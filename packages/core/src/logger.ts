@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, appendFileSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { getConfigDir } from './config';
 
@@ -99,7 +99,7 @@ export class SessionStorage {
     cwd: string;
   }) {
     try {
-      Bun.write(this.sessionFile, JSON.stringify(data, null, 2));
+      writeFileSync(this.sessionFile, JSON.stringify(data, null, 2));
     } catch {
       // Ignore write errors
     }
