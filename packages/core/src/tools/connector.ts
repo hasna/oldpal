@@ -1,7 +1,8 @@
 import type { Tool, Connector, ConnectorCommand } from '@oldpal/shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, basename } from 'path';
+import { readdirSync, statSync, readlinkSync } from 'fs';
 
 /**
  * Connector bridge - wraps connect-* CLIs as tools
@@ -11,15 +12,52 @@ export class ConnectorBridge {
   private static cache: Map<string, Connector | null> = new Map();
 
   /**
-   * Discover available connectors (optimized - only checks configured ones)
+   * Auto-discover all connect-* CLIs in PATH
+   */
+  private autoDiscoverConnectorNames(): string[] {
+    const connectorNames = new Set<string>();
+    const pathDirs = (process.env.PATH || '').split(':');
+
+    // Also check common bun/npm global bin locations
+    const extraDirs = [
+      join(homedir(), '.bun', 'bin'),
+      join(homedir(), '.npm-global', 'bin'),
+      '/usr/local/bin',
+    ];
+
+    const allDirs = [...new Set([...pathDirs, ...extraDirs])];
+
+    for (const dir of allDirs) {
+      try {
+        const files = readdirSync(dir);
+        for (const file of files) {
+          if (file.startsWith('connect-')) {
+            const name = file.replace('connect-', '');
+            // Skip if it's a common non-connector (like connect.js or similar)
+            if (name && !name.includes('.') && name.length > 1) {
+              connectorNames.add(name);
+            }
+          }
+        }
+      } catch {
+        // Directory doesn't exist or can't be read, skip
+      }
+    }
+
+    return Array.from(connectorNames);
+  }
+
+  /**
+   * Discover available connectors (auto-discovers if no names provided)
    */
   async discover(connectorNames?: string[]): Promise<Connector[]> {
-    // Only check explicitly configured connectors, or a minimal default set
-    // This prevents slow startup from checking 14+ non-existent CLIs
-    const names = connectorNames || [];
+    // Auto-discover if no names provided, or use provided list
+    const names = connectorNames && connectorNames.length > 0
+      ? connectorNames
+      : this.autoDiscoverConnectorNames();
 
     if (names.length === 0) {
-      // No connectors configured - skip discovery entirely for fast startup
+      // No connectors found
       return [];
     }
 
