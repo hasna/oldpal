@@ -1,0 +1,28 @@
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "maxTokens": 8192
+  },
+  "voice": {
+    "enabled": false,
+    "stt": {
+      "provider": "whisper",
+      "model": "whisper-1",
+      "language": "en"
+    },
+    "tts": {
+      "provider": "elevenlabs",
+      "voiceId": "",
+      "model": "eleven_turbo_v2_5"
+    }
+  },
+  "connectors": [
+    "notion",
+    "googledrive",
+    "gmail",
+    "googlecalendar",
+    "linear",
+    "slack"
+  ]
+}
