@@ -303,6 +303,23 @@ describe('CommandExecutor', () => {
 
       expect(result.prompt).toContain('hello');
     });
+
+    test('should run shell commands from context cwd', async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'oldpal-shell-'));
+      loader.register({
+        name: 'cwd',
+        description: 'Shell cwd command',
+        content: 'Output:\n!pwd',
+        selfHandled: false,
+      });
+
+      mockContext.cwd = tempDir;
+      const result = await executor.execute('/cwd', mockContext);
+
+      expect(result.prompt).toContain(tempDir);
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
   });
 
   describe('getSuggestions', () => {
