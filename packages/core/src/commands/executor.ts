@@ -73,7 +73,7 @@ export class CommandExecutor {
     }
 
     // Commands that go to LLM
-    const prompt = await this.preparePrompt(command, parsed.args);
+    const prompt = await this.preparePrompt(command, parsed.args, context);
 
     return {
       handled: false,
@@ -86,14 +86,14 @@ export class CommandExecutor {
    * - Substitutes $ARGUMENTS
    * - Executes shell commands (!command)
    */
-  private async preparePrompt(command: Command, args: string): Promise<string> {
+  private async preparePrompt(command: Command, args: string, context: CommandContext): Promise<string> {
     let content = command.content;
 
     // Substitute $ARGUMENTS
     content = content.replace(/\$ARGUMENTS/g, args || '(no arguments provided)');
 
     // Execute shell commands (!command) and inject output
-    content = await this.processShellCommands(content);
+    content = await this.processShellCommands(content, context.cwd);
 
     return content;
   }
@@ -102,7 +102,7 @@ export class CommandExecutor {
    * Process shell commands in content
    * Lines starting with ! are executed and replaced with their output
    */
-  private async processShellCommands(content: string): Promise<string> {
+  private async processShellCommands(content: string, cwd: string): Promise<string> {
     const lines = content.split('\n');
     const processedLines: string[] = [];
 
@@ -112,7 +112,7 @@ export class CommandExecutor {
       if (trimmed.startsWith('!')) {
         // Execute shell command
         const command = trimmed.slice(1).trim();
-        const output = await this.executeShell(command);
+        const output = await this.executeShell(command, cwd);
         processedLines.push(`\`\`\`\n${output}\n\`\`\``);
       } else {
         processedLines.push(line);
@@ -125,9 +125,10 @@ export class CommandExecutor {
   /**
    * Execute a shell command and return output
    */
-  private async executeShell(command: string): Promise<string> {
+  private async executeShell(command: string, cwd: string): Promise<string> {
     try {
       const proc = Bun.spawn(['bash', '-c', command], {
+        cwd,
         stdout: 'pipe',
         stderr: 'pipe',
       });
