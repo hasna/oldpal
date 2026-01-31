@@ -100,6 +100,64 @@ export function App({ cwd }: AppProps) {
   const toolCallsRef = useRef<ToolCall[]>([]);
   const toolResultsRef = useRef<ToolResult[]>([]);
   const activityLogRef = useRef<ActivityEntry[]>([]);
+  const skipNextDoneRef = useRef(false);
+
+  const buildFullResponse = useCallback(() => {
+    const parts = activityLogRef.current
+      .filter((entry) => entry.type === 'text' && entry.content)
+      .map((entry) => entry.content as string);
+
+    if (responseRef.current.trim()) {
+      parts.push(responseRef.current);
+    }
+
+    return parts.join('\n').trim();
+  }, []);
+
+  const finalizeResponse = useCallback((status?: 'stopped' | 'interrupted' | 'error') => {
+    const baseContent = buildFullResponse();
+    const hasContent = baseContent.length > 0;
+    const hasTools = toolCallsRef.current.length > 0;
+
+    if (!hasContent && !hasTools) {
+      return false;
+    }
+
+    let content = baseContent;
+    if (status === 'stopped') {
+      content = content ? `${content}\n\n[stopped]` : '[stopped]';
+    } else if (status === 'interrupted') {
+      content = content ? `${content}\n\n[interrupted]` : '[interrupted]';
+    } else if (status === 'error') {
+      content = content ? `${content}\n\n[error]` : '[error]';
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: generateId(),
+        role: 'assistant',
+        content,
+        timestamp: now(),
+        toolCalls: hasTools ? [...toolCallsRef.current] : undefined,
+        toolResults: toolResultsRef.current.length > 0 ? [...toolResultsRef.current] : undefined,
+      },
+    ]);
+
+    return true;
+  }, [buildFullResponse]);
+
+  const resetTurnState = useCallback(() => {
+    setCurrentResponse('');
+    responseRef.current = '';
+    toolCallsRef.current = [];
+    toolResultsRef.current = [];
+    setCurrentToolCall(undefined);
+    setActivityLog([]);
+    activityLogRef.current = [];
+    setProcessingStartTime(undefined);
+    setCurrentTurnTokens(0);
+  }, []);
 
   // Save current session UI state
   const saveCurrentSessionState = useCallback(() => {
@@ -192,6 +250,11 @@ export function App({ cwd }: AppProps) {
       setActivityLog(activityLogRef.current);
       setCurrentToolCall(undefined);
     } else if (chunk.type === 'error' && chunk.error) {
+      const finalized = finalizeResponse('error');
+      if (finalized) {
+        skipNextDoneRef.current = true;
+      }
+      resetTurnState();
       setError(chunk.error);
       setIsProcessing(false);
     } else if (chunk.type === 'exit') {
@@ -203,48 +266,12 @@ export function App({ cwd }: AppProps) {
       // Track tokens for current turn
       setCurrentTurnTokens((prev) => prev + (chunk.usage?.outputTokens || 0));
     } else if (chunk.type === 'done') {
-      // Save any remaining text to activity log
-      if (responseRef.current.trim()) {
-        const textEntry = {
-          id: generateId(),
-          type: 'text' as const,
-          content: responseRef.current,
-          timestamp: now(),
-        };
-        activityLogRef.current = [...activityLogRef.current, textEntry];
-        responseRef.current = ''; // Clear after saving to avoid duplication
+      const shouldSkip = skipNextDoneRef.current;
+      skipNextDoneRef.current = false;
+      if (!shouldSkip) {
+        finalizeResponse();
       }
-
-      // Add complete message to history (all text is now in activityLog)
-      const fullContent = activityLogRef.current
-        .filter(e => e.type === 'text')
-        .map(e => e.content)
-        .join('\n');
-
-      if (fullContent.trim() || toolCallsRef.current.length > 0) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: generateId(),
-            role: 'assistant',
-            content: fullContent.trim(),
-            timestamp: now(),
-            toolCalls: toolCallsRef.current.length > 0 ? [...toolCallsRef.current] : undefined,
-            toolResults: toolResultsRef.current.length > 0 ? [...toolResultsRef.current] : undefined,
-          },
-        ]);
-      }
-
-      // Reset all state
-      setCurrentResponse('');
-      responseRef.current = '';
-      toolCallsRef.current = [];
-      toolResultsRef.current = [];
-      setCurrentToolCall(undefined);
-      setActivityLog([]);
-      activityLogRef.current = [];
-      setProcessingStartTime(undefined);
-      setCurrentTurnTokens(0);
+      resetTurnState();
       setIsProcessing(false);
 
       // Update token usage from client
@@ -253,7 +280,7 @@ export function App({ cwd }: AppProps) {
         setTokenUsage(activeSession.client.getTokenUsage());
       }
     }
-  }, [registry, exit]);
+  }, [registry, exit, finalizeResponse, resetTurnState]);
 
   // Initialize first session
   useEffect(() => {
@@ -262,6 +289,11 @@ export function App({ cwd }: AppProps) {
         // Register chunk handler
         registry.onChunk(handleChunk);
         registry.onError((err) => {
+          const finalized = finalizeResponse('error');
+          if (finalized) {
+            skipNextDoneRef.current = true;
+          }
+          resetTurnState();
           setError(err.message);
           setIsProcessing(false);
         });
@@ -291,7 +323,7 @@ export function App({ cwd }: AppProps) {
     return () => {
       registry.closeAll();
     };
-  }, [cwd, registry, handleChunk]);
+  }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState]);
 
   // Process queued messages
   const processQueue = useCallback(async () => {
@@ -311,6 +343,7 @@ export function App({ cwd }: AppProps) {
     setMessages((prev) => [...prev, userMessage]);
 
     // Reset state
+    skipNextDoneRef.current = false;
     setCurrentResponse('');
     responseRef.current = '';
     toolCallsRef.current = [];
@@ -417,20 +450,12 @@ export function App({ cwd }: AppProps) {
     if (key.ctrl && input === 'c') {
       if (isProcessing && activeSession) {
         activeSession.client.stop();
-        // Save partial response if any
-        if (responseRef.current) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: generateId(),
-              role: 'assistant',
-              content: responseRef.current + '\n\n[stopped]',
-              timestamp: now(),
-            },
-          ]);
-          setCurrentResponse('');
-          responseRef.current = '';
+        const finalized = finalizeResponse('stopped');
+        if (finalized) {
+          skipNextDoneRef.current = true;
         }
+        resetTurnState();
+        registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
       } else {
         registry.closeAll();
@@ -441,19 +466,12 @@ export function App({ cwd }: AppProps) {
     if (key.escape) {
       if (isProcessing && activeSession) {
         activeSession.client.stop();
-        if (responseRef.current) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: generateId(),
-              role: 'assistant',
-              content: responseRef.current + '\n\n[stopped]',
-              timestamp: now(),
-            },
-          ]);
-          setCurrentResponse('');
-          responseRef.current = '';
+        const finalized = finalizeResponse('stopped');
+        if (finalized) {
+          skipNextDoneRef.current = true;
         }
+        resetTurnState();
+        registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
       }
     }
@@ -535,19 +553,11 @@ export function App({ cwd }: AppProps) {
       if (mode === 'interrupt' && isProcessing) {
         activeSession.client.stop();
         // Save partial response
-        if (responseRef.current) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: generateId(),
-              role: 'assistant',
-              content: responseRef.current + '\n\n[interrupted]',
-              timestamp: now(),
-            },
-          ]);
+        const finalized = finalizeResponse('interrupted');
+        if (finalized) {
+          skipNextDoneRef.current = true;
         }
-        setCurrentResponse('');
-        responseRef.current = '';
+        resetTurnState();
         setIsProcessing(false);
         // Small delay to ensure stop is processed
         await new Promise((r) => setTimeout(r, 100));
@@ -563,6 +573,7 @@ export function App({ cwd }: AppProps) {
       setMessages((prev) => [...prev, userMessage]);
 
       // Reset state
+      skipNextDoneRef.current = false;
       setCurrentResponse('');
       responseRef.current = '';
       toolCallsRef.current = [];
@@ -581,7 +592,16 @@ export function App({ cwd }: AppProps) {
       // Send to agent
       await activeSession.client.send(trimmedInput);
     },
-    [activeSession, isProcessing, registry, sessions, handleNewSession, handleSessionSwitch]
+    [
+      activeSession,
+      isProcessing,
+      registry,
+      sessions,
+      handleNewSession,
+      handleSessionSwitch,
+      finalizeResponse,
+      resetTurnState,
+    ]
   );
 
   if (isInitializing) {
