@@ -256,7 +256,13 @@ export class AgentLoop {
       }
 
       // Add assistant message
+      const shouldStopNow = this.shouldStop;
       this.context.addAssistantMessage(responseText, toolCalls.length > 0 ? toolCalls : undefined);
+
+      // If stopped mid-stream, don't execute tool calls
+      if (shouldStopNow) {
+        break;
+      }
 
       // If no tool calls, we're done
       if (toolCalls.length === 0) {
