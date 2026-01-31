@@ -92,6 +92,9 @@ export function App({ cwd }: AppProps) {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
 
+  // Available skills for autocomplete
+  const [skills, setSkills] = useState<{ name: string; description: string; argumentHint?: string }[]>([]);
+
   // Use ref to track response for the done callback
   const responseRef = useRef('');
   const toolCallsRef = useRef<ToolCall[]>([]);
@@ -265,6 +268,15 @@ export function App({ cwd }: AppProps) {
         // Create first session
         const session = await registry.createSession(cwd);
         setActiveSessionId(session.id);
+
+        // Load available skills for autocomplete
+        const loadedSkills = await session.client.getSkills();
+        setSkills(loadedSkills.map(s => ({
+          name: s.name,
+          description: s.description || '',
+          argumentHint: s.argumentHint,
+        })));
+
         setIsInitializing(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -485,6 +497,13 @@ export function App({ cwd }: AppProps) {
 
       const trimmedInput = input.trim();
 
+      // Check for $skill command - convert to /skill format
+      if (trimmedInput.startsWith('$')) {
+        const skillInput = '/' + trimmedInput.slice(1);
+        // Continue with the converted input
+        return handleSubmit(skillInput, mode);
+      }
+
       // Check for /session command
       if (trimmedInput.startsWith('/session')) {
         const arg = trimmedInput.slice(8).trim();
@@ -681,6 +700,7 @@ export function App({ cwd }: AppProps) {
         onSubmit={handleSubmit}
         isProcessing={isProcessing}
         queueLength={messageQueue.length}
+        skills={skills}
       />
 
       {/* Status bar */}
