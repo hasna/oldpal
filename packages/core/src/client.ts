@@ -21,7 +21,14 @@ export class EmbeddedClient implements AssistantClient {
 
   constructor(
     cwd?: string,
-    options?: { sessionId?: string; initialMessages?: Message[]; systemPrompt?: string; allowedTools?: string[]; startedAt?: string }
+    options?: {
+      sessionId?: string;
+      initialMessages?: Message[];
+      systemPrompt?: string;
+      allowedTools?: string[];
+      startedAt?: string;
+      agentFactory?: (options: ConstructorParameters<typeof AgentLoop>[0]) => AgentLoop;
+    }
   ) {
     // Initialize .oldpal directory structure
     initOldpalDir();
@@ -35,7 +42,8 @@ export class EmbeddedClient implements AssistantClient {
 
     this.logger.info('Session started', { cwd: this.cwd });
 
-    this.agent = new AgentLoop({
+    const createAgent = options?.agentFactory ?? ((opts: ConstructorParameters<typeof AgentLoop>[0]) => new AgentLoop(opts));
+    this.agent = createAgent({
       cwd: this.cwd,
       sessionId,
       allowedTools: options?.allowedTools,
