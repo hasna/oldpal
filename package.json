@@ -1,6 +1,6 @@
 {
   "name": "@hasna/oldpal",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Your personal AI assistant - terminal first, voice enabled, connector powered",
   "type": "module",
   "bin": {

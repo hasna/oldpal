@@ -628,7 +628,7 @@ export function App({ cwd }: AppProps) {
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
-          version="0.6.5"
+          version="0.6.6"
           model="claude-sonnet-4"
           directory={activeSession?.cwd || cwd}
         />
