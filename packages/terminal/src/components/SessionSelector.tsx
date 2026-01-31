@@ -56,11 +56,19 @@ export function SessionSelector({
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useInput((input, key) => {
+    // 'n' or 'N' for new session - check first to prioritize
+    if (input === 'n' || input === 'N') {
+      onNew();
+      return;
+    }
+
+    // Escape: cancel
     if (key.escape) {
       onCancel();
       return;
     }
 
+    // Enter: select current option
     if (key.return) {
       if (selectedIndex === sessions.length) {
         // "New session" option
@@ -71,23 +79,22 @@ export function SessionSelector({
       return;
     }
 
+    // Arrow navigation
     if (key.upArrow) {
       setSelectedIndex((prev) => Math.max(0, prev - 1));
+      return;
     }
 
     if (key.downArrow) {
       setSelectedIndex((prev) => Math.min(sessions.length, prev + 1)); // +1 for "new" option
+      return;
     }
 
-    // Number keys for quick selection
+    // Number keys for quick selection (1-9)
     const num = parseInt(input, 10);
     if (!isNaN(num) && num >= 1 && num <= sessions.length) {
       onSelect(sessions[num - 1].id);
-    }
-
-    // 'n' for new session
-    if (input === 'n') {
-      onNew();
+      return;
     }
   });
 
