@@ -1,3 +1,4 @@
+import { dirname } from 'path';
 import type { Skill } from '@oldpal/shared';
 import { substituteVariables } from '@oldpal/shared';
 
@@ -8,7 +9,7 @@ export class SkillExecutor {
   /**
    * Prepare skill content with argument substitution
    */
-  prepare(skill: Skill, args: string[]): string {
+  async prepare(skill: Skill, args: string[]): Promise<string> {
     let content = skill.content;
 
     // Substitute variables
@@ -20,24 +21,41 @@ export class SkillExecutor {
     }
 
     // Execute dynamic context injection (backtick commands)
-    content = this.executeDynamicContext(content);
+    content = await this.executeDynamicContext(content, skill.filePath);
 
     return content;
   }
 
   /**
    * Execute backtick commands for dynamic context injection
-   * Syntax: `!command`
+   * Syntax: !`command`
    */
-  private executeDynamicContext(content: string): string {
-    const backtickPattern = /`!([^`]+)`/g;
+  private async executeDynamicContext(content: string, skillFilePath: string): Promise<string> {
+    const backtickPattern = /!\`([^`]+)\`/g;
+    const matches = [...content.matchAll(backtickPattern)];
+
+    if (matches.length === 0) {
+      return content;
+    }
+
+    // Get the skill's directory for relative command execution
+    const skillDir = dirname(skillFilePath);
     let result = content;
 
-    // Note: In a real implementation, this would need to be async
-    // and handle command execution. For now, we'll mark it for the agent to handle.
-    result = result.replace(backtickPattern, (match, command) => {
-      return `[Dynamic context: ${command}]`;
-    });
+    for (const match of matches) {
+      const fullMatch = match[0];
+      const command = match[1];
+
+      try {
+        // Execute the command in the skill's directory
+        const output = await Bun.$`cd ${skillDir} && ${command}`.quiet().text();
+        result = result.replace(fullMatch, output.trim());
+      } catch (error) {
+        // If command fails, include error message
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        result = result.replace(fullMatch, `[Command failed: ${errorMsg}]`);
+      }
+    }
 
     return result;
   }

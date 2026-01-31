@@ -31,15 +31,32 @@ export class SkillLoader {
 
   /**
    * Load skills from a directory
+   * Supports both `skill-name/SKILL.md` and `name/SKILL.md` patterns
    */
   async loadFromDirectory(dir: string): Promise<void> {
     try {
-      const glob = new Glob('*/SKILL.md');
-      for await (const file of glob.scan({ cwd: dir })) {
+      // Check if directory exists
+      const dirFile = Bun.file(dir);
+      const stats = await Bun.$`test -d ${dir} && echo "exists"`.quiet().nothrow();
+      if (stats.exitCode !== 0) return;
+
+      // Load skills from skill-* directories (preferred convention)
+      const skillPrefixGlob = new Glob('skill-*/SKILL.md');
+      for await (const file of skillPrefixGlob.scan({ cwd: dir })) {
         await this.loadSkillFile(join(dir, file));
       }
+
+      // Also load from regular directories (for backwards compatibility)
+      const regularGlob = new Glob('*/SKILL.md');
+      for await (const file of regularGlob.scan({ cwd: dir })) {
+        // Skip if already loaded via skill- prefix
+        const dirName = file.split('/')[0];
+        if (!dirName.startsWith('skill-')) {
+          await this.loadSkillFile(join(dir, file));
+        }
+      }
     } catch {
-      // Directory doesn't exist, skip
+      // Directory doesn't exist or error reading, skip
     }
   }
 

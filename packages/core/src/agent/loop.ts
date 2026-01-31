@@ -339,7 +339,7 @@ export class AgentLoop {
 
     // Execute the skill
     const argsList = args ? args.split(/\s+/) : [];
-    const content = this.skillExecutor.prepare(skill, argsList);
+    const content = await this.skillExecutor.prepare(skill, argsList);
 
     // Add skill content as context
     this.context.addSystemMessage(content);
