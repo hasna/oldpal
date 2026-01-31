@@ -1,0 +1,365 @@
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { SkillLoader } from '../src/skills/loader';
+import { SkillExecutor } from '../src/skills/executor';
+import type { Skill } from '@oldpal/shared';
+import { join } from 'path';
+import { mkdtemp, writeFile, mkdir, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+
+describe('SkillLoader', () => {
+  let loader: SkillLoader;
+  let tempDir: string;
+
+  beforeEach(async () => {
+    loader = new SkillLoader();
+    tempDir = await mkdtemp(join(tmpdir(), 'oldpal-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  describe('loadSkillFile', () => {
+    test('should load skill with full frontmatter', async () => {
+      const skillDir = join(tempDir, 'test-skill');
+      await mkdir(skillDir, { recursive: true });
+
+      const skillContent = `---
+name: my-skill
+description: A test skill
+argument-hint: [arg1] [arg2]
+allowed-tools: bash, notion
+user-invocable: true
+model: claude-3-opus
+---
+
+# My Skill
+
+Instructions for the skill.
+`;
+      await writeFile(join(skillDir, 'SKILL.md'), skillContent);
+
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+
+      expect(skill).not.toBeNull();
+      expect(skill?.name).toBe('my-skill');
+      expect(skill?.description).toBe('A test skill');
+      expect(skill?.argumentHint).toBe('[arg1] [arg2]');
+      expect(skill?.allowedTools).toEqual(['bash', 'notion']);
+      expect(skill?.userInvocable).toBe(true);
+      expect(skill?.model).toBe('claude-3-opus');
+      expect(skill?.content).toContain('My Skill');
+    });
+
+    test('should infer name from directory when not in frontmatter', async () => {
+      const skillDir = join(tempDir, 'calendar');
+      await mkdir(skillDir, { recursive: true });
+
+      const skillContent = `---
+description: Calendar management
+---
+
+View and manage calendar events.
+`;
+      await writeFile(join(skillDir, 'SKILL.md'), skillContent);
+
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+
+      expect(skill?.name).toBe('calendar');
+    });
+
+    test('should infer description from first paragraph when not in frontmatter', async () => {
+      const skillDir = join(tempDir, 'notes');
+      await mkdir(skillDir, { recursive: true });
+
+      // Content without heading - first paragraph becomes description
+      const skillContent = `---
+name: notes
+---
+
+Quick note management tool.
+
+## Usage
+
+More instructions here.
+`;
+      await writeFile(join(skillDir, 'SKILL.md'), skillContent);
+
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+
+      // First paragraph after frontmatter
+      expect(skill?.description).toBe('Quick note management tool.');
+    });
+
+    test('should handle skill without frontmatter', async () => {
+      const skillDir = join(tempDir, 'simple');
+      await mkdir(skillDir, { recursive: true });
+
+      const skillContent = `# Simple Skill
+
+Just some instructions without frontmatter.
+`;
+      await writeFile(join(skillDir, 'SKILL.md'), skillContent);
+
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+
+      expect(skill?.name).toBe('simple');
+      expect(skill?.content).toContain('Simple Skill');
+    });
+
+    test('should return null for non-existent file', async () => {
+      const skill = await loader.loadSkillFile(join(tempDir, 'non-existent', 'SKILL.md'));
+      expect(skill).toBeNull();
+    });
+  });
+
+  describe('loadFromDirectory', () => {
+    test('should load multiple skills from directory', async () => {
+      const skillsDir = join(tempDir, 'skills');
+      await mkdir(join(skillsDir, 'skill1'), { recursive: true });
+      await mkdir(join(skillsDir, 'skill2'), { recursive: true });
+
+      await writeFile(join(skillsDir, 'skill1', 'SKILL.md'), `---
+name: skill1
+description: First skill
+---
+Content 1`);
+
+      await writeFile(join(skillsDir, 'skill2', 'SKILL.md'), `---
+name: skill2
+description: Second skill
+---
+Content 2`);
+
+      await loader.loadFromDirectory(skillsDir);
+
+      const skills = loader.getSkills();
+      expect(skills.length).toBe(2);
+      expect(skills.map((s) => s.name).sort()).toEqual(['skill1', 'skill2']);
+    });
+
+    test('should handle non-existent directory gracefully', async () => {
+      // Should not throw, just silently skip
+      await loader.loadFromDirectory(join(tempDir, 'non-existent'));
+      expect(loader.getSkills()).toEqual([]);
+    });
+  });
+
+  describe('getSkill and getSkills', () => {
+    test('should return undefined for non-existent skill', () => {
+      expect(loader.getSkill('non-existent')).toBeUndefined();
+    });
+
+    test('should return empty array when no skills loaded', () => {
+      expect(loader.getSkills()).toEqual([]);
+    });
+  });
+
+  describe('getUserInvocableSkills', () => {
+    test('should filter out non-user-invocable skills', async () => {
+      const skillsDir = join(tempDir, 'skills');
+      await mkdir(join(skillsDir, 'public'), { recursive: true });
+      await mkdir(join(skillsDir, 'internal'), { recursive: true });
+
+      await writeFile(join(skillsDir, 'public', 'SKILL.md'), `---
+name: public
+description: Public skill
+user-invocable: true
+---
+Content`);
+
+      await writeFile(join(skillsDir, 'internal', 'SKILL.md'), `---
+name: internal
+description: Internal skill
+user-invocable: false
+---
+Content`);
+
+      await loader.loadFromDirectory(skillsDir);
+
+      const allSkills = loader.getSkills();
+      const userSkills = loader.getUserInvocableSkills();
+
+      expect(allSkills.length).toBe(2);
+      expect(userSkills.length).toBe(1);
+      expect(userSkills[0].name).toBe('public');
+    });
+  });
+
+  describe('getSkillDescriptions', () => {
+    test('should format skill descriptions', async () => {
+      const skillsDir = join(tempDir, 'skills');
+      await mkdir(join(skillsDir, 'calendar'), { recursive: true });
+
+      await writeFile(join(skillsDir, 'calendar', 'SKILL.md'), `---
+name: calendar
+description: View and manage calendar
+argument-hint: [today|tomorrow|week]
+---
+Content`);
+
+      await loader.loadFromDirectory(skillsDir);
+
+      const descriptions = loader.getSkillDescriptions();
+
+      expect(descriptions).toContain('Available skills');
+      expect(descriptions).toContain('/calendar');
+      expect(descriptions).toContain('[today|tomorrow|week]');
+      expect(descriptions).toContain('View and manage calendar');
+    });
+
+    test('should return empty string when no skills', () => {
+      expect(loader.getSkillDescriptions()).toBe('');
+    });
+  });
+});
+
+describe('SkillExecutor', () => {
+  let executor: SkillExecutor;
+
+  beforeEach(() => {
+    executor = new SkillExecutor();
+  });
+
+  const createSkill = (overrides: Partial<Skill> = {}): Skill => ({
+    name: 'test',
+    description: 'Test skill',
+    content: 'Default content',
+    filePath: '/path/to/skill.md',
+    ...overrides,
+  });
+
+  describe('prepare', () => {
+    test('should substitute $ARGUMENTS with all args', () => {
+      const skill = createSkill({
+        content: 'Search for: $ARGUMENTS',
+      });
+
+      const result = executor.prepare(skill, ['hello', 'world']);
+
+      expect(result).toBe('Search for: hello world');
+    });
+
+    test('should substitute positional args $0, $1', () => {
+      // Include $ARGUMENTS to prevent auto-append
+      const skill = createSkill({
+        content: 'First: $0, Second: $1 (all: $ARGUMENTS)',
+      });
+
+      const result = executor.prepare(skill, ['one', 'two']);
+
+      expect(result).toBe('First: one, Second: two (all: one two)');
+    });
+
+    test('should substitute $ARGUMENTS[n]', () => {
+      // $ARGUMENTS[n] doesn't count as $ARGUMENTS for auto-append check
+      // so we need to test this expects the appended ARGUMENTS
+      const skill = createSkill({
+        content: 'A: $ARGUMENTS[0], B: $ARGUMENTS[1]',
+      });
+
+      const result = executor.prepare(skill, ['first', 'second']);
+
+      // $ARGUMENTS[n] gets substituted, but $ARGUMENTS is not in content
+      // So the implementation checks for literal $ARGUMENTS, not $ARGUMENTS[n]
+      expect(result).toContain('A: first, B: second');
+    });
+
+    test('should append arguments if $ARGUMENTS not in content', () => {
+      const skill = createSkill({
+        content: 'Static content',
+      });
+
+      const result = executor.prepare(skill, ['arg1', 'arg2']);
+
+      expect(result).toContain('Static content');
+      expect(result).toContain('ARGUMENTS: arg1 arg2');
+    });
+
+    test('should not append arguments if no args provided', () => {
+      const skill = createSkill({
+        content: 'Static content',
+      });
+
+      const result = executor.prepare(skill, []);
+
+      expect(result).toBe('Static content');
+    });
+
+    test('should handle dynamic context markers', () => {
+      const skill = createSkill({
+        content: 'Files: `!ls -la`',
+      });
+
+      const result = executor.prepare(skill, []);
+
+      expect(result).toContain('[Dynamic context: ls -la]');
+    });
+
+    test('should handle multiple dynamic context markers', () => {
+      const skill = createSkill({
+        content: 'Date: `!date` and PWD: `!pwd`',
+      });
+
+      const result = executor.prepare(skill, []);
+
+      expect(result).toContain('[Dynamic context: date]');
+      expect(result).toContain('[Dynamic context: pwd]');
+    });
+  });
+
+  describe('shouldAutoInvoke', () => {
+    test('should return false if disableModelInvocation is true', () => {
+      const skill = createSkill({
+        description: 'Calendar events today tomorrow',
+        disableModelInvocation: true,
+      });
+
+      const result = executor.shouldAutoInvoke(skill, 'show me my calendar events for today');
+
+      expect(result).toBe(false);
+    });
+
+    test('should return true when keywords match', () => {
+      const skill = createSkill({
+        description: 'View calendar events for today',
+      });
+
+      const result = executor.shouldAutoInvoke(skill, 'show calendar events today');
+
+      // Should match 'calendar', 'events', 'today'
+      expect(result).toBe(true);
+    });
+
+    test('should return false when not enough keywords match', () => {
+      const skill = createSkill({
+        description: 'View calendar events for today',
+      });
+
+      const result = executor.shouldAutoInvoke(skill, 'what is the weather');
+
+      expect(result).toBe(false);
+    });
+
+    test('should be case insensitive', () => {
+      const skill = createSkill({
+        description: 'Search Notion pages',
+      });
+
+      const result = executor.shouldAutoInvoke(skill, 'SEARCH my NOTION PAGES');
+
+      expect(result).toBe(true);
+    });
+
+    test('should ignore short keywords', () => {
+      const skill = createSkill({
+        description: 'a to do app for task management',
+      });
+
+      // 'a' and 'to' are too short (<=3), only 'task' and 'management' count
+      const result = executor.shouldAutoInvoke(skill, 'a to task management app');
+
+      expect(result).toBe(true);
+    });
+  });
+});
