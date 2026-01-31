@@ -354,8 +354,10 @@ export function App({ cwd }: AppProps) {
 
   // Handle session switch
   const handleSessionSwitch = useCallback(async (sessionId: string) => {
+    // Close selector IMMEDIATELY
+    setShowSessionSelector(false);
+
     if (sessionId === activeSessionId) {
-      setShowSessionSelector(false);
       return;
     }
 
@@ -374,12 +376,13 @@ export function App({ cwd }: AppProps) {
     // Now switch session in registry (may replay buffered chunks to the reset state)
     await registry.switchSession(sessionId);
     setActiveSessionId(sessionId);
-
-    setShowSessionSelector(false);
   }, [activeSessionId, registry, saveCurrentSessionState, loadSessionState]);
 
   // Handle new session creation
   const handleNewSession = useCallback(async () => {
+    // Close selector IMMEDIATELY - don't wait for async operations
+    setShowSessionSelector(false);
+
     try {
       // Save current session state
       saveCurrentSessionState();
@@ -394,11 +397,8 @@ export function App({ cwd }: AppProps) {
       // Now switch to new session
       await registry.switchSession(newSession.id);
       setActiveSessionId(newSession.id);
-
-      setShowSessionSelector(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
-      setShowSessionSelector(false);
     }
   }, [cwd, registry, saveCurrentSessionState, loadSessionState]);
 

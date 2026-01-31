@@ -4,7 +4,7 @@ import { render } from 'ink';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 
 // Parse CLI arguments
 function parseArgs(argv: string[]) {
