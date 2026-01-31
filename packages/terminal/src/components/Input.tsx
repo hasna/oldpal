@@ -7,6 +7,7 @@ const COMMANDS = [
   { name: '/help', description: 'show available commands' },
   { name: '/clear', description: 'clear the conversation' },
   { name: '/new', description: 'start a new conversation' },
+  { name: '/session', description: 'list/switch sessions (Ctrl+S)' },
   { name: '/status', description: 'show session status' },
   { name: '/tokens', description: 'show token usage' },
   { name: '/cost', description: 'show estimated API cost' },
