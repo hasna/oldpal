@@ -30,7 +30,7 @@ export function Messages({ messages, currentResponse, currentToolCall, lastToolR
         <MessageBubble key={message.id} message={message} />
       ))}
 
-      {/* Show activity log - interleaved text, tool calls, and results */}
+      {/* Show activity log - only text entries (tool calls shown in ToolCallBox) */}
       {activityLog.map((entry) => {
         if (entry.type === 'text' && entry.content) {
           return (
@@ -39,20 +39,6 @@ export function Messages({ messages, currentResponse, currentToolCall, lastToolR
               <Box flexGrow={1}>
                 <Markdown content={entry.content} />
               </Box>
-            </Box>
-          );
-        }
-        if (entry.type === 'tool_call' && entry.toolCall) {
-          return (
-            <Box key={entry.id} marginTop={1}>
-              <Text dimColor>  ◐ {formatToolCall(entry.toolCall)}</Text>
-            </Box>
-          );
-        }
-        if (entry.type === 'tool_result' && entry.toolResult) {
-          return (
-            <Box key={entry.id} marginBottom={1}>
-              <Text dimColor>  → {truncate(entry.toolResult.content, 80)}</Text>
             </Box>
           );
         }
@@ -66,13 +52,6 @@ export function Messages({ messages, currentResponse, currentToolCall, lastToolR
           <Box flexGrow={1}>
             <Markdown content={currentResponse} />
           </Box>
-        </Box>
-      )}
-
-      {/* Show current tool call being executed */}
-      {currentToolCall && (
-        <Box marginTop={1}>
-          <Text dimColor>  ◐ {formatToolCall(currentToolCall)}</Text>
         </Box>
       )}
     </Box>
@@ -101,6 +80,8 @@ function MessageBubble({ message }: MessageBubbleProps) {
   }
 
   // Assistant message
+  const toolCount = message.toolCalls?.length || 0;
+
   return (
     <Box marginY={1} flexDirection="column">
       <Box>
@@ -110,12 +91,14 @@ function MessageBubble({ message }: MessageBubbleProps) {
         </Box>
       </Box>
 
-      {/* Show tool calls in this message */}
-      {message.toolCalls?.map((toolCall) => (
-        <Box key={toolCall.id} marginLeft={2} marginTop={1}>
-          <Text dimColor>◐ {formatToolCall(toolCall)}</Text>
+      {/* Show compact tool summary for historical messages */}
+      {toolCount > 0 && (
+        <Box marginLeft={2}>
+          <Text dimColor>
+            [{toolCount} tool{toolCount > 1 ? 's' : ''} used]
+          </Text>
         </Box>
-      ))}
+      )}
     </Box>
   );
 }

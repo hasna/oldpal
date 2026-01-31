@@ -7,6 +7,8 @@ import { Input } from './Input';
 import { Messages } from './Messages';
 import { Status } from './Status';
 import { Spinner } from './Spinner';
+import { ProcessingIndicator } from './ProcessingIndicator';
+import { ToolCallBox, useToolCallExpansion } from './ToolCallBox';
 
 interface AppProps {
   cwd: string;
@@ -35,6 +37,11 @@ export function App({ cwd }: AppProps) {
   const [messageQueue, setMessageQueue] = useState<string[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | undefined>();
+  const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
+  const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
+
+  // Tool call expansion hook
+  const { isExpanded: toolsExpanded } = useToolCallExpansion();
 
   // Use ref to track response for the done callback
   const responseRef = useRef('');
@@ -67,6 +74,8 @@ export function App({ cwd }: AppProps) {
     setCurrentToolCall(undefined);
     setLastToolResult(undefined);
     setActivityLog([]);
+    setProcessingStartTime(Date.now());
+    setCurrentTurnTokens(0);
     setIsProcessing(true);
 
     await clientRef.current.send(nextMessage);
@@ -129,6 +138,8 @@ export function App({ cwd }: AppProps) {
             setIsProcessing(false);
           } else if (chunk.type === 'usage' && chunk.usage) {
             setTokenUsage(chunk.usage);
+            // Track tokens for current turn
+            setCurrentTurnTokens((prev) => prev + (chunk.usage?.outputTokens || 0));
           } else if (chunk.type === 'done') {
             // Save any remaining text
             if (responseRef.current.trim()) {
@@ -170,6 +181,8 @@ export function App({ cwd }: AppProps) {
             toolResultsRef.current = [];
             setCurrentToolCall(undefined);
             setActivityLog([]);
+            setProcessingStartTime(undefined);
+            setCurrentTurnTokens(0);
             setIsProcessing(false);
 
             // Update token usage
@@ -301,6 +314,8 @@ export function App({ cwd }: AppProps) {
       setCurrentToolCall(undefined);
       setLastToolResult(undefined);
       setActivityLog([]);
+      setProcessingStartTime(Date.now());
+      setCurrentTurnTokens(0);
       setIsProcessing(true);
 
       // Send to agent
@@ -317,16 +332,38 @@ export function App({ cwd }: AppProps) {
     );
   }
 
+  // Build tool call entries for the box
+  const toolCallEntries = activityLog
+    .filter((e) => e.type === 'tool_call' && e.toolCall)
+    .map((e) => {
+      const result = activityLog.find(
+        (r) => r.type === 'tool_result' && r.toolResult?.toolCallId === e.toolCall?.id
+      )?.toolResult;
+      return { toolCall: e.toolCall!, result };
+    });
+
+  // Check if currently thinking (no response and no tool calls yet)
+  const isThinking = isProcessing && !currentResponse && !currentToolCall && toolCallEntries.length === 0;
+
   return (
     <Box flexDirection="column" padding={1}>
       {/* Messages */}
       <Messages
         messages={messages}
         currentResponse={isProcessing ? currentResponse : undefined}
-        currentToolCall={currentToolCall}
-        lastToolResult={lastToolResult}
-        activityLog={isProcessing ? activityLog : []}
+        currentToolCall={undefined} // Moved to ToolCallBox
+        lastToolResult={undefined}
+        activityLog={isProcessing ? activityLog.filter((e) => e.type === 'text') : []}
       />
+
+      {/* Tool calls in a collapsible box */}
+      {isProcessing && toolCallEntries.length > 0 && (
+        <ToolCallBox
+          entries={toolCallEntries}
+          maxVisible={3}
+          isExpanded={toolsExpanded}
+        />
+      )}
 
       {/* Queue indicator */}
       {messageQueue.length > 0 && (
@@ -344,12 +381,13 @@ export function App({ cwd }: AppProps) {
         </Box>
       )}
 
-      {/* Processing indicator (only when no tool call or response) */}
-      {isProcessing && !currentToolCall && !currentResponse && (
-        <Box marginY={1}>
-          <Spinner label="Thinking..." />
-        </Box>
-      )}
+      {/* Processing indicator */}
+      <ProcessingIndicator
+        isProcessing={isProcessing}
+        startTime={processingStartTime}
+        tokenCount={currentTurnTokens}
+        isThinking={isThinking}
+      />
 
       {/* Input - always enabled, supports queue/interrupt */}
       <Input
