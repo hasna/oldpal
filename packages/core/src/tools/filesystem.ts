@@ -239,7 +239,8 @@ export class FilesystemTools {
     const caseSensitive = (input.caseSensitive as boolean) || false;
 
     try {
-      const flags = caseSensitive ? 'g' : 'gi';
+      // Don't use global flag - it causes stateful behavior with .test()
+      const flags = caseSensitive ? '' : 'i';
       const regex = new RegExp(pattern, flags);
       const results: string[] = [];
 

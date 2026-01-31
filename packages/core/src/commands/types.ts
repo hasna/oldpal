@@ -46,6 +46,7 @@ export interface CommandContext {
   sessionId: string;
   messages: Array<{ role: string; content: string }>;
   tools: Tool[];
+  skills: Array<{ name: string; description: string; argumentHint?: string }>;
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;
   emit: (type: 'text' | 'done' | 'error', content?: string) => void;

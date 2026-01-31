@@ -236,20 +236,19 @@ export class BuiltinCommands {
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
-        // Skills are loaded separately, so we show what's available
         let message = '\n**Available Skills**\n\n';
-        message += 'Skills are invoked with /skill-name [arguments]\n\n';
-        message += '**Built-in Skills:**\n';
-        message += '  /brainstorm - Generate ideas on a topic\n';
-        message += '  /draft - Draft content (emails, docs, etc.)\n';
-        message += '  /research - Research a topic\n';
-        message += '  /summarize - Summarize text or content\n';
-        message += '\n**Connector Skills:**\n';
-        message += '  /calendar - Manage calendar events\n';
-        message += '  /email - Read and send emails\n';
-        message += '  /notes - Manage notes (Notion)\n';
-        message += '  /search - Search the web\n';
-        message += '\nCustom skills can be added in .oldpal/skills/\n';
+        message += 'Skills are invoked with $skill-name [arguments] or /skill-name [arguments]\n\n';
+
+        if (context.skills.length === 0) {
+          message += 'No skills loaded.\n';
+          message += '\nAdd skills to ~/.oldpal/skills/ or .oldpal/skills/\n';
+        } else {
+          for (const skill of context.skills) {
+            const hint = skill.argumentHint ? ` ${skill.argumentHint}` : '';
+            message += `  $${skill.name}${hint} - ${skill.description}\n`;
+          }
+          message += `\n${context.skills.length} skill(s) available.\n`;
+        }
 
         context.emit('text', message);
         context.emit('done');

@@ -45,6 +45,7 @@ export class AgentLoop {
   private sessionId: string;
   private isRunning = false;
   private shouldStop = false;
+  private systemPrompt: string | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -117,8 +118,9 @@ export class AgentLoop {
     // Load hooks
     this.hookLoader.load(hooksConfig);
 
-    // Set system prompt
+    // Set system prompt (store for re-use on clear)
     if (systemPrompt) {
+      this.systemPrompt = systemPrompt;
       this.context.addSystemMessage(systemPrompt);
     }
 
@@ -168,6 +170,10 @@ export class AgentLoop {
         if (commandResult.handled) {
           if (commandResult.clearConversation) {
             this.context = new AgentContext();
+            // Re-add system prompt after clearing
+            if (this.systemPrompt) {
+              this.context.addSystemMessage(this.systemPrompt);
+            }
           }
           if (commandResult.exit) {
             this.emit({ type: 'exit' });
@@ -266,7 +272,7 @@ export class AgentLoop {
       const preHookResult = await this.hookExecutor.execute(
         this.hookLoader.getHooks('PreToolUse'),
         {
-          session_id: generateId(),
+          session_id: this.sessionId,
           hook_event_name: 'PreToolUse',
           cwd: this.cwd,
           tool_name: toolCall.name,
@@ -274,7 +280,8 @@ export class AgentLoop {
         }
       );
 
-      if (preHookResult?.permissionDecision === 'deny') {
+      // Check if hook blocked the tool (either via continue: false or permissionDecision: deny)
+      if (preHookResult?.continue === false || preHookResult?.permissionDecision === 'deny') {
         results.push({
           toolCallId: toolCall.id,
           content: `Tool call denied: ${preHookResult.stopReason || 'Blocked by hook'}`,
@@ -295,10 +302,11 @@ export class AgentLoop {
       // Emit result as stream chunk
       this.emit({ type: 'tool_result', toolResult: result });
 
-      // Run PostToolUse hooks
-      await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUse'), {
-        session_id: generateId(),
-        hook_event_name: 'PostToolUse',
+      // Run PostToolUse or PostToolUseFailure hooks based on result
+      const hookEvent = result.isError ? 'PostToolUseFailure' : 'PostToolUse';
+      await this.hookExecutor.execute(this.hookLoader.getHooks(hookEvent), {
+        session_id: this.sessionId,
+        hook_event_name: hookEvent,
         cwd: this.cwd,
         tool_name: toolCall.name,
         tool_input: toolCall.input,
@@ -320,6 +328,11 @@ export class AgentLoop {
       sessionId: this.sessionId,
       messages: this.context.getMessages(),
       tools: this.toolRegistry.getTools(),
+      skills: this.skillLoader.getSkills().map(s => ({
+        name: s.name,
+        description: s.description || '',
+        argumentHint: s.argumentHint,
+      })),
       clearMessages: () => {
         this.context = new AgentContext();
       },
