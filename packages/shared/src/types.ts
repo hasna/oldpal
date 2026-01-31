@@ -202,6 +202,18 @@ export interface Session {
 }
 
 // ============================================
+// Multi-Session Types
+// ============================================
+
+export interface SessionInfo {
+  id: string;
+  cwd: string;
+  startedAt: number;
+  updatedAt: number;
+  isProcessing: boolean;
+}
+
+// ============================================
 // Config Types
 // ============================================
 

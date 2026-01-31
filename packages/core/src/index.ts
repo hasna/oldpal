@@ -38,6 +38,10 @@ export { loadConfig, getConfigPath } from './config';
 // Client
 export { EmbeddedClient } from './client';
 
+// Sessions
+export { SessionRegistry } from './sessions/registry';
+export type { SessionInfo, PersistedSession } from './sessions/registry';
+
 // Logger
 export { Logger, SessionStorage, initOldpalDir } from './logger';
 

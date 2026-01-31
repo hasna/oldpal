@@ -217,4 +217,25 @@ export class EmbeddedClient implements AssistantClient {
     this.messages = [];
     this.logger.info('Conversation cleared');
   }
+
+  /**
+   * Get working directory
+   */
+  getCwd(): string {
+    return this.cwd;
+  }
+
+  /**
+   * Get start time
+   */
+  getStartedAt(): string {
+    return this.startedAt;
+  }
+
+  /**
+   * Get messages
+   */
+  getMessages(): Message[] {
+    return [...this.messages];
+  }
 }
