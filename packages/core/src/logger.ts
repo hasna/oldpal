@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -108,6 +108,97 @@ export class SessionStorage {
   getSessionId(): string {
     return this.sessionId;
   }
+
+  /**
+   * Load session data from file
+   */
+  load(): SessionData | null {
+    try {
+      if (!existsSync(this.sessionFile)) return null;
+      const content = Bun.file(this.sessionFile).text();
+      return JSON.parse(content as unknown as string) as SessionData;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * List all saved sessions
+   */
+  static listSessions(): SavedSessionInfo[] {
+    const sessionsDir = join(homedir(), '.oldpal', 'sessions');
+    if (!existsSync(sessionsDir)) return [];
+
+    const sessions: SavedSessionInfo[] = [];
+    const files = readdirSync(sessionsDir);
+
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      try {
+        const filePath = join(sessionsDir, file);
+        const stat = Bun.file(filePath);
+        const content = JSON.parse(readFileSync(filePath, 'utf-8')) as SessionData;
+        sessions.push({
+          id: file.replace('.json', ''),
+          cwd: content.cwd,
+          startedAt: content.startedAt,
+          updatedAt: content.updatedAt,
+          messageCount: content.messages?.length || 0,
+        });
+      } catch {
+        // Skip invalid files
+      }
+    }
+
+    // Sort by updatedAt descending (most recent first)
+    return sessions.sort((a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
+  /**
+   * Get the most recent session
+   */
+  static getLatestSession(): SavedSessionInfo | null {
+    const sessions = SessionStorage.listSessions();
+    return sessions[0] || null;
+  }
+
+  /**
+   * Load a session by ID
+   */
+  static loadSession(sessionId: string): SessionData | null {
+    const sessionsDir = join(homedir(), '.oldpal', 'sessions');
+    const sessionFile = join(sessionsDir, `${sessionId}.json`);
+
+    try {
+      if (!existsSync(sessionFile)) return null;
+      return JSON.parse(readFileSync(sessionFile, 'utf-8')) as SessionData;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * Session data structure
+ */
+export interface SessionData {
+  messages: unknown[];
+  startedAt: string;
+  updatedAt: string;
+  cwd: string;
+}
+
+/**
+ * Saved session info (lightweight, for listing)
+ */
+export interface SavedSessionInfo {
+  id: string;
+  cwd: string;
+  startedAt: string;
+  updatedAt: string;
+  messageCount: number;
 }
 
 /**

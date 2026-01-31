@@ -380,30 +380,30 @@ export function App({ cwd }: AppProps) {
 
   // Handle new session creation
   const handleNewSession = useCallback(async () => {
-    // Save current session state
-    saveCurrentSessionState();
+    try {
+      // Save current session state
+      saveCurrentSessionState();
 
-    // Create new session
-    const newSession = await registry.createSession(cwd);
+      // Create new session
+      const newSession = await registry.createSession(cwd);
 
-    // Switch to new session
-    await registry.switchSession(newSession.id);
-    setActiveSessionId(newSession.id);
+      // Switch to new session
+      await registry.switchSession(newSession.id);
+      setActiveSessionId(newSession.id);
 
-    // Initialize empty state for new session
-    loadSessionState(newSession.id);
-    setIsProcessing(false);
+      // Initialize empty state for new session
+      loadSessionState(newSession.id);
+      setIsProcessing(false);
 
-    setShowSessionSelector(false);
+      setShowSessionSelector(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create session');
+      setShowSessionSelector(false);
+    }
   }, [cwd, registry, saveCurrentSessionState, loadSessionState]);
 
-  // Handle keyboard shortcuts
+  // Handle keyboard shortcuts (inactive when session selector is shown)
   useInput((input, key) => {
-    // If session selector is open, don't handle other shortcuts
-    if (showSessionSelector) {
-      return;
-    }
-
     // Ctrl+S: show session selector
     if (key.ctrl && input === 's') {
       if (sessions.length > 0) {
@@ -488,7 +488,7 @@ export function App({ cwd }: AppProps) {
       setScrollOffset(0);
       setAutoScroll(true);
     }
-  });
+  }, { isActive: !showSessionSelector });
 
   // Handle message submission
   const handleSubmit = useCallback(

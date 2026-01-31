@@ -6,7 +6,7 @@ interface SessionSelectorProps {
   sessions: SessionInfo[];
   activeSessionId: string | null;
   onSelect: (sessionId: string) => void;
-  onNew: () => void;
+  onNew: () => void | Promise<void>;
   onCancel: () => void;
 }
 
