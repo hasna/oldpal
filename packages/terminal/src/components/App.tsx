@@ -359,14 +359,10 @@ export function App({ cwd }: AppProps) {
       return;
     }
 
-    // Save current session state
+    // Save current session state first
     saveCurrentSessionState();
 
-    // Switch session in registry
-    await registry.switchSession(sessionId);
-    setActiveSessionId(sessionId);
-
-    // Load new session state
+    // Load new session state BEFORE switching (prevents race with buffered chunk replay)
     loadSessionState(sessionId);
 
     // Update processing state from new session
@@ -374,6 +370,10 @@ export function App({ cwd }: AppProps) {
     if (session) {
       setIsProcessing(session.isProcessing);
     }
+
+    // Now switch session in registry (may replay buffered chunks to the reset state)
+    await registry.switchSession(sessionId);
+    setActiveSessionId(sessionId);
 
     setShowSessionSelector(false);
   }, [activeSessionId, registry, saveCurrentSessionState, loadSessionState]);
@@ -387,13 +387,13 @@ export function App({ cwd }: AppProps) {
       // Create new session
       const newSession = await registry.createSession(cwd);
 
-      // Switch to new session
-      await registry.switchSession(newSession.id);
-      setActiveSessionId(newSession.id);
-
-      // Initialize empty state for new session
+      // Initialize empty state BEFORE switching (ensures clean slate)
       loadSessionState(newSession.id);
       setIsProcessing(false);
+
+      // Now switch to new session
+      await registry.switchSession(newSession.id);
+      setActiveSessionId(newSession.id);
 
       setShowSessionSelector(false);
     } catch (err) {
@@ -649,8 +649,9 @@ export function App({ cwd }: AppProps) {
         </Box>
       )}
 
-      {/* Messages */}
+      {/* Messages - key forces remount on session switch for clean state */}
       <Messages
+        key={activeSessionId || 'default'}
         messages={messages}
         currentResponse={isProcessing ? currentResponse : undefined}
         currentToolCall={undefined} // Moved to ToolCallBox

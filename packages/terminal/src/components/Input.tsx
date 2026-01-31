@@ -158,46 +158,30 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
     return desc.slice(0, maxLen - 3) + '...';
   };
 
+  // Autocomplete dropdown settings
+  const maxVisible = 8;
+
+  // Calculate visible window for scrolling
+  const getVisibleItems = <T extends { name: string }>(items: T[]): { items: T[]; startIndex: number } => {
+    if (items.length <= maxVisible) {
+      return { items, startIndex: 0 };
+    }
+
+    // Keep selected item in view with some context
+    let startIndex = Math.max(0, selectedIndex - Math.floor(maxVisible / 2));
+    startIndex = Math.min(startIndex, items.length - maxVisible);
+
+    return {
+      items: items.slice(startIndex, startIndex + maxVisible),
+      startIndex,
+    };
+  };
+
+  const visibleSkills = getVisibleItems(filteredSkills);
+  const visibleCommands = getVisibleItems(filteredCommands);
+
   return (
     <Box flexDirection="column" marginTop={1}>
-      {/* Skills autocomplete dropdown */}
-      {autocompleteMode === 'skill' && filteredSkills.length > 0 && (
-        <Box flexDirection="column" marginBottom={1} marginLeft={2}>
-          {filteredSkills.slice(0, 8).map((skill, i) => (
-            <Box key={skill.name}>
-              <Text color={i === selectedIndex ? 'cyan' : '#5fb3a1'}>
-                {skill.name.padEnd(20)}
-              </Text>
-              <Text dimColor={i !== selectedIndex}>
-                {truncateDescription(skill.description)}
-              </Text>
-            </Box>
-          ))}
-          {filteredSkills.length > 8 && (
-            <Text dimColor>  ...and {filteredSkills.length - 8} more</Text>
-          )}
-        </Box>
-      )}
-
-      {/* Commands autocomplete dropdown */}
-      {autocompleteMode === 'command' && filteredCommands.length > 0 && (
-        <Box flexDirection="column" marginBottom={1} marginLeft={2}>
-          {filteredCommands.slice(0, 8).map((cmd, i) => (
-            <Box key={cmd.name}>
-              <Text color={i === selectedIndex ? 'cyan' : undefined}>
-                {cmd.name.padEnd(16)}
-              </Text>
-              <Text dimColor={i !== selectedIndex}>
-                {cmd.description}
-              </Text>
-            </Box>
-          ))}
-          {filteredCommands.length > 8 && (
-            <Text dimColor>  ...and {filteredCommands.length - 8} more</Text>
-          )}
-        </Box>
-      )}
-
       {/* Input line */}
       <Box>
         <Text dimColor={isProcessing}>{prompt} </Text>
@@ -208,6 +192,62 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
           placeholder={placeholder}
         />
       </Box>
+
+      {/* Skills autocomplete dropdown - below input */}
+      {autocompleteMode === 'skill' && filteredSkills.length > 0 && (
+        <Box flexDirection="column" marginTop={1} marginLeft={2}>
+          {/* Scroll indicator - top */}
+          {visibleSkills.startIndex > 0 && (
+            <Text dimColor>  ↑ {visibleSkills.startIndex} more above</Text>
+          )}
+          {visibleSkills.items.map((skill, i) => {
+            const actualIndex = visibleSkills.startIndex + i;
+            return (
+              <Box key={skill.name}>
+                <Text color={actualIndex === selectedIndex ? 'cyan' : '#5fb3a1'}>
+                  {actualIndex === selectedIndex ? '▸ ' : '  '}
+                  {skill.name.padEnd(18)}
+                </Text>
+                <Text dimColor={actualIndex !== selectedIndex}>
+                  {truncateDescription(skill.description)}
+                </Text>
+              </Box>
+            );
+          })}
+          {/* Scroll indicator - bottom */}
+          {visibleSkills.startIndex + maxVisible < filteredSkills.length && (
+            <Text dimColor>  ↓ {filteredSkills.length - visibleSkills.startIndex - maxVisible} more below</Text>
+          )}
+        </Box>
+      )}
+
+      {/* Commands autocomplete dropdown - below input */}
+      {autocompleteMode === 'command' && filteredCommands.length > 0 && (
+        <Box flexDirection="column" marginTop={1} marginLeft={2}>
+          {/* Scroll indicator - top */}
+          {visibleCommands.startIndex > 0 && (
+            <Text dimColor>  ↑ {visibleCommands.startIndex} more above</Text>
+          )}
+          {visibleCommands.items.map((cmd, i) => {
+            const actualIndex = visibleCommands.startIndex + i;
+            return (
+              <Box key={cmd.name}>
+                <Text color={actualIndex === selectedIndex ? 'cyan' : undefined}>
+                  {actualIndex === selectedIndex ? '▸ ' : '  '}
+                  {cmd.name.padEnd(14)}
+                </Text>
+                <Text dimColor={actualIndex !== selectedIndex}>
+                  {cmd.description}
+                </Text>
+              </Box>
+            );
+          })}
+          {/* Scroll indicator - bottom */}
+          {visibleCommands.startIndex + maxVisible < filteredCommands.length && (
+            <Text dimColor>  ↓ {filteredCommands.length - visibleCommands.startIndex - maxVisible} more below</Text>
+          )}
+        </Box>
+      )}
     </Box>
   );
 }
