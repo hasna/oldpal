@@ -14,6 +14,7 @@ const COMMANDS = [
   { name: '/model', description: 'show model information' },
   { name: '/skills', description: 'list available skills' },
   { name: '/config', description: 'show configuration' },
+  { name: '/connectors', description: 'list available connectors' },
   { name: '/init', description: 'initialize oldpal in project' },
   { name: '/compact', description: 'summarize to save context' },
   { name: '/memory', description: 'show what AI remembers' },

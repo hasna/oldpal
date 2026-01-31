@@ -333,6 +333,15 @@ export class AgentLoop {
         description: s.description || '',
         argumentHint: s.argumentHint,
       })),
+      connectors: this.connectorBridge.getConnectors().map(c => ({
+        name: c.name,
+        description: c.description,
+        cli: c.cli,
+        commands: c.commands.map(cmd => ({
+          name: cmd.name,
+          description: cmd.description,
+        })),
+      })),
       clearMessages: () => {
         this.context = new AgentContext();
       },

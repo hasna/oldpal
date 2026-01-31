@@ -5,7 +5,7 @@ import { homedir, platform, release, arch } from 'os';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 
 // Version constant - should match package.json
-const VERSION = '0.6.6';
+const VERSION = '0.6.7';
 
 /**
  * Built-in slash commands for oldpal
@@ -39,6 +39,7 @@ export class BuiltinCommands {
     loader.register(this.prCommand());
     loader.register(this.reviewCommand());
     loader.register(this.feedbackCommand());
+    loader.register(this.connectorsCommand());
     loader.register(this.exitCommand());
   }
 
@@ -575,6 +576,124 @@ Check for:
 5. **Tests** - Coverage, edge cases, assertions
 
 If there are staged changes, review those. Otherwise, ask what to review.`,
+    };
+  }
+
+  /**
+   * /connectors - List and manage connectors
+   */
+  private connectorsCommand(): Command {
+    return {
+      name: 'connectors',
+      description: 'List available connectors and their status',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const connectorName = args.trim().toLowerCase();
+
+        // If a specific connector is requested, show details
+        if (connectorName) {
+          const connector = context.connectors.find(
+            c => c.name.toLowerCase() === connectorName
+          );
+
+          if (!connector) {
+            context.emit('text', `\nConnector "${connectorName}" not found.\n`);
+            context.emit('text', `Use /connectors to see available connectors.\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // Show detailed info for this connector
+          let message = `\n**${connector.name}** Connector\n\n`;
+          message += `CLI: \`${connector.cli}\`\n`;
+          message += `Description: ${connector.description}\n\n`;
+
+          // Check auth status
+          try {
+            const result = await Bun.$`${connector.cli} auth status --format json`.quiet().nothrow();
+            if (result.exitCode === 0) {
+              const status = JSON.parse(result.stdout.toString());
+              message += `**Auth Status:** ${status.authenticated ? '✓ Authenticated' : '○ Not authenticated'}\n`;
+              if (status.user || status.email) {
+                message += `**Account:** ${status.user || status.email}\n`;
+              }
+            } else {
+              message += `**Auth Status:** ○ Not authenticated\n`;
+            }
+          } catch {
+            message += `**Auth Status:** ? Unable to check\n`;
+          }
+
+          message += `\n**Available Commands:**\n`;
+          for (const cmd of connector.commands) {
+            message += `  ${cmd.name} - ${cmd.description}\n`;
+          }
+
+          message += `\n**Usage:**\n`;
+          message += `  Ask the AI to use ${connector.name} (e.g., "list my ${connector.name} items")\n`;
+          message += `  Or run directly: \`${connector.cli} <command>\`\n`;
+
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // List all connectors
+        let message = '\n**Available Connectors**\n\n';
+
+        if (context.connectors.length === 0) {
+          message += 'No connectors found.\n\n';
+          message += 'Install connectors with:\n';
+          message += '  `bun add -g @hasnaxyz/connect-<name>`\n\n';
+          message += 'Available connectors: notion, gmail, slack, linear, etc.\n';
+        } else {
+          // Check auth status for each (in parallel for speed)
+          const statuses = await Promise.all(
+            context.connectors.map(async (connector) => {
+              try {
+                const result = await Promise.race([
+                  Bun.$`${connector.cli} auth status --format json`.quiet().nothrow(),
+                  new Promise<{ exitCode: number; stdout: { toString: () => string } }>((resolve) =>
+                    setTimeout(() => resolve({ exitCode: 1, stdout: { toString: () => '{}' } }), 1000)
+                  ),
+                ]);
+                if (result.exitCode === 0) {
+                  try {
+                    const status = JSON.parse(result.stdout.toString());
+                    return status.authenticated ? '✓' : '○';
+                  } catch {
+                    return '○';
+                  }
+                }
+                return '○';
+              } catch {
+                return '?';
+              }
+            })
+          );
+
+          message += '| Status | Connector | Commands |\n';
+          message += '|--------|-----------|----------|\n';
+
+          context.connectors.forEach((connector, i) => {
+            const status = statuses[i];
+            const cmdCount = connector.commands.length;
+            message += `| ${status} | ${connector.name.padEnd(12)} | ${cmdCount} commands |\n`;
+          });
+
+          message += `\n${context.connectors.length} connector(s) available.\n\n`;
+          message += '**Legend:** ✓ authenticated | ○ not authenticated | ? unknown\n\n';
+          message += '**Commands:**\n';
+          message += '  `/connectors <name>` - Show details for a connector\n';
+          message += '  `connect-<name> auth login` - Authenticate a connector\n';
+        }
+
+        context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
+      },
     };
   }
 

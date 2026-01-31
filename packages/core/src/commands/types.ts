@@ -39,6 +39,16 @@ export interface CommandFrontmatter {
 }
 
 /**
+ * Connector info for command context
+ */
+export interface ConnectorInfo {
+  name: string;
+  description: string;
+  cli: string;
+  commands: Array<{ name: string; description: string }>;
+}
+
+/**
  * Context passed to command handlers
  */
 export interface CommandContext {
@@ -47,6 +57,7 @@ export interface CommandContext {
   messages: Array<{ role: string; content: string }>;
   tools: Tool[];
   skills: Array<{ name: string; description: string; argumentHint?: string }>;
+  connectors: ConnectorInfo[];
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;
   emit: (type: 'text' | 'done' | 'error', content?: string) => void;
