@@ -12,7 +12,7 @@ import { HookLoader } from '../hooks/loader';
 import { HookExecutor } from '../hooks/executor';
 import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext } from '../commands';
 import { createLLMClient, type LLMClient } from '../llm/client';
-import { loadConfig, loadHooksConfig, loadSystemPrompt } from '../config';
+import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir } from '../config';
 
 export interface AgentLoopOptions {
   config?: OldpalConfig;
@@ -75,6 +75,9 @@ export class AgentLoop {
    * Initialize the agent
    */
   async initialize(): Promise<void> {
+    // Ensure config directories exist
+    await ensureConfigDir();
+
     // Load configuration
     this.config = await loadConfig(this.cwd);
 
