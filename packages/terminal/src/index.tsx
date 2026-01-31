@@ -13,7 +13,7 @@ const options = {
 
 // Handle version
 if (options.version) {
-  console.log('oldpal v0.4.1');
+  console.log('oldpal v0.5.1');
   process.exit(0);
 }
 
