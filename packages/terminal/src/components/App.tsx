@@ -203,7 +203,7 @@ export function App({ cwd }: AppProps) {
       // Track tokens for current turn
       setCurrentTurnTokens((prev) => prev + (chunk.usage?.outputTokens || 0));
     } else if (chunk.type === 'done') {
-      // Save any remaining text
+      // Save any remaining text to activity log
       if (responseRef.current.trim()) {
         const textEntry = {
           id: generateId(),
@@ -212,13 +212,14 @@ export function App({ cwd }: AppProps) {
           timestamp: now(),
         };
         activityLogRef.current = [...activityLogRef.current, textEntry];
+        responseRef.current = ''; // Clear after saving to avoid duplication
       }
 
-      // Add complete message to history
+      // Add complete message to history (all text is now in activityLog)
       const fullContent = activityLogRef.current
         .filter(e => e.type === 'text')
         .map(e => e.content)
-        .join('\n') + (responseRef.current ? '\n' + responseRef.current : '');
+        .join('\n');
 
       if (fullContent.trim() || toolCallsRef.current.length > 0) {
         setMessages((prev) => [
@@ -627,7 +628,7 @@ export function App({ cwd }: AppProps) {
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
-          version="0.6.3"
+          version="0.6.4"
           model="claude-sonnet-4"
           directory={activeSession?.cwd || cwd}
         />
