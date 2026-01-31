@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
-import { EmbeddedClient } from '@oldpal/core';
+import { SessionRegistry, type SessionInfo } from '@oldpal/core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage } from '@oldpal/shared';
 import { generateId, now } from '@oldpal/shared';
 import { Input } from './Input';
@@ -9,6 +9,7 @@ import { Status } from './Status';
 import { Spinner } from './Spinner';
 import { ProcessingIndicator } from './ProcessingIndicator';
 import { WelcomeBanner } from './WelcomeBanner';
+import { SessionSelector } from './SessionSelector';
 
 // Format tool name for compact display
 function formatToolName(toolCall: ToolCall): string {
@@ -50,15 +51,38 @@ interface ActivityEntry {
   timestamp: number;
 }
 
+// Per-session UI state
+interface SessionUIState {
+  messages: Message[];
+  currentResponse: string;
+  activityLog: ActivityEntry[];
+  tokenUsage: TokenUsage | undefined;
+  processingStartTime: number | undefined;
+  currentTurnTokens: number;
+  messageQueue: string[];
+  error: string | null;
+}
+
 export function App({ cwd }: AppProps) {
   const { exit } = useApp();
-  const [client, setClient] = useState<EmbeddedClient | null>(null);
+
+  // Session registry
+  const [registry] = useState(() => new SessionRegistry());
+  const registryRef = useRef(registry);
+
+  // Active session state
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [showSessionSelector, setShowSessionSelector] = useState(false);
+
+  // Per-session UI state stored by session ID
+  const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
+
+  // Current session UI state (derived from active session)
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentResponse, setCurrentResponse] = useState('');
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | undefined>();
-  const [lastToolResult, setLastToolResult] = useState<ToolResult | undefined>();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [messageQueue, setMessageQueue] = useState<string[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
@@ -68,16 +92,198 @@ export function App({ cwd }: AppProps) {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
 
-
   // Use ref to track response for the done callback
   const responseRef = useRef('');
-  const clientRef = useRef<EmbeddedClient | null>(null);
   const toolCallsRef = useRef<ToolCall[]>([]);
   const toolResultsRef = useRef<ToolResult[]>([]);
+  const activityLogRef = useRef<ActivityEntry[]>([]);
+
+  // Save current session UI state
+  const saveCurrentSessionState = useCallback(() => {
+    if (activeSessionId) {
+      sessionUIStates.current.set(activeSessionId, {
+        messages,
+        currentResponse: responseRef.current,
+        activityLog: activityLogRef.current,
+        tokenUsage,
+        processingStartTime,
+        currentTurnTokens,
+        messageQueue,
+        error,
+      });
+    }
+  }, [activeSessionId, messages, tokenUsage, processingStartTime, currentTurnTokens, messageQueue, error]);
+
+  // Load session UI state
+  const loadSessionState = useCallback((sessionId: string) => {
+    const state = sessionUIStates.current.get(sessionId);
+    if (state) {
+      setMessages(state.messages);
+      setCurrentResponse(state.currentResponse);
+      responseRef.current = state.currentResponse;
+      setActivityLog(state.activityLog);
+      activityLogRef.current = state.activityLog;
+      setTokenUsage(state.tokenUsage);
+      setProcessingStartTime(state.processingStartTime);
+      setCurrentTurnTokens(state.currentTurnTokens);
+      setMessageQueue(state.messageQueue);
+      setError(state.error);
+    } else {
+      // New session - reset state
+      setMessages([]);
+      setCurrentResponse('');
+      responseRef.current = '';
+      setActivityLog([]);
+      activityLogRef.current = [];
+      setTokenUsage(undefined);
+      setProcessingStartTime(undefined);
+      setCurrentTurnTokens(0);
+      setMessageQueue([]);
+      setError(null);
+    }
+    setScrollOffset(0);
+    setAutoScroll(true);
+  }, []);
+
+  // Handle chunk from registry
+  const handleChunk = useCallback((chunk: StreamChunk) => {
+    if (chunk.type === 'text' && chunk.content) {
+      responseRef.current += chunk.content;
+      setCurrentResponse(responseRef.current);
+    } else if (chunk.type === 'tool_use' && chunk.toolCall) {
+      // Save any accumulated text before the tool call
+      if (responseRef.current.trim()) {
+        const textEntry = {
+          id: generateId(),
+          type: 'text' as const,
+          content: responseRef.current,
+          timestamp: now(),
+        };
+        activityLogRef.current = [...activityLogRef.current, textEntry];
+        setActivityLog(activityLogRef.current);
+        setCurrentResponse('');
+        responseRef.current = '';
+      }
+
+      // Track tool call
+      toolCallsRef.current.push(chunk.toolCall);
+      const toolEntry = {
+        id: generateId(),
+        type: 'tool_call' as const,
+        toolCall: chunk.toolCall,
+        timestamp: now(),
+      };
+      activityLogRef.current = [...activityLogRef.current, toolEntry];
+      setActivityLog(activityLogRef.current);
+      setCurrentToolCall(chunk.toolCall);
+    } else if (chunk.type === 'tool_result' && chunk.toolResult) {
+      // Track tool result
+      toolResultsRef.current.push(chunk.toolResult);
+      const resultEntry = {
+        id: generateId(),
+        type: 'tool_result' as const,
+        toolResult: chunk.toolResult,
+        timestamp: now(),
+      };
+      activityLogRef.current = [...activityLogRef.current, resultEntry];
+      setActivityLog(activityLogRef.current);
+      setCurrentToolCall(undefined);
+    } else if (chunk.type === 'error' && chunk.error) {
+      setError(chunk.error);
+      setIsProcessing(false);
+    } else if (chunk.type === 'exit') {
+      // Exit command was issued
+      registry.closeAll();
+      exit();
+    } else if (chunk.type === 'usage' && chunk.usage) {
+      setTokenUsage(chunk.usage);
+      // Track tokens for current turn
+      setCurrentTurnTokens((prev) => prev + (chunk.usage?.outputTokens || 0));
+    } else if (chunk.type === 'done') {
+      // Save any remaining text
+      if (responseRef.current.trim()) {
+        const textEntry = {
+          id: generateId(),
+          type: 'text' as const,
+          content: responseRef.current,
+          timestamp: now(),
+        };
+        activityLogRef.current = [...activityLogRef.current, textEntry];
+      }
+
+      // Add complete message to history
+      const fullContent = activityLogRef.current
+        .filter(e => e.type === 'text')
+        .map(e => e.content)
+        .join('\n') + (responseRef.current ? '\n' + responseRef.current : '');
+
+      if (fullContent.trim() || toolCallsRef.current.length > 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateId(),
+            role: 'assistant',
+            content: fullContent.trim(),
+            timestamp: now(),
+            toolCalls: toolCallsRef.current.length > 0 ? [...toolCallsRef.current] : undefined,
+            toolResults: toolResultsRef.current.length > 0 ? [...toolResultsRef.current] : undefined,
+          },
+        ]);
+      }
+
+      // Reset all state
+      setCurrentResponse('');
+      responseRef.current = '';
+      toolCallsRef.current = [];
+      toolResultsRef.current = [];
+      setCurrentToolCall(undefined);
+      setActivityLog([]);
+      activityLogRef.current = [];
+      setProcessingStartTime(undefined);
+      setCurrentTurnTokens(0);
+      setIsProcessing(false);
+
+      // Update token usage from client
+      const activeSession = registry.getActiveSession();
+      if (activeSession) {
+        setTokenUsage(activeSession.client.getTokenUsage());
+      }
+    }
+  }, [registry, exit]);
+
+  // Initialize first session
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        // Register chunk handler
+        registry.onChunk(handleChunk);
+        registry.onError((err) => {
+          setError(err.message);
+          setIsProcessing(false);
+        });
+
+        // Create first session
+        const session = await registry.createSession(cwd);
+        setActiveSessionId(session.id);
+        setIsInitializing(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setIsInitializing(false);
+      }
+    };
+
+    initSession();
+
+    // Cleanup on unmount
+    return () => {
+      registry.closeAll();
+    };
+  }, [cwd, registry, handleChunk]);
 
   // Process queued messages
   const processQueue = useCallback(async () => {
-    if (!clientRef.current || messageQueue.length === 0) return;
+    const activeSession = registryRef.current.getActiveSession();
+    if (!activeSession || messageQueue.length === 0) return;
 
     const nextMessage = messageQueue[0];
     setMessageQueue((prev) => prev.slice(1));
@@ -98,145 +304,15 @@ export function App({ cwd }: AppProps) {
     toolResultsRef.current = [];
     setError(null);
     setCurrentToolCall(undefined);
-    setLastToolResult(undefined);
     setActivityLog([]);
+    activityLogRef.current = [];
     setProcessingStartTime(Date.now());
     setCurrentTurnTokens(0);
     setIsProcessing(true);
 
-    await clientRef.current.send(nextMessage);
+    registryRef.current.setProcessing(activeSession.id, true);
+    await activeSession.client.send(nextMessage);
   }, [messageQueue]);
-
-  // Initialize client
-  useEffect(() => {
-    const initClient = async () => {
-      try {
-        const newClient = new EmbeddedClient(cwd);
-        clientRef.current = newClient;
-
-        newClient.onChunk((chunk: StreamChunk) => {
-          if (chunk.type === 'text' && chunk.content) {
-            responseRef.current += chunk.content;
-            setCurrentResponse(responseRef.current);
-          } else if (chunk.type === 'tool_use' && chunk.toolCall) {
-            // Save any accumulated text before the tool call
-            if (responseRef.current.trim()) {
-              setActivityLog((prev) => [
-                ...prev,
-                {
-                  id: generateId(),
-                  type: 'text',
-                  content: responseRef.current,
-                  timestamp: now(),
-                },
-              ]);
-              setCurrentResponse('');
-              responseRef.current = '';
-            }
-
-            // Track tool call
-            toolCallsRef.current.push(chunk.toolCall);
-            setActivityLog((prev) => [
-              ...prev,
-              {
-                id: generateId(),
-                type: 'tool_call',
-                toolCall: chunk.toolCall,
-                timestamp: now(),
-              },
-            ]);
-            setCurrentToolCall(chunk.toolCall);
-          } else if (chunk.type === 'tool_result' && chunk.toolResult) {
-            // Track tool result
-            toolResultsRef.current.push(chunk.toolResult);
-            setActivityLog((prev) => [
-              ...prev,
-              {
-                id: generateId(),
-                type: 'tool_result',
-                toolResult: chunk.toolResult,
-                timestamp: now(),
-              },
-            ]);
-            setCurrentToolCall(undefined);
-          } else if (chunk.type === 'error' && chunk.error) {
-            setError(chunk.error);
-            setIsProcessing(false);
-          } else if (chunk.type === 'exit') {
-            // Exit command was issued
-            exit();
-          } else if (chunk.type === 'usage' && chunk.usage) {
-            setTokenUsage(chunk.usage);
-            // Track tokens for current turn
-            setCurrentTurnTokens((prev) => prev + (chunk.usage?.outputTokens || 0));
-          } else if (chunk.type === 'done') {
-            // Save any remaining text
-            if (responseRef.current.trim()) {
-              setActivityLog((prev) => [
-                ...prev,
-                {
-                  id: generateId(),
-                  type: 'text',
-                  content: responseRef.current,
-                  timestamp: now(),
-                },
-              ]);
-            }
-
-            // Add complete message to history
-            const fullContent = activityLog
-              .filter(e => e.type === 'text')
-              .map(e => e.content)
-              .join('\n') + (responseRef.current ? '\n' + responseRef.current : '');
-
-            if (fullContent.trim() || toolCallsRef.current.length > 0) {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: generateId(),
-                  role: 'assistant',
-                  content: fullContent.trim(),
-                  timestamp: now(),
-                  toolCalls: toolCallsRef.current.length > 0 ? [...toolCallsRef.current] : undefined,
-                  toolResults: toolResultsRef.current.length > 0 ? [...toolResultsRef.current] : undefined,
-                },
-              ]);
-            }
-
-            // Reset all state
-            setCurrentResponse('');
-            responseRef.current = '';
-            toolCallsRef.current = [];
-            toolResultsRef.current = [];
-            setCurrentToolCall(undefined);
-            setActivityLog([]);
-            setProcessingStartTime(undefined);
-            setCurrentTurnTokens(0);
-            setIsProcessing(false);
-
-            // Update token usage
-            if (newClient) {
-              setTokenUsage(newClient.getTokenUsage());
-            }
-          }
-        });
-
-        newClient.onError((err: Error) => {
-          setError(err.message);
-          setIsProcessing(false);
-        });
-
-        await newClient.initialize();
-        setClient(newClient);
-        setIsInitializing(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        setIsInitializing(false);
-      }
-    };
-
-    initClient();
-  }, [cwd]);
 
   // Process queue when not processing
   useEffect(() => {
@@ -257,12 +333,77 @@ export function App({ cwd }: AppProps) {
   const toolCallsHeight = isProcessing ? Math.min(toolCallsRef.current.length, 5) : 0;
   const maxVisibleMessages = Math.max(3, baseMaxVisible - toolCallsHeight);
 
+  // Get session info
+  const sessions = registry.listSessions();
+  const activeSession = registry.getActiveSession();
+  const sessionIndex = activeSessionId ? registry.getSessionIndex(activeSessionId) : 0;
+  const sessionCount = registry.getSessionCount();
+  const backgroundProcessingCount = registry.getBackgroundProcessingSessions().length;
+
+  // Handle session switch
+  const handleSessionSwitch = useCallback(async (sessionId: string) => {
+    if (sessionId === activeSessionId) {
+      setShowSessionSelector(false);
+      return;
+    }
+
+    // Save current session state
+    saveCurrentSessionState();
+
+    // Switch session in registry
+    await registry.switchSession(sessionId);
+    setActiveSessionId(sessionId);
+
+    // Load new session state
+    loadSessionState(sessionId);
+
+    // Update processing state from new session
+    const session = registry.getSession(sessionId);
+    if (session) {
+      setIsProcessing(session.isProcessing);
+    }
+
+    setShowSessionSelector(false);
+  }, [activeSessionId, registry, saveCurrentSessionState, loadSessionState]);
+
+  // Handle new session creation
+  const handleNewSession = useCallback(async () => {
+    // Save current session state
+    saveCurrentSessionState();
+
+    // Create new session
+    const newSession = await registry.createSession(cwd);
+
+    // Switch to new session
+    await registry.switchSession(newSession.id);
+    setActiveSessionId(newSession.id);
+
+    // Initialize empty state for new session
+    loadSessionState(newSession.id);
+    setIsProcessing(false);
+
+    setShowSessionSelector(false);
+  }, [cwd, registry, saveCurrentSessionState, loadSessionState]);
+
   // Handle keyboard shortcuts
   useInput((input, key) => {
+    // If session selector is open, don't handle other shortcuts
+    if (showSessionSelector) {
+      return;
+    }
+
+    // Ctrl+S: show session selector
+    if (key.ctrl && input === 's') {
+      if (sessions.length > 0) {
+        setShowSessionSelector(true);
+      }
+      return;
+    }
+
     // Ctrl+C: stop or exit
     if (key.ctrl && input === 'c') {
-      if (isProcessing && client) {
-        client.stop();
+      if (isProcessing && activeSession) {
+        activeSession.client.stop();
         // Save partial response if any
         if (responseRef.current) {
           setMessages((prev) => [
@@ -279,26 +420,29 @@ export function App({ cwd }: AppProps) {
         }
         setIsProcessing(false);
       } else {
+        registry.closeAll();
         exit();
       }
     }
-    // Escape: stop processing
-    if (key.escape && isProcessing && client) {
-      client.stop();
-      if (responseRef.current) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: generateId(),
-            role: 'assistant',
-            content: responseRef.current + '\n\n[stopped]',
-            timestamp: now(),
-          },
-        ]);
-        setCurrentResponse('');
-        responseRef.current = '';
+    // Escape: stop processing or close session selector
+    if (key.escape) {
+      if (isProcessing && activeSession) {
+        activeSession.client.stop();
+        if (responseRef.current) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: generateId(),
+              role: 'assistant',
+              content: responseRef.current + '\n\n[stopped]',
+              timestamp: now(),
+            },
+          ]);
+          setCurrentResponse('');
+          responseRef.current = '';
+        }
+        setIsProcessing(false);
       }
-      setIsProcessing(false);
     }
 
     // Page Up: scroll up through messages
@@ -337,9 +481,29 @@ export function App({ cwd }: AppProps) {
   // Handle message submission
   const handleSubmit = useCallback(
     async (input: string, mode: 'normal' | 'interrupt' | 'queue' = 'normal') => {
-      if (!client || !input.trim()) return;
+      if (!activeSession || !input.trim()) return;
 
       const trimmedInput = input.trim();
+
+      // Check for /session command
+      if (trimmedInput.startsWith('/session')) {
+        const arg = trimmedInput.slice(8).trim();
+
+        if (arg === 'new') {
+          await handleNewSession();
+          return;
+        }
+
+        const num = parseInt(arg, 10);
+        if (!isNaN(num) && num > 0 && num <= sessions.length) {
+          await handleSessionSwitch(sessions[num - 1].id);
+          return;
+        }
+
+        // No arg or invalid - show session list
+        setShowSessionSelector(true);
+        return;
+      }
 
       // Queue mode: add to queue for later
       if (mode === 'queue' || (isProcessing && mode === 'normal')) {
@@ -349,7 +513,7 @@ export function App({ cwd }: AppProps) {
 
       // Interrupt mode: stop current and send immediately
       if (mode === 'interrupt' && isProcessing) {
-        client.stop();
+        activeSession.client.stop();
         // Save partial response
         if (responseRef.current) {
           setMessages((prev) => [
@@ -385,22 +549,40 @@ export function App({ cwd }: AppProps) {
       toolResultsRef.current = [];
       setError(null);
       setCurrentToolCall(undefined);
-      setLastToolResult(undefined);
       setActivityLog([]);
+      activityLogRef.current = [];
       setProcessingStartTime(Date.now());
       setCurrentTurnTokens(0);
       setIsProcessing(true);
 
+      // Mark session as processing
+      registry.setProcessing(activeSession.id, true);
+
       // Send to agent
-      await client.send(trimmedInput);
+      await activeSession.client.send(trimmedInput);
     },
-    [client, isProcessing]
+    [activeSession, isProcessing, registry, sessions, handleNewSession, handleSessionSwitch]
   );
 
   if (isInitializing) {
     return (
       <Box flexDirection="column" padding={1}>
         <Spinner label="Initializing..." />
+      </Box>
+    );
+  }
+
+  // Show session selector modal
+  if (showSessionSelector) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <SessionSelector
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelect={handleSessionSwitch}
+          onNew={handleNewSession}
+          onCancel={() => setShowSessionSelector(false)}
+        />
       </Box>
     );
   }
@@ -428,8 +610,17 @@ export function App({ cwd }: AppProps) {
         <WelcomeBanner
           version="0.4.1"
           model="claude-sonnet-4"
-          directory={cwd}
+          directory={activeSession?.cwd || cwd}
         />
+      )}
+
+      {/* Background processing indicator */}
+      {backgroundProcessingCount > 0 && (
+        <Box marginBottom={1}>
+          <Text color="yellow">
+            {backgroundProcessingCount} session{backgroundProcessingCount > 1 ? 's' : ''} processing in background (Ctrl+S to switch)
+          </Text>
+        </Box>
       )}
 
       {/* Scroll indicator */}
@@ -493,7 +684,15 @@ export function App({ cwd }: AppProps) {
       />
 
       {/* Status bar */}
-      <Status isProcessing={isProcessing} cwd={cwd} queueLength={messageQueue.length} tokenUsage={tokenUsage} />
+      <Status
+        isProcessing={isProcessing}
+        cwd={activeSession?.cwd || cwd}
+        queueLength={messageQueue.length}
+        tokenUsage={tokenUsage}
+        sessionIndex={sessionIndex}
+        sessionCount={sessionCount}
+        backgroundProcessingCount={backgroundProcessingCount}
+      />
     </Box>
   );
 }
