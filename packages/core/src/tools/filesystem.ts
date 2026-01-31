@@ -1,7 +1,7 @@
 import type { Tool } from '@oldpal/shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname } from 'path';
-import { homedir } from 'os';
+import { getConfigDir } from '../config';
 import { Glob } from 'bun';
 
 // Session ID for temp folder (set during registration)
@@ -11,7 +11,7 @@ let currentSessionId: string = 'default';
  * Get the temp folder path for the current session
  */
 function getTempFolder(): string {
-  return join(homedir(), '.oldpal', 'temp', currentSessionId);
+  return join(getConfigDir(), 'temp', currentSessionId);
 }
 
 /**
@@ -62,6 +62,10 @@ export class FilesystemTools {
           type: 'string',
           description: 'The file path to read (absolute or relative to cwd)',
         },
+        cwd: {
+          type: 'string',
+          description: 'Base working directory for relative paths (optional)',
+        },
         offset: {
           type: 'number',
           description: 'Line number to start reading from (1-indexed)',
@@ -76,7 +80,8 @@ export class FilesystemTools {
   };
 
   static readonly readExecutor: ToolExecutor = async (input) => {
-    const path = resolve(process.cwd(), input.path as string);
+    const baseCwd = (input.cwd as string) || process.cwd();
+    const path = resolve(baseCwd, input.path as string);
     const offset = ((input.offset as number) || 1) - 1;
     const limit = input.limit as number | undefined;
 
@@ -173,6 +178,10 @@ export class FilesystemTools {
           type: 'string',
           description: 'Directory to search in (default: cwd)',
         },
+        cwd: {
+          type: 'string',
+          description: 'Base working directory for relative paths (optional)',
+        },
       },
       required: ['pattern'],
     },
@@ -180,7 +189,8 @@ export class FilesystemTools {
 
   static readonly globExecutor: ToolExecutor = async (input) => {
     const pattern = input.pattern as string;
-    const searchPath = resolve(process.cwd(), (input.path as string) || '.');
+    const baseCwd = (input.cwd as string) || process.cwd();
+    const searchPath = resolve(baseCwd, (input.path as string) || '.');
 
     try {
       const glob = new Glob(pattern);
@@ -219,6 +229,10 @@ export class FilesystemTools {
           type: 'string',
           description: 'File or directory to search in',
         },
+        cwd: {
+          type: 'string',
+          description: 'Base working directory for relative paths (optional)',
+        },
         glob: {
           type: 'string',
           description: 'Glob pattern to filter files (e.g., "*.ts")',
@@ -234,7 +248,8 @@ export class FilesystemTools {
 
   static readonly grepExecutor: ToolExecutor = async (input) => {
     const pattern = input.pattern as string;
-    const searchPath = resolve(process.cwd(), (input.path as string) || '.');
+    const baseCwd = (input.cwd as string) || process.cwd();
+    const searchPath = resolve(baseCwd, (input.path as string) || '.');
     const globPattern = (input.glob as string) || '**/*';
     const caseSensitive = (input.caseSensitive as boolean) || false;
 

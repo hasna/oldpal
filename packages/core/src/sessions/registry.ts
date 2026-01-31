@@ -34,12 +34,17 @@ export class SessionRegistry {
   private chunkBuffers: Map<string, StreamChunk[]> = new Map();
   private chunkCallbacks: ((chunk: StreamChunk) => void)[] = [];
   private errorCallbacks: ((error: Error) => void)[] = [];
+  private clientFactory: (cwd: string) => EmbeddedClient;
+
+  constructor(clientFactory?: (cwd: string) => EmbeddedClient) {
+    this.clientFactory = clientFactory ?? ((cwd) => new EmbeddedClient(cwd));
+  }
 
   /**
    * Create a new session
    */
   async createSession(cwd: string): Promise<SessionInfo> {
-    const client = new EmbeddedClient(cwd);
+    const client = this.clientFactory(cwd);
     await client.initialize();
 
     const sessionInfo: SessionInfo = {
@@ -84,7 +89,7 @@ export class SessionRegistry {
       session.updatedAt = Date.now();
 
       // Track processing state
-      if (chunk.type === 'done') {
+      if (chunk.type === 'done' || chunk.type === 'error' || chunk.type === 'exit') {
         session.isProcessing = false;
       }
     }

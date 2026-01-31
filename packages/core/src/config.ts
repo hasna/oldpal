@@ -31,10 +31,56 @@ const DEFAULT_CONFIG: OldpalConfig = {
   ],
 };
 
+function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): OldpalConfig {
+  if (!override) return base;
+
+  const mergedVoice = base.voice || override.voice
+    ? {
+        ...(base.voice || {}),
+        ...(override.voice || {}),
+        enabled: override.voice?.enabled ?? base.voice?.enabled ?? false,
+        stt: {
+          ...(base.voice?.stt || {}),
+          ...(override.voice?.stt || {}),
+          provider: override.voice?.stt?.provider ?? base.voice?.stt?.provider ?? 'whisper',
+        },
+        tts: {
+          ...(base.voice?.tts || {}),
+          ...(override.voice?.tts || {}),
+          provider: override.voice?.tts?.provider ?? base.voice?.tts?.provider ?? 'elevenlabs',
+          voiceId: override.voice?.tts?.voiceId ?? base.voice?.tts?.voiceId ?? '',
+        },
+        wake: {
+          ...(base.voice?.wake || {}),
+          ...(override.voice?.wake || {}),
+          enabled: override.voice?.wake?.enabled ?? base.voice?.wake?.enabled ?? false,
+          word: override.voice?.wake?.word ?? base.voice?.wake?.word ?? '',
+        },
+      }
+    : undefined;
+
+  return {
+    ...base,
+    ...override,
+    llm: {
+      ...base.llm,
+      ...(override.llm || {}),
+    },
+    voice: mergedVoice,
+    connectors: override.connectors ?? base.connectors,
+    skills: override.skills ?? base.skills,
+    hooks: override.hooks ?? base.hooks,
+  };
+}
+
 /**
  * Get the path to the oldpal config directory
  */
 export function getConfigDir(): string {
+  const override = process.env.OLDPAL_DIR;
+  if (override && override.trim()) {
+    return override;
+  }
   return join(homedir(), '.oldpal');
 }
 
@@ -57,34 +103,22 @@ export function getProjectConfigDir(cwd: string = process.cwd()): string {
  * Priority: project local > project > user > default
  */
 export async function loadConfig(cwd: string = process.cwd()): Promise<OldpalConfig> {
-  const config: OldpalConfig = { ...DEFAULT_CONFIG };
+  let config: OldpalConfig = { ...DEFAULT_CONFIG };
 
   // Load user config
   const userConfigPath = getConfigPath('settings.json');
   const userConfig = await loadJsonFile<Partial<OldpalConfig>>(userConfigPath);
-  if (userConfig) {
-    Object.assign(config, userConfig);
-    if (userConfig.llm) config.llm = { ...config.llm, ...userConfig.llm };
-    if (userConfig.voice) config.voice = { ...config.voice, ...userConfig.voice };
-  }
+  config = mergeConfig(config, userConfig || undefined);
 
   // Load project config
   const projectConfigPath = join(getProjectConfigDir(cwd), 'settings.json');
   const projectConfig = await loadJsonFile<Partial<OldpalConfig>>(projectConfigPath);
-  if (projectConfig) {
-    Object.assign(config, projectConfig);
-    if (projectConfig.llm) config.llm = { ...config.llm, ...projectConfig.llm };
-    if (projectConfig.voice) config.voice = { ...config.voice, ...projectConfig.voice };
-  }
+  config = mergeConfig(config, projectConfig || undefined);
 
   // Load project local config (git-ignored)
   const localConfigPath = join(getProjectConfigDir(cwd), 'settings.local.json');
   const localConfig = await loadJsonFile<Partial<OldpalConfig>>(localConfigPath);
-  if (localConfig) {
-    Object.assign(config, localConfig);
-    if (localConfig.llm) config.llm = { ...config.llm, ...localConfig.llm };
-    if (localConfig.voice) config.voice = { ...config.voice, ...localConfig.voice };
-  }
+  config = mergeConfig(config, localConfig || undefined);
 
   return config;
 }

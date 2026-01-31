@@ -76,11 +76,18 @@ export class CommandLoader {
       const fileName = basename(filePath, '.md');
       const name = frontmatter.name || (prefix ? `${prefix}:${fileName}` : fileName);
 
+      const allowedToolsRaw = frontmatter['allowed-tools'];
+      const allowedTools = Array.isArray(allowedToolsRaw)
+        ? allowedToolsRaw.map((t) => String(t).trim()).filter(Boolean)
+        : typeof allowedToolsRaw === 'string'
+          ? allowedToolsRaw.split(',').map((t) => t.trim()).filter(Boolean)
+          : undefined;
+
       return {
         name,
         description: frontmatter.description || `Run the ${name} command`,
         tags: frontmatter.tags,
-        allowedTools: frontmatter['allowed-tools']?.split(',').map(t => t.trim()),
+        allowedTools,
         content: body,
         filePath,
         builtin: false,

@@ -17,21 +17,29 @@ export class EmbeddedClient implements AssistantClient {
   private messages: Message[] = [];
   private cwd: string;
   private startedAt: string;
+  private initialMessages: Message[] | null = null;
 
-  constructor(cwd?: string) {
+  constructor(
+    cwd?: string,
+    options?: { sessionId?: string; initialMessages?: Message[]; systemPrompt?: string; allowedTools?: string[]; startedAt?: string }
+  ) {
     // Initialize .oldpal directory structure
     initOldpalDir();
 
-    const sessionId = generateId();
+    const sessionId = options?.sessionId || generateId();
     this.logger = new Logger(sessionId);
     this.session = new SessionStorage(sessionId);
     this.cwd = cwd || process.cwd();
-    this.startedAt = new Date().toISOString();
+    this.startedAt = options?.startedAt || new Date().toISOString();
+    this.initialMessages = options?.initialMessages || null;
 
     this.logger.info('Session started', { cwd: this.cwd });
 
     this.agent = new AgentLoop({
       cwd: this.cwd,
+      sessionId,
+      allowedTools: options?.allowedTools,
+      extraSystemPrompt: options?.systemPrompt,
       onChunk: (chunk) => {
         for (const callback of this.chunkCallbacks) {
           callback(chunk);
@@ -47,12 +55,6 @@ export class EmbeddedClient implements AssistantClient {
           success: !result.isError,
           resultLength: result.content.length,
         });
-        for (const callback of this.chunkCallbacks) {
-          callback({
-            type: 'tool_result',
-            toolResult: result,
-          });
-        }
       },
     });
   }
@@ -64,6 +66,10 @@ export class EmbeddedClient implements AssistantClient {
     if (this.initialized) return;
     this.logger.info('Initializing agent');
     await this.agent.initialize();
+    if (this.initialMessages && this.initialMessages.length > 0) {
+      this.agent.getContext().import(this.initialMessages);
+      this.messages = [...this.initialMessages];
+    }
     this.initialized = true;
     this.logger.info('Agent initialized', {
       tools: this.agent.getTools().length,
@@ -81,26 +87,21 @@ export class EmbeddedClient implements AssistantClient {
 
     this.logger.info('User message', { message });
 
-    // Store user message
-    this.messages.push({
-      id: generateId(),
-      role: 'user',
-      content: message,
-      timestamp: Date.now(),
-    });
-
     try {
       await this.agent.process(message);
 
       // Get assistant response from context
       const context = this.agent.getContext();
-      const lastMessage = context.getMessages().slice(-1)[0];
-      if (lastMessage?.role === 'assistant') {
-        this.messages.push(lastMessage);
-        this.logger.info('Assistant response', {
-          length: lastMessage.content.length,
-          hasToolCalls: !!lastMessage.toolCalls?.length,
-        });
+      const contextMessages = context.getMessages();
+      if (contextMessages.length > 0) {
+        this.messages = contextMessages;
+        const lastMessage = contextMessages.slice(-1)[0];
+        if (lastMessage?.role === 'assistant') {
+          this.logger.info('Assistant response', {
+            length: lastMessage.content.length,
+            hasToolCalls: !!lastMessage.toolCalls?.length,
+          });
+        }
       }
 
       // Save session

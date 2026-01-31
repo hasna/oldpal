@@ -3,6 +3,7 @@ import type { CommandLoader } from './loader';
 import { join } from 'path';
 import { homedir, platform, release, arch } from 'os';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { getConfigDir } from '../config';
 
 // Version constant - should match package.json
 const VERSION = '0.6.7';
@@ -336,8 +337,9 @@ Format the summary as a brief bullet-point list. This summary will replace the c
       content: '',
       handler: async (args, context) => {
         const configPaths = [
-          join(context.cwd, '.oldpal', 'config.json'),
-          join(homedir(), '.oldpal', 'config.json'),
+          join(context.cwd, '.oldpal', 'settings.json'),
+          join(context.cwd, '.oldpal', 'settings.local.json'),
+          join(getConfigDir(), 'settings.json'),
         ];
 
         let message = '\n**Configuration**\n\n';

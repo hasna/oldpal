@@ -19,6 +19,8 @@ export interface AgentLoopOptions {
   config?: OldpalConfig;
   cwd?: string;
   sessionId?: string;
+  allowedTools?: string[];
+  extraSystemPrompt?: string;
   onChunk?: (chunk: StreamChunk) => void;
   onToolStart?: (toolCall: ToolCall) => void;
   onToolEnd?: (toolCall: ToolCall, result: ToolResult) => void;
@@ -41,6 +43,9 @@ export class AgentLoop {
   private builtinCommands: BuiltinCommands;
   private llmClient: LLMClient | null = null;
   private config: OldpalConfig | null = null;
+  private allowedTools: Set<string> | null = null;
+  private currentAllowedTools: Set<string> | null = null;
+  private extraSystemPrompt: string | null = null;
   private cwd: string;
   private sessionId: string;
   private isRunning = false;
@@ -66,6 +71,8 @@ export class AgentLoop {
     this.commandLoader = new CommandLoader(this.cwd);
     this.commandExecutor = new CommandExecutor(this.commandLoader);
     this.builtinCommands = new BuiltinCommands();
+    this.allowedTools = this.normalizeAllowedTools(options.allowedTools);
+    this.extraSystemPrompt = options.extraSystemPrompt || null;
 
     this.onChunk = options.onChunk;
     this.onToolStart = options.onToolStart;
@@ -119,9 +126,12 @@ export class AgentLoop {
     this.hookLoader.load(hooksConfig);
 
     // Set system prompt (store for re-use on clear)
-    if (systemPrompt) {
-      this.systemPrompt = systemPrompt;
-      this.context.addSystemMessage(systemPrompt);
+    this.systemPrompt = systemPrompt || null;
+    if (this.systemPrompt) {
+      this.context.addSystemMessage(this.systemPrompt);
+    }
+    if (this.extraSystemPrompt) {
+      this.context.addSystemMessage(this.extraSystemPrompt);
     }
 
     // Run session start hooks
@@ -166,30 +176,37 @@ export class AgentLoop {
 
       // Check for slash command first (e.g., /help, /clear)
       if (userMessage.startsWith('/')) {
-        const commandResult = await this.handleCommand(userMessage);
-        if (commandResult.handled) {
-          if (commandResult.clearConversation) {
-            this.context = new AgentContext();
-            // Re-add system prompt after clearing
-            if (this.systemPrompt) {
-              this.context.addSystemMessage(this.systemPrompt);
-            }
-          }
-          if (commandResult.exit) {
-            this.emit({ type: 'exit' });
-          }
-          return;
-        }
-        // If command returned a prompt, use that instead
-        if (commandResult.prompt) {
-          userMessage = commandResult.prompt;
-        }
-      }
+        const parsed = this.commandExecutor.parseCommand(userMessage);
+        const command = parsed ? this.commandLoader.getCommand(parsed.name) : undefined;
+        const skill = parsed ? this.skillLoader.getSkill(parsed.name) : undefined;
 
-      // Check for skill invocation (e.g., /skill-name) - legacy support
-      if (userMessage.startsWith('/')) {
-        const handled = await this.handleSkillInvocation(userMessage);
-        if (handled) return;
+        if (command) {
+          const commandResult = await this.handleCommand(userMessage);
+          if (commandResult.handled) {
+            if (commandResult.clearConversation) {
+              this.resetContext();
+            }
+            if (commandResult.exit) {
+              this.emit({ type: 'exit' });
+            }
+            return;
+          }
+          // If command returned a prompt, use that instead
+          if (commandResult.prompt) {
+            userMessage = commandResult.prompt;
+          }
+        } else if (skill) {
+          const handled = await this.handleSkillInvocation(userMessage);
+          if (handled) return;
+        } else {
+          const commandResult = await this.handleCommand(userMessage);
+          if (commandResult.handled) {
+            return;
+          }
+          if (commandResult.prompt) {
+            userMessage = commandResult.prompt;
+          }
+        }
       }
 
       // Add user message to context
@@ -198,6 +215,7 @@ export class AgentLoop {
       // Run the agent loop
       await this.runLoop();
     } finally {
+      this.currentAllowedTools = null;
       this.isRunning = false;
     }
   }
@@ -213,13 +231,14 @@ export class AgentLoop {
       turn++;
 
       const messages = this.context.getMessages();
-      const tools = this.toolRegistry.getTools();
+      const tools = this.filterAllowedTools(this.toolRegistry.getTools());
+      const systemPrompt = this.buildSystemPrompt(messages);
 
       let responseText = '';
       const toolCalls: ToolCall[] = [];
 
       // Stream response from LLM
-      for await (const chunk of this.llmClient!.chat(messages, tools)) {
+      for await (const chunk of this.llmClient!.chat(messages, tools, systemPrompt)) {
         if (this.shouldStop) break;
 
         this.emit(chunk);
@@ -253,7 +272,7 @@ export class AgentLoop {
 
     // Run Stop hooks
     await this.hookExecutor.execute(this.hookLoader.getHooks('Stop'), {
-      session_id: generateId(),
+      session_id: this.sessionId,
       hook_event_name: 'Stop',
       cwd: this.cwd,
     });
@@ -268,6 +287,32 @@ export class AgentLoop {
     const results: ToolResult[] = [];
 
     for (const toolCall of toolCalls) {
+      // Ensure tools receive the agent's cwd by default
+      const toolInput = { ...(toolCall.input || {}) } as Record<string, unknown>;
+      if (toolInput.cwd === undefined) {
+        toolInput.cwd = this.cwd;
+      }
+      toolCall.input = toolInput;
+
+      if (!this.isToolAllowed(toolCall.name)) {
+        const blockedResult: ToolResult = {
+          toolCallId: toolCall.id,
+          content: `Tool call denied: "${toolCall.name}" is not in the allowed tools list`,
+          isError: true,
+        };
+        this.emit({ type: 'tool_result', toolResult: blockedResult });
+        await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+          session_id: this.sessionId,
+          hook_event_name: 'PostToolUseFailure',
+          cwd: this.cwd,
+          tool_name: toolCall.name,
+          tool_input: toolCall.input,
+          tool_result: blockedResult.content,
+        });
+        results.push(blockedResult);
+        continue;
+      }
+
       // Run PreToolUse hooks
       const preHookResult = await this.hookExecutor.execute(
         this.hookLoader.getHooks('PreToolUse'),
@@ -280,13 +325,50 @@ export class AgentLoop {
         }
       );
 
+      // Apply updated input from hook if provided
+      if (preHookResult?.updatedInput) {
+        toolCall.input = { ...preHookResult.updatedInput };
+        if ((toolCall.input as Record<string, unknown>).cwd === undefined) {
+          (toolCall.input as Record<string, unknown>).cwd = this.cwd;
+        }
+      }
+
       // Check if hook blocked the tool (either via continue: false or permissionDecision: deny)
       if (preHookResult?.continue === false || preHookResult?.permissionDecision === 'deny') {
-        results.push({
+        const blockedResult: ToolResult = {
           toolCallId: toolCall.id,
           content: `Tool call denied: ${preHookResult.stopReason || 'Blocked by hook'}`,
           isError: true,
+        };
+        this.emit({ type: 'tool_result', toolResult: blockedResult });
+        await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+          session_id: this.sessionId,
+          hook_event_name: 'PostToolUseFailure',
+          cwd: this.cwd,
+          tool_name: toolCall.name,
+          tool_input: toolCall.input,
+          tool_result: blockedResult.content,
         });
+        results.push(blockedResult);
+        continue;
+      }
+
+      if (preHookResult?.permissionDecision === 'ask') {
+        const askResult: ToolResult = {
+          toolCallId: toolCall.id,
+          content: `Tool call requires approval: ${preHookResult.stopReason || 'Approval required'}`,
+          isError: true,
+        };
+        this.emit({ type: 'tool_result', toolResult: askResult });
+        await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+          session_id: this.sessionId,
+          hook_event_name: 'PostToolUseFailure',
+          cwd: this.cwd,
+          tool_name: toolCall.name,
+          tool_input: toolCall.input,
+          tool_result: askResult.content,
+        });
+        results.push(askResult);
         continue;
       }
 
@@ -323,6 +405,8 @@ export class AgentLoop {
    * Handle slash command
    */
   private async handleCommand(message: string): Promise<{ handled: boolean; prompt?: string; clearConversation?: boolean; exit?: boolean }> {
+    const parsed = this.commandExecutor.parseCommand(message);
+    const command = parsed ? this.commandLoader.getCommand(parsed.name) : undefined;
     const context: CommandContext = {
       cwd: this.cwd,
       sessionId: this.sessionId,
@@ -343,7 +427,7 @@ export class AgentLoop {
         })),
       })),
       clearMessages: () => {
-        this.context = new AgentContext();
+        this.resetContext();
       },
       addSystemMessage: (content: string) => {
         this.context.addSystemMessage(content);
@@ -359,7 +443,13 @@ export class AgentLoop {
       },
     };
 
-    return this.commandExecutor.execute(message, context);
+    const result = await this.commandExecutor.execute(message, context);
+
+    if (!result.handled && result.prompt) {
+      this.currentAllowedTools = this.normalizeAllowedTools(command?.allowedTools);
+    }
+
+    return result;
   }
 
   /**
@@ -382,10 +472,15 @@ export class AgentLoop {
     const content = await this.skillExecutor.prepare(skill, argsList);
 
     // Add skill content as context
+    this.currentAllowedTools = this.normalizeAllowedTools(skill.allowedTools);
     this.context.addSystemMessage(content);
     this.context.addUserMessage(`Execute the "${skillName}" skill with arguments: ${args || '(none)'}`);
 
-    await this.runLoop();
+    try {
+      await this.runLoop();
+    } finally {
+      this.currentAllowedTools = null;
+    }
     return true;
   }
 
@@ -464,6 +559,106 @@ export class AgentLoop {
    * Clear conversation
    */
   clearConversation(): void {
+    this.resetContext();
+  }
+
+  /**
+   * Reset context and re-apply system prompt
+   */
+  private resetContext(): void {
     this.context = new AgentContext();
+    if (this.systemPrompt) {
+      this.context.addSystemMessage(this.systemPrompt);
+    }
+    if (this.extraSystemPrompt) {
+      this.context.addSystemMessage(this.extraSystemPrompt);
+    }
+  }
+
+  /**
+   * Build system prompt from base + extra + system messages in context
+   */
+  private buildSystemPrompt(messages: Message[]): string | undefined {
+    const parts: string[] = [];
+
+    if (this.systemPrompt) {
+      parts.push(this.systemPrompt);
+    }
+    if (this.extraSystemPrompt) {
+      parts.push(this.extraSystemPrompt);
+    }
+
+    for (const msg of messages) {
+      if (msg.role !== 'system') continue;
+      const content = msg.content.trim();
+      if (!content) continue;
+      if (parts.includes(content)) continue;
+      parts.push(content);
+    }
+
+    return parts.length > 0 ? parts.join('\n\n---\n\n') : undefined;
+  }
+
+  /**
+   * Normalize tool names to a canonical set (case-insensitive with aliases)
+   */
+  private normalizeAllowedTools(tools?: string[]): Set<string> | null {
+    if (!tools || tools.length === 0) return null;
+
+    const aliases: Record<string, string[]> = {
+      read: ['read'],
+      edit: ['write'],
+      write: ['write'],
+      bash: ['bash'],
+      search: ['web_search'],
+      web_search: ['web_search'],
+      fetch: ['web_fetch', 'curl'],
+      web_fetch: ['web_fetch'],
+      curl: ['curl'],
+      image: ['display_image'],
+      display_image: ['display_image'],
+    };
+
+    const normalized = new Set<string>();
+    for (const raw of tools) {
+      const key = raw.trim().toLowerCase();
+      if (!key) continue;
+      const mapped = aliases[key];
+      if (mapped) {
+        for (const name of mapped) normalized.add(name);
+      } else {
+        normalized.add(key);
+      }
+    }
+
+    return normalized.size > 0 ? normalized : null;
+  }
+
+  /**
+   * Compute the effective allowed tools for this run
+   */
+  private getEffectiveAllowedTools(): Set<string> | null {
+    if (this.allowedTools && this.currentAllowedTools) {
+      const intersection = new Set<string>();
+      for (const name of this.currentAllowedTools) {
+        if (this.allowedTools.has(name)) {
+          intersection.add(name);
+        }
+      }
+      return intersection;
+    }
+    return this.currentAllowedTools || this.allowedTools;
+  }
+
+  private filterAllowedTools(tools: Tool[]): Tool[] {
+    const allowed = this.getEffectiveAllowedTools();
+    if (!allowed) return tools;
+    return tools.filter((tool) => allowed.has(tool.name.toLowerCase()));
+  }
+
+  private isToolAllowed(name: string): boolean {
+    const allowed = this.getEffectiveAllowedTools();
+    if (!allowed) return true;
+    return allowed.has(name.toLowerCase());
   }
 }

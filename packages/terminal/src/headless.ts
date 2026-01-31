@@ -1,5 +1,5 @@
-import { EmbeddedClient } from '@oldpal/core';
-import type { StreamChunk, TokenUsage } from '@oldpal/shared';
+import { EmbeddedClient, SessionStorage } from '@oldpal/core';
+import type { StreamChunk, TokenUsage, Message } from '@oldpal/shared';
 
 export interface HeadlessOptions {
   prompt: string;
@@ -8,6 +8,9 @@ export interface HeadlessOptions {
   allowedTools?: string[];
   systemPrompt?: string;
   jsonSchema?: string;
+  continue?: boolean;
+  resume?: string | null;
+  cwdProvided?: boolean;
 }
 
 interface JsonOutput {
@@ -30,9 +33,38 @@ export async function runHeadless(options: HeadlessOptions): Promise<void> {
     cwd,
     outputFormat,
     jsonSchema,
+    continue: shouldContinue,
+    resume,
+    cwdProvided,
   } = options;
 
-  const client = new EmbeddedClient(cwd);
+  let sessionData = null as null | { id: string; data: ReturnType<typeof SessionStorage.loadSession> };
+
+  if (resume) {
+    const data = SessionStorage.loadSession(resume);
+    if (!data) {
+      throw new Error(`Session ${resume} not found`);
+    }
+    sessionData = { id: resume, data };
+  } else if (shouldContinue) {
+    const latest = SessionStorage.getLatestSession();
+    if (latest) {
+      const data = SessionStorage.loadSession(latest.id);
+      if (data) {
+        sessionData = { id: latest.id, data };
+      }
+    }
+  }
+
+  const effectiveCwd = sessionData?.data?.cwd && !cwdProvided ? sessionData.data.cwd : cwd;
+
+  const client = new EmbeddedClient(effectiveCwd, {
+    sessionId: sessionData?.id,
+    initialMessages: sessionData?.data?.messages as Message[] | undefined,
+    systemPrompt: options.systemPrompt,
+    allowedTools: options.allowedTools,
+    startedAt: sessionData?.data?.startedAt,
+  });
 
   let result = '';
   const toolCalls: Array<{ name: string; input: Record<string, unknown> }> = [];

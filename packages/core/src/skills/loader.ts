@@ -24,7 +24,7 @@ export class SkillLoader {
 
     // Also check nested .oldpal/skills in monorepo
     const nestedGlob = new Glob('**/.oldpal/skills/*/SKILL.md');
-    for await (const file of nestedGlob.scan({ cwd: projectDir })) {
+    for await (const file of nestedGlob.scan({ cwd: projectDir, dot: true })) {
       await this.loadSkillFile(join(projectDir, file));
     }
   }
@@ -89,11 +89,25 @@ export class SkillLoader {
         description = firstParagraph.replace(/^#.*\n?/, '').trim();
       }
 
+      const allowedToolsRaw = frontmatter['allowed-tools'];
+      const allowedTools = Array.isArray(allowedToolsRaw)
+        ? allowedToolsRaw.map((t) => String(t).trim()).filter(Boolean)
+        : typeof allowedToolsRaw === 'string'
+          ? allowedToolsRaw.split(',').map((t) => t.trim()).filter(Boolean)
+          : undefined;
+
+      const argumentHintRaw = frontmatter['argument-hint'];
+      const argumentHint = Array.isArray(argumentHintRaw)
+        ? `[${argumentHintRaw.join(', ')}]`
+        : typeof argumentHintRaw === 'string'
+          ? argumentHintRaw
+          : undefined;
+
       const skill: Skill = {
         name,
         description,
-        argumentHint: frontmatter['argument-hint'],
-        allowedTools: frontmatter['allowed-tools']?.split(',').map((t) => t.trim()),
+        argumentHint,
+        allowedTools,
         disableModelInvocation: frontmatter['disable-model-invocation'],
         userInvocable: frontmatter['user-invocable'] !== false,
         model: frontmatter.model,

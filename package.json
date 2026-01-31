@@ -21,9 +21,7 @@
     "clean": "turbo run clean && rm -rf node_modules dist",
     "prepublishOnly": "bun run build"
   },
-  "dependencies": {
-    "@hasna/oldpal": "0.5.3"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.32.0",
     "@types/bun": "latest",

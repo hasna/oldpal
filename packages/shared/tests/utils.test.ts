@@ -98,6 +98,39 @@ Content`;
     expect(result.frontmatter.name).toBe('quoted value');
   });
 
+  test('should parse array values', () => {
+    const content = `---
+tags: [one, "two", three]
+---
+
+Content`;
+
+    const result = parseFrontmatter(content);
+    expect(result.frontmatter.tags).toEqual(['one', 'two', 'three']);
+  });
+
+  test('should parse single-item array values', () => {
+    const content = `---
+tags: [single]
+---
+
+Content`;
+
+    const result = parseFrontmatter(content);
+    expect(result.frontmatter.tags).toEqual(['single']);
+  });
+
+  test('should not treat bracketed argument hints as arrays', () => {
+    const content = `---
+argument-hint: [arg1] [arg2]
+---
+
+Content`;
+
+    const result = parseFrontmatter(content);
+    expect(result.frontmatter['argument-hint']).toBe('[arg1] [arg2]');
+  });
+
   test('should return empty frontmatter for content without frontmatter', () => {
     const content = '# Just content\n\nNo frontmatter here';
     const result = parseFrontmatter(content);

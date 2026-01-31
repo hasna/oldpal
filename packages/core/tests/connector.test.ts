@@ -2,6 +2,9 @@ import { describe, expect, test, beforeEach } from 'bun:test';
 import { ConnectorBridge } from '../src/tools/connector';
 import { ToolRegistry } from '../src/tools/registry';
 import type { Connector, ConnectorCommand } from '@oldpal/shared';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 describe('ConnectorBridge', () => {
   let bridge: ConnectorBridge;
@@ -138,6 +141,27 @@ Commands:
 
     test('should return empty array when no connectors discovered', () => {
       expect(bridge.getConnectors()).toEqual([]);
+    });
+  });
+
+  describe('discover', () => {
+    test('should auto-discover connect-* binaries on PATH', async () => {
+      const binDir = mkdtempSync(join(tmpdir(), 'oldpal-bin-'));
+      const cliPath = join(binDir, 'connect-demo');
+      writeFileSync(cliPath, '#!/bin/sh\necho demo\n');
+      chmodSync(cliPath, 0o755);
+
+      const originalPath = process.env.PATH;
+      process.env.PATH = `${binDir}:${originalPath || ''}`;
+
+      try {
+        (ConnectorBridge as any).cache = new Map();
+        const discovered = await bridge.discover();
+        expect(discovered.some((c) => c.name === 'demo')).toBe(true);
+      } finally {
+        process.env.PATH = originalPath;
+        rmSync(binDir, { recursive: true, force: true });
+      }
     });
   });
 

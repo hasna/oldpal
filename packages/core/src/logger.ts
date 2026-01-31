@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, appendFileSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { getConfigDir } from './config';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -21,7 +21,7 @@ export class Logger {
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
-    this.logDir = join(homedir(), '.oldpal', 'logs');
+    this.logDir = join(getConfigDir(), 'logs');
     this.ensureDir(this.logDir);
 
     const date = new Date().toISOString().split('T')[0];
@@ -81,7 +81,7 @@ export class SessionStorage {
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
-    this.sessionsDir = join(homedir(), '.oldpal', 'sessions');
+    this.sessionsDir = join(getConfigDir(), 'sessions');
     this.ensureDir(this.sessionsDir);
     this.sessionFile = join(this.sessionsDir, `${sessionId}.json`);
   }
@@ -115,8 +115,7 @@ export class SessionStorage {
   load(): SessionData | null {
     try {
       if (!existsSync(this.sessionFile)) return null;
-      const content = Bun.file(this.sessionFile).text();
-      return JSON.parse(content as unknown as string) as SessionData;
+      return JSON.parse(readFileSync(this.sessionFile, 'utf-8')) as SessionData;
     } catch {
       return null;
     }
@@ -126,7 +125,7 @@ export class SessionStorage {
    * List all saved sessions
    */
   static listSessions(): SavedSessionInfo[] {
-    const sessionsDir = join(homedir(), '.oldpal', 'sessions');
+    const sessionsDir = join(getConfigDir(), 'sessions');
     if (!existsSync(sessionsDir)) return [];
 
     const sessions: SavedSessionInfo[] = [];
@@ -168,7 +167,7 @@ export class SessionStorage {
    * Load a session by ID
    */
   static loadSession(sessionId: string): SessionData | null {
-    const sessionsDir = join(homedir(), '.oldpal', 'sessions');
+    const sessionsDir = join(getConfigDir(), 'sessions');
     const sessionFile = join(sessionsDir, `${sessionId}.json`);
 
     try {
@@ -205,7 +204,7 @@ export interface SavedSessionInfo {
  * Initialize .oldpal directory structure
  */
 export function initOldpalDir(): void {
-  const baseDir = join(homedir(), '.oldpal');
+  const baseDir = getConfigDir();
   const dirs = [
     baseDir,
     join(baseDir, 'sessions'),

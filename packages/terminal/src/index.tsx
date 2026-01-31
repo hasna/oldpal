@@ -20,6 +20,7 @@ function parseArgs(argv: string[]) {
     jsonSchema: string | null;
     continue: boolean;
     resume: string | null;
+    cwdProvided: boolean;
   } = {
     cwd: process.cwd(),
     version: false,
@@ -31,6 +32,7 @@ function parseArgs(argv: string[]) {
     jsonSchema: null,
     continue: false,
     resume: null,
+    cwdProvided: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -99,6 +101,7 @@ function parseArgs(argv: string[]) {
     // Working directory
     if (arg === '--cwd') {
       options.cwd = args[++i] || process.cwd();
+      options.cwdProvided = true;
       continue;
     }
 
@@ -185,6 +188,9 @@ if (options.print !== null) {
     allowedTools: options.allowedTools.length > 0 ? options.allowedTools : undefined,
     systemPrompt: options.systemPrompt || undefined,
     jsonSchema: options.jsonSchema || undefined,
+    continue: options.continue,
+    resume: options.resume,
+    cwdProvided: options.cwdProvided,
   }).catch((error) => {
     console.error('Error:', error.message);
     process.exit(1);

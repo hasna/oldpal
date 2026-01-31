@@ -47,9 +47,13 @@ describe('SessionRegistry', () => {
   let createdMockClients: ReturnType<typeof createMockClient>[] = [];
 
   beforeEach(() => {
-    registry = new SessionRegistry();
     mockClientCounter = 0;
     createdMockClients = [];
+    registry = new SessionRegistry((cwd) => {
+      const client = createMockClient(`session-${++mockClientCounter}`, cwd);
+      createdMockClients.push(client);
+      return client as unknown as EmbeddedClient;
+    });
 
     // Mock EmbeddedClient constructor
     // Note: We'll test with a real instance approach since mocking constructors
@@ -125,6 +129,85 @@ describe('SessionRegistry', () => {
       await expect(registry.switchSession('non-existent')).rejects.toThrow(
         'Session non-existent not found'
       );
+    });
+
+    test('should replay buffered chunks when switching', async () => {
+      const chunks: StreamChunk[] = [];
+      registry.onChunk((chunk) => chunks.push(chunk));
+
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+
+      // Emit chunk on background session (session2 is not active yet)
+      createdMockClients[1]._emitChunk({ type: 'text', content: 'bg' });
+      expect(chunks).toHaveLength(0);
+
+      await registry.switchSession(session2.id);
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].content).toBe('bg');
+
+      // Switch back to ensure no duplicate replay
+      await registry.switchSession(session1.id);
+      expect(chunks).toHaveLength(1);
+    });
+  });
+
+  describe('createSession', () => {
+    test('should create and activate first session', async () => {
+      const session = await registry.createSession('/tmp/one');
+      expect(session.id).toBe('session-1');
+      expect(registry.getActiveSessionId()).toBe(session.id);
+      expect(registry.getSessionCount()).toBe(1);
+    });
+
+    test('should forward errors only for active session', async () => {
+      const errors: Error[] = [];
+      registry.onError((err) => errors.push(err));
+
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+
+      createdMockClients[0]._emitError(new Error('active'));
+      createdMockClients[1]._emitError(new Error('background'));
+
+      expect(errors.length).toBe(1);
+      expect(errors[0].message).toBe('active');
+
+      await registry.switchSession(session2.id);
+      createdMockClients[1]._emitError(new Error('now-active'));
+      expect(errors.some((e) => e.message === 'now-active')).toBe(true);
+    });
+  });
+
+  describe('closeSession', () => {
+    test('should switch active session when closing current', async () => {
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+      expect(registry.getActiveSessionId()).toBe(session1.id);
+
+      registry.closeSession(session1.id);
+      expect(registry.getActiveSessionId()).toBe(session2.id);
+    });
+  });
+
+  describe('processing state updates', () => {
+    test('should clear processing state on error chunk', () => {
+      const sessionId = 'session-1';
+      const mockClient = createMockClient(sessionId, '/tmp');
+      const sessionInfo: SessionInfo = {
+        id: sessionId,
+        cwd: '/tmp',
+        startedAt: Date.now(),
+        updatedAt: Date.now(),
+        isProcessing: true,
+        client: mockClient as unknown as EmbeddedClient,
+      };
+
+      (registry as any).sessions.set(sessionId, sessionInfo);
+
+      (registry as any).handleChunk(sessionId, { type: 'error', error: 'boom' });
+
+      expect(sessionInfo.isProcessing).toBe(false);
     });
   });
 });

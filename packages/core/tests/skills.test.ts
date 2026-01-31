@@ -51,6 +51,22 @@ Instructions for the skill.
       expect(skill?.content).toContain('My Skill');
     });
 
+    test('should parse allowed-tools as array', async () => {
+      const skillDir = join(tempDir, 'array-skill');
+      await mkdir(skillDir, { recursive: true });
+
+      const skillContent = `---
+name: array-skill
+allowed-tools: [bash, "notion"]
+---
+
+Content`;
+      await writeFile(join(skillDir, 'SKILL.md'), skillContent);
+
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+      expect(skill?.allowedTools).toEqual(['bash', 'notion']);
+    });
+
     test('should infer name from directory when not in frontmatter', async () => {
       const skillDir = join(tempDir, 'calendar');
       await mkdir(skillDir, { recursive: true });
@@ -142,6 +158,45 @@ Content 2`);
       // Should not throw, just silently skip
       await loader.loadFromDirectory(join(tempDir, 'non-existent'));
       expect(loader.getSkills()).toEqual([]);
+    });
+  });
+
+  describe('loadAll', () => {
+    test('should load user, project, and nested skills', async () => {
+      const originalHome = process.env.HOME;
+      process.env.HOME = tempDir;
+
+      const userSkillsDir = join(tempDir, '.oldpal', 'skills', 'user-skill');
+      await mkdir(userSkillsDir, { recursive: true });
+      await writeFile(join(userSkillsDir, 'SKILL.md'), `---
+name: user-skill
+description: User skill
+---
+Content`);
+
+      const projectDir = join(tempDir, 'project');
+      const projectSkillsDir = join(projectDir, '.oldpal', 'skills', 'project-skill');
+      await mkdir(projectSkillsDir, { recursive: true });
+      await writeFile(join(projectSkillsDir, 'SKILL.md'), `---
+name: project-skill
+description: Project skill
+---
+Content`);
+
+      const nestedSkillDir = join(projectDir, 'packages', 'app', '.oldpal', 'skills', 'nested-skill');
+      await mkdir(nestedSkillDir, { recursive: true });
+      await writeFile(join(nestedSkillDir, 'SKILL.md'), `---
+name: nested-skill
+description: Nested skill
+---
+Content`);
+
+      await loader.loadAll(projectDir);
+
+      const skills = loader.getSkills().map((s) => s.name).sort();
+      expect(skills).toEqual(['nested-skill', 'project-skill', 'user-skill']);
+
+      process.env.HOME = originalHome;
     });
   });
 

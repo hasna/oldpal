@@ -49,7 +49,28 @@ export function parseFrontmatter<T extends Record<string, unknown>>(
     if (value === 'true') value = true;
     else if (value === 'false') value = false;
     else if (!isNaN(Number(value)) && value !== '') value = Number(value);
-    else if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+    else if (
+      typeof value === 'string' &&
+      value.startsWith('[') &&
+      value.endsWith(']') &&
+      (value.includes(',') || !/]\s+\[/.test(value))
+    ) {
+      const inner = value.slice(1, -1).trim();
+      if (inner === '') {
+        value = [];
+      } else {
+        value = inner.split(',').map((item) => {
+          const trimmed = item.trim();
+          if (
+            (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+            (trimmed.startsWith("'") && trimmed.endsWith("'"))
+          ) {
+            return trimmed.slice(1, -1);
+          }
+          return trimmed;
+        });
+      }
+    } else if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
       value = value.slice(1, -1);
     }
 

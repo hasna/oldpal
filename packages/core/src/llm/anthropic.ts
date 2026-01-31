@@ -65,10 +65,15 @@ export class AnthropicClient implements LLMClient {
     const anthropicTools = tools ? this.convertTools(tools) : undefined;
 
     try {
+      const combinedSystem =
+        systemPrompt && systemPrompt.trim().length > 0
+          ? `${this.getDefaultSystemPrompt()}\n\n---\n\n${systemPrompt}`
+          : this.getDefaultSystemPrompt();
+
       const stream = this.client.messages.stream({
         model: this.model,
         max_tokens: this.maxTokens,
-        system: systemPrompt || this.getDefaultSystemPrompt(),
+        system: combinedSystem,
         messages: anthropicMessages,
         tools: anthropicTools,
       });
@@ -107,19 +112,6 @@ export class AnthropicClient implements LLMClient {
             };
             currentToolCall = null;
             toolInputJson = '';
-          }
-        } else if (event.type === 'message_delta') {
-          // Extract token usage from message_delta
-          if (event.usage) {
-            yield {
-              type: 'usage',
-              usage: {
-                inputTokens: 0, // Not available in delta, only in final message
-                outputTokens: event.usage.output_tokens || 0,
-                totalTokens: event.usage.output_tokens || 0,
-                maxContextTokens: 200000,
-              },
-            };
           }
         } else if (event.type === 'message_stop') {
           yield { type: 'done' };

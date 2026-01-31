@@ -190,6 +190,11 @@ describe('HookExecutor', () => {
       });
       expect(matchesPattern(executor, 'terminal', sessionInput)).toBe(true);
     });
+
+    test('should fall back to equality on invalid regex', () => {
+      const input = createInput({ tool_name: '[' });
+      expect(matchesPattern(executor, '[', input)).toBe(true);
+    });
   });
 
   describe('execute', () => {
