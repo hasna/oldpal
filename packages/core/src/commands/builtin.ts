@@ -5,7 +5,7 @@ import { homedir, platform, release, arch } from 'os';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 
 // Version constant - should match package.json
-const VERSION = '0.6.2';
+const VERSION = '0.6.3';
 
 /**
  * Built-in slash commands for oldpal
