@@ -6,6 +6,7 @@ import { ConnectorBridge } from '../tools/connector';
 import { BashTool } from '../tools/bash';
 import { FilesystemTools } from '../tools/filesystem';
 import { WebTools } from '../tools/web';
+import { ImageTools } from '../tools/image';
 import { SkillLoader } from '../skills/loader';
 import { SkillExecutor } from '../skills/executor';
 import { HookLoader } from '../hooks/loader';
@@ -105,6 +106,7 @@ export class AgentLoop {
     this.toolRegistry.register(BashTool.tool, BashTool.executor);
     FilesystemTools.registerAll(this.toolRegistry);
     WebTools.registerAll(this.toolRegistry);
+    ImageTools.registerAll(this.toolRegistry);
 
     // Register connector tools
     this.connectorBridge.registerAll(this.toolRegistry);
