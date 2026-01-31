@@ -89,9 +89,19 @@ describe('AnthropicClient', () => {
 
     test('should include tool results in user message', () => {
       const client = createClient();
+      // Tool results need a preceding assistant message with the corresponding tool_use
       const messages: Message[] = [
         {
           id: '1',
+          role: 'assistant',
+          content: 'Let me list the files.',
+          timestamp: Date.now(),
+          toolCalls: [
+            { id: 'tc1', name: 'bash', input: { command: 'ls' } },
+          ],
+        },
+        {
+          id: '2',
           role: 'user',
           content: '',
           timestamp: Date.now(),
@@ -103,16 +113,27 @@ describe('AnthropicClient', () => {
 
       const converted = (client as any).convertMessages(messages);
 
-      expect(converted[0].content).toHaveLength(1);
-      expect(converted[0].content[0].type).toBe('tool_result');
-      expect(converted[0].content[0].tool_use_id).toBe('tc1');
+      expect(converted).toHaveLength(2);
+      expect(converted[1].content).toHaveLength(1);
+      expect(converted[1].content[0].type).toBe('tool_result');
+      expect(converted[1].content[0].tool_use_id).toBe('tc1');
     });
 
     test('should handle message with both text and tool results', () => {
       const client = createClient();
+      // Tool results need a preceding assistant message with the corresponding tool_use
       const messages: Message[] = [
         {
           id: '1',
+          role: 'assistant',
+          content: 'Running the command.',
+          timestamp: Date.now(),
+          toolCalls: [
+            { id: 'tc1', name: 'bash', input: { command: 'echo test' } },
+          ],
+        },
+        {
+          id: '2',
           role: 'user',
           content: 'Here are the results',
           timestamp: Date.now(),
@@ -124,16 +145,27 @@ describe('AnthropicClient', () => {
 
       const converted = (client as any).convertMessages(messages);
 
-      expect(converted[0].content).toHaveLength(2);
-      expect(converted[0].content[0].type).toBe('text');
-      expect(converted[0].content[1].type).toBe('tool_result');
+      expect(converted).toHaveLength(2);
+      expect(converted[1].content).toHaveLength(2);
+      expect(converted[1].content[0].type).toBe('text');
+      expect(converted[1].content[1].type).toBe('tool_result');
     });
 
     test('should handle error in tool results', () => {
       const client = createClient();
+      // Tool results need a preceding assistant message with the corresponding tool_use
       const messages: Message[] = [
         {
           id: '1',
+          role: 'assistant',
+          content: 'Trying to read the file.',
+          timestamp: Date.now(),
+          toolCalls: [
+            { id: 'tc1', name: 'read', input: { path: '/nonexistent' } },
+          ],
+        },
+        {
+          id: '2',
           role: 'user',
           content: '',
           timestamp: Date.now(),
@@ -145,7 +177,8 @@ describe('AnthropicClient', () => {
 
       const converted = (client as any).convertMessages(messages);
 
-      expect(converted[0].content[0].is_error).toBe(true);
+      expect(converted).toHaveLength(2);
+      expect(converted[1].content[0].is_error).toBe(true);
     });
 
     test('should handle conversation with multiple turns', () => {
@@ -274,7 +307,7 @@ describe('AnthropicClient', () => {
 
       expect(typeof prompt).toBe('string');
       expect(prompt.length).toBeGreaterThan(0);
-      expect(prompt).toContain('Oldpal');
+      expect(prompt).toContain('personal AI assistant');
     });
 
     test('should include current date', () => {

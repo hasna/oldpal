@@ -230,81 +230,88 @@ describe('SkillExecutor', () => {
   });
 
   describe('prepare', () => {
-    test('should substitute $ARGUMENTS with all args', () => {
+    test('should substitute $ARGUMENTS with all args', async () => {
       const skill = createSkill({
         content: 'Search for: $ARGUMENTS',
       });
 
-      const result = executor.prepare(skill, ['hello', 'world']);
+      const result = await executor.prepare(skill, ['hello', 'world']);
 
       expect(result).toBe('Search for: hello world');
     });
 
-    test('should substitute positional args $0, $1', () => {
+    test('should substitute positional args $0, $1', async () => {
       // Include $ARGUMENTS to prevent auto-append
       const skill = createSkill({
         content: 'First: $0, Second: $1 (all: $ARGUMENTS)',
       });
 
-      const result = executor.prepare(skill, ['one', 'two']);
+      const result = await executor.prepare(skill, ['one', 'two']);
 
       expect(result).toBe('First: one, Second: two (all: one two)');
     });
 
-    test('should substitute $ARGUMENTS[n]', () => {
+    test('should substitute $ARGUMENTS[n]', async () => {
       // $ARGUMENTS[n] doesn't count as $ARGUMENTS for auto-append check
       // so we need to test this expects the appended ARGUMENTS
       const skill = createSkill({
         content: 'A: $ARGUMENTS[0], B: $ARGUMENTS[1]',
       });
 
-      const result = executor.prepare(skill, ['first', 'second']);
+      const result = await executor.prepare(skill, ['first', 'second']);
 
       // $ARGUMENTS[n] gets substituted, but $ARGUMENTS is not in content
       // So the implementation checks for literal $ARGUMENTS, not $ARGUMENTS[n]
       expect(result).toContain('A: first, B: second');
     });
 
-    test('should append arguments if $ARGUMENTS not in content', () => {
+    test('should append arguments if $ARGUMENTS not in content', async () => {
       const skill = createSkill({
         content: 'Static content',
       });
 
-      const result = executor.prepare(skill, ['arg1', 'arg2']);
+      const result = await executor.prepare(skill, ['arg1', 'arg2']);
 
       expect(result).toContain('Static content');
       expect(result).toContain('ARGUMENTS: arg1 arg2');
     });
 
-    test('should not append arguments if no args provided', () => {
+    test('should not append arguments if no args provided', async () => {
       const skill = createSkill({
         content: 'Static content',
       });
 
-      const result = executor.prepare(skill, []);
+      const result = await executor.prepare(skill, []);
 
       expect(result).toBe('Static content');
     });
 
-    test('should handle dynamic context markers', () => {
+    test('should handle dynamic context markers', async () => {
+      // Use a real directory so the cd command works
       const skill = createSkill({
-        content: 'Files: `!ls -la`',
+        // Pattern is !`command` - exclamation before backtick
+        content: 'Files: !`echo test`',
+        filePath: `${process.cwd()}/test-skill.md`,
       });
 
-      const result = executor.prepare(skill, []);
+      const result = await executor.prepare(skill, []);
 
-      expect(result).toContain('[Dynamic context: ls -la]');
+      // The command output replaces the marker
+      expect(result).toContain('Files: test');
     });
 
-    test('should handle multiple dynamic context markers', () => {
+    test('should handle multiple dynamic context markers', async () => {
+      // Use a real directory so the cd command works
       const skill = createSkill({
-        content: 'Date: `!date` and PWD: `!pwd`',
+        // Pattern is !`command` - exclamation before backtick
+        content: 'A: !`echo first` and B: !`echo second`',
+        filePath: `${process.cwd()}/test-skill.md`,
       });
 
-      const result = executor.prepare(skill, []);
+      const result = await executor.prepare(skill, []);
 
-      expect(result).toContain('[Dynamic context: date]');
-      expect(result).toContain('[Dynamic context: pwd]');
+      expect(result).toContain('A: first');
+      expect(result).toContain('B: second');
     });
   });
 

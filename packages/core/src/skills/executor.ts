@@ -48,7 +48,9 @@ export class SkillExecutor {
 
       try {
         // Execute the command in the skill's directory
-        const output = await Bun.$`cd ${skillDir} && ${command}`.quiet().text();
+        // Use sh -c to properly run the command string
+        const fullCommand = `cd ${skillDir} && ${command}`;
+        const output = await Bun.$`sh -c ${fullCommand}`.quiet().text();
         result = result.replace(fullMatch, output.trim());
       } catch (error) {
         // If command fails, include error message
