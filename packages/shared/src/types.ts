@@ -14,7 +14,7 @@ export interface Message {
 }
 
 export interface StreamChunk {
-  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'usage';
+  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'usage' | 'exit';
   content?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;

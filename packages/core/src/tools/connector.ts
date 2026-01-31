@@ -8,50 +8,60 @@ import { join } from 'path';
  */
 export class ConnectorBridge {
   private connectors: Map<string, Connector> = new Map();
+  private static cache: Map<string, Connector | null> = new Map();
 
   /**
-   * Discover available connectors (parallelized for speed)
+   * Discover available connectors (optimized - only checks configured ones)
    */
   async discover(connectorNames?: string[]): Promise<Connector[]> {
-    // Default connectors to look for
-    const names = connectorNames || [
-      'notion',
-      'googledrive',
-      'gmail',
-      'googlecalendar',
-      'googlecontacts',
-      'linear',
-      'slack',
-      'discord',
-      'github',
-      'x',
-      'exa',
-      'anthropic',
-      'openai',
-      'elevenlabs',
-    ];
+    // Only check explicitly configured connectors, or a minimal default set
+    // This prevents slow startup from checking 14+ non-existent CLIs
+    const names = connectorNames || [];
 
-    // Discover all connectors in parallel
-    const results = await Promise.all(
-      names.map(async (name) => {
-        const cli = `connect-${name}`;
+    if (names.length === 0) {
+      // No connectors configured - skip discovery entirely for fast startup
+      return [];
+    }
 
-        // Check if the CLI is available
-        try {
-          const result = await Bun.$`which ${cli}`.quiet().nothrow();
-          if (result.exitCode !== 0) return null;
-        } catch {
-          return null;
-        }
+    // Check cache first
+    const uncached = names.filter(n => !ConnectorBridge.cache.has(n));
 
-        // Try to get help output to discover commands
-        return this.discoverConnector(name, cli);
-      })
-    );
+    if (uncached.length > 0) {
+      // Discover uncached connectors in parallel (with timeout)
+      const results = await Promise.all(
+        uncached.map(async (name) => {
+          const cli = `connect-${name}`;
 
-    // Filter out nulls and register connectors
+          try {
+            // Quick existence check with timeout
+            const result = await Promise.race([
+              Bun.$`which ${cli}`.quiet().nothrow(),
+              new Promise<{ exitCode: number }>((_, reject) =>
+                setTimeout(() => reject(new Error('timeout')), 500)
+              )
+            ]);
+
+            if (result.exitCode !== 0) {
+              ConnectorBridge.cache.set(name, null);
+              return null;
+            }
+
+            // Lazy: don't run --help, just create minimal connector
+            const connector = this.createMinimalConnector(name, cli);
+            ConnectorBridge.cache.set(name, connector);
+            return connector;
+          } catch {
+            ConnectorBridge.cache.set(name, null);
+            return null;
+          }
+        })
+      );
+    }
+
+    // Return all cached connectors
     const discovered: Connector[] = [];
-    for (const connector of results) {
+    for (const name of names) {
+      const connector = ConnectorBridge.cache.get(name);
       if (connector) {
         discovered.push(connector);
         this.connectors.set(connector.name, connector);
@@ -59,6 +69,24 @@ export class ConnectorBridge {
     }
 
     return discovered;
+  }
+
+  /**
+   * Create minimal connector without running --help (lazy discovery)
+   */
+  private createMinimalConnector(name: string, cli: string): Connector {
+    return {
+      name,
+      cli,
+      description: `${name} connector`,
+      commands: [
+        { name: 'help', description: 'Show available commands', args: [], options: [] },
+      ],
+      auth: {
+        type: 'oauth2',
+        statusCommand: `${cli} auth status`,
+      },
+    };
   }
 
   /**

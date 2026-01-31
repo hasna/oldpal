@@ -79,7 +79,7 @@ export class AgentLoop {
     // Phase 1: Load config and ensure directories exist (fast, needed for phase 2)
     const [config] = await Promise.all([
       loadConfig(this.cwd),
-      ensureConfigDir(),
+      ensureConfigDir(this.sessionId),
     ]);
     this.config = config;
 
@@ -104,7 +104,7 @@ export class AgentLoop {
     // Phase 3: Sync operations (fast)
     // Register built-in tools
     this.toolRegistry.register(BashTool.tool, BashTool.executor);
-    FilesystemTools.registerAll(this.toolRegistry);
+    FilesystemTools.registerAll(this.toolRegistry, this.sessionId);
     WebTools.registerAll(this.toolRegistry);
     ImageTools.registerAll(this.toolRegistry);
 
@@ -168,6 +168,9 @@ export class AgentLoop {
         if (commandResult.handled) {
           if (commandResult.clearConversation) {
             this.context = new AgentContext();
+          }
+          if (commandResult.exit) {
+            this.emit({ type: 'exit' });
           }
           return;
         }
@@ -308,7 +311,7 @@ export class AgentLoop {
   /**
    * Handle slash command
    */
-  private async handleCommand(message: string): Promise<{ handled: boolean; prompt?: string; clearConversation?: boolean }> {
+  private async handleCommand(message: string): Promise<{ handled: boolean; prompt?: string; clearConversation?: boolean; exit?: boolean }> {
     const context: CommandContext = {
       cwd: this.cwd,
       sessionId: this.sessionId,

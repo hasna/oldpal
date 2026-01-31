@@ -21,16 +21,20 @@ export class BuiltinCommands {
   registerAll(loader: CommandLoader): void {
     loader.register(this.helpCommand(loader));
     loader.register(this.clearCommand());
+    loader.register(this.newCommand());
     loader.register(this.statusCommand());
+    loader.register(this.tokensCommand());
     loader.register(this.compactCommand());
     loader.register(this.configCommand());
     loader.register(this.initCommand());
     loader.register(this.costCommand());
     loader.register(this.modelCommand());
+    loader.register(this.skillsCommand(loader));
     loader.register(this.memoryCommand());
     loader.register(this.bugCommand());
     loader.register(this.prCommand());
     loader.register(this.reviewCommand());
+    loader.register(this.exitCommand());
   }
 
   /**
@@ -110,6 +114,112 @@ export class BuiltinCommands {
         context.emit('text', 'Conversation cleared. Starting fresh.\n');
         context.emit('done');
         return { handled: true, clearConversation: true };
+      },
+    };
+  }
+
+  /**
+   * /new - Start a new conversation (alias for /clear)
+   */
+  private newCommand(): Command {
+    return {
+      name: 'new',
+      description: 'Start a new conversation',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        context.clearMessages();
+        this.tokenUsage.inputTokens = 0;
+        this.tokenUsage.outputTokens = 0;
+        this.tokenUsage.totalTokens = 0;
+        context.emit('text', 'Starting new conversation.\n');
+        context.emit('done');
+        return { handled: true, clearConversation: true };
+      },
+    };
+  }
+
+  /**
+   * /exit - Exit oldpal
+   */
+  private exitCommand(): Command {
+    return {
+      name: 'exit',
+      description: 'Exit oldpal',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        context.emit('text', 'Goodbye!\n');
+        context.emit('done');
+        // Signal exit by returning special flag
+        return { handled: true, exit: true };
+      },
+    };
+  }
+
+  /**
+   * /tokens - Show token usage (alias for /status)
+   */
+  private tokensCommand(): Command {
+    return {
+      name: 'tokens',
+      description: 'Show token usage',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const usage = this.tokenUsage;
+        const usedPercent = Math.round((usage.totalTokens / usage.maxContextTokens) * 100);
+
+        let message = '\n**Token Usage**\n\n';
+        message += `Input: ${usage.inputTokens.toLocaleString()}\n`;
+        message += `Output: ${usage.outputTokens.toLocaleString()}\n`;
+        message += `Total: ${usage.totalTokens.toLocaleString()} / ${usage.maxContextTokens.toLocaleString()} (${usedPercent}%)\n`;
+
+        // Visual progress bar
+        const barLength = 30;
+        const filledLength = Math.round((usedPercent / 100) * barLength);
+        const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
+        message += `\n[${bar}] ${usedPercent}%\n`;
+
+        context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /skills - List available skills
+   */
+  private skillsCommand(loader: CommandLoader): Command {
+    return {
+      name: 'skills',
+      description: 'List available skills',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        // Skills are loaded separately, so we show what's available
+        let message = '\n**Available Skills**\n\n';
+        message += 'Skills are invoked with /skill-name [arguments]\n\n';
+        message += '**Built-in Skills:**\n';
+        message += '  /brainstorm - Generate ideas on a topic\n';
+        message += '  /draft - Draft content (emails, docs, etc.)\n';
+        message += '  /research - Research a topic\n';
+        message += '  /summarize - Summarize text or content\n';
+        message += '\n**Connector Skills:**\n';
+        message += '  /calendar - Manage calendar events\n';
+        message += '  /email - Read and send emails\n';
+        message += '  /notes - Manage notes (Notion)\n';
+        message += '  /search - Search the web\n';
+        message += '\nCustom skills can be added in .oldpal/skills/\n';
+
+        context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
       },
     };
   }
@@ -332,9 +442,9 @@ If there are staged git changes, focus on those. Otherwise, ask what code to rev
       content: '',
       handler: async (args, context) => {
         let message = '\n**Model Information**\n\n';
-        message += 'Current model: claude-3-5-sonnet-20241022\n';
+        message += 'Current model: claude-sonnet-4-20250514 (Claude 4 Sonnet)\n';
         message += 'Context window: 200,000 tokens\n';
-        message += 'Max output: 8,192 tokens\n\n';
+        message += 'Max output: 64,000 tokens\n\n';
         message += '*Model selection coming in a future update*\n';
 
         context.emit('text', message);

@@ -1,20 +1,51 @@
 import type { Tool } from '@oldpal/shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname } from 'path';
+import { homedir } from 'os';
 import { Glob } from 'bun';
+
+// Session ID for temp folder (set during registration)
+let currentSessionId: string = 'default';
+
+/**
+ * Get the temp folder path for the current session
+ */
+function getTempFolder(): string {
+  return join(homedir(), '.oldpal', 'temp', currentSessionId);
+}
+
+/**
+ * Check if a path is within the allowed temp folder
+ */
+function isInTempFolder(path: string): boolean {
+  const tempFolder = getTempFolder();
+  const resolved = resolve(path);
+  return resolved.startsWith(tempFolder);
+}
 
 /**
  * Filesystem tools - read, write, glob, grep
+ * Write operations are RESTRICTED to ~/.oldpal/temp/{session-id}/
  */
 export class FilesystemTools {
   /**
-   * Register all filesystem tools
+   * Register all filesystem tools with session context
    */
-  static registerAll(registry: ToolRegistry): void {
+  static registerAll(registry: ToolRegistry, sessionId?: string): void {
+    if (sessionId) {
+      currentSessionId = sessionId;
+    }
     registry.register(this.readTool, this.readExecutor);
     registry.register(this.writeTool, this.writeExecutor);
     registry.register(this.globTool, this.globExecutor);
     registry.register(this.grepTool, this.grepExecutor);
+  }
+
+  /**
+   * Set the session ID for temp folder
+   */
+  static setSessionId(sessionId: string): void {
+    currentSessionId = sessionId;
   }
 
   // ============================================
@@ -74,39 +105,51 @@ export class FilesystemTools {
   };
 
   // ============================================
-  // Write Tool
+  // Write Tool (RESTRICTED to temp folder)
   // ============================================
 
   static readonly writeTool: Tool = {
     name: 'write',
-    description: 'Write content to a file (creates or overwrites)',
+    description: 'Write content to a file. RESTRICTED: Can only write to ~/.oldpal/temp/{session}/ folder. Provide just the filename and it will be saved to the temp folder.',
     parameters: {
       type: 'object',
       properties: {
-        path: {
+        filename: {
           type: 'string',
-          description: 'The file path to write to',
+          description: 'The filename to write to (will be saved in temp folder)',
         },
         content: {
           type: 'string',
           description: 'The content to write',
         },
       },
-      required: ['path', 'content'],
+      required: ['filename', 'content'],
     },
   };
 
   static readonly writeExecutor: ToolExecutor = async (input) => {
-    const path = resolve(process.cwd(), input.path as string);
+    const filename = input.filename as string || input.path as string;
     const content = input.content as string;
 
+    // Always write to temp folder
+    const tempFolder = getTempFolder();
+
+    // Sanitize filename - remove any path traversal attempts
+    const sanitizedFilename = filename.replace(/\.\./g, '').replace(/^\/+/, '');
+    const path = join(tempFolder, sanitizedFilename);
+
+    // Double check we're in temp folder
+    if (!isInTempFolder(path)) {
+      return `Error: Cannot write outside temp folder. Files are saved to ${tempFolder}`;
+    }
+
     try {
-      // Ensure directory exists
+      // Ensure temp directory exists
       const dir = dirname(path);
       await Bun.$`mkdir -p ${dir}`.quiet();
 
       await Bun.write(path, content);
-      return `Successfully wrote ${content.length} characters to ${path}`;
+      return `Successfully wrote ${content.length} characters to ${path}\n\nYou can review and copy this file to your project if needed.`;
     } catch (error) {
       return `Error: ${error instanceof Error ? error.message : String(error)}`;
     }

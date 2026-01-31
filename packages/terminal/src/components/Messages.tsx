@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, Static } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@oldpal/shared';
 import { Markdown } from './Markdown';
 
@@ -37,11 +37,29 @@ export function Messages({
   const startIndex = Math.max(0, endIndex - maxVisible);
   const visibleMessages = messages.slice(startIndex, endIndex);
 
+  // Group consecutive tool-only assistant messages
+  const groupedMessages = groupConsecutiveToolMessages(visibleMessages);
+
+  // Separate historical messages (stable) from current activity (dynamic)
+  // Historical messages use Static to prevent re-rendering and "eating"
+  const historicalItems = groupedMessages.map((group) => {
+    if (group.type === 'single') {
+      return { id: group.message.id, group };
+    }
+    return { id: group.messages[0].id, group };
+  });
+
   return (
     <Box flexDirection="column">
-      {visibleMessages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
-      ))}
+      {/* Historical messages - wrapped in Static to prevent eating */}
+      <Static items={historicalItems}>
+        {(item) => {
+          if (item.group.type === 'single') {
+            return <MessageBubble key={item.id} message={item.group.message} />;
+          }
+          return <CombinedToolMessage key={item.id} messages={item.group.messages} />;
+        }}
+      </Static>
 
       {/* Show activity log - only text entries (tool calls shown in ToolCallBox) */}
       {activityLog.map((entry) => {
@@ -71,6 +89,74 @@ export function Messages({
   );
 }
 
+type MessageGroup =
+  | { type: 'single'; message: Message }
+  | { type: 'grouped'; messages: Message[] };
+
+/**
+ * Group consecutive assistant messages that only have tool calls (no text content)
+ */
+function groupConsecutiveToolMessages(messages: Message[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  let currentToolGroup: Message[] = [];
+
+  for (const msg of messages) {
+    const isToolOnlyAssistant =
+      msg.role === 'assistant' &&
+      (!msg.content || !msg.content.trim()) &&
+      msg.toolCalls &&
+      msg.toolCalls.length > 0;
+
+    if (isToolOnlyAssistant) {
+      currentToolGroup.push(msg);
+    } else {
+      // Flush any accumulated tool messages
+      if (currentToolGroup.length > 0) {
+        if (currentToolGroup.length === 1) {
+          groups.push({ type: 'single', message: currentToolGroup[0] });
+        } else {
+          groups.push({ type: 'grouped', messages: currentToolGroup });
+        }
+        currentToolGroup = [];
+      }
+      groups.push({ type: 'single', message: msg });
+    }
+  }
+
+  // Flush remaining tool messages
+  if (currentToolGroup.length > 0) {
+    if (currentToolGroup.length === 1) {
+      groups.push({ type: 'single', message: currentToolGroup[0] });
+    } else {
+      groups.push({ type: 'grouped', messages: currentToolGroup });
+    }
+  }
+
+  return groups;
+}
+
+/**
+ * Render multiple tool-only messages as a single combined row
+ */
+function CombinedToolMessage({ messages }: { messages: Message[] }) {
+  // Collect all tool calls from all messages
+  const allToolCalls: ToolCall[] = [];
+  for (const msg of messages) {
+    if (msg.toolCalls) {
+      allToolCalls.push(...msg.toolCalls);
+    }
+  }
+
+  const summary = getToolSummary(allToolCalls);
+
+  return (
+    <Box marginY={1}>
+      <Text dimColor>● </Text>
+      <Text dimColor>{summary}</Text>
+    </Box>
+  );
+}
+
 interface MessageBubbleProps {
   message: Message;
 }
@@ -93,27 +179,125 @@ function MessageBubble({ message }: MessageBubbleProps) {
   }
 
   // Assistant message
-  const toolCount = message.toolCalls?.length || 0;
+  const toolSummary = message.toolCalls ? getToolSummary(message.toolCalls) : '';
+  const hasContent = message.content && message.content.trim();
 
-  return (
-    <Box marginY={1} flexDirection="column">
-      <Box>
+  // If no content but has tools, show tool summary inline with bullet
+  if (!hasContent && toolSummary) {
+    return (
+      <Box marginY={1}>
         <Text dimColor>● </Text>
-        <Box flexGrow={1}>
-          <Markdown content={message.content} />
-        </Box>
+        <Text dimColor>{toolSummary}</Text>
       </Box>
+    );
+  }
 
-      {/* Show compact tool summary for historical messages */}
-      {toolCount > 0 && (
-        <Box marginLeft={2}>
-          <Text dimColor>
-            [{toolCount} tool{toolCount > 1 ? 's' : ''} used]
-          </Text>
-        </Box>
-      )}
+  // Content with optional tool summary inline
+  return (
+    <Box marginY={1}>
+      <Text dimColor>● </Text>
+      <Box flexGrow={1}>
+        <Markdown content={message.content} />
+        {toolSummary && <Text dimColor> {toolSummary}</Text>}
+      </Box>
     </Box>
   );
+}
+
+/**
+ * Generate a brief summary of tool calls with descriptive blurbs
+ */
+function getToolSummary(toolCalls: ToolCall[]): string {
+  if (toolCalls.length === 0) return '';
+
+  // For single tool call, show descriptive blurb
+  if (toolCalls.length === 1) {
+    return `[${formatToolCall(toolCalls[0])}]`;
+  }
+
+  // For multiple tool calls, group by type and show count with first item's context
+  const toolGroups: Record<string, { count: number; firstCall: ToolCall }> = {};
+  for (const tc of toolCalls) {
+    const name = getToolDisplayName(tc);
+    if (!toolGroups[name]) {
+      toolGroups[name] = { count: 1, firstCall: tc };
+    } else {
+      toolGroups[name].count++;
+    }
+  }
+
+  // Build summary string with context
+  const parts: string[] = [];
+  for (const [name, { count, firstCall }] of Object.entries(toolGroups)) {
+    if (count > 1) {
+      // Show abbreviated context for multiple calls
+      const context = getToolContext(firstCall);
+      parts.push(context ? `${name} ×${count} (${context}, ...)` : `${name} ×${count}`);
+    } else {
+      parts.push(formatToolCall(firstCall));
+    }
+  }
+
+  return `[${parts.join(', ')}]`;
+}
+
+/**
+ * Get short context from tool call input
+ */
+function getToolContext(toolCall: ToolCall): string {
+  const { name, input } = toolCall;
+  switch (name) {
+    case 'bash':
+      return truncate(String(input.command || ''), 20);
+    case 'read':
+      const path = String(input.path || input.file_path || '');
+      return path.split('/').pop() || '';
+    case 'write':
+      const writePath = String(input.path || input.file_path || '');
+      return writePath.split('/').pop() || '';
+    case 'glob':
+      return truncate(String(input.pattern || ''), 20);
+    case 'grep':
+      return truncate(String(input.pattern || ''), 20);
+    default:
+      return '';
+  }
+}
+
+/**
+ * Get display name for a tool call
+ */
+function getToolDisplayName(toolCall: ToolCall): string {
+  const { name, input } = toolCall;
+
+  switch (name) {
+    case 'bash':
+      return 'bash';
+    case 'curl':
+    case 'web_fetch':
+      return 'fetch';
+    case 'web_search':
+      return 'search';
+    case 'read':
+      return 'read';
+    case 'write':
+      return 'write';
+    case 'glob':
+      return 'glob';
+    case 'grep':
+      return 'grep';
+    case 'display_image':
+      return 'image';
+    case 'notion':
+    case 'gmail':
+    case 'googledrive':
+    case 'googlecalendar':
+    case 'linear':
+    case 'slack':
+      return name;
+    default:
+      return name;
+  }
 }
 
 function formatToolCall(toolCall: ToolCall): string {

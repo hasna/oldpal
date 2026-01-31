@@ -8,7 +8,33 @@ import { Messages } from './Messages';
 import { Status } from './Status';
 import { Spinner } from './Spinner';
 import { ProcessingIndicator } from './ProcessingIndicator';
-import { ToolCallBox, useToolCallExpansion } from './ToolCallBox';
+import { WelcomeBanner } from './WelcomeBanner';
+
+// Format tool name for compact display
+function formatToolName(toolCall: ToolCall): string {
+  const { name, input } = toolCall;
+  switch (name) {
+    case 'bash':
+      return `bash`;
+    case 'read':
+      const path = String(input.path || input.file_path || '');
+      return `read ${path.split('/').pop() || ''}`;
+    case 'write':
+      const writePath = String(input.path || input.file_path || '');
+      return `write ${writePath.split('/').pop() || ''}`;
+    case 'glob':
+      return `glob`;
+    case 'grep':
+      return `grep`;
+    case 'web_search':
+      return `search`;
+    case 'web_fetch':
+    case 'curl':
+      return `fetch`;
+    default:
+      return name;
+  }
+}
 
 interface AppProps {
   cwd: string;
@@ -42,8 +68,6 @@ export function App({ cwd }: AppProps) {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
 
-  // Tool call expansion hook
-  const { isExpanded: toolsExpanded } = useToolCallExpansion();
 
   // Use ref to track response for the done callback
   const responseRef = useRef('');
@@ -138,6 +162,9 @@ export function App({ cwd }: AppProps) {
           } else if (chunk.type === 'error' && chunk.error) {
             setError(chunk.error);
             setIsProcessing(false);
+          } else if (chunk.type === 'exit') {
+            // Exit command was issued
+            exit();
           } else if (chunk.type === 'usage' && chunk.usage) {
             setTokenUsage(chunk.usage);
             // Track tokens for current turn
@@ -225,8 +252,10 @@ export function App({ cwd }: AppProps) {
     }
   }, [messages.length, autoScroll]);
 
-  // Max visible messages
-  const maxVisibleMessages = 10;
+  // Max visible messages - reduce when processing to prevent overflow
+  const baseMaxVisible = 10;
+  const toolCallsHeight = isProcessing ? Math.min(toolCallsRef.current.length, 5) : 0;
+  const maxVisibleMessages = Math.max(3, baseMaxVisible - toolCallsHeight);
 
   // Handle keyboard shortcuts
   useInput((input, key) => {
@@ -389,8 +418,20 @@ export function App({ cwd }: AppProps) {
   // Check if currently thinking (no response and no tool calls yet)
   const isThinking = isProcessing && !currentResponse && !currentToolCall && toolCallEntries.length === 0;
 
+  // Show welcome banner only when no messages
+  const showWelcome = messages.length === 0 && !isProcessing;
+
   return (
     <Box flexDirection="column" padding={1}>
+      {/* Welcome banner */}
+      {showWelcome && (
+        <WelcomeBanner
+          version="0.4.0"
+          model="claude-4-sonnet"
+          directory={cwd}
+        />
+      )}
+
       {/* Scroll indicator */}
       {scrollOffset > 0 && (
         <Box>
@@ -409,13 +450,15 @@ export function App({ cwd }: AppProps) {
         maxVisible={maxVisibleMessages}
       />
 
-      {/* Tool calls in a collapsible box */}
+      {/* Tool calls - show compact single line during processing */}
       {isProcessing && toolCallEntries.length > 0 && (
-        <ToolCallBox
-          entries={toolCallEntries}
-          maxVisible={3}
-          isExpanded={toolsExpanded}
-        />
+        <Box marginY={1}>
+          <Text dimColor>
+            ⚙ {toolCallEntries.length} tool{toolCallEntries.length > 1 ? 's' : ''} running
+            {toolCallEntries.length > 0 && `: ${formatToolName(toolCallEntries[toolCallEntries.length - 1].toolCall)}`}
+            {toolCallEntries.length > 1 && ` (+${toolCallEntries.length - 1} more)`}
+          </Text>
+        </Box>
       )}
 
       {/* Queue indicator */}

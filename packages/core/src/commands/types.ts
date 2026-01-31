@@ -63,5 +63,7 @@ export interface CommandResult {
   prompt?: string;
   /** Whether to clear the conversation */
   clearConversation?: boolean;
+  /** Whether to exit the application */
+  exit?: boolean;
 }
 

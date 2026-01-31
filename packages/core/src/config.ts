@@ -142,16 +142,31 @@ async function loadJsonFile<T>(path: string): Promise<T | null> {
 /**
  * Ensure the config directory exists (using native fs for speed)
  */
-export async function ensureConfigDir(): Promise<void> {
+export async function ensureConfigDir(sessionId?: string): Promise<void> {
   const { mkdir } = await import('fs/promises');
   const configDir = getConfigDir();
 
   // Create all directories in parallel
-  await Promise.all([
+  const dirs = [
     mkdir(configDir, { recursive: true }),
     mkdir(join(configDir, 'sessions'), { recursive: true }),
     mkdir(join(configDir, 'skills'), { recursive: true }),
-  ]);
+    mkdir(join(configDir, 'temp'), { recursive: true }),
+  ];
+
+  // Create session-specific temp folder if provided
+  if (sessionId) {
+    dirs.push(mkdir(join(configDir, 'temp', sessionId), { recursive: true }));
+  }
+
+  await Promise.all(dirs);
+}
+
+/**
+ * Get the temp folder path for a session
+ */
+export function getTempFolder(sessionId: string): string {
+  return join(getConfigDir(), 'temp', sessionId);
 }
 
 /**

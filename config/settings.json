@@ -18,11 +18,26 @@
     }
   },
   "connectors": [
-    "notion",
-    "googledrive",
+    "anthropic",
+    "brandsight",
+    "clickbank",
+    "cloudflare",
+    "discord",
     "gmail",
     "googlecalendar",
+    "googlecontacts",
+    "googledrive",
     "linear",
-    "slack"
+    "maropost",
+    "mercury",
+    "mistral",
+    "notion",
+    "openai",
+    "perplexity",
+    "sedo",
+    "slack",
+    "x",
+    "xai",
+    "zendesk"
   ]
 }
