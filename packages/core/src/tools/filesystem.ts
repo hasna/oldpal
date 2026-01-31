@@ -1,6 +1,6 @@
 import type { Tool } from '@oldpal/shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
-import { join, resolve, dirname } from 'path';
+import { join, resolve, dirname, sep } from 'path';
 import { getConfigDir } from '../config';
 import { Glob } from 'bun';
 
@@ -18,9 +18,10 @@ function getTempFolder(): string {
  * Check if a path is within the allowed temp folder
  */
 function isInTempFolder(path: string): boolean {
-  const tempFolder = getTempFolder();
+  const tempFolder = resolve(getTempFolder());
   const resolved = resolve(path);
-  return resolved.startsWith(tempFolder);
+  if (resolved === tempFolder) return true;
+  return resolved.startsWith(`${tempFolder}${sep}`);
 }
 
 /**
@@ -139,8 +140,15 @@ export class FilesystemTools {
     // Always write to temp folder
     const tempFolder = getTempFolder();
 
+    if (!filename || !filename.trim()) {
+      return 'Error: filename is required';
+    }
+
     // Sanitize filename - remove any path traversal attempts
-    const sanitizedFilename = filename.replace(/\.\./g, '').replace(/^\/+/, '');
+    const sanitizedFilename = filename
+      .replace(/\.\.[/\\]/g, '')
+      .replace(/\.\./g, '')
+      .replace(/^[/\\]+/, '');
     const path = join(tempFolder, sanitizedFilename);
 
     // Double check we're in temp folder
