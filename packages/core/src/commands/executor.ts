@@ -1,0 +1,163 @@
+import type { Command, CommandContext, CommandResult } from './types';
+import type { CommandLoader } from './loader';
+
+/**
+ * CommandExecutor - executes slash commands
+ *
+ * Features:
+ * - Argument substitution ($ARGUMENTS)
+ * - Shell command injection (!command)
+ * - Self-handled commands (built-in)
+ * - Custom commands (sent to LLM)
+ */
+export class CommandExecutor {
+  private loader: CommandLoader;
+
+  constructor(loader: CommandLoader) {
+    this.loader = loader;
+  }
+
+  /**
+   * Parse a slash command from user input
+   * Returns null if input is not a slash command
+   */
+  parseCommand(input: string): { name: string; args: string } | null {
+    const trimmed = input.trim();
+
+    // Must start with /
+    if (!trimmed.startsWith('/')) {
+      return null;
+    }
+
+    // Extract command name and arguments
+    const match = trimmed.match(/^\/(\S+)(?:\s+(.*))?$/);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      name: match[1],
+      args: match[2] || '',
+    };
+  }
+
+  /**
+   * Check if input is a slash command
+   */
+  isCommand(input: string): boolean {
+    return this.parseCommand(input) !== null;
+  }
+
+  /**
+   * Execute a slash command
+   */
+  async execute(input: string, context: CommandContext): Promise<CommandResult> {
+    const parsed = this.parseCommand(input);
+
+    if (!parsed) {
+      return { handled: false };
+    }
+
+    const command = this.loader.getCommand(parsed.name);
+
+    if (!command) {
+      // Unknown command
+      context.emit('text', `Unknown command: /${parsed.name}\n\nUse /help to see available commands.\n`);
+      context.emit('done');
+      return { handled: true };
+    }
+
+    // Self-handled commands (built-in with handler)
+    if (command.selfHandled && command.handler) {
+      return command.handler(parsed.args, context);
+    }
+
+    // Commands that go to LLM
+    const prompt = await this.preparePrompt(command, parsed.args);
+
+    return {
+      handled: false,
+      prompt,
+    };
+  }
+
+  /**
+   * Prepare the prompt for LLM
+   * - Substitutes $ARGUMENTS
+   * - Executes shell commands (!command)
+   */
+  private async preparePrompt(command: Command, args: string): Promise<string> {
+    let content = command.content;
+
+    // Substitute $ARGUMENTS
+    content = content.replace(/\$ARGUMENTS/g, args || '(no arguments provided)');
+
+    // Execute shell commands (!command) and inject output
+    content = await this.processShellCommands(content);
+
+    return content;
+  }
+
+  /**
+   * Process shell commands in content
+   * Lines starting with ! are executed and replaced with their output
+   */
+  private async processShellCommands(content: string): Promise<string> {
+    const lines = content.split('\n');
+    const processedLines: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith('!')) {
+        // Execute shell command
+        const command = trimmed.slice(1).trim();
+        const output = await this.executeShell(command);
+        processedLines.push(`\`\`\`\n${output}\n\`\`\``);
+      } else {
+        processedLines.push(line);
+      }
+    }
+
+    return processedLines.join('\n');
+  }
+
+  /**
+   * Execute a shell command and return output
+   */
+  private async executeShell(command: string): Promise<string> {
+    try {
+      const proc = Bun.spawn(['bash', '-c', command], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      const [stdout, stderr] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+
+      const exitCode = await proc.exited;
+
+      if (exitCode !== 0 && stderr) {
+        return `Error (exit ${exitCode}):\n${stderr}`;
+      }
+
+      return stdout.trim() || '(no output)';
+    } catch (error) {
+      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  /**
+   * Get command suggestions for partial input
+   */
+  getSuggestions(partial: string): Command[] {
+    if (!partial.startsWith('/')) {
+      return [];
+    }
+
+    const name = partial.slice(1).toLowerCase();
+    return this.loader.findMatching(name);
+  }
+}

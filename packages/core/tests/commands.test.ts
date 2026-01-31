@@ -1,0 +1,491 @@
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { CommandLoader } from '../src/commands/loader';
+import { CommandExecutor } from '../src/commands/executor';
+import { BuiltinCommands } from '../src/commands/builtin';
+import type { CommandContext, CommandResult } from '../src/commands/types';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+
+describe('CommandLoader', () => {
+  let loader: CommandLoader;
+  let testDir: string;
+  let commandsDir: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `oldpal-test-${Date.now()}`);
+    commandsDir = join(testDir, '.oldpal', 'commands');
+    mkdirSync(commandsDir, { recursive: true });
+    loader = new CommandLoader(testDir);
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  describe('loadAll', () => {
+    test('should load commands from directory', async () => {
+      // Create a test command file
+      writeFileSync(join(commandsDir, 'test.md'), `---
+name: test
+description: A test command
+---
+
+Test content here.
+`);
+
+      await loader.loadAll();
+      const commands = loader.getCommands();
+      expect(commands.length).toBeGreaterThan(0);
+
+      const testCmd = loader.getCommand('test');
+      expect(testCmd).toBeDefined();
+      expect(testCmd?.description).toBe('A test command');
+      expect(testCmd?.content).toBe('Test content here.');
+    });
+
+    test('should handle missing directory', async () => {
+      const emptyLoader = new CommandLoader('/nonexistent/path');
+      await emptyLoader.loadAll();
+      expect(emptyLoader.getCommands()).toEqual([]);
+    });
+
+    test('should derive name from filename if not in frontmatter', async () => {
+      writeFileSync(join(commandsDir, 'mycommand.md'), `---
+description: Command without name
+---
+
+Content.
+`);
+
+      await loader.loadAll();
+      expect(loader.hasCommand('mycommand')).toBe(true);
+    });
+
+    test('should parse tags from frontmatter', async () => {
+      writeFileSync(join(commandsDir, 'tagged.md'), `---
+name: tagged
+description: A tagged command
+tags: [git, automation]
+---
+
+Content.
+`);
+
+      await loader.loadAll();
+      const cmd = loader.getCommand('tagged');
+      expect(cmd?.tags).toEqual(['git', 'automation']);
+    });
+
+    test('should parse allowed-tools from frontmatter', async () => {
+      writeFileSync(join(commandsDir, 'restricted.md'), `---
+name: restricted
+description: Restricted tools
+allowed-tools: bash, read
+---
+
+Content.
+`);
+
+      await loader.loadAll();
+      const cmd = loader.getCommand('restricted');
+      expect(cmd?.allowedTools).toEqual(['bash', 'read']);
+    });
+
+    test('should handle nested directories with namespacing', async () => {
+      const gitDir = join(commandsDir, 'git');
+      mkdirSync(gitDir, { recursive: true });
+      writeFileSync(join(gitDir, 'commit.md'), `---
+description: Git commit command
+---
+
+Commit changes.
+`);
+
+      await loader.loadAll();
+      expect(loader.hasCommand('git:commit')).toBe(true);
+    });
+
+    test('should handle file without frontmatter', async () => {
+      writeFileSync(join(commandsDir, 'plain.md'), 'Just plain content.');
+
+      await loader.loadAll();
+      const cmd = loader.getCommand('plain');
+      expect(cmd).toBeDefined();
+      expect(cmd?.content).toBe('Just plain content.');
+    });
+  });
+
+  describe('register', () => {
+    test('should register a command programmatically', () => {
+      loader.register({
+        name: 'programmatic',
+        description: 'A programmatic command',
+        content: 'Content here',
+        builtin: true,
+      });
+
+      expect(loader.hasCommand('programmatic')).toBe(true);
+      const cmd = loader.getCommand('programmatic');
+      expect(cmd?.builtin).toBe(true);
+    });
+  });
+
+  describe('getCommand', () => {
+    test('should return undefined for non-existent command', () => {
+      expect(loader.getCommand('nonexistent')).toBeUndefined();
+    });
+  });
+
+  describe('findMatching', () => {
+    test('should find commands by partial name', async () => {
+      loader.register({ name: 'commit', description: 'Commit changes', content: '' });
+      loader.register({ name: 'config', description: 'Configuration', content: '' });
+      loader.register({ name: 'help', description: 'Show help', content: '' });
+
+      const matches = loader.findMatching('co');
+      expect(matches.length).toBe(2);
+      expect(matches.map(c => c.name)).toContain('commit');
+      expect(matches.map(c => c.name)).toContain('config');
+    });
+
+    test('should find commands by description', async () => {
+      loader.register({ name: 'commit', description: 'Commit changes', content: '' });
+
+      const matches = loader.findMatching('changes');
+      expect(matches.length).toBe(1);
+      expect(matches[0].name).toBe('commit');
+    });
+  });
+});
+
+describe('CommandExecutor', () => {
+  let loader: CommandLoader;
+  let executor: CommandExecutor;
+  let mockContext: CommandContext;
+  let emittedChunks: Array<{ type: string; content?: string }>;
+
+  beforeEach(() => {
+    loader = new CommandLoader();
+    executor = new CommandExecutor(loader);
+    emittedChunks = [];
+
+    mockContext = {
+      cwd: '/test/dir',
+      sessionId: 'test-session',
+      messages: [],
+      tools: [],
+      clearMessages: () => {},
+      addSystemMessage: () => {},
+      emit: (type, content) => {
+        emittedChunks.push({ type, content });
+      },
+    };
+  });
+
+  describe('parseCommand', () => {
+    test('should parse command with name only', () => {
+      const result = executor.parseCommand('/help');
+      expect(result).toEqual({ name: 'help', args: '' });
+    });
+
+    test('should parse command with arguments', () => {
+      const result = executor.parseCommand('/search hello world');
+      expect(result).toEqual({ name: 'search', args: 'hello world' });
+    });
+
+    test('should return null for non-command input', () => {
+      expect(executor.parseCommand('hello')).toBeNull();
+      expect(executor.parseCommand('')).toBeNull();
+    });
+
+    test('should handle command with colon namespace', () => {
+      const result = executor.parseCommand('/git:commit message');
+      expect(result).toEqual({ name: 'git:commit', args: 'message' });
+    });
+  });
+
+  describe('isCommand', () => {
+    test('should return true for slash commands', () => {
+      expect(executor.isCommand('/help')).toBe(true);
+      expect(executor.isCommand('/search foo')).toBe(true);
+    });
+
+    test('should return false for non-commands', () => {
+      expect(executor.isCommand('hello')).toBe(false);
+      expect(executor.isCommand('')).toBe(false);
+    });
+  });
+
+  describe('execute', () => {
+    test('should handle unknown command', async () => {
+      const result = await executor.execute('/unknown', mockContext);
+
+      expect(result.handled).toBe(true);
+      expect(emittedChunks.some(c => c.content?.includes('Unknown command'))).toBe(true);
+    });
+
+    test('should execute self-handled command', async () => {
+      let handlerCalled = false;
+
+      loader.register({
+        name: 'test',
+        description: 'Test command',
+        content: '',
+        selfHandled: true,
+        handler: async (args, ctx) => {
+          handlerCalled = true;
+          ctx.emit('text', `Args: ${args}`);
+          ctx.emit('done');
+          return { handled: true };
+        },
+      });
+
+      const result = await executor.execute('/test myargs', mockContext);
+
+      expect(result.handled).toBe(true);
+      expect(handlerCalled).toBe(true);
+      expect(emittedChunks.some(c => c.content === 'Args: myargs')).toBe(true);
+    });
+
+    test('should return prompt for non-self-handled command', async () => {
+      loader.register({
+        name: 'review',
+        description: 'Review code',
+        content: 'Please review the code. $ARGUMENTS',
+        selfHandled: false,
+      });
+
+      const result = await executor.execute('/review main.ts', mockContext);
+
+      expect(result.handled).toBe(false);
+      expect(result.prompt).toContain('Please review the code.');
+      expect(result.prompt).toContain('main.ts');
+    });
+
+    test('should substitute $ARGUMENTS placeholder', async () => {
+      loader.register({
+        name: 'debug',
+        description: 'Debug issue',
+        content: 'Debug this: $ARGUMENTS',
+        selfHandled: false,
+      });
+
+      const result = await executor.execute('/debug error in line 42', mockContext);
+
+      expect(result.prompt).toBe('Debug this: error in line 42');
+    });
+
+    test('should handle missing arguments', async () => {
+      loader.register({
+        name: 'test',
+        description: 'Test',
+        content: 'Args: $ARGUMENTS',
+        selfHandled: false,
+      });
+
+      const result = await executor.execute('/test', mockContext);
+
+      expect(result.prompt).toBe('Args: (no arguments provided)');
+    });
+  });
+
+  describe('getSuggestions', () => {
+    test('should return matching commands for partial input', () => {
+      loader.register({ name: 'help', description: 'Show help', content: '' });
+      loader.register({ name: 'history', description: 'Show history', content: '' });
+
+      const suggestions = executor.getSuggestions('/h');
+      expect(suggestions.length).toBe(2);
+    });
+
+    test('should return empty for non-slash input', () => {
+      expect(executor.getSuggestions('hello')).toEqual([]);
+    });
+  });
+});
+
+describe('BuiltinCommands', () => {
+  let builtins: BuiltinCommands;
+  let loader: CommandLoader;
+  let mockContext: CommandContext;
+  let emittedContent: string[];
+  let messagesCleared: boolean;
+
+  beforeEach(() => {
+    builtins = new BuiltinCommands();
+    loader = new CommandLoader();
+    emittedContent = [];
+    messagesCleared = false;
+
+    mockContext = {
+      cwd: '/test/project',
+      sessionId: 'session-123',
+      messages: [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there!' },
+      ],
+      tools: [
+        { name: 'bash', description: 'Run commands', parameters: { type: 'object', properties: {} } },
+        { name: 'read', description: 'Read files', parameters: { type: 'object', properties: {} } },
+      ],
+      clearMessages: () => { messagesCleared = true; },
+      addSystemMessage: () => {},
+      emit: (type, content) => {
+        if (type === 'text' && content) {
+          emittedContent.push(content);
+        }
+      },
+    };
+
+    builtins.registerAll(loader);
+  });
+
+  describe('token usage tracking', () => {
+    test('should track and return token usage', () => {
+      builtins.updateTokenUsage({
+        inputTokens: 1000,
+        outputTokens: 500,
+        totalTokens: 1500,
+      });
+
+      const usage = builtins.getTokenUsage();
+      expect(usage.inputTokens).toBe(1000);
+      expect(usage.outputTokens).toBe(500);
+      expect(usage.totalTokens).toBe(1500);
+    });
+  });
+
+  describe('/help command', () => {
+    test('should list all commands', async () => {
+      const cmd = loader.getCommand('help');
+      expect(cmd).toBeDefined();
+      expect(cmd?.selfHandled).toBe(true);
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        expect(emittedContent.some(c => c.includes('Available Slash Commands'))).toBe(true);
+      }
+    });
+  });
+
+  describe('/clear command', () => {
+    test('should clear conversation', async () => {
+      const cmd = loader.getCommand('clear');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        expect(result.clearConversation).toBe(true);
+        expect(messagesCleared).toBe(true);
+      }
+    });
+  });
+
+  describe('/status command', () => {
+    test('should show session status', async () => {
+      builtins.updateTokenUsage({
+        inputTokens: 5000,
+        outputTokens: 2000,
+        totalTokens: 7000,
+        maxContextTokens: 200000,
+      });
+
+      const cmd = loader.getCommand('status');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        expect(emittedContent.some(c => c.includes('Session Status'))).toBe(true);
+        expect(emittedContent.some(c => c.includes('/test/project'))).toBe(true);
+        expect(emittedContent.some(c => c.includes('session-123'))).toBe(true);
+      }
+    });
+  });
+
+  describe('/cost command', () => {
+    test('should show cost estimate', async () => {
+      builtins.updateTokenUsage({
+        inputTokens: 10000,
+        outputTokens: 5000,
+        totalTokens: 15000,
+        maxContextTokens: 200000,
+      });
+
+      const cmd = loader.getCommand('cost');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        expect(emittedContent.some(c => c.includes('Estimated Session Cost'))).toBe(true);
+        expect(emittedContent.some(c => c.includes('$'))).toBe(true);
+      }
+    });
+  });
+
+  describe('/model command', () => {
+    test('should show model information', async () => {
+      const cmd = loader.getCommand('model');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        expect(emittedContent.some(c => c.includes('Model Information'))).toBe(true);
+      }
+    });
+  });
+
+  describe('/config command', () => {
+    test('should show configuration', async () => {
+      const cmd = loader.getCommand('config');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        expect(emittedContent.some(c => c.includes('Configuration'))).toBe(true);
+      }
+    });
+  });
+
+  describe('non-self-handled commands', () => {
+    test('/compact should return LLM prompt', () => {
+      const cmd = loader.getCommand('compact');
+      expect(cmd).toBeDefined();
+      expect(cmd?.selfHandled).toBe(false);
+      expect(cmd?.content).toContain('summarize');
+    });
+
+    test('/memory should return LLM prompt', () => {
+      const cmd = loader.getCommand('memory');
+      expect(cmd).toBeDefined();
+      expect(cmd?.selfHandled).toBe(false);
+      expect(cmd?.content).toContain('summary');
+    });
+
+    test('/bug should support arguments', () => {
+      const cmd = loader.getCommand('bug');
+      expect(cmd).toBeDefined();
+      expect(cmd?.content).toContain('$ARGUMENTS');
+    });
+
+    test('/review should support arguments', () => {
+      const cmd = loader.getCommand('review');
+      expect(cmd).toBeDefined();
+      expect(cmd?.content).toContain('$ARGUMENTS');
+    });
+
+    test('/pr should create pull request prompt', () => {
+      const cmd = loader.getCommand('pr');
+      expect(cmd).toBeDefined();
+      expect(cmd?.content).toContain('pull request');
+    });
+  });
+});
