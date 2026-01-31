@@ -12,7 +12,7 @@ import { HookLoader } from '../hooks/loader';
 import { HookExecutor } from '../hooks/executor';
 import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext } from '../commands';
 import { createLLMClient, type LLMClient } from '../llm/client';
-import { loadConfig, loadHooksConfig } from '../config';
+import { loadConfig, loadHooksConfig, loadSystemPrompt } from '../config';
 
 export interface AgentLoopOptions {
   config?: OldpalConfig;
@@ -100,6 +100,12 @@ export class AgentLoop {
     // Load hooks
     const hooksConfig = await loadHooksConfig(this.cwd);
     this.hookLoader.load(hooksConfig);
+
+    // Load and set system prompt from OLDPAL.md
+    const systemPrompt = await loadSystemPrompt(this.cwd);
+    if (systemPrompt) {
+      this.context.addSystemMessage(systemPrompt);
+    }
 
     // Run session start hooks
     await this.hookExecutor.execute(this.hookLoader.getHooks('SessionStart'), {

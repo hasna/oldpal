@@ -148,3 +148,47 @@ export async function ensureConfigDir(): Promise<void> {
   await Bun.$`mkdir -p ${configDir}/sessions`;
   await Bun.$`mkdir -p ${configDir}/skills`;
 }
+
+/**
+ * Load system prompt from OLDPAL.md files
+ * Priority: project .oldpal/OLDPAL.md > global ~/.oldpal/OLDPAL.md
+ * If both exist, they are concatenated (global first, then project)
+ */
+export async function loadSystemPrompt(cwd: string = process.cwd()): Promise<string | null> {
+  const prompts: string[] = [];
+
+  // Load global system prompt
+  const globalPromptPath = getConfigPath('OLDPAL.md');
+  const globalPrompt = await loadTextFile(globalPromptPath);
+  if (globalPrompt) {
+    prompts.push(globalPrompt);
+  }
+
+  // Load project system prompt
+  const projectPromptPath = join(getProjectConfigDir(cwd), 'OLDPAL.md');
+  const projectPrompt = await loadTextFile(projectPromptPath);
+  if (projectPrompt) {
+    prompts.push(projectPrompt);
+  }
+
+  if (prompts.length === 0) {
+    return null;
+  }
+
+  return prompts.join('\n\n---\n\n');
+}
+
+/**
+ * Load a text file, returning null if it doesn't exist
+ */
+async function loadTextFile(path: string): Promise<string | null> {
+  try {
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      return null;
+    }
+    return await file.text();
+  } catch {
+    return null;
+  }
+}
