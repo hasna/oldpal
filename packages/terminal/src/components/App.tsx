@@ -117,7 +117,32 @@ export function App({ cwd }: AppProps) {
   const finalizeResponse = useCallback((status?: 'stopped' | 'interrupted' | 'error') => {
     const baseContent = buildFullResponse();
     const hasContent = baseContent.length > 0;
-    const hasTools = toolCallsRef.current.length > 0;
+    const activityToolCalls = activityLogRef.current
+      .filter((entry) => entry.type === 'tool_call' && entry.toolCall)
+      .map((entry) => entry.toolCall as ToolCall);
+    const activityToolResults = activityLogRef.current
+      .filter((entry) => entry.type === 'tool_result' && entry.toolResult)
+      .map((entry) => entry.toolResult as ToolResult);
+
+    const toolCallMap = new Map<string, ToolCall>();
+    for (const toolCall of activityToolCalls) {
+      toolCallMap.set(toolCall.id, toolCall);
+    }
+    for (const toolCall of toolCallsRef.current) {
+      toolCallMap.set(toolCall.id, toolCall);
+    }
+    const mergedToolCalls = Array.from(toolCallMap.values());
+
+    const toolResultMap = new Map<string, ToolResult>();
+    for (const toolResult of activityToolResults) {
+      toolResultMap.set(toolResult.toolCallId, toolResult);
+    }
+    for (const toolResult of toolResultsRef.current) {
+      toolResultMap.set(toolResult.toolCallId, toolResult);
+    }
+    const mergedToolResults = Array.from(toolResultMap.values());
+
+    const hasTools = mergedToolCalls.length > 0;
 
     if (!hasContent && !hasTools) {
       return false;
@@ -139,8 +164,8 @@ export function App({ cwd }: AppProps) {
         role: 'assistant',
         content,
         timestamp: now(),
-        toolCalls: hasTools ? [...toolCallsRef.current] : undefined,
-        toolResults: toolResultsRef.current.length > 0 ? [...toolResultsRef.current] : undefined,
+        toolCalls: hasTools ? mergedToolCalls : undefined,
+        toolResults: mergedToolResults.length > 0 ? mergedToolResults : undefined,
       },
     ]);
 
