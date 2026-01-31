@@ -15,7 +15,9 @@ export class SkillLoader {
    */
   async loadAll(projectDir: string = process.cwd()): Promise<void> {
     // Load user skills
-    const userSkillsDir = join(homedir(), '.oldpal', 'skills');
+    const envHome = process.env.HOME || process.env.USERPROFILE;
+    const userHome = envHome && envHome.trim().length > 0 ? envHome : homedir();
+    const userSkillsDir = join(userHome, '.oldpal', 'skills');
     await this.loadFromDirectory(userSkillsDir);
 
     // Load project skills
