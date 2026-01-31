@@ -10,11 +10,9 @@ export class ConnectorBridge {
   private connectors: Map<string, Connector> = new Map();
 
   /**
-   * Discover available connectors
+   * Discover available connectors (parallelized for speed)
    */
   async discover(connectorNames?: string[]): Promise<Connector[]> {
-    const discovered: Connector[] = [];
-
     // Default connectors to look for
     const names = connectorNames || [
       'notion',
@@ -33,22 +31,30 @@ export class ConnectorBridge {
       'elevenlabs',
     ];
 
-    for (const name of names) {
-      const cli = `connect-${name}`;
+    // Discover all connectors in parallel
+    const results = await Promise.all(
+      names.map(async (name) => {
+        const cli = `connect-${name}`;
 
-      // Check if the CLI is available
-      try {
-        const result = await Bun.$`which ${cli}`.quiet();
-        if (result.exitCode !== 0) continue;
-      } catch {
-        continue;
-      }
+        // Check if the CLI is available
+        try {
+          const result = await Bun.$`which ${cli}`.quiet().nothrow();
+          if (result.exitCode !== 0) return null;
+        } catch {
+          return null;
+        }
 
-      // Try to get help output to discover commands
-      const connector = await this.discoverConnector(name, cli);
+        // Try to get help output to discover commands
+        return this.discoverConnector(name, cli);
+      })
+    );
+
+    // Filter out nulls and register connectors
+    const discovered: Connector[] = [];
+    for (const connector of results) {
       if (connector) {
         discovered.push(connector);
-        this.connectors.set(name, connector);
+        this.connectors.set(connector.name, connector);
       }
     }
 

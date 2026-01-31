@@ -35,15 +35,22 @@ export class SkillLoader {
    */
   async loadFromDirectory(dir: string): Promise<void> {
     try {
-      // Check if directory exists
-      const dirFile = Bun.file(dir);
-      const stats = await Bun.$`test -d ${dir} && echo "exists"`.quiet().nothrow();
-      if (stats.exitCode !== 0) return;
+      // Check if directory exists using native fs
+      const { stat } = await import('fs/promises');
+      try {
+        const stats = await stat(dir);
+        if (!stats.isDirectory()) return;
+      } catch {
+        return; // Directory doesn't exist
+      }
+
+      // Collect all skill files to load
+      const filesToLoad: string[] = [];
 
       // Load skills from skill-* directories (preferred convention)
       const skillPrefixGlob = new Glob('skill-*/SKILL.md');
       for await (const file of skillPrefixGlob.scan({ cwd: dir })) {
-        await this.loadSkillFile(join(dir, file));
+        filesToLoad.push(join(dir, file));
       }
 
       // Also load from regular directories (for backwards compatibility)
@@ -52,9 +59,12 @@ export class SkillLoader {
         // Skip if already loaded via skill- prefix
         const dirName = file.split('/')[0];
         if (!dirName.startsWith('skill-')) {
-          await this.loadSkillFile(join(dir, file));
+          filesToLoad.push(join(dir, file));
         }
       }
+
+      // Load all skill files in parallel
+      await Promise.all(filesToLoad.map((file) => this.loadSkillFile(file)));
     } catch {
       // Directory doesn't exist or error reading, skip
     }

@@ -140,13 +140,18 @@ async function loadJsonFile<T>(path: string): Promise<T | null> {
 }
 
 /**
- * Ensure the config directory exists
+ * Ensure the config directory exists (using native fs for speed)
  */
 export async function ensureConfigDir(): Promise<void> {
+  const { mkdir } = await import('fs/promises');
   const configDir = getConfigDir();
-  await Bun.$`mkdir -p ${configDir}`;
-  await Bun.$`mkdir -p ${configDir}/sessions`;
-  await Bun.$`mkdir -p ${configDir}/skills`;
+
+  // Create all directories in parallel
+  await Promise.all([
+    mkdir(configDir, { recursive: true }),
+    mkdir(join(configDir, 'sessions'), { recursive: true }),
+    mkdir(join(configDir, 'skills'), { recursive: true }),
+  ]);
 }
 
 /**

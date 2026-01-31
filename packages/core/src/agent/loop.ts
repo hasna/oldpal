@@ -72,40 +72,50 @@ export class AgentLoop {
   }
 
   /**
-   * Initialize the agent
+   * Initialize the agent (parallelized for fast startup)
    */
   async initialize(): Promise<void> {
-    // Ensure config directories exist
-    await ensureConfigDir();
+    // Phase 1: Load config and ensure directories exist (fast, needed for phase 2)
+    const [config] = await Promise.all([
+      loadConfig(this.cwd),
+      ensureConfigDir(),
+    ]);
+    this.config = config;
 
-    // Load configuration
-    this.config = await loadConfig(this.cwd);
+    // Phase 2: All independent async operations in parallel
+    const [, , , hooksConfig, systemPrompt] = await Promise.all([
+      // Initialize LLM client
+      createLLMClient(this.config.llm).then((client) => {
+        this.llmClient = client;
+      }),
+      // Discover connectors
+      this.connectorBridge.discover(this.config.connectors),
+      // Load skills
+      this.skillLoader.loadAll(this.cwd),
+      // Load hooks config
+      loadHooksConfig(this.cwd),
+      // Load system prompt
+      loadSystemPrompt(this.cwd),
+      // Load commands
+      this.commandLoader.loadAll(),
+    ]);
 
-    // Initialize LLM client
-    this.llmClient = await createLLMClient(this.config.llm);
-
+    // Phase 3: Sync operations (fast)
     // Register built-in tools
     this.toolRegistry.register(BashTool.tool, BashTool.executor);
     FilesystemTools.registerAll(this.toolRegistry);
     WebTools.registerAll(this.toolRegistry);
 
-    // Discover and register connectors
-    await this.connectorBridge.discover(this.config.connectors);
+    // Register connector tools
     this.connectorBridge.registerAll(this.toolRegistry);
 
-    // Load skills
-    await this.skillLoader.loadAll(this.cwd);
-
-    // Load commands
-    await this.commandLoader.loadAll();
+    // Register builtin commands
     this.builtinCommands.registerAll(this.commandLoader);
 
     // Load hooks
-    const hooksConfig = await loadHooksConfig(this.cwd);
     this.hookLoader.load(hooksConfig);
 
-    // Load and set system prompt from OLDPAL.md
-    const systemPrompt = await loadSystemPrompt(this.cwd);
+    // Set system prompt
     if (systemPrompt) {
       this.context.addSystemMessage(systemPrompt);
     }
