@@ -163,6 +163,34 @@ Commands:
         rmSync(binDir, { recursive: true, force: true });
       }
     });
+
+    test('should discover connector commands from help output', async () => {
+      const binDir = mkdtempSync(join(tmpdir(), 'oldpal-bin-help-'));
+      const cliPath = join(binDir, 'connect-foo');
+      const helpOutput = [
+        'Usage: connect-foo <command>',
+        '',
+        'Commands:',
+        '  list    List items',
+        '  help    Show help',
+        '',
+      ].join('\\n');
+
+      writeFileSync(
+        cliPath,
+        `#!/bin/sh\necho "${helpOutput.replace(/"/g, '\\"')}"\n`
+      );
+      chmodSync(cliPath, 0o755);
+
+      try {
+        const connector = await (bridge as any).discoverConnector('foo', cliPath);
+        expect(connector?.name).toBe('foo');
+        expect(connector?.commands.some((cmd: { name: string }) => cmd.name === 'list')).toBe(true);
+        expect(connector?.commands.some((cmd: { name: string }) => cmd.name === 'help')).toBe(false);
+      } finally {
+        rmSync(binDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('registerAll', () => {

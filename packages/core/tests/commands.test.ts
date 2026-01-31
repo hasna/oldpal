@@ -173,7 +173,7 @@ describe('CommandExecutor', () => {
     emittedChunks = [];
 
     mockContext = {
-      cwd: '/test/dir',
+      cwd: process.cwd(),
       sessionId: 'test-session',
       messages: [],
       tools: [],

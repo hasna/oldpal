@@ -39,4 +39,5 @@ describe('AgentLoop initialize', () => {
     const tools = agent.getTools();
     expect(tools.length).toBeGreaterThan(0);
   });
+
 });

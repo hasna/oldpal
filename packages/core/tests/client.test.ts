@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { Message, Tool, Skill, StreamChunk } from '@oldpal/shared';
 import type { Command } from '../src/commands';
+import { EmbeddedClient } from '../src/client';
 
 class MockContext {
   private messages: Message[] = [];
@@ -98,12 +99,6 @@ class MockAgentLoop {
   }
 }
 
-mock.module('../src/agent/loop', () => ({
-  AgentLoop: MockAgentLoop,
-}));
-
-const { EmbeddedClient } = await import('../src/client');
-
 let tempDir: string;
 let originalOldpalDir: string | undefined;
 
@@ -125,7 +120,11 @@ describe('EmbeddedClient', () => {
       { id: '2', role: 'assistant', content: 'hello', timestamp: 2 },
     ];
 
-    const client = new EmbeddedClient(tempDir, { initialMessages, sessionId: 'sess' });
+    const client = new EmbeddedClient(tempDir, {
+      initialMessages,
+      sessionId: 'sess',
+      agentFactory: (options) => new MockAgentLoop(options) as any,
+    });
     await client.initialize();
 
     const messages = client.getMessages();
@@ -134,7 +133,10 @@ describe('EmbeddedClient', () => {
   });
 
   test('send updates messages and emits chunks', async () => {
-    const client = new EmbeddedClient(tempDir, { sessionId: 'sess' });
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => new MockAgentLoop(options) as any,
+    });
     const chunks: StreamChunk[] = [];
     client.onChunk((chunk) => chunks.push(chunk));
 
@@ -147,7 +149,10 @@ describe('EmbeddedClient', () => {
   });
 
   test('clearConversation resets messages', async () => {
-    const client = new EmbeddedClient(tempDir, { sessionId: 'sess' });
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => new MockAgentLoop(options) as any,
+    });
     await client.send('hello');
     expect(client.getMessages().length).toBeGreaterThan(0);
     client.clearConversation();
@@ -155,14 +160,20 @@ describe('EmbeddedClient', () => {
   });
 
   test('proxies tools, skills, and commands', async () => {
-    const client = new EmbeddedClient(tempDir, { sessionId: 'sess' });
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => new MockAgentLoop(options) as any,
+    });
     expect((await client.getTools())[0].name).toBe('tool');
     expect((await client.getSkills())[0].name).toBe('skill');
     expect((await client.getCommands())[0].name).toBe('cmd');
   });
 
   test('stop, disconnect, and token usage work', async () => {
-    const client = new EmbeddedClient(tempDir, { sessionId: 'sess' });
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => new MockAgentLoop(options) as any,
+    });
     await client.send('hello');
     expect(client.getTokenUsage().totalTokens).toBe(3);
 
@@ -176,7 +187,10 @@ describe('EmbeddedClient', () => {
   });
 
   test('propagates errors to callbacks', async () => {
-    const client = new EmbeddedClient(tempDir, { sessionId: 'sess' });
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => new MockAgentLoop(options) as any,
+    });
     const errors: Error[] = [];
     client.onError((err) => errors.push(err));
 

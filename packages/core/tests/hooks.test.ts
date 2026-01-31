@@ -191,6 +191,22 @@ describe('HookExecutor', () => {
       expect(matchesPattern(executor, 'terminal', sessionInput)).toBe(true);
     });
 
+    test('should match SessionEnd reason', () => {
+      const endInput = createInput({
+        hook_event_name: 'SessionEnd',
+        reason: 'timeout' as any,
+      });
+      expect(matchesPattern(executor, 'timeout', endInput)).toBe(true);
+    });
+
+    test('should return true when no matcher value exists', () => {
+      const input = createInput({
+        hook_event_name: 'SessionStart',
+        source: undefined as any,
+      });
+      expect(matchesPattern(executor, 'anything', input)).toBe(true);
+    });
+
     test('should fall back to equality on invalid regex', () => {
       const input = createInput({ tool_name: '[' });
       expect(matchesPattern(executor, '[', input)).toBe(true);
@@ -244,6 +260,20 @@ describe('HookExecutor', () => {
         expect(result.continue).toBe(false);
       }
     });
+
+    test('should return permission decision from hook', async () => {
+      const matchers: HookMatcher[] = [
+        {
+          matcher: '*',
+          hooks: [
+            { type: 'command', command: 'echo \'{"permissionDecision":"deny","stopReason":"nope"}\'' },
+          ],
+        },
+      ];
+
+      const result = await executor.execute(matchers, createInput());
+      expect(result?.permissionDecision).toBe('deny');
+    });
   });
 
   describe('executeHook', () => {
@@ -283,6 +313,23 @@ describe('HookExecutor', () => {
         createInput()
       );
       expect(result).toBeNull();
+    });
+
+    test('should swallow errors from hook execution', async () => {
+      const originalExecute = (executor as any).executeCommandHook;
+      (executor as any).executeCommandHook = () => {
+        throw new Error('boom');
+      };
+      try {
+        const result = await executeHook(
+          executor,
+          { type: 'command', command: 'echo ok' },
+          createInput()
+        );
+        expect(result).toBeNull();
+      } finally {
+        (executor as any).executeCommandHook = originalExecute;
+      }
     });
   });
 
@@ -348,6 +395,24 @@ describe('HookExecutor', () => {
       );
       // Non-blocking error returns null
       expect(result).toBeNull();
+    });
+
+    test('should return null when spawn throws', async () => {
+      const originalSpawn = Bun.spawn;
+      (Bun as any).spawn = () => {
+        throw new Error('spawn failed');
+      };
+      try {
+        const result = await executeCommandHook(
+          executor,
+          { type: 'command', command: 'echo ok' },
+          createInput(),
+          5000
+        );
+        expect(result).toBeNull();
+      } finally {
+        (Bun as any).spawn = originalSpawn;
+      }
     });
   });
 });

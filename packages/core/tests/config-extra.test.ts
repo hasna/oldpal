@@ -73,6 +73,24 @@ describe('config helpers', () => {
     rmSync(projectDir, { recursive: true, force: true });
   });
 
+  test('loadSystemPrompt returns null when no prompt files exist', async () => {
+    const prompt = await loadSystemPrompt(tempDir);
+    expect(prompt).toBeNull();
+  });
+
+  test('loadSystemPrompt tolerates read errors', async () => {
+    const originalFile = Bun.file;
+    try {
+      (Bun as any).file = () => {
+        throw new Error('boom');
+      };
+      const prompt = await loadSystemPrompt(tempDir);
+      expect(prompt).toBeNull();
+    } finally {
+      (Bun as any).file = originalFile;
+    }
+  });
+
   test('loadConfig ignores invalid JSON files', async () => {
     const invalidPath = join(tempDir, 'settings.json');
     writeFileSync(invalidPath, '{ invalid json');

@@ -40,6 +40,36 @@ describe('Logger', () => {
     expect(entry.message).toBe('hello');
     expect(entry.sessionId).toBe('session-123');
   });
+
+  test('writes debug entries', () => {
+    const logger = new Logger('session-456');
+    logger.debug('debugging');
+
+    const date = new Date().toISOString().split('T')[0];
+    const logPath = join(tempDir, 'logs', `${date}.log`);
+    const content = readFileSync(logPath, 'utf-8').trim().split('\n').pop() || '';
+    const entry = JSON.parse(content);
+    expect(entry.level).toBe('debug');
+    expect(entry.message).toBe('debugging');
+    expect(entry.sessionId).toBe('session-456');
+  });
+
+  test('writes warn and error entries', () => {
+    const logger = new Logger('session-789');
+    logger.warn('warn-msg');
+    logger.error('error-msg');
+
+    const date = new Date().toISOString().split('T')[0];
+    const logPath = join(tempDir, 'logs', `${date}.log`);
+    const lines = readFileSync(logPath, 'utf-8').trim().split('\n');
+    const last = JSON.parse(lines[lines.length - 1]);
+    const secondLast = JSON.parse(lines[lines.length - 2]);
+
+    expect(secondLast.level).toBe('warn');
+    expect(secondLast.message).toBe('warn-msg');
+    expect(last.level).toBe('error');
+    expect(last.message).toBe('error-msg');
+  });
 });
 
 describe('SessionStorage', () => {

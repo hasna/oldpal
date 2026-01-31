@@ -254,6 +254,53 @@ describe('AgentLoop', () => {
     });
   });
 
+  describe('getSkills and getCommands', () => {
+    test('should return arrays for skills and commands', () => {
+      const agent = new AgentLoop();
+      expect(Array.isArray(agent.getSkills())).toBe(true);
+      expect(Array.isArray(agent.getCommands())).toBe(true);
+    });
+  });
+
+  describe('token usage', () => {
+    test('should update token usage and invoke callback', () => {
+      let lastUsage: any = null;
+      const agent = new AgentLoop({
+        onTokenUsage: (usage) => {
+          lastUsage = usage;
+        },
+      });
+
+      agent.updateTokenUsage({ outputTokens: 5, inputTokens: 2 });
+      const usage = agent.getTokenUsage();
+
+      expect(usage.outputTokens).toBeGreaterThan(0);
+      expect(lastUsage).not.toBeNull();
+    });
+  });
+
+  describe('session id', () => {
+    test('should return provided session id', () => {
+      const agent = new AgentLoop({ sessionId: 'session-123' });
+      expect(agent.getSessionId()).toBe('session-123');
+    });
+  });
+
+  describe('clearConversation', () => {
+    test('should reapply system prompts on clear', () => {
+      const agent = new AgentLoop();
+      (agent as any).systemPrompt = 'System prompt';
+      (agent as any).extraSystemPrompt = 'Extra prompt';
+
+      agent.clearConversation();
+
+      const systemMessages = agent.getContext().getMessages().filter((m) => m.role === 'system');
+      const combined = systemMessages.map((m) => m.content).join('\n');
+      expect(combined).toContain('System prompt');
+      expect(combined).toContain('Extra prompt');
+    });
+  });
+
   describe('stop', () => {
     test('should not throw when called', () => {
       const agent = new AgentLoop();

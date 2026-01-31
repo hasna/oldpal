@@ -368,6 +368,17 @@ describe('SkillExecutor', () => {
       expect(result).toContain('A: first');
       expect(result).toContain('B: second');
     });
+
+    test('should include error message when dynamic context command fails', async () => {
+      const skill = createSkill({
+        content: 'Result: !`nonexistent_command_xyz`',
+        filePath: `${process.cwd()}/test-skill.md`,
+      });
+
+      const result = await executor.prepare(skill, []);
+
+      expect(result).toContain('Command failed');
+    });
   });
 
   describe('shouldAutoInvoke', () => {
