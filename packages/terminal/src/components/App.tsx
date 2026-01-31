@@ -426,8 +426,8 @@ export function App({ cwd }: AppProps) {
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
-          version="0.4.0"
-          model="claude-4-sonnet"
+          version="0.4.1"
+          model="claude-sonnet-4"
           directory={cwd}
         />
       )}
