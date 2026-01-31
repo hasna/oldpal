@@ -123,6 +123,9 @@ export class AnthropicClient implements LLMClient {
   private convertMessages(messages: Message[]): Anthropic.MessageParam[] {
     const result: Anthropic.MessageParam[] = [];
 
+    // Track tool_use IDs from assistant messages to validate tool_results
+    const pendingToolUseIds = new Set<string>();
+
     for (const msg of messages) {
       if (msg.role === 'system') continue; // System messages handled separately
 
@@ -147,18 +150,25 @@ export class AnthropicClient implements LLMClient {
             name: toolCall.name,
             input: toolCall.input as Record<string, unknown>,
           });
+          pendingToolUseIds.add(toolCall.id);
         }
       }
 
       // Add tool results (for user messages following tool use)
+      // Only include results that have a corresponding tool_use in this conversation
       if (msg.toolResults) {
         for (const toolResult of msg.toolResults) {
-          content.push({
-            type: 'tool_result',
-            tool_use_id: toolResult.toolCallId,
-            content: toolResult.content,
-            is_error: toolResult.isError,
-          });
+          // Only add if we have a corresponding tool_use
+          if (pendingToolUseIds.has(toolResult.toolCallId)) {
+            content.push({
+              type: 'tool_result',
+              tool_use_id: toolResult.toolCallId,
+              content: toolResult.content,
+              is_error: toolResult.isError,
+            });
+            pendingToolUseIds.delete(toolResult.toolCallId);
+          }
+          // Skip orphaned tool_results to avoid API errors
         }
       }
 

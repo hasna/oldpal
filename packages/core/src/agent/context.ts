@@ -96,16 +96,40 @@ export class AgentContext {
 
   /**
    * Prune old messages if over limit
+   * Ensures tool_use/tool_result pairs are kept together
    */
   private prune(): void {
-    if (this.messages.length > this.maxMessages) {
-      // Keep system messages and recent messages
-      const systemMessages = this.messages.filter((m) => m.role === 'system');
-      const recentMessages = this.messages
-        .filter((m) => m.role !== 'system')
-        .slice(-(this.maxMessages - systemMessages.length));
-      this.messages = [...systemMessages, ...recentMessages];
+    if (this.messages.length <= this.maxMessages) {
+      return;
     }
+
+    // Keep system messages
+    const systemMessages = this.messages.filter((m) => m.role === 'system');
+    const nonSystemMessages = this.messages.filter((m) => m.role !== 'system');
+
+    const targetCount = this.maxMessages - systemMessages.length;
+    let recentMessages = nonSystemMessages.slice(-targetCount);
+
+    // Ensure we don't start with tool_results (orphaned from their tool_use)
+    // If the first message has tool_results, we need to find its corresponding
+    // assistant message with tool_use
+    while (recentMessages.length > 0 && recentMessages[0].toolResults) {
+      // Find the previous assistant message that has the matching tool_use
+      const firstIndex = nonSystemMessages.indexOf(recentMessages[0]);
+      if (firstIndex > 0) {
+        // Include the previous message
+        recentMessages = nonSystemMessages.slice(firstIndex - 1);
+        // But limit to target count + 1 to include the pair
+        if (recentMessages.length > targetCount + 1) {
+          recentMessages = recentMessages.slice(-(targetCount + 1));
+        }
+      } else {
+        // Can't find the matching message, remove the orphan
+        recentMessages = recentMessages.slice(1);
+      }
+    }
+
+    this.messages = [...systemMessages, ...recentMessages];
   }
 
   /**
