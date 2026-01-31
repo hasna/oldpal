@@ -38,13 +38,8 @@ export class EmbeddedClient implements AssistantClient {
         }
       },
       onToolStart: (toolCall) => {
+        // Only log - tool_use chunk is already emitted from LLM stream
         this.logger.info('Tool started', { tool: toolCall.name, input: toolCall.input });
-        for (const callback of this.chunkCallbacks) {
-          callback({
-            type: 'tool_use',
-            toolCall,
-          });
-        }
       },
       onToolEnd: (toolCall, result) => {
         this.logger.info('Tool completed', {

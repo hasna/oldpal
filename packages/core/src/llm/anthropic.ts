@@ -108,9 +108,36 @@ export class AnthropicClient implements LLMClient {
             currentToolCall = null;
             toolInputJson = '';
           }
+        } else if (event.type === 'message_delta') {
+          // Extract token usage from message_delta
+          if (event.usage) {
+            yield {
+              type: 'usage',
+              usage: {
+                inputTokens: 0, // Not available in delta, only in final message
+                outputTokens: event.usage.output_tokens || 0,
+                totalTokens: event.usage.output_tokens || 0,
+                maxContextTokens: 200000,
+              },
+            };
+          }
         } else if (event.type === 'message_stop') {
           yield { type: 'done' };
         }
+      }
+
+      // Get final usage from stream
+      const finalMessage = await stream.finalMessage();
+      if (finalMessage.usage) {
+        yield {
+          type: 'usage',
+          usage: {
+            inputTokens: finalMessage.usage.input_tokens,
+            outputTokens: finalMessage.usage.output_tokens,
+            totalTokens: finalMessage.usage.input_tokens + finalMessage.usage.output_tokens,
+            maxContextTokens: 200000,
+          },
+        };
       }
     } catch (error) {
       yield {

@@ -222,6 +222,9 @@ export class AgentLoop {
           responseText += chunk.content;
         } else if (chunk.type === 'tool_use' && chunk.toolCall) {
           toolCalls.push(chunk.toolCall);
+        } else if (chunk.type === 'usage' && chunk.usage) {
+          // Update token usage
+          this.updateTokenUsage(chunk.usage);
         } else if (chunk.type === 'error') {
           return;
         }
