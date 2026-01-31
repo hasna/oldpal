@@ -65,5 +65,9 @@ export interface CommandResult {
   clearConversation?: boolean;
   /** Whether to exit the application */
   exit?: boolean;
+  /** Session action to perform */
+  sessionAction?: 'list' | 'switch' | 'new';
+  /** Session number to switch to (1-based) */
+  sessionNumber?: number;
 }
 

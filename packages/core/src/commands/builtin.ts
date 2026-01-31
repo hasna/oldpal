@@ -22,6 +22,7 @@ export class BuiltinCommands {
     loader.register(this.helpCommand(loader));
     loader.register(this.clearCommand());
     loader.register(this.newCommand());
+    loader.register(this.sessionCommand());
     loader.register(this.statusCommand());
     loader.register(this.tokensCommand());
     loader.register(this.compactCommand());
@@ -155,6 +156,39 @@ export class BuiltinCommands {
         context.emit('done');
         // Signal exit by returning special flag
         return { handled: true, exit: true };
+      },
+    };
+  }
+
+  /**
+   * /session - List and switch sessions
+   */
+  private sessionCommand(): Command {
+    return {
+      name: 'session',
+      description: 'List sessions or switch to a session by number',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        // Session management is handled by the terminal UI
+        // This command signals what action to take
+        const arg = args.trim();
+
+        if (arg === 'new') {
+          context.emit('done');
+          return { handled: true, sessionAction: 'new' };
+        }
+
+        const num = parseInt(arg, 10);
+        if (!isNaN(num) && num > 0) {
+          context.emit('done');
+          return { handled: true, sessionAction: 'switch', sessionNumber: num };
+        }
+
+        // No arg or invalid - signal to show session list
+        context.emit('done');
+        return { handled: true, sessionAction: 'list' };
       },
     };
   }
