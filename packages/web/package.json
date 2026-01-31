@@ -1,0 +1,21 @@
+{
+  "name": "@oldpal/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'Web UI coming in Phase 4'",
+    "build": "echo 'Web UI coming in Phase 4'",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@oldpal/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18.3.0",
+    "typescript": "^5"
+  }
+}
