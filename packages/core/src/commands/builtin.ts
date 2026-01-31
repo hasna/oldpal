@@ -1,8 +1,11 @@
 import type { Command, CommandContext, CommandResult, TokenUsage } from './types';
 import type { CommandLoader } from './loader';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, platform, release, arch } from 'os';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
+
+// Version constant - should match package.json
+const VERSION = '0.6.2';
 
 /**
  * Built-in slash commands for oldpal
@@ -35,6 +38,7 @@ export class BuiltinCommands {
     loader.register(this.bugCommand());
     loader.register(this.prCommand());
     loader.register(this.reviewCommand());
+    loader.register(this.feedbackCommand());
     loader.register(this.exitCommand());
   }
 
@@ -571,6 +575,139 @@ Check for:
 5. **Tests** - Coverage, edge cases, assertions
 
 If there are staged changes, review those. Otherwise, ask what to review.`,
+    };
+  }
+
+  /**
+   * /feedback - Submit feedback or report issues
+   */
+  private feedbackCommand(): Command {
+    return {
+      name: 'feedback',
+      description: 'Submit feedback or report an issue on GitHub',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const feedbackType = args.trim().toLowerCase();
+
+        // Collect system info
+        const systemInfo = {
+          version: VERSION,
+          platform: platform(),
+          release: release(),
+          arch: arch(),
+          nodeVersion: process.version,
+          bunVersion: typeof Bun !== 'undefined' ? Bun.version : 'N/A',
+        };
+
+        // GitHub repo URL
+        const repoUrl = 'https://github.com/hasna/oldpal';
+
+        // Build issue body template
+        const issueBody = `## Description
+
+<!-- Describe the issue or feedback here -->
+
+## Steps to Reproduce (if bug)
+
+1.
+2.
+3.
+
+## Expected Behavior
+
+<!-- What did you expect to happen? -->
+
+## Actual Behavior
+
+<!-- What actually happened? -->
+
+## System Information
+
+- **oldpal version**: ${systemInfo.version}
+- **Platform**: ${systemInfo.platform} ${systemInfo.release} (${systemInfo.arch})
+- **Bun version**: ${systemInfo.bunVersion}
+- **Node version**: ${systemInfo.nodeVersion}
+
+## Additional Context
+
+<!-- Add any other context about the problem here -->
+`;
+
+        // Determine issue template based on feedback type
+        let issueTitle = '';
+        let labels = '';
+
+        if (feedbackType === 'bug' || feedbackType === 'issue') {
+          issueTitle = '[Bug] ';
+          labels = 'bug';
+        } else if (feedbackType === 'feature' || feedbackType === 'request') {
+          issueTitle = '[Feature Request] ';
+          labels = 'enhancement';
+        } else {
+          issueTitle = '[Feedback] ';
+          labels = 'feedback';
+        }
+
+        // Build GitHub new issue URL
+        const issueUrl = new URL(`${repoUrl}/issues/new`);
+        issueUrl.searchParams.set('title', issueTitle);
+        issueUrl.searchParams.set('body', issueBody);
+        if (labels) {
+          issueUrl.searchParams.set('labels', labels);
+        }
+
+        // Truncate URL if too long (GitHub has limits)
+        let finalUrl = issueUrl.toString();
+        if (finalUrl.length > 8000) {
+          // Shorten the body if URL is too long
+          const shortBody = `## Description
+
+<!-- Describe the issue or feedback here -->
+
+## System Information
+
+- **oldpal version**: ${systemInfo.version}
+- **Platform**: ${systemInfo.platform} (${systemInfo.arch})
+- **Bun version**: ${systemInfo.bunVersion}
+`;
+          const shortUrl = new URL(`${repoUrl}/issues/new`);
+          shortUrl.searchParams.set('title', issueTitle);
+          shortUrl.searchParams.set('body', shortBody);
+          if (labels) {
+            shortUrl.searchParams.set('labels', labels);
+          }
+          finalUrl = shortUrl.toString();
+        }
+
+        // Open browser
+        try {
+          const openCmd = platform() === 'darwin' ? 'open' :
+                         platform() === 'win32' ? 'start' : 'xdg-open';
+
+          await Bun.$`${openCmd} ${finalUrl}`.quiet();
+
+          let message = '\n**Opening GitHub to submit feedback...**\n\n';
+          message += 'A browser window should open with a pre-filled issue template.\n';
+          message += 'Please fill in the details and submit.\n\n';
+          message += `If the browser doesn't open, visit:\n${repoUrl}/issues/new\n`;
+
+          context.emit('text', message);
+        } catch {
+          let message = '\n**Submit Feedback**\n\n';
+          message += `Please visit: ${repoUrl}/issues/new\n\n`;
+          message += '**System Information:**\n';
+          message += `- oldpal version: ${systemInfo.version}\n`;
+          message += `- Platform: ${systemInfo.platform} ${systemInfo.release}\n`;
+          message += `- Bun version: ${systemInfo.bunVersion}\n`;
+
+          context.emit('text', message);
+        }
+
+        context.emit('done');
+        return { handled: true };
+      },
     };
   }
 }

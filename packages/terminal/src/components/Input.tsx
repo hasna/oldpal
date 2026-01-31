@@ -20,6 +20,7 @@ const COMMANDS = [
   { name: '/bug', description: 'analyze and fix a bug' },
   { name: '/pr', description: 'create a pull request' },
   { name: '/review', description: 'review code changes' },
+  { name: '/feedback', description: 'submit feedback on GitHub' },
   { name: '/exit', description: 'exit oldpal' },
 ];
 
