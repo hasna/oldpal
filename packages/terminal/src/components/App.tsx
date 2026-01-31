@@ -39,6 +39,8 @@ export function App({ cwd }: AppProps) {
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | undefined>();
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const [autoScroll, setAutoScroll] = useState(true);
 
   // Tool call expansion hook
   const { isExpanded: toolsExpanded } = useToolCallExpansion();
@@ -216,6 +218,16 @@ export function App({ cwd }: AppProps) {
     }
   }, [isProcessing, messageQueue.length, processQueue]);
 
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (autoScroll) {
+      setScrollOffset(0);
+    }
+  }, [messages.length, autoScroll]);
+
+  // Max visible messages
+  const maxVisibleMessages = 10;
+
   // Handle keyboard shortcuts
   useInput((input, key) => {
     // Ctrl+C: stop or exit
@@ -258,6 +270,38 @@ export function App({ cwd }: AppProps) {
         responseRef.current = '';
       }
       setIsProcessing(false);
+    }
+
+    // Page Up: scroll up through messages
+    if (key.pageUp || (key.shift && key.upArrow)) {
+      setScrollOffset((prev) => {
+        const maxOffset = Math.max(0, messages.length - maxVisibleMessages);
+        const newOffset = Math.min(prev + 3, maxOffset);
+        if (newOffset > 0) setAutoScroll(false);
+        return newOffset;
+      });
+    }
+
+    // Page Down: scroll down through messages
+    if (key.pageDown || (key.shift && key.downArrow)) {
+      setScrollOffset((prev) => {
+        const newOffset = Math.max(0, prev - 3);
+        if (newOffset === 0) setAutoScroll(true);
+        return newOffset;
+      });
+    }
+
+    // Home: scroll to top
+    if (key.ctrl && input === 'u') {
+      const maxOffset = Math.max(0, messages.length - maxVisibleMessages);
+      setScrollOffset(maxOffset);
+      setAutoScroll(false);
+    }
+
+    // End: scroll to bottom
+    if (key.ctrl && input === 'd') {
+      setScrollOffset(0);
+      setAutoScroll(true);
     }
   });
 
@@ -347,6 +391,13 @@ export function App({ cwd }: AppProps) {
 
   return (
     <Box flexDirection="column" padding={1}>
+      {/* Scroll indicator */}
+      {scrollOffset > 0 && (
+        <Box>
+          <Text dimColor>↑ {scrollOffset} more messages above (Shift+↓ or Ctrl+D to scroll down)</Text>
+        </Box>
+      )}
+
       {/* Messages */}
       <Messages
         messages={messages}
@@ -354,6 +405,8 @@ export function App({ cwd }: AppProps) {
         currentToolCall={undefined} // Moved to ToolCallBox
         lastToolResult={undefined}
         activityLog={isProcessing ? activityLog.filter((e) => e.type === 'text') : []}
+        scrollOffset={scrollOffset}
+        maxVisible={maxVisibleMessages}
       />
 
       {/* Tool calls in a collapsible box */}

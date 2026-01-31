@@ -18,11 +18,24 @@ interface MessagesProps {
   currentToolCall?: ToolCall;
   lastToolResult?: ToolResult;
   activityLog?: ActivityEntry[];
+  scrollOffset?: number;
+  maxVisible?: number;
 }
 
-export function Messages({ messages, currentResponse, currentToolCall, lastToolResult, activityLog = [] }: MessagesProps) {
-  // Only show last 10 messages to avoid terminal overflow
-  const visibleMessages = messages.slice(-10);
+export function Messages({
+  messages,
+  currentResponse,
+  currentToolCall,
+  lastToolResult,
+  activityLog = [],
+  scrollOffset = 0,
+  maxVisible = 10,
+}: MessagesProps) {
+  // Calculate visible messages based on scroll offset
+  // scrollOffset 0 means showing the latest messages
+  const endIndex = messages.length - scrollOffset;
+  const startIndex = Math.max(0, endIndex - maxVisible);
+  const visibleMessages = messages.slice(startIndex, endIndex);
 
   return (
     <Box flexDirection="column">
