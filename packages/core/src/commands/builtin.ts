@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
 
 // Version constant - should match package.json
-const VERSION = '0.6.7';
+const VERSION = '0.6.9';
 
 type ConnectorAuthTimeoutResolve = (value: {
   exitCode: number;
