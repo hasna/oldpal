@@ -76,9 +76,9 @@ describe('config helpers', () => {
     rmSync(projectDir, { recursive: true, force: true });
   });
 
-  test('loadSystemPrompt returns null when no prompt files exist', async () => {
+  test('loadSystemPrompt returns default prompt when no prompt files exist', async () => {
     const prompt = await loadSystemPrompt(tempDir);
-    expect(prompt).toBeNull();
+    expect(prompt).toContain('You are a helpful AI assistant');
   });
 
   test('loadSystemPrompt tolerates read errors', async () => {
@@ -88,7 +88,7 @@ describe('config helpers', () => {
         throw new Error('boom');
       };
       const prompt = await loadSystemPrompt(tempDir);
-      expect(prompt).toBeNull();
+      expect(prompt).toContain('You are a helpful AI assistant');
     } finally {
       (Bun as any).file = originalFile;
     }

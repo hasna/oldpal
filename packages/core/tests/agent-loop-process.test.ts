@@ -4,12 +4,60 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import type { StreamChunk } from '@hasna/assistants-shared';
 import { AgentLoop } from '../src/agent/loop';
+import { ContextManager } from '../src/context/manager';
+import type { SummaryStrategy } from '../src/context/summarizer';
 
 let callCount = 0;
 
 describe('AgentLoop process', () => {
   beforeEach(() => {
     callCount = 0;
+  });
+
+  test('auto compaction summarizes when context grows too large', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-sum-'));
+    const chunks: StreamChunk[] = [];
+    const agent = new AgentLoop({
+      cwd,
+      onChunk: (chunk) => chunks.push(chunk),
+    });
+
+    class StubSummarizer implements SummaryStrategy {
+      name = 'stub';
+      async summarize(): Promise<string> {
+        return 'stub summary';
+      }
+    }
+
+    (agent as any).llmClient = {
+      getModel: () => 'mock',
+      chat: async function* (): AsyncGenerator<StreamChunk> {
+        yield { type: 'text', content: 'ok' };
+        yield { type: 'done' };
+      },
+    };
+    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+
+    const contextConfig = {
+      enabled: true,
+      maxContextTokens: 50,
+      targetContextTokens: 40,
+      summaryTriggerRatio: 0.5,
+      keepRecentMessages: 0,
+      keepSystemPrompt: false,
+      summaryStrategy: 'llm',
+      summaryMaxTokens: 50,
+      maxMessages: 100,
+    };
+
+    (agent as any).contextConfig = contextConfig;
+    (agent as any).contextManager = new ContextManager(contextConfig, new StubSummarizer());
+
+    await agent.process('word '.repeat(200));
+
+    const messages = agent.getContext().getMessages();
+    expect(messages.some((msg) => msg.role === 'system' && msg.content.includes('Context Summary'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.type === 'text' && chunk.content?.includes('Context summarized'))).toBe(true);
   });
 
   test('executes tool calls and continues the loop', async () => {
