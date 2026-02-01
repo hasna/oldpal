@@ -37,6 +37,8 @@ export function Messages({
   queuedMessageIds,
 }: MessagesProps) {
   const [now, setNow] = useState(Date.now());
+  const { columns } = useStdout();
+  const messageWidth = columns ? Math.max(10, columns - 2) : undefined;
 
   const combinedMessages = useMemo(
     () => [...messages, ...streamingMessages],
@@ -47,12 +49,12 @@ export function Messages({
   const lineSpans = useMemo(() => {
     let cursor = 0;
     return combinedMessages.map((message, index) => {
-      const lines = estimateMessageLines(message);
+      const lines = estimateMessageLines(message, messageWidth);
       const start = cursor;
       cursor += lines;
       return { message, index, start, end: cursor, lines };
     });
-  }, [combinedMessages]);
+  }, [combinedMessages, messageWidth]);
 
   const totalLines = lineSpans.length > 0 ? lineSpans[lineSpans.length - 1].end : 0;
   const endLine = Math.max(0, totalLines - scrollOffsetLines);

@@ -35,21 +35,39 @@ function estimateToolPanelLines(
   return lines;
 }
 
-export function estimateMessageLines(message: DisplayMessage): number {
+export function estimateMessageLines(message: DisplayMessage, maxWidth?: number): number {
   if (message.role === 'system') {
     return 0;
   }
 
   const content = message.content ?? '';
-  const contentLines = content.length > 0 ? content.split('\n').length : 0;
-  const hasContent = contentLines > 0;
-  let lines = Math.max(1, contentLines);
+  const contentLines = content.length > 0 ? content.split('\n') : [];
+  const hasContent = contentLines.length > 0;
+  const wrappedLines = contentLines.length > 0 ? countWrappedLines(contentLines, maxWidth) : 0;
+  let lines = Math.max(1, wrappedLines);
 
   if (message.role === 'assistant' && message.toolCalls?.length) {
     lines += estimateToolPanelLines(message.toolCalls, message.toolResults, hasContent);
   }
 
   return lines;
+}
+
+function countWrappedLines(lines: string[], maxWidth?: number): number {
+  if (!maxWidth || maxWidth <= 0) {
+    return lines.length;
+  }
+  let total = 0;
+  for (const line of lines) {
+    const visible = stripAnsi(line).length;
+    const wrapped = Math.max(1, Math.ceil(visible / maxWidth));
+    total += wrapped;
+  }
+  return total;
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1B\[[0-9;]*m/g, '');
 }
 
 export const __test__ = {

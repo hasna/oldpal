@@ -646,6 +646,77 @@ export function App({ cwd, version }: AppProps) {
     [activeQueue]
   );
 
+  // Get session info
+  const sessions = registry.listSessions();
+  const activeSession = registry.getActiveSession();
+  const sessionIndex = activeSessionId ? registry.getSessionIndex(activeSessionId) : 0;
+  const sessionCount = registry.getSessionCount();
+  const backgroundProcessingCount = registry.getBackgroundProcessingSessions().length;
+
+  const MAX_QUEUED_PREVIEW = 3;
+  const truncateQueued = (text: string, maxLen: number = 80) => {
+    if (text.length <= maxLen) return text;
+    return text.slice(0, maxLen - 3) + '...';
+  };
+  const queuedCount = activeQueue.filter((msg) => msg.mode === 'queued').length;
+  const inlineCount = activeInline.length;
+
+  // Show welcome banner only when no messages
+  const showWelcome = messages.length === 0 && !isProcessing;
+
+  const reservedLines = useMemo(() => {
+    let lines = 0;
+
+    if (showWelcome) {
+      lines += 5; // WelcomeBanner lines + margin
+    }
+    if (backgroundProcessingCount > 0) {
+      lines += 1;
+    }
+    if (scrollOffset > 0) {
+      lines += 1;
+    }
+
+    if (activeQueue.length > 0 || inlineCount > 0) {
+      const previewCount = Math.min(MAX_QUEUED_PREVIEW, activeQueue.length + inlineCount);
+      const hasMore = activeQueue.length + inlineCount > MAX_QUEUED_PREVIEW;
+      lines += 2; // marginY
+      lines += 1; // summary line
+      lines += previewCount;
+      if (hasMore) lines += 1;
+    }
+
+    if (error) {
+      const parsed = parseErrorMessage(error);
+      const messageLines = parsed.message ? parsed.message.split('\n').length : 1;
+      const suggestionLines = parsed.suggestion ? parsed.suggestion.split('\n').length : 0;
+      lines += 2; // marginY
+      lines += Math.max(1, messageLines) + suggestionLines;
+    }
+
+    if (isProcessing) {
+      lines += 3; // ProcessingIndicator margin + line
+    }
+
+    lines += 1; // Input marginTop
+    lines += 1; // Input line
+    if (isProcessing) {
+      lines += 2; // esc hint margin + line
+    }
+
+    lines += 2; // Status marginTop + line
+
+    return lines;
+  }, [
+    activeQueue.length,
+    inlineCount,
+    backgroundProcessingCount,
+    scrollOffset,
+    error,
+    isProcessing,
+    showWelcome,
+  ]);
+
   const wrapChars = columns ? Math.max(40, columns - 4) : MESSAGE_WRAP_CHARS;
   const renderWidth = columns ? Math.max(20, columns - 2) : undefined;
   const displayMessages = useMemo(
@@ -664,8 +735,8 @@ export function App({ cwd, version }: AppProps) {
   }, [currentResponse, isProcessing, wrapChars, renderWidth]);
   const displayLineCount = useMemo(() => {
     const combined = [...displayMessages, ...streamingMessages];
-    return combined.reduce((sum, msg) => sum + estimateMessageLines(msg), 0);
-  }, [displayMessages, streamingMessages]);
+    return combined.reduce((sum, msg) => sum + estimateMessageLines(msg, renderWidth), 0);
+  }, [displayMessages, streamingMessages, renderWidth]);
 
   // Process queue when not processing
   useEffect(() => {
@@ -692,21 +763,13 @@ export function App({ cwd, version }: AppProps) {
   }, [displayLineCount, autoScroll]);
 
   // Max visible messages - size to terminal height when available
-  const reservedLines = 8;
-  const maxVisibleLines = rows ? Math.max(6, rows - reservedLines) : 20;
+  const maxVisibleLines = rows ? Math.max(4, rows - reservedLines) : 20;
 
   // Clamp scroll offset to available range
   useEffect(() => {
     const maxOffset = Math.max(0, displayLineCount - maxVisibleLines);
     setScrollOffset((prev) => Math.min(prev, maxOffset));
   }, [displayLineCount, maxVisibleLines]);
-
-  // Get session info
-  const sessions = registry.listSessions();
-  const activeSession = registry.getActiveSession();
-  const sessionIndex = activeSessionId ? registry.getSessionIndex(activeSessionId) : 0;
-  const sessionCount = registry.getSessionCount();
-  const backgroundProcessingCount = registry.getBackgroundProcessingSessions().length;
 
   // Handle session switch
   const handleSessionSwitch = useCallback(async (sessionId: string) => {
@@ -1029,17 +1092,6 @@ export function App({ cwd, version }: AppProps) {
 
   // Check if currently thinking (no response and no tool calls yet)
   const isThinking = isProcessing && !currentResponse && !currentToolCall && toolCallEntries.length === 0;
-
-  const MAX_QUEUED_PREVIEW = 3;
-  const truncateQueued = (text: string, maxLen: number = 80) => {
-    if (text.length <= maxLen) return text;
-    return text.slice(0, maxLen - 3) + '...';
-  };
-  const queuedCount = activeQueue.filter((msg) => msg.mode === 'queued').length;
-  const inlineCount = activeInline.length;
-
-  // Show welcome banner only when no messages
-  const showWelcome = messages.length === 0 && !isProcessing;
 
   return (
     <Box flexDirection="column" padding={1}>
