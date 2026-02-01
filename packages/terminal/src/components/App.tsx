@@ -159,6 +159,12 @@ export function App({ cwd }: AppProps) {
     isProcessingRef.current = isProcessing;
   }, [isProcessing]);
 
+  useEffect(() => {
+    if (isProcessing && !processingStartTime) {
+      setProcessingStartTime(Date.now());
+    }
+  }, [isProcessing, processingStartTime]);
+
   const buildFullResponse = useCallback(() => {
     const parts = activityLogRef.current
       .filter((entry) => entry.type === 'text' && entry.content)
@@ -807,7 +813,7 @@ export function App({ cwd }: AppProps) {
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
-          version="0.6.10"
+          version="0.6.11"
           model="claude-sonnet-4"
           directory={activeSession?.cwd || cwd}
         />

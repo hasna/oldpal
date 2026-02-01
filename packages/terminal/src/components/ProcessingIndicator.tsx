@@ -58,23 +58,17 @@ export function ProcessingIndicator({
 
   const parts: string[] = [];
   parts.push('esc to interrupt');
-  if (elapsed > 0) {
-    parts.push(formatTime(elapsed));
-  }
-  if (tokenCount > 0) {
-    parts.push(`↓ ${formatTokens(tokenCount)} tokens`);
-  }
+  parts.push(formatTime(elapsed));
+  parts.push(`↓ ${formatTokens(tokenCount)} tokens`);
   if (isThinking) {
     parts.push('thinking');
   }
 
-  const label = isThinking ? 'Thinking' : 'Working';
+  const label = isThinking ? 'Metamorphosing' : 'Working';
 
   return (
     <Box marginY={1}>
-      <Text dimColor>
-        <InkSpinner type="dots" />
-      </Text>
+      <Text dimColor>✶ </Text>
       <Text dimColor> {label}... </Text>
       <Text dimColor>({parts.join(' · ')})</Text>
     </Box>
