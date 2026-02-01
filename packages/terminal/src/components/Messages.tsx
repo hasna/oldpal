@@ -333,7 +333,7 @@ function ToolCallPanel({
       borderStyle="round"
       borderColor={borderColor}
       paddingX={1}
-      width={panelWidth ?? '100%'}
+      width="100%"
     >
       <Box justifyContent="space-between">
         <Text color={borderColor} bold>Tool Calls</Text>
