@@ -4,6 +4,126 @@
 
 This document outlines the planned features, missing functionality, and detailed implementation guides for oldpal development.
 
+**Last Updated:** 2025-02-01
+
+---
+
+## Status Tracking
+
+### Legend
+
+| Symbol | Meaning |
+|--------|---------|
+| ⬜ | Not Started |
+| 🟨 | In Progress |
+| 🟩 | Complete |
+| 🟥 | Blocked |
+
+### Progress Overview
+
+```
+HIGH PRIORITY     [████████░░░░░░░░░░░░] 40% (4/10 subtasks)
+MEDIUM PRIORITY   [██░░░░░░░░░░░░░░░░░░] 10% (2/20 subtasks)
+LOW PRIORITY      [░░░░░░░░░░░░░░░░░░░░]  0% (0/15 subtasks)
+─────────────────────────────────────────────────────────
+OVERALL           [███░░░░░░░░░░░░░░░░░] 13% (6/45 subtasks)
+```
+
+### Detailed Status Table
+
+| # | Item | Priority | Progress | Status | Effort | Owner | Updated |
+|---|------|----------|----------|--------|--------|-------|---------|
+| 1 | Prompt/Agent Hooks | 🔴 High | ⬜ 0% | Stub exists | M | - | - |
+| 2 | Error Handling & Recovery | 🔴 High | 🟨 20% | Basic errors | L | - | - |
+| 3 | Input Validation | 🔴 High | 🟨 30% | Partial | M | - | - |
+| 4 | Security Audit | 🔴 High | 🟨 40% | Basic checks | M | - | - |
+| 5 | Scheduled Commands | 🟡 Med | ⬜ 0% | Planned | L | - | - |
+| 6 | Context Summarization | 🟡 Med | ⬜ 0% | Not started | M | - | - |
+| 7 | Heartbeat System | 🟡 Med | ⬜ 0% | Planned | M | - | - |
+| 8 | Test Coverage | 🟡 Med | 🟨 25% | Partial | L | - | - |
+| 9 | Stamina/Energy System | 🟢 Low | ⬜ 0% | Planned | M | - | - |
+| 10 | Voice Features | 🟢 Low | ⬜ 5% | Stub only | L | - | - |
+| 11 | Web UI | 🟢 Low | ⬜ 0% | Not started | L | - | - |
+
+### Subtask Breakdown
+
+#### 1. Prompt/Agent Hooks (0/4)
+- [ ] Inject LLMClient into HookExecutor
+- [ ] Implement executePromptHook
+- [ ] Implement executeAgentHook
+- [ ] Add tests for hook execution
+
+#### 2. Error Handling & Recovery (1/5)
+- [x] Basic error catching exists
+- [ ] Create error type hierarchy
+- [ ] Add error categorization
+- [ ] Implement retry logic
+- [ ] Add error aggregation
+
+#### 3. Input Validation (2/6)
+- [x] Basic path validation in filesystem
+- [x] Bash command allowlist
+- [ ] JSON schema validation for tools
+- [ ] LLM response validation
+- [ ] Message size limits
+- [ ] Symlink resolution
+
+#### 4. Security Audit (2/5)
+- [x] Bash allowlist implemented
+- [x] Temp folder restriction for writes
+- [ ] Command parsing before regex
+- [ ] Connector verification
+- [ ] Audit logging
+
+#### 5. Scheduled Commands (0/5)
+- [ ] Create scheduler service
+- [ ] SQLite persistence
+- [ ] /schedule command
+- [ ] Background task runner
+- [ ] Missed task handling
+
+#### 6. Context Summarization (0/4)
+- [ ] Summarizer module
+- [ ] Trigger conditions
+- [ ] LLM summarization prompt
+- [ ] Context integration
+
+#### 7. Heartbeat System (0/5)
+- [ ] State machine implementation
+- [ ] Background heartbeat process
+- [ ] State persistence
+- [ ] Wake/sleep triggers
+- [ ] /status integration
+
+#### 8. Test Coverage (2/8)
+- [x] Core agent tests
+- [x] Tool registry tests
+- [ ] Terminal UI tests
+- [ ] Error path tests
+- [ ] Hook execution tests
+- [ ] Integration tests
+- [ ] Session tests
+- [ ] Connector tests
+
+#### 9. Stamina/Energy System (0/4)
+- [ ] Stamina tracking
+- [ ] Energy calculation
+- [ ] Behavior modulation
+- [ ] Configuration
+
+#### 10. Voice Features (0/4)
+- [ ] Whisper STT integration
+- [ ] ElevenLabs TTS integration
+- [ ] Streaming audio
+- [ ] Voice commands
+
+#### 11. Web UI (0/5)
+- [ ] React setup
+- [ ] Component library
+- [ ] API layer
+- [ ] Authentication
+- [ ] Deploy config
+
 ---
 
 ## Priority Summary
