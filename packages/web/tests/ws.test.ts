@@ -36,6 +36,7 @@ beforeEach(() => {
     messages: [],
     isStreaming: false,
     currentToolCalls: [],
+    currentStreamMessageId: null,
     sessionId: null,
     sessions: [],
     sessionSnapshots: {},

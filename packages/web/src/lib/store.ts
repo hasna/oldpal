@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateId, now } from '@hasna/assistants-shared';
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 
 type ToolCallWithMeta = ToolCall & { result?: ToolResult; startedAt?: number };
@@ -86,6 +87,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             [state.sessionId]: {
               messages: [...state.messages, message],
               toolCalls: state.currentToolCalls,
+              streamMessageId: state.currentStreamMessageId,
             },
           }
         : state.sessionSnapshots,
@@ -109,8 +111,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!updated) {
         const lastMessage = messages[messages.length - 1];
         if (lastMessage && lastMessage.role === 'assistant') {
-          lastMessage.content += content;
+          messages[messages.length - 1] = { ...lastMessage, content: lastMessage.content + content };
           streamId = lastMessage.id;
+        } else {
+          const newId = id ?? generateId();
+          messages.push({
+            id: newId,
+            role: 'assistant',
+            content,
+            timestamp: now(),
+          });
+          streamId = newId;
         }
       }
       return {
@@ -237,6 +248,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             [state.sessionId]: {
               messages: [],
               toolCalls: [],
+              streamMessageId: null,
             },
           }
         : state.sessionSnapshots,
