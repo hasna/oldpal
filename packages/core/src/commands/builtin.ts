@@ -4,6 +4,8 @@ import { join } from 'path';
 import { homedir, platform, release, arch } from 'os';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
+import { generateId } from '@oldpal/shared';
+import { saveFeedbackEntry, type FeedbackType } from '../tools/feedback';
 
 // Version constant - should match package.json
 const VERSION = '0.6.10';
@@ -45,9 +47,6 @@ export class BuiltinCommands {
     loader.register(this.modelCommand());
     loader.register(this.skillsCommand(loader));
     loader.register(this.memoryCommand());
-    loader.register(this.bugCommand());
-    loader.register(this.prCommand());
-    loader.register(this.reviewCommand());
     loader.register(this.feedbackCommand());
     loader.register(this.connectorsCommand());
     loader.register(this.exitCommand());
@@ -407,34 +406,21 @@ Format the summary as a brief bullet-point list. This summary will replace the c
 
         // Create example command
         const exampleCommand = `---
-name: review
-description: Review code changes for issues and improvements
-tags: [code, review]
+name: reflect
+description: Reflect on the conversation and suggest next steps
+tags: [reflection, next-steps]
 ---
 
-# Code Review
+# Reflection
 
-Please review the current code changes and provide feedback on:
+Please summarize the last interaction and suggest 2-3 next steps.
 
-1. **Code Quality**
-   - Readability and maintainability
-   - Following project conventions
-   - Proper error handling
-
-2. **Potential Issues**
-   - Security vulnerabilities
-   - Performance concerns
-   - Edge cases not handled
-
-3. **Suggestions**
-   - Improvements to consider
-   - Best practices to apply
-   - Documentation needs
-
-If there are staged git changes, focus on those. Otherwise, ask what code to review.
+- Keep it concise
+- Focus on clarity
+- Ask a follow-up question if needed
 `;
 
-        const examplePath = join(commandsDir, 'review.md');
+        const examplePath = join(commandsDir, 'reflect.md');
         if (!existsSync(examplePath)) {
           writeFileSync(examplePath, exampleCommand);
         }
@@ -444,7 +430,7 @@ If there are staged git changes, focus on those. Otherwise, ask what code to rev
         message += `Example: ${examplePath}\n\n`;
         message += 'You can now:\n';
         message += '  - Add custom commands to .oldpal/commands/\n';
-        message += '  - Use /review to try the example command\n';
+        message += '  - Use /reflect to try the example command\n';
         message += '  - Run /help to see all available commands\n';
 
         context.emit('text', message);
@@ -544,73 +530,6 @@ Keep it concise but comprehensive.`,
   }
 
   /**
-   * /bug - Report and analyze a bug
-   */
-  private bugCommand(): Command {
-    return {
-      name: 'bug',
-      description: 'Analyze and help fix a bug',
-      builtin: true,
-      selfHandled: false,
-      content: `Help me debug an issue. $ARGUMENTS
-
-Please:
-1. Understand the bug/error described
-2. Identify likely causes
-3. Search relevant code files
-4. Propose a fix with code changes
-
-If no bug is described, ask me to describe the issue I'm experiencing.`,
-    };
-  }
-
-  /**
-   * /pr - Create a pull request
-   */
-  private prCommand(): Command {
-    return {
-      name: 'pr',
-      description: 'Create a pull request for current changes',
-      builtin: true,
-      selfHandled: false,
-      content: `Help me create a pull request for the current changes.
-
-1. First, check git status and staged changes
-2. Review the diff to understand what changed
-3. Write a clear PR title (max 72 chars)
-4. Write a description with:
-   - Summary of changes
-   - Motivation/context
-   - Testing done
-   - Any notes for reviewers
-
-Then create the PR using the gh CLI.`,
-    };
-  }
-
-  /**
-   * /review - Review code changes
-   */
-  private reviewCommand(): Command {
-    return {
-      name: 'review',
-      description: 'Review code changes for issues',
-      builtin: true,
-      selfHandled: false,
-      content: `Review the current code changes. $ARGUMENTS
-
-Check for:
-1. **Bugs** - Logic errors, edge cases, null checks
-2. **Security** - Input validation, injection risks, secrets
-3. **Performance** - N+1 queries, unnecessary loops, memory leaks
-4. **Style** - Naming, formatting, code organization
-5. **Tests** - Coverage, edge cases, assertions
-
-If there are staged changes, review those. Otherwise, ask what to review.`,
-    };
-  }
-
-  /**
    * /connectors - List and manage connectors
    */
   private connectorsCommand(): Command {
@@ -680,9 +599,10 @@ If there are staged changes, review those. Otherwise, ask what to review.`,
 
         if (context.connectors.length === 0) {
           message += 'No connectors found.\n\n';
-          message += 'Install connectors with:\n';
-          message += '  `bun add -g @hasnaxyz/connect-<name>`\n\n';
-          message += 'Available connectors: notion, gmail, slack, linear, etc.\n';
+          message += 'Connectors are auto-discovered from installed `connect-*` CLIs on your PATH.\n';
+          message += 'Install a connector with:\n';
+          message += '  `bun add -g connect-<name>`\n\n';
+          message += 'Then run `/connectors` again to verify it is detected.\n';
         } else {
           // Check auth status for each
           const statuses: string[] = [];
@@ -756,7 +676,16 @@ If there are staged changes, review those. Otherwise, ask what to review.`,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
-        const feedbackType = args.trim().toLowerCase();
+        const rawArgs = args.trim();
+        const [maybeType, ...rest] = rawArgs.split(/\s+/);
+        const normalizedType = maybeType?.toLowerCase();
+        const feedbackType: FeedbackType =
+          normalizedType === 'bug' || normalizedType === 'feature' || normalizedType === 'feedback'
+            ? normalizedType
+            : 'feedback';
+        const summary = (normalizedType && feedbackType !== 'feedback')
+          ? rest.join(' ').trim()
+          : rawArgs;
 
         // Collect system info
         const systemInfo = {
@@ -817,6 +746,20 @@ If there are staged changes, review those. Otherwise, ask what to review.`,
           labels = 'feedback';
         }
 
+        // Save locally
+        const localEntry = {
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+          type: feedbackType,
+          title: summary || (feedbackType === 'bug' ? 'Bug report' : feedbackType === 'feature' ? 'Feature request' : 'Feedback'),
+          description: summary || 'Submitted via /feedback',
+          source: 'command',
+          metadata: {
+            cwd: context.cwd,
+          },
+        };
+        const { path: localPath } = saveFeedbackEntry(localEntry);
+
         // Build GitHub new issue URL
         const issueUrl = new URL(`${repoUrl}/issues/new`);
         issueUrl.searchParams.set('title', issueTitle);
@@ -858,12 +801,14 @@ If there are staged changes, review those. Otherwise, ask what to review.`,
           let message = '\n**Opening GitHub to submit feedback...**\n\n';
           message += 'A browser window should open with a pre-filled issue template.\n';
           message += 'Please fill in the details and submit.\n\n';
+          message += `Saved locally: ${localPath}\n\n`;
           message += `If the browser doesn't open, visit:\n${repoUrl}/issues/new\n`;
 
           context.emit('text', message);
         } catch {
           let message = '\n**Submit Feedback**\n\n';
           message += `Please visit: ${repoUrl}/issues/new\n\n`;
+          message += `Saved locally: ${localPath}\n\n`;
           message += '**System Information:**\n';
           message += `- oldpal version: ${systemInfo.version}\n`;
           message += `- Platform: ${systemInfo.platform} ${systemInfo.release}\n`;

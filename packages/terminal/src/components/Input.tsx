@@ -18,9 +18,6 @@ const COMMANDS = [
   { name: '/init', description: 'initialize oldpal in project' },
   { name: '/compact', description: 'summarize to save context' },
   { name: '/memory', description: 'show what AI remembers' },
-  { name: '/bug', description: 'analyze and fix a bug' },
-  { name: '/pr', description: 'create a pull request' },
-  { name: '/review', description: 'review code changes' },
   { name: '/feedback', description: 'submit feedback on GitHub' },
   { name: '/exit', description: 'exit oldpal' },
 ];
@@ -134,6 +131,24 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
 
   const handleSubmit = (submittedValue: string) => {
     if (!submittedValue.trim()) return;
+
+    if (
+      autocompleteMode === 'command' &&
+      filteredCommands.length > 0 &&
+      !submittedValue.includes(' ')
+    ) {
+      const selected = filteredCommands[selectedIndex] || filteredCommands[0];
+      if (selected) {
+        if (isProcessing) {
+          onSubmit(selected.name, 'queue');
+        } else {
+          onSubmit(selected.name, 'normal');
+        }
+        setValue('');
+        setSelectedIndex(0);
+        return;
+      }
+    }
 
     // Normal submit: queue if processing, send otherwise
     if (isProcessing) {
