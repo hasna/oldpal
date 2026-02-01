@@ -190,6 +190,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearMessages: () =>
     set((state) => ({
+      isStreaming: false,
       messages: [],
       currentToolCalls: [],
       sessionSnapshots: state.sessionId

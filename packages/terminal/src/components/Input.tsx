@@ -121,7 +121,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
       setValue('');
       setSelectedIndex(0);
     }
-    // Alt+Enter: queue message
+    // Meta+Enter: queue message
     else if (key.meta && key.return) {
       onSubmit(value, 'queue');
       setValue('');

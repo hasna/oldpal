@@ -38,6 +38,7 @@ class ChatWebSocket {
         setTimeout(() => this.connect(this.url), retryDelay);
       } else {
         const store = useChatStore.getState();
+        store.finalizeToolCalls();
         store.setStreaming(false);
         store.clearToolCalls();
         this.pending = [];
