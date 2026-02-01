@@ -1,7 +1,7 @@
 # Plan: Scheduled Commands System
 
 **Plan ID:** 00005
-**Status:** Draft
+**Status:** Completed
 **Priority:** Medium
 **Estimated Effort:** Medium (3 days)
 **Dependencies:** plan-00002 (Error Handling)
