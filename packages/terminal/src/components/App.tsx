@@ -218,6 +218,7 @@ export function App({ cwd, version }: AppProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
+  const [inlinePending, setInlinePending] = useState<QueuedMessage[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | undefined>();
   const [energyState, setEnergyState] = useState<EnergyState | undefined>();
@@ -400,6 +401,21 @@ export function App({ cwd, version }: AppProps) {
 
   // Handle chunk from registry
   const handleChunk = useCallback((chunk: StreamChunk) => {
+    if (!isProcessingRef.current && (chunk.type === 'text' || chunk.type === 'tool_use' || chunk.type === 'tool_result')) {
+      const active = registryRef.current.getActiveSession();
+      if (active) {
+        registryRef.current.setProcessing(active.id, true);
+        setIsProcessing(true);
+        isProcessingRef.current = true;
+        setProcessingStartTime(Date.now());
+        setInlinePending((prev) => {
+          const idx = prev.findIndex((msg) => msg.sessionId === active.id);
+          if (idx === -1) return prev;
+          return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+        });
+      }
+    }
+
     if (chunk.type === 'text' && chunk.content) {
       responseRef.current += chunk.content;
       setCurrentResponse(responseRef.current);
@@ -610,6 +626,9 @@ export function App({ cwd, version }: AppProps) {
 
   const activeQueue = activeSessionId
     ? messageQueue.filter((msg) => msg.sessionId === activeSessionId)
+    : [];
+  const activeInline = activeSessionId
+    ? inlinePending.filter((msg) => msg.sessionId === activeSessionId)
     : [];
   const queuedMessageIds = useMemo(
     () => new Set(activeQueue.filter((msg) => msg.mode === 'queued').map((msg) => msg.id)),
@@ -848,7 +867,7 @@ export function App({ cwd, version }: AppProps) {
       }
 
       // Queue mode: add to queue for later
-      if (mode === 'queue' || mode === 'inline') {
+      if (mode === 'queue') {
         if (!activeSessionId) return;
         const queuedId = generateId();
         setMessageQueue((prev) => [
@@ -858,7 +877,7 @@ export function App({ cwd, version }: AppProps) {
             sessionId: activeSessionId,
             content: trimmedInput,
             queuedAt: now(),
-            mode: mode === 'inline' ? 'inline' : 'queued',
+            mode: 'queued',
           },
         ]);
         setMessages((prev) => [
@@ -870,6 +889,33 @@ export function App({ cwd, version }: AppProps) {
             timestamp: now(),
           },
         ]);
+        return;
+      }
+
+      // Inline mode: send immediately (client will queue while processing)
+      if (mode === 'inline') {
+        if (!activeSessionId) return;
+        const inlineId = generateId();
+        setInlinePending((prev) => [
+          ...prev,
+          {
+            id: inlineId,
+            sessionId: activeSessionId,
+            content: trimmedInput,
+            queuedAt: now(),
+            mode: 'inline',
+          },
+        ]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: inlineId,
+            role: 'user',
+            content: trimmedInput,
+            timestamp: now(),
+          },
+        ]);
+        await activeSession.client.send(trimmedInput);
         return;
       }
 
@@ -979,7 +1025,7 @@ export function App({ cwd, version }: AppProps) {
     return text.slice(0, maxLen - 3) + '...';
   };
   const queuedCount = activeQueue.filter((msg) => msg.mode === 'queued').length;
-  const inlineCount = activeQueue.filter((msg) => msg.mode === 'inline').length;
+  const inlineCount = activeInline.length;
 
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
@@ -1026,21 +1072,21 @@ export function App({ cwd, version }: AppProps) {
       />
 
       {/* Queue indicator */}
-      {activeQueue.length > 0 && (
+      {(activeQueue.length > 0 || inlineCount > 0) && (
         <Box marginY={1} flexDirection="column">
           <Text dimColor>
-            {activeQueue.length} pending message{activeQueue.length > 1 ? 's' : ''}
+            {activeQueue.length + inlineCount} pending message{activeQueue.length + inlineCount > 1 ? 's' : ''}
             {inlineCount > 0 || queuedCount > 0
               ? ` · ${inlineCount} in-stream · ${queuedCount} queued`
               : ''}
           </Text>
-          {activeQueue.slice(0, MAX_QUEUED_PREVIEW).map((queued) => (
+          {[...activeInline, ...activeQueue].slice(0, MAX_QUEUED_PREVIEW).map((queued) => (
             <Box key={queued.id} marginLeft={2}>
               <Text dimColor>{queued.mode === 'inline' ? '↳' : '⏳'} {truncateQueued(queued.content)}</Text>
             </Box>
           ))}
-          {activeQueue.length > MAX_QUEUED_PREVIEW && (
-            <Text dimColor>  ... and {activeQueue.length - MAX_QUEUED_PREVIEW} more</Text>
+          {activeQueue.length + inlineCount > MAX_QUEUED_PREVIEW && (
+            <Text dimColor>  ... and {activeQueue.length + inlineCount - MAX_QUEUED_PREVIEW} more</Text>
           )}
         </Box>
       )}
@@ -1072,7 +1118,7 @@ export function App({ cwd, version }: AppProps) {
       <Input
         onSubmit={handleSubmit}
         isProcessing={isProcessing}
-        queueLength={activeQueue.length}
+        queueLength={activeQueue.length + inlineCount}
         skills={skills}
       />
 
@@ -1080,7 +1126,7 @@ export function App({ cwd, version }: AppProps) {
       <Status
         isProcessing={isProcessing}
         cwd={activeSession?.cwd || cwd}
-        queueLength={activeQueue.length}
+        queueLength={activeQueue.length + inlineCount}
         tokenUsage={tokenUsage}
         energyState={energyState}
         voiceState={voiceState}

@@ -5,7 +5,7 @@ import { migrateFromOldpal } from '@hasna/assistants-core';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 
-const VERSION = '0.6.20';
+const VERSION = '0.6.21';
 process.env.ASSISTANTS_VERSION ??= VERSION;
 
 // Parse CLI arguments
@@ -176,14 +176,8 @@ Interactive Mode:
   process.exit(0);
 }
 
-try {
-  const result = await migrateFromOldpal();
-  if (!result.success && result.errors.length > 0) {
-    console.error(`Migration warning: ${result.errors.join('; ')}`);
-  }
-} catch (error) {
-  console.error(`Migration warning: ${error instanceof Error ? error.message : String(error)}`);
-}
+// Migration runs in background - don't block startup
+migrateFromOldpal().catch(() => {});
 
 // Headless mode
 if (options.print !== null) {

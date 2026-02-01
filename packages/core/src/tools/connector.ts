@@ -2,7 +2,7 @@ import type { Tool, Connector, ConnectorCommand } from '@hasna/assistants-shared
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { homedir } from 'os';
 import { join, delimiter } from 'path';
-import { readdirSync, statSync } from 'fs';
+import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { ConnectorError, ErrorCodes } from '../errors';
 
 type TimeoutResolve = (value: { exitCode: number }) => void;
@@ -11,21 +11,82 @@ function resolveTimeout(resolve: TimeoutResolve): void {
   resolve({ exitCode: 1 });
 }
 
+interface DiskCache {
+  version: number;
+  timestamp: number;
+  connectors: Record<string, Connector | null>;
+}
+
+const CACHE_VERSION = 1;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 /**
  * Connector bridge - wraps connect-* CLIs as tools
  */
 export class ConnectorBridge {
   private connectors: Map<string, Connector> = new Map();
   private static cache: Map<string, Connector | null> = new Map();
+  private static diskCacheLoaded = false;
   private cwd?: string;
 
   constructor(cwd?: string) {
     this.cwd = cwd;
+    // Load disk cache on first instantiation
+    if (!ConnectorBridge.diskCacheLoaded) {
+      ConnectorBridge.loadDiskCache();
+    }
   }
 
   private getHomeDir(): string {
     const envHome = process.env.HOME || process.env.USERPROFILE;
     return envHome && envHome.trim().length > 0 ? envHome : homedir();
+  }
+
+  private static getCachePath(): string {
+    const envHome = process.env.HOME || process.env.USERPROFILE;
+    const home = envHome && envHome.trim().length > 0 ? envHome : homedir();
+    return join(home, '.assistants', 'cache', 'connectors.json');
+  }
+
+  private static loadDiskCache(): void {
+    ConnectorBridge.diskCacheLoaded = true;
+    try {
+      const cachePath = ConnectorBridge.getCachePath();
+      if (!existsSync(cachePath)) return;
+
+      const data = JSON.parse(readFileSync(cachePath, 'utf-8')) as DiskCache;
+
+      // Check version and TTL
+      if (data.version !== CACHE_VERSION) return;
+      if (Date.now() - data.timestamp > CACHE_TTL_MS) return;
+
+      // Load into memory cache
+      for (const [name, connector] of Object.entries(data.connectors)) {
+        ConnectorBridge.cache.set(name, connector);
+      }
+    } catch {
+      // Cache read failed, will rediscover
+    }
+  }
+
+  private static saveDiskCache(): void {
+    try {
+      const cachePath = ConnectorBridge.getCachePath();
+      const cacheDir = join(cachePath, '..');
+      if (!existsSync(cacheDir)) {
+        mkdirSync(cacheDir, { recursive: true });
+      }
+
+      const data: DiskCache = {
+        version: CACHE_VERSION,
+        timestamp: Date.now(),
+        connectors: Object.fromEntries(ConnectorBridge.cache),
+      };
+
+      writeFileSync(cachePath, JSON.stringify(data));
+    } catch {
+      // Cache write failed, non-critical
+    }
   }
 
   /**
@@ -82,10 +143,30 @@ export class ConnectorBridge {
   }
 
   /**
-   * Fast discovery: scan PATH once and register minimal connectors immediately.
+   * Fast discovery: use disk cache if available, otherwise scan PATH.
    * This avoids slower per-connector checks and allows tools to be available right away.
    */
   fastDiscover(connectorNames?: string[]): Connector[] {
+    // If we have cached connectors from disk, use those immediately
+    if (ConnectorBridge.cache.size > 0) {
+      const connectors: Connector[] = [];
+      const allowList = connectorNames && connectorNames.length > 0
+        ? new Set(connectorNames)
+        : null;
+
+      for (const [name, connector] of ConnectorBridge.cache) {
+        if (connector && (!allowList || allowList.has(name))) {
+          this.connectors.set(connector.name, connector);
+          connectors.push(connector);
+        }
+      }
+
+      if (connectors.length > 0) {
+        return connectors;
+      }
+    }
+
+    // Fallback: scan PATH for connector names
     const discoveredNames = this.autoDiscoverConnectorNames();
     const allowList = connectorNames && connectorNames.length > 0
       ? new Set(connectorNames)
@@ -113,6 +194,11 @@ export class ConnectorBridge {
       ConnectorBridge.cache.set(name, connector);
       this.connectors.set(connector.name, connector);
       connectors.push(connector);
+    }
+
+    // Save to disk if we created new minimal connectors
+    if (connectors.length > 0) {
+      ConnectorBridge.saveDiskCache();
     }
 
     return connectors;
@@ -147,6 +233,9 @@ export class ConnectorBridge {
         tasks.push(this.populateCache(name));
       }
       await Promise.all(tasks);
+
+      // Save to disk after discovery
+      ConnectorBridge.saveDiskCache();
     }
 
     // Return all cached connectors
