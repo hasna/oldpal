@@ -1,7 +1,7 @@
 # Plan: Stamina & Energy System
 
 **Plan ID:** 00009
-**Status:** Draft
+**Status:** Completed
 **Priority:** Low
 **Estimated Effort:** Medium (2-3 days)
 **Dependencies:** plan-00007 (Heartbeat System)
@@ -282,62 +282,62 @@ function applyPersonality(
 ## Implementation Steps
 
 ### Step 1: Create Energy Types
-- [ ] Define EnergyState interface
-- [ ] Define EnergyCosts interface
-- [ ] Define EnergyConfig interface
-- [ ] Create defaults
+- [x] Define EnergyState interface
+- [x] Define EnergyCosts interface
+- [x] Define EnergyConfig interface
+- [x] Create defaults
 
 **Files:**
 - `packages/core/src/energy/types.ts`
 
 ### Step 2: Implement EnergyManager
-- [ ] Create EnergyManager class
-- [ ] Add consumption logic
-- [ ] Add regeneration logic
-- [ ] Add offline regeneration
-- [ ] Add effects calculation
+- [x] Create EnergyManager class
+- [x] Add consumption logic
+- [x] Add regeneration logic
+- [x] Add offline regeneration
+- [x] Add effects calculation
 
 **Files:**
 - `packages/core/src/energy/manager.ts`
 
 ### Step 3: Implement Storage
-- [ ] Create EnergyStorage class
-- [ ] Add persistence
+- [x] Create EnergyStorage class
+- [x] Add persistence
 
 **Files:**
 - `packages/core/src/energy/storage.ts`
 
 ### Step 4: Add Personality Effects
-- [ ] Define personality types
-- [ ] Create prompt modifiers
-- [ ] Add response modifiers
+- [x] Define personality types
+- [x] Create prompt modifiers
+- [x] Add response modifiers
 
 **Files:**
 - `packages/core/src/energy/personality.ts`
 
 ### Step 5: Add UI Components
-- [ ] Create EnergyBar component
-- [ ] Integrate into Status
-- [ ] Add low energy warnings
+- [x] Create EnergyBar component
+- [x] Integrate into Status
+- [x] Add low energy warnings
 
 **Files:**
 - `packages/terminal/src/components/EnergyBar.tsx`
 - `packages/terminal/src/components/Status.tsx`
 
 ### Step 6: Integrate with Agent
-- [ ] Add EnergyManager to AgentLoop
-- [ ] Consume energy on actions
-- [ ] Apply personality effects
-- [ ] Add /rest command
+- [x] Add EnergyManager to AgentLoop
+- [x] Consume energy on actions
+- [x] Apply personality effects
+- [x] Add /rest command
 
 **Files:**
 - `packages/core/src/agent/loop.ts`
 - `packages/core/src/commands/builtin.ts`
 
 ### Step 7: Add Tests
-- [ ] Test energy consumption
-- [ ] Test regeneration
-- [ ] Test effects
+- [x] Test energy consumption
+- [x] Test regeneration
+- [x] Test effects
 
 **Files:**
 - `packages/core/tests/energy.test.ts`
@@ -382,7 +382,7 @@ describe('EnergyBar', () => {
 
 ## Approval
 
-- [ ] Technical design approved
-- [ ] Implementation steps clear
-- [ ] Tests defined
-- [ ] Ready to implement
+- [x] Technical design approved
+- [x] Implementation steps clear
+- [x] Tests defined
+- [x] Ready to implement
