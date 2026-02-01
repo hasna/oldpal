@@ -22,6 +22,10 @@ const DEFAULT_CONFIG: OldpalConfig = {
     },
   },
   connectors: [],
+  scheduler: {
+    enabled: true,
+    heartbeatIntervalMs: 30000,
+  },
 };
 
 function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): OldpalConfig {
@@ -63,6 +67,10 @@ function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): Oldp
     connectors: override.connectors ?? base.connectors,
     skills: override.skills ?? base.skills,
     hooks: override.hooks ?? base.hooks,
+    scheduler: {
+      ...(base.scheduler || {}),
+      ...(override.scheduler || {}),
+    },
   };
 }
 

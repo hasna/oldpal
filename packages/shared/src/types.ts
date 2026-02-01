@@ -224,6 +224,7 @@ export interface OldpalConfig {
   connectors?: string[];
   skills?: string[];
   hooks?: HookConfig;
+  scheduler?: SchedulerConfig;
 }
 
 export interface LLMConfig {
@@ -255,6 +256,38 @@ export interface TTSConfig {
 export interface WakeConfig {
   enabled: boolean;
   word: string;
+}
+
+export interface SchedulerConfig {
+  enabled?: boolean;
+  heartbeatIntervalMs?: number;
+}
+
+// ============================================
+// Scheduler Types
+// ============================================
+
+export interface ScheduledCommand {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  createdBy: 'user' | 'agent';
+  command: string;
+  description?: string;
+  status: 'active' | 'paused' | 'completed' | 'error';
+  schedule: {
+    kind: 'once' | 'cron';
+    at?: string;
+    cron?: string;
+    timezone?: string;
+  };
+  nextRunAt?: number;
+  lastRunAt?: number;
+  lastResult?: {
+    ok: boolean;
+    summary?: string;
+    error?: string;
+  };
 }
 
 // ============================================

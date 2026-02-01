@@ -6,6 +6,14 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
 import { generateId } from '@oldpal/shared';
 import { saveFeedbackEntry, type FeedbackType } from '../tools/feedback';
+import type { ScheduledCommand } from '@oldpal/shared';
+import {
+  saveSchedule,
+  listSchedules,
+  deleteSchedule,
+  updateSchedule,
+  computeNextRun,
+} from '../scheduler/store';
 
 // Version constant - should match package.json
 const VERSION = '0.6.12';
@@ -17,6 +25,42 @@ type ConnectorAuthTimeoutResolve = (value: {
 
 function resolveAuthTimeout(resolve: ConnectorAuthTimeoutResolve): void {
   resolve({ exitCode: 1, stdout: { toString: () => '{}' } });
+}
+
+function splitArgs(input: string): string[] {
+  const args: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char as '"' | "'";
+      continue;
+    }
+
+    if (char === ' ' || char === '\t') {
+      if (current) {
+        args.push(current);
+        current = '';
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current) args.push(current);
+  return args;
 }
 
 /**
@@ -48,6 +92,11 @@ export class BuiltinCommands {
     loader.register(this.skillsCommand(loader));
     loader.register(this.memoryCommand());
     loader.register(this.feedbackCommand());
+    loader.register(this.scheduleCommand());
+    loader.register(this.schedulesCommand());
+    loader.register(this.unscheduleCommand());
+    loader.register(this.pauseScheduleCommand());
+    loader.register(this.resumeScheduleCommand());
     loader.register(this.connectorsCommand());
     loader.register(this.exitCommand());
   }
@@ -526,6 +575,190 @@ Please summarize the last interaction and suggest 2-3 next steps.
 4. **Open Items** - Things we mentioned but haven't addressed yet
 
 Keep it concise but comprehensive.`,
+    };
+  }
+
+  /**
+   * /schedule - Schedule a command
+   */
+  private scheduleCommand(): Command {
+    return {
+      name: 'schedule',
+      description: 'Schedule a command (ISO time or cron)',
+      builtin: true,
+      selfHandled: true,
+      handler: async (args, context) => {
+        const parts = splitArgs(args);
+        if (parts.length < 2) {
+          context.emit('text', 'Usage:\n  /schedule <ISO time> <command>\n  /schedule cron "<expr>" <command>\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const now = Date.now();
+        let kind: 'once' | 'cron' = 'once';
+        let at: string | undefined;
+        let cron: string | undefined;
+        let commandStart = 1;
+
+        if (parts[0] === 'cron') {
+          kind = 'cron';
+          cron = parts[1];
+          commandStart = 2;
+        } else {
+          at = parts[0];
+        }
+
+        const command = parts.slice(commandStart).join(' ').trim();
+        if (!command) {
+          context.emit('text', 'Error: command is required.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const schedule: ScheduledCommand = {
+          id: generateId(),
+          createdAt: now,
+          updatedAt: now,
+          createdBy: 'user',
+          command,
+          status: 'active',
+          schedule: {
+            kind,
+            at,
+            cron,
+          },
+        };
+
+        schedule.nextRunAt = computeNextRun(schedule, now);
+        if (!schedule.nextRunAt) {
+          context.emit('text', 'Error: unable to compute next run time.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        await saveSchedule(context.cwd, schedule);
+        context.emit(
+          'text',
+          `Scheduled ${schedule.command}\n  id: ${schedule.id}\n  next: ${new Date(schedule.nextRunAt).toISOString()}\n`
+        );
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /schedules - List all schedules
+   */
+  private schedulesCommand(): Command {
+    return {
+      name: 'schedules',
+      description: 'List scheduled commands',
+      builtin: true,
+      selfHandled: true,
+      handler: async (_args, context) => {
+        const schedules = await listSchedules(context.cwd);
+        if (schedules.length === 0) {
+          context.emit('text', 'No schedules found.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        let output = '\n| ID | Status | Next Run | Command |\n';
+        output += '|----|--------|----------|---------|\n';
+        for (const schedule of schedules.sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))) {
+          const next = schedule.nextRunAt ? new Date(schedule.nextRunAt).toISOString() : 'n/a';
+          output += `| ${schedule.id} | ${schedule.status} | ${next} | ${schedule.command} |\n`;
+        }
+        context.emit('text', output);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /unschedule - Delete a schedule
+   */
+  private unscheduleCommand(): Command {
+    return {
+      name: 'unschedule',
+      description: 'Delete a scheduled command',
+      builtin: true,
+      selfHandled: true,
+      handler: async (args, context) => {
+        const id = args.trim();
+        if (!id) {
+          context.emit('text', 'Usage: /unschedule <id>\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const ok = await deleteSchedule(context.cwd, id);
+        context.emit('text', ok ? `Deleted schedule ${id}.\n` : `Schedule ${id} not found.\n`);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /pause - Pause a schedule
+   */
+  private pauseScheduleCommand(): Command {
+    return {
+      name: 'pause',
+      description: 'Pause a scheduled command',
+      builtin: true,
+      selfHandled: true,
+      handler: async (args, context) => {
+        const id = args.trim();
+        if (!id) {
+          context.emit('text', 'Usage: /pause <id>\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const updated = await updateSchedule(context.cwd, id, (schedule) => ({
+          ...schedule,
+          status: 'paused',
+          updatedAt: Date.now(),
+        }));
+        context.emit('text', updated ? `Paused schedule ${id}.\n` : `Schedule ${id} not found.\n`);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /resume - Resume a schedule
+   */
+  private resumeScheduleCommand(): Command {
+    return {
+      name: 'resume',
+      description: 'Resume a scheduled command',
+      builtin: true,
+      selfHandled: true,
+      handler: async (args, context) => {
+        const id = args.trim();
+        if (!id) {
+          context.emit('text', 'Usage: /resume <id>\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const updated = await updateSchedule(context.cwd, id, (schedule) => ({
+          ...schedule,
+          status: 'active',
+          updatedAt: Date.now(),
+          nextRunAt: computeNextRun(schedule, Date.now()),
+        }));
+        context.emit('text', updated ? `Resumed schedule ${id}.\n` : `Schedule ${id} not found.\n`);
+        context.emit('done');
+        return { handled: true };
+      },
     };
   }
 

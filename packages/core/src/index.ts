@@ -11,6 +11,7 @@ export { BashTool } from './tools/bash';
 export { FilesystemTools } from './tools/filesystem';
 export { WebTools } from './tools/web';
 export { FeedbackTool } from './tools/feedback';
+export { SchedulerTool } from './tools/scheduler';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';
@@ -35,6 +36,9 @@ export { AnthropicClient } from './llm/anthropic';
 
 // Config
 export { loadConfig, getConfigPath } from './config';
+
+// Scheduler
+export * from './scheduler';
 
 // Client
 export { EmbeddedClient } from './client';
