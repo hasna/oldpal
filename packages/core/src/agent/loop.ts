@@ -52,6 +52,7 @@ export class AgentLoop {
   private isRunning = false;
   private shouldStop = false;
   private systemPrompt: string | null = null;
+  private connectorDiscovery: Promise<unknown> | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -92,18 +93,24 @@ export class AgentLoop {
     ]);
     this.config = config;
 
-    // Phase 2: All independent async operations in parallel
-    const [, , , hooksConfig, systemPrompt] = await Promise.all([
+    const connectorNames =
+      this.config.connectors && this.config.connectors.length > 0 && !this.config.connectors.includes('*')
+        ? this.config.connectors
+        : undefined;
+
+    // Start connector discovery in the background so chat can start immediately.
+    this.connectorDiscovery = this.connectorBridge.discover(connectorNames)
+      .then(() => {
+        this.connectorBridge.registerAll(this.toolRegistry);
+      })
+      .catch(() => {});
+
+    // Phase 2: All independent async operations in parallel (excluding connectors)
+    const [, , hooksConfig, systemPrompt] = await Promise.all([
       // Initialize LLM client
       createLLMClient(this.config.llm).then((client) => {
         this.llmClient = client;
       }),
-      // Discover connectors (auto-discover when list is empty or contains '*')
-      this.connectorBridge.discover(
-        this.config.connectors && this.config.connectors.length > 0 && !this.config.connectors.includes('*')
-          ? this.config.connectors
-          : undefined
-      ),
       // Load skills
       this.skillLoader.loadAll(this.cwd),
       // Load hooks config
@@ -421,6 +428,13 @@ export class AgentLoop {
   private async handleCommand(message: string): Promise<{ handled: boolean; prompt?: string; clearConversation?: boolean; exit?: boolean }> {
     const parsed = this.commandExecutor.parseCommand(message);
     const command = parsed ? this.commandLoader.getCommand(parsed.name) : undefined;
+    if (parsed?.name === 'connectors' && this.connectorDiscovery) {
+      try {
+        await this.connectorDiscovery;
+      } catch {
+        // Ignore discovery errors; command will handle empty state.
+      }
+    }
     const context: CommandContext = {
       cwd: this.cwd,
       sessionId: this.sessionId,
