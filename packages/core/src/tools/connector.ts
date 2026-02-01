@@ -393,7 +393,7 @@ export class ConnectorBridge {
             cwd,
             stdin: 'ignore',
             stdout: 'ignore',
-            stderr: 'pipe',
+            stderr: 'ignore',
           });
           proc.unref?.();
         } catch {
