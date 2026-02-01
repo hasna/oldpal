@@ -1,4 +1,4 @@
-import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig } from '@oldpal/shared';
+import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig, ScheduledCommand } from '@oldpal/shared';
 import { generateId } from '@oldpal/shared';
 import { AgentContext } from './context';
 import { ToolRegistry } from '../tools/registry';
@@ -7,6 +7,7 @@ import { BashTool } from '../tools/bash';
 import { FilesystemTools } from '../tools/filesystem';
 import { WebTools } from '../tools/web';
 import { FeedbackTool } from '../tools/feedback';
+import { SchedulerTool } from '../tools/scheduler';
 import { ImageTools } from '../tools/image';
 import { SkillLoader } from '../skills/loader';
 import { SkillExecutor } from '../skills/executor';
@@ -15,6 +16,13 @@ import { HookExecutor } from '../hooks/executor';
 import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext } from '../commands';
 import { createLLMClient, type LLMClient } from '../llm/client';
 import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir } from '../config';
+import {
+  acquireScheduleLock,
+  releaseScheduleLock,
+  getDueSchedules,
+  computeNextRun,
+  updateSchedule,
+} from '../scheduler/store';
 
 export interface AgentLoopOptions {
   config?: OldpalConfig;
@@ -53,6 +61,9 @@ export class AgentLoop {
   private shouldStop = false;
   private systemPrompt: string | null = null;
   private connectorDiscovery: Promise<unknown> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private scheduledQueue: ScheduledCommand[] = [];
+  private drainingScheduled = false;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -98,6 +109,9 @@ export class AgentLoop {
         ? this.config.connectors
         : undefined;
 
+    // Fast discovery (PATH scan only) so connector tools are available immediately.
+    this.connectorBridge.fastDiscover(connectorNames);
+
     // Start connector discovery in the background so chat can start immediately.
     this.connectorDiscovery = this.connectorBridge.discover(connectorNames)
       .then(() => {
@@ -128,6 +142,7 @@ export class AgentLoop {
     WebTools.registerAll(this.toolRegistry);
     ImageTools.registerAll(this.toolRegistry);
     this.toolRegistry.register(FeedbackTool.tool, FeedbackTool.executor);
+    this.toolRegistry.register(SchedulerTool.tool, SchedulerTool.executor);
 
     // Register connector tools
     this.connectorBridge.registerAll(this.toolRegistry);
@@ -153,6 +168,8 @@ export class AgentLoop {
       hook_event_name: 'SessionStart',
       cwd: this.cwd,
     });
+
+    this.startHeartbeat();
   }
 
   /**
@@ -162,32 +179,39 @@ export class AgentLoop {
     if (this.isRunning) {
       throw new Error('Agent is already processing a message');
     }
+    await this.runMessage(userMessage, 'user');
+  }
 
+  private async runMessage(
+    userMessage: string,
+    source: 'user' | 'schedule'
+  ): Promise<{ ok: boolean; summary?: string; error?: string }> {
     if (!this.llmClient || !this.config) {
       throw new Error('Agent not initialized. Call initialize() first.');
     }
 
     this.isRunning = true;
     this.shouldStop = false;
+    const beforeCount = this.context.getMessages().length;
 
     try {
-      // Run UserPromptSubmit hooks
-      const promptHookResult = await this.hookExecutor.execute(
-        this.hookLoader.getHooks('UserPromptSubmit'),
-        {
-          session_id: this.sessionId,
-          hook_event_name: 'UserPromptSubmit',
-          cwd: this.cwd,
-          prompt: userMessage,
-        }
-      );
+      if (source === 'user') {
+        const promptHookResult = await this.hookExecutor.execute(
+          this.hookLoader.getHooks('UserPromptSubmit'),
+          {
+            session_id: this.sessionId,
+            hook_event_name: 'UserPromptSubmit',
+            cwd: this.cwd,
+            prompt: userMessage,
+          }
+        );
 
-      if (promptHookResult?.continue === false) {
-        this.emit({ type: 'error', error: promptHookResult.stopReason || 'Blocked by hook' });
-        return;
+        if (promptHookResult?.continue === false) {
+          this.emit({ type: 'error', error: promptHookResult.stopReason || 'Blocked by hook' });
+          return { ok: false, error: promptHookResult.stopReason || 'Blocked by hook' };
+        }
       }
 
-      // Check for slash command first (e.g., /help, /clear)
       if (userMessage.startsWith('/')) {
         const parsed = this.commandExecutor.parseCommand(userMessage);
         const command = parsed ? this.commandLoader.getCommand(parsed.name) : undefined;
@@ -202,19 +226,18 @@ export class AgentLoop {
             if (commandResult.exit) {
               this.emit({ type: 'exit' });
             }
-            return;
+            return { ok: true, summary: `Handled ${userMessage}` };
           }
-          // If command returned a prompt, use that instead
           if (commandResult.prompt) {
             userMessage = commandResult.prompt;
           }
         } else if (skill) {
           const handled = await this.handleSkillInvocation(userMessage);
-          if (handled) return;
+          if (handled) return { ok: true, summary: `Executed ${userMessage}` };
         } else {
           const commandResult = await this.handleCommand(userMessage);
           if (commandResult.handled) {
-            return;
+            return { ok: true, summary: `Handled ${userMessage}` };
           }
           if (commandResult.prompt) {
             userMessage = commandResult.prompt;
@@ -222,14 +245,20 @@ export class AgentLoop {
         }
       }
 
-      // Add user message to context
       this.context.addUserMessage(userMessage);
-
-      // Run the agent loop
       await this.runLoop();
+
+      const messages = this.context.getMessages().slice(beforeCount);
+      const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant');
+      const summary = lastAssistant?.content?.trim();
+      return { ok: true, summary: summary ? summary.slice(0, 200) : undefined };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, error: message };
     } finally {
       this.currentAllowedTools = null;
       this.isRunning = false;
+      this.drainScheduledQueue();
     }
   }
 
@@ -588,6 +617,74 @@ export class AgentLoop {
    */
   clearConversation(): void {
     this.resetContext();
+  }
+
+  private startHeartbeat(): void {
+    if (!this.config?.scheduler?.enabled) return;
+    const interval = this.config.scheduler?.heartbeatIntervalMs ?? 30000;
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => {
+      this.tickHeartbeat();
+    }, interval);
+    if (typeof (this.heartbeatTimer as any).unref === 'function') {
+      (this.heartbeatTimer as any).unref();
+    }
+  }
+
+  private async tickHeartbeat(): Promise<void> {
+    try {
+      const now = Date.now();
+      const due = await getDueSchedules(this.cwd, now);
+      for (const schedule of due) {
+        const locked = await acquireScheduleLock(this.cwd, schedule.id, this.sessionId);
+        if (!locked) continue;
+        this.scheduledQueue.push(schedule);
+      }
+      this.drainScheduledQueue();
+    } catch {
+      // ignore heartbeat errors
+    }
+  }
+
+  private async drainScheduledQueue(): Promise<void> {
+    if (this.drainingScheduled) return;
+    if (this.isRunning) return;
+    if (this.scheduledQueue.length === 0) return;
+
+    this.drainingScheduled = true;
+    try {
+      while (this.scheduledQueue.length > 0 && !this.isRunning) {
+        const schedule = this.scheduledQueue.shift();
+        if (!schedule) break;
+
+        const result = await this.runMessage(schedule.command, 'schedule');
+        const now = Date.now();
+        await updateSchedule(this.cwd, schedule.id, (current) => {
+          const updated: ScheduledCommand = {
+            ...current,
+            updatedAt: now,
+            lastRunAt: now,
+            lastResult: {
+              ok: result.ok,
+              summary: result.summary,
+              error: result.error,
+            },
+          };
+
+          if (current.schedule.kind === 'once') {
+            updated.status = result.ok ? 'completed' : 'error';
+            updated.nextRunAt = undefined;
+          } else {
+            updated.status = current.status === 'paused' ? 'paused' : 'active';
+            updated.nextRunAt = computeNextRun(updated, now);
+          }
+          return updated;
+        });
+        await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
+      }
+    } finally {
+      this.drainingScheduled = false;
+    }
   }
 
   /**

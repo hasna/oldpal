@@ -223,6 +223,7 @@ You have access to various tools and connectors:
 - Connectors discovered from installed connect-* CLIs
 - Filesystem operations (read, write, search files)
 - Shell command execution
+- Scheduling tools for recurring or delayed commands
 
 Guidelines:
 - Be concise and direct

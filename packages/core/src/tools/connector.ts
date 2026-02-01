@@ -74,6 +74,43 @@ export class ConnectorBridge {
   }
 
   /**
+   * Fast discovery: scan PATH once and register minimal connectors immediately.
+   * This avoids slower per-connector checks and allows tools to be available right away.
+   */
+  fastDiscover(connectorNames?: string[]): Connector[] {
+    const discoveredNames = this.autoDiscoverConnectorNames();
+    const allowList = connectorNames && connectorNames.length > 0
+      ? new Set(connectorNames)
+      : null;
+    const names = allowList
+      ? discoveredNames.filter((name) => allowList.has(name))
+      : discoveredNames;
+
+    if (names.length === 0) {
+      return [];
+    }
+
+    const connectors: Connector[] = [];
+    for (const name of names) {
+      const cached = ConnectorBridge.cache.get(name);
+      if (cached) {
+        this.connectors.set(cached.name, cached);
+        connectors.push(cached);
+        continue;
+      }
+      if (cached === null) {
+        continue;
+      }
+      const connector = this.createMinimalConnector(name, `connect-${name}`);
+      ConnectorBridge.cache.set(name, connector);
+      this.connectors.set(connector.name, connector);
+      connectors.push(connector);
+    }
+
+    return connectors;
+  }
+
+  /**
    * Discover available connectors (auto-discovers if no names provided)
    */
   async discover(connectorNames?: string[]): Promise<Connector[]> {
