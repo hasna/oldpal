@@ -15,18 +15,21 @@ interface ToolCallCardProps {
 export function ToolCallCard({ call, result }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
   const isError = result?.isError;
+  const accentClass = isError
+    ? 'border-rose-500/50 shadow-[0_0_30px_-18px_rgba(244,63,94,0.6)]'
+    : 'border-sky-500/40 shadow-[0_0_30px_-18px_rgba(56,189,248,0.5)]';
   const filePath = call.name === 'read'
     ? String((call.input as Record<string, unknown>)?.path || (call.input as Record<string, unknown>)?.file_path || '')
     : '';
 
   return (
-    <Card className="mt-3 shadow-glow">
+    <Card className={cn('mt-3 overflow-hidden border-l-4', accentClass)}>
       <CardHeader
-        className="cursor-pointer justify-between gap-4 text-sm"
+        className="cursor-pointer justify-between gap-4 bg-gradient-to-r from-slate-950/60 via-slate-900/80 to-slate-950/40 text-sm"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-sky-500/20 px-2 py-1 font-mono text-xs text-sky-200">
+          <span className="rounded-full bg-sky-500/20 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-sky-100">
             {call.name}
           </span>
           {isError && <Badge variant="error">Error</Badge>}
