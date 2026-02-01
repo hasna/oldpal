@@ -1152,7 +1152,23 @@ export class AgentLoop {
           await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
           continue;
         }
-        this.scheduledQueue.push(schedule);
+        let scheduleToQueue = schedule;
+        if (!schedule.sessionId) {
+          const claimed = await updateSchedule(this.cwd, schedule.id, (current) => {
+            if (current.sessionId) return current;
+            return {
+              ...current,
+              sessionId: this.sessionId,
+              updatedAt: Date.now(),
+            };
+          });
+          if (!claimed || (claimed.sessionId && claimed.sessionId !== this.sessionId)) {
+            await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
+            continue;
+          }
+          scheduleToQueue = claimed;
+        }
+        this.scheduledQueue.push(scheduleToQueue);
       }
       this.drainScheduledQueue();
     } catch (error) {
