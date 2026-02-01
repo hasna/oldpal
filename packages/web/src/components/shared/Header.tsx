@@ -27,7 +27,8 @@ export function Header() {
             if (isStreaming && sessionId) {
               chatWs.send({ type: 'cancel', sessionId });
             }
-            createSession();
+            const newId = createSession();
+            chatWs.send({ type: 'session', sessionId: newId });
           }}
         >
           New Session

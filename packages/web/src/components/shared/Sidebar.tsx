@@ -29,6 +29,7 @@ export function Sidebar() {
                   chatWs.send({ type: 'cancel', sessionId });
                 }
                 switchSession(session.id);
+                chatWs.send({ type: 'session', sessionId: session.id });
               }}
             >
               {session.label}

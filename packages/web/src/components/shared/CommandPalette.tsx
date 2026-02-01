@@ -44,7 +44,8 @@ export function CommandPalette() {
                   if (isStreaming && sessionId) {
                     chatWs.send({ type: 'cancel', sessionId });
                   }
-                  createSession();
+                  const newId = createSession();
+                  chatWs.send({ type: 'session', sessionId: newId });
                 }
                 if (command.action === 'clear') {
                   clearMessages();
