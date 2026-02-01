@@ -107,6 +107,24 @@ Content here
 :::
 ```
 
+For progress reports, use a report block:
+
+```
+:::report
+legend: Not Started | In Progress | Complete | Blocked
+progress:
+- HIGH PRIORITY: 40
+- MEDIUM PRIORITY: 10
+- LOW PRIORITY: 0
+- OVERALL: 13
+table:
+| # | Item | Priority | Progress | Status |
+|---|------|----------|----------|--------|
+| 1 | Prompt/Agent Hooks | High | 0% | Stub exists |
+| 2 | Error Handling | High | 20% | Basic errors |
+:::
+```
+
 ## Error Handling
 
 When encountering errors:

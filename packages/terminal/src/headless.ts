@@ -99,10 +99,21 @@ export async function runHeadless(options: HeadlessOptions): Promise<void> {
       });
     }
 
+    if (chunk.type === 'tool_result' && chunk.toolResult?.isError) {
+      hadError = true;
+      errorMessage = chunk.toolResult.content || 'Tool error';
+      if (outputFormat === 'text') {
+        process.stderr.write(`Error: ${errorMessage}\n`);
+      }
+    }
+
     // Handle errors
     if (chunk.type === 'error' && chunk.error) {
       hadError = true;
       errorMessage = chunk.error;
+      if (outputFormat === 'text') {
+        process.stderr.write(`Error: ${chunk.error}\n`);
+      }
     }
   });
 
@@ -139,6 +150,9 @@ export async function runHeadless(options: HeadlessOptions): Promise<void> {
       usage: client.getTokenUsage(),
       tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     };
+    if (hadError && errorMessage) {
+      (output as JsonOutput & { error?: string }).error = errorMessage;
+    }
 
     // Parse structured output if JSON schema was provided
     if (jsonSchema) {

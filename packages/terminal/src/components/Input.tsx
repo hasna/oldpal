@@ -214,6 +214,11 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
           placeholder={placeholder}
         />
       </Box>
+      {isProcessing && (
+        <Box marginTop={1} marginLeft={2}>
+          <Text dimColor>[esc] stop</Text>
+        </Box>
+      )}
 
       {/* Skills autocomplete dropdown - below input */}
       {autocompleteMode === 'skill' && filteredSkills.length > 0 && (

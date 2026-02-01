@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@oldpal/shared';
 import { Markdown } from './Markdown';
@@ -33,6 +33,8 @@ export function Messages({
   maxVisible = 10,
   queuedMessageIds,
 }: MessagesProps) {
+  const [now, setNow] = useState(Date.now());
+
   // Calculate visible messages based on scroll offset
   // scrollOffset 0 means showing the latest messages
   const endIndex = messages.length - scrollOffset;
@@ -51,8 +53,37 @@ export function Messages({
     return { id: group.messages[0].id, group };
   });
 
+  const toolResultMap = useMemo(() => {
+    const map = new Map<string, ActivityEntry>();
+    for (const entry of activityLog) {
+      if (entry.type === 'tool_result' && entry.toolResult) {
+        map.set(entry.toolResult.toolCallId, entry);
+      }
+    }
+    return map;
+  }, [activityLog]);
+
+  const hasPendingTools = useMemo(() => {
+    for (const entry of activityLog) {
+      if (entry.type === 'tool_call' && entry.toolCall) {
+        if (!toolResultMap.has(entry.toolCall.id)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [activityLog, toolResultMap]);
+
+  useEffect(() => {
+    if (!hasPendingTools) return;
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [hasPendingTools]);
+
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width="100%">
       {/* Historical messages */}
       {historicalItems.map((item) => {
         if (item.group.type === 'single') {
@@ -74,10 +105,15 @@ export function Messages({
           );
         }
         if (entry.type === 'tool_call' && entry.toolCall) {
+          const resultEntry = toolResultMap.get(entry.toolCall.id);
+          const elapsedMs = (resultEntry ? resultEntry.timestamp : now) - entry.timestamp;
+          const elapsedText = formatDuration(elapsedMs);
           return (
             <Box key={entry.id} marginY={1}>
               <Text dimColor>⚙ </Text>
-              <Text dimColor>{formatToolCall(entry.toolCall)}</Text>
+              <Text dimColor>
+                {formatToolCall(entry.toolCall)} · {elapsedText}
+              </Text>
             </Box>
           );
         }
@@ -106,6 +142,14 @@ export function Messages({
       )}
     </Box>
   );
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}m ${secs}s`;
 }
 
 type MessageGroup =
@@ -248,7 +292,13 @@ function ToolCallPanel({
   const borderColor = hasError ? 'red' : allComplete ? 'green' : 'yellow';
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={borderColor} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={borderColor}
+      paddingX={1}
+      width="100%"
+    >
       <Box justifyContent="space-between">
         <Text color={borderColor} bold>Tool Calls</Text>
         <Text dimColor>

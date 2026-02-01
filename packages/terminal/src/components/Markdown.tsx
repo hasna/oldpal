@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from 'ink';
+import { Text, useStdout } from 'ink';
 import chalk from 'chalk';
 
 interface MarkdownProps {
@@ -13,11 +13,13 @@ interface MarkdownProps {
  * - Handles code blocks and inline code
  */
 export function Markdown({ content }: MarkdownProps) {
-  const rendered = parseMarkdown(content);
+  const { columns } = useStdout();
+  const maxWidth = columns ? Math.max(20, columns - 2) : undefined;
+  const rendered = parseMarkdown(content, { maxWidth });
   return <Text>{rendered}</Text>;
 }
 
-function parseMarkdown(text: string, options?: { skipBlocks?: boolean }): string {
+function parseMarkdown(text: string, options?: { skipBlocks?: boolean; maxWidth?: number }): string {
   let result = text;
 
   // Handle code blocks first (preserve them)
@@ -69,7 +71,7 @@ function parseMarkdown(text: string, options?: { skipBlocks?: boolean }): string
   result = result.replace(/@@BLOCKSECTION(\d+)@@/g, (_, index) => {
     const section = blockSections[parseInt(index, 10)];
     if (!section) return '';
-    return renderBlockSection(section);
+    return renderBlockSection(section, options?.maxWidth);
   });
 
   // Restore code blocks with dim styling
@@ -80,12 +82,13 @@ function parseMarkdown(text: string, options?: { skipBlocks?: boolean }): string
     return chalk.dim(code);
   });
 
-  return result.trim();
+  return result.trimEnd();
 }
 
 type BlockSection =
-  | { kind: 'block'; type: string; title?: string; body: string }
-  | { kind: 'grid'; columns: number; cards: { type: string; title?: string; body: string }[]; body: string };
+  | { kind: 'block'; type: string; title?: string; body: string; indent: string }
+  | { kind: 'grid'; columns: number; cards: { type: string; title?: string; body: string }[]; body: string; indent: string }
+  | { kind: 'report'; body: string; indent: string };
 
 function extractBlockSections(text: string, blocks: BlockSection[]): string {
   const lines = text.split('\n');
@@ -94,62 +97,65 @@ function extractBlockSections(text: string, blocks: BlockSection[]): string {
 
   while (i < lines.length) {
     const line = lines[i];
-    const gridMatch = line.match(/^:::grid(.*)$/);
-    const blockMatch = line.match(/^:::block(.*)$/);
+    const gridMatch = line.match(/^(\s*):::grid(.*)$/);
+    const blockMatch = line.match(/^(\s*):::block(.*)$/);
+    const reportMatch = line.match(/^(\s*):::report(.*)$/);
 
     if (gridMatch) {
-      const header = gridMatch[1] ?? '';
+      const indent = gridMatch[1] ?? '';
+      const header = gridMatch[2] ?? '';
       const attrs = parseAttributes(header);
       const columns = Math.max(1, Math.min(4, Number(attrs.columns || attrs.cols || 2)));
-      const bodyLines: string[] = [];
-      i += 1;
-      let openCards = 0;
-      while (i < lines.length) {
-        const current = lines[i];
-        if (current.startsWith(':::card')) {
-          openCards += 1;
-          bodyLines.push(current);
-          i += 1;
-          continue;
-        }
-        if (current.trim() === ':::') {
-          if (openCards > 0) {
-            openCards -= 1;
-            bodyLines.push(current);
-            i += 1;
-            continue;
-          }
-          i += 1;
-          break;
-        }
-        bodyLines.push(current);
+      const parsed = parseDelimitedBlock(lines, i, indent);
+      if (!parsed) {
+        output.push(line);
+        output.push(createMalformedBlock(blocks, indent, 'grid'));
         i += 1;
+        continue;
       }
 
+      const bodyLines = stripIndent(parsed.bodyLines, indent);
       const body = bodyLines.join('\n');
       const cards = extractCards(body);
-      blocks.push({ kind: 'grid', columns, cards, body });
+      blocks.push({ kind: 'grid', columns, cards, body, indent });
       output.push(`@@BLOCKSECTION${blocks.length - 1}@@`);
+      i = parsed.nextIndex;
       continue;
     }
 
     if (blockMatch) {
-      const header = blockMatch[1] ?? '';
+      const indent = blockMatch[1] ?? '';
+      const header = blockMatch[2] ?? '';
       const attrs = parseAttributes(header);
       const type = String(attrs.type || 'info');
       const title = attrs.title ? String(attrs.title) : undefined;
-      const bodyLines: string[] = [];
-      i += 1;
-      while (i < lines.length && lines[i].trim() !== ':::') {
-        bodyLines.push(lines[i]);
+      const parsed = parseDelimitedBlock(lines, i, indent);
+      if (!parsed) {
+        output.push(line);
+        output.push(createMalformedBlock(blocks, indent, 'block'));
         i += 1;
+        continue;
       }
-      if (i < lines.length && lines[i].trim() === ':::') {
-        i += 1;
-      }
-      const body = bodyLines.join('\n');
-      blocks.push({ kind: 'block', type, title, body });
+      const body = stripIndent(parsed.bodyLines, indent).join('\n');
+      blocks.push({ kind: 'block', type, title, body, indent });
       output.push(`@@BLOCKSECTION${blocks.length - 1}@@`);
+      i = parsed.nextIndex;
+      continue;
+    }
+
+    if (reportMatch) {
+      const indent = reportMatch[1] ?? '';
+      const parsed = parseDelimitedBlock(lines, i, indent);
+      if (!parsed) {
+        output.push(line);
+        output.push(createMalformedBlock(blocks, indent, 'report'));
+        i += 1;
+        continue;
+      }
+      const body = stripIndent(parsed.bodyLines, indent).join('\n');
+      blocks.push({ kind: 'report', body, indent });
+      output.push(`@@BLOCKSECTION${blocks.length - 1}@@`);
+      i = parsed.nextIndex;
       continue;
     }
 
@@ -167,7 +173,7 @@ function extractCards(body: string): { type: string; title?: string; body: strin
 
   while (i < lines.length) {
     const line = lines[i];
-    const match = line.match(/^:::card(.*)$/);
+    const match = line.match(/^\s*:::card(.*)$/);
     if (!match) {
       i += 1;
       continue;
@@ -191,6 +197,59 @@ function extractCards(body: string): { type: string; title?: string; body: strin
   return cards;
 }
 
+function parseDelimitedBlock(
+  lines: string[],
+  startIndex: number,
+  indent: string
+): { bodyLines: string[]; nextIndex: number } | null {
+  const bodyLines: string[] = [];
+  let openCards = 0;
+  let i = startIndex + 1;
+
+  while (i < lines.length) {
+    const current = lines[i];
+    const trimmed = current.trim();
+
+    if (trimmed.startsWith(':::card')) {
+      openCards += 1;
+      bodyLines.push(current);
+      i += 1;
+      continue;
+    }
+
+    if (trimmed === ':::' && current.startsWith(indent)) {
+      if (openCards > 0) {
+        openCards -= 1;
+        bodyLines.push(current);
+        i += 1;
+        continue;
+      }
+      return { bodyLines, nextIndex: i + 1 };
+    }
+
+    bodyLines.push(current);
+    i += 1;
+  }
+
+  return null;
+}
+
+function stripIndent(lines: string[], indent: string): string[] {
+  if (!indent) return lines;
+  return lines.map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line));
+}
+
+function createMalformedBlock(blocks: BlockSection[], indent: string, kind: 'block' | 'grid' | 'report'): string {
+  blocks.push({
+    kind: 'block',
+    type: 'warning',
+    title: 'Malformed block',
+    body: `Missing closing ::: for ${kind}.`,
+    indent,
+  });
+  return `@@BLOCKSECTION${blocks.length - 1}@@`;
+}
+
 function parseAttributes(raw: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   const regex = /(\w+)=(".*?"|'.*?'|\S+)/g;
@@ -206,33 +265,55 @@ function parseAttributes(raw: string): Record<string, string> {
   return attrs;
 }
 
-function renderBlockSection(section: BlockSection): string {
+function renderBlockSection(section: BlockSection, maxWidth?: number): string {
   if (section.kind === 'grid') {
+    const adjustedWidth = maxWidth ? Math.max(20, maxWidth - section.indent.length) : undefined;
     if (section.cards.length === 0) {
-      return renderCard({ type: 'note', title: 'Grid', body: section.body });
+      return renderCard({ type: 'note', title: 'Grid', body: section.body }, adjustedWidth, section.indent);
     }
-    return renderCardGrid(section.cards, section.columns);
+    return renderCardGrid(section.cards, section.columns, adjustedWidth, section.indent);
   }
 
-  return renderBlock(section.type, section.title, section.body);
+  if (section.kind === 'report') {
+    const adjustedWidth = maxWidth ? Math.max(20, maxWidth - section.indent.length) : undefined;
+    return renderReport(section.body, adjustedWidth, section.indent);
+  }
+
+  const adjustedWidth = maxWidth ? Math.max(20, maxWidth - section.indent.length) : undefined;
+  return renderBlock(section.type, section.title, section.body, adjustedWidth, section.indent);
 }
 
-function renderBlock(type: string, title: string | undefined, body: string): string {
+function renderBlock(type: string, title: string | undefined, body: string, maxWidth?: number, indent = ''): string {
   const header = formatBlockHeader(type, title);
-  const content = parseMarkdown(body, { skipBlocks: true });
+  const content = parseMarkdown(body, { skipBlocks: true, maxWidth });
   const lines = content ? content.split('\n') : [];
-  return renderBox(header, lines, type);
+  return renderBox(header, lines, type, maxWidth, indent);
 }
 
-function renderCard(card: { type: string; title?: string; body: string }): string[] {
+function renderCard(
+  card: { type: string; title?: string; body: string },
+  maxWidth?: number,
+  indent = '',
+  forceWidth = false
+): string[] {
   const header = formatBlockHeader(card.type, card.title);
-  const content = parseMarkdown(card.body, { skipBlocks: true });
+  const content = parseMarkdown(card.body, { skipBlocks: true, maxWidth });
   const lines = content ? content.split('\n') : [];
-  return renderBoxLines(header, lines, card.type);
+  return renderBoxLines(header, lines, card.type, maxWidth, indent, forceWidth);
 }
 
-function renderCardGrid(cards: { type: string; title?: string; body: string }[], columns: number): string {
-  const cardLines = cards.map((card) => renderCard(card));
+function renderCardGrid(
+  cards: { type: string; title?: string; body: string }[],
+  columns: number,
+  maxWidth?: number,
+  indent = ''
+): string {
+  const gap = 2;
+  const totalWidth = maxWidth ? Math.max(20, maxWidth) : undefined;
+  const cardTotalWidth = totalWidth
+    ? Math.max(20, Math.floor((totalWidth - gap * (columns - 1)) / columns))
+    : undefined;
+  const cardLines = cards.map((card) => renderCard(card, cardTotalWidth, '', true));
   const rows: string[][][] = [];
   for (let i = 0; i < cardLines.length; i += columns) {
     rows.push(cardLines.slice(i, i + columns));
@@ -251,7 +332,7 @@ function renderCardGrid(cards: { type: string; title?: string; body: string }[],
     });
 
     for (let lineIdx = 0; lineIdx < maxHeight; lineIdx += 1) {
-      output.push(padded.map((card) => card[lineIdx]).join('  '));
+      output.push(indent + padded.map((card) => card[lineIdx]).join('  '));
     }
   }
 
@@ -283,29 +364,40 @@ function getBlockIcon(type: string): string {
   }
 }
 
-function renderBox(header: string, lines: string[], type: string): string {
-  return renderBoxLines(header, lines, type).join('\n');
+function renderBox(header: string, lines: string[], type: string, maxWidth?: number, indent = ''): string {
+  return renderBoxLines(header, lines, type, maxWidth, indent).join('\n');
 }
 
-function renderBoxLines(header: string, lines: string[], type: string): string[] {
+function renderBoxLines(
+  header: string,
+  lines: string[],
+  type: string,
+  maxWidth?: number,
+  indent = '',
+  forceWidth = false
+): string[] {
   const headerStyled = styleHeader(header, type);
-  const width = Math.max(
-    stripAnsi(headerStyled).length,
-    ...lines.map((line) => stripAnsi(line).length),
+  const maxInnerWidth = maxWidth ? Math.max(10, maxWidth - 4) : undefined;
+  const headerLine = maxInnerWidth ? truncateAnsi(headerStyled, maxInnerWidth) : headerStyled;
+  const wrappedLines = maxInnerWidth ? wrapAnsiLines(lines, maxInnerWidth) : lines;
+  const contentWidth = Math.max(
+    stripAnsi(headerLine).length,
+    ...wrappedLines.map((line) => stripAnsi(line).length),
     0
   );
+  const width = forceWidth && maxInnerWidth ? maxInnerWidth : contentWidth;
   const top = `┌${'─'.repeat(width + 2)}┐`;
   const mid = `├${'─'.repeat(width + 2)}┤`;
   const bot = `└${'─'.repeat(width + 2)}┘`;
 
   const output: string[] = [];
-  output.push(chalk.dim(top));
-  output.push(formatBoxRow(headerStyled, width));
-  output.push(chalk.dim(mid));
-  for (const line of lines) {
-    output.push(formatBoxRow(line, width));
+  output.push(indent + chalk.dim(top));
+  output.push(indent + formatBoxRow(headerLine, width));
+  output.push(indent + chalk.dim(mid));
+  for (const line of wrappedLines) {
+    output.push(indent + formatBoxRow(line, width));
   }
-  output.push(chalk.dim(bot));
+  output.push(indent + chalk.dim(bot));
   return output;
 }
 
@@ -419,6 +511,205 @@ function renderTable(header: string[], rows: string[][]): string[] {
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
+function renderReport(body: string, maxWidth?: number, indent = ''): string {
+  const lines = body.split('\n');
+  let legendLine = '';
+  const progressLines: string[] = [];
+  const tableLines: string[] = [];
+  let mode: 'progress' | 'table' | null = null;
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+
+    const legendMatch = trimmed.match(/^legend\s*:\s*(.+)$/i);
+    if (legendMatch) {
+      legendLine = legendMatch[1];
+      mode = null;
+      continue;
+    }
+
+    if (/^progress\s*:/i.test(trimmed)) {
+      mode = 'progress';
+      continue;
+    }
+
+    if (/^table\s*:/i.test(trimmed)) {
+      mode = 'table';
+      continue;
+    }
+
+    if (mode === 'progress') {
+      progressLines.push(rawLine);
+    } else if (mode === 'table') {
+      tableLines.push(rawLine);
+    }
+  }
+
+  const output: string[] = [];
+  if (legendLine) {
+    output.push(indent + chalk.bold('Legend'));
+    output.push(indent + renderLegend(legendLine));
+    output.push('');
+  }
+
+  if (progressLines.length > 0) {
+    output.push(indent + chalk.bold('Progress Overview'));
+    const parsed = progressLines
+      .map((line) => line.trim().replace(/^-/, '').trim())
+      .map((line) => line.match(/^(.+?):\s*(\d{1,3})%?$/))
+      .filter((match): match is RegExpMatchArray => Boolean(match))
+      .map((match) => ({ label: match[1].trim(), value: Math.max(0, Math.min(100, Number(match[2]))) }));
+    if (parsed.length > 0) {
+      const labelWidth = Math.min(24, Math.max(...parsed.map((p) => p.label.length), 10));
+      const barWidth = maxWidth ? Math.max(10, Math.min(30, maxWidth - labelWidth - 10)) : 24;
+      for (const entry of parsed) {
+        output.push(indent + renderProgressLine(entry.label, entry.value, labelWidth, barWidth));
+      }
+      output.push('');
+    }
+  }
+
+  if (tableLines.length > 0) {
+    output.push(indent + chalk.bold('Detailed Status Table'));
+    const rendered = renderReportTable(tableLines, indent);
+    output.push(...rendered);
+  }
+
+  return output.join('\n').trimEnd();
+}
+
+function renderLegend(raw: string): string {
+  const parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
+  const rendered = parts.map((label) => {
+    const key = label.toLowerCase();
+    if (key.includes('not started')) return `${chalk.gray('■')} ${label}`;
+    if (key.includes('in progress')) return `${chalk.yellow('■')} ${label}`;
+    if (key.includes('complete')) return `${chalk.green('■')} ${label}`;
+    if (key.includes('blocked')) return `${chalk.red('■')} ${label}`;
+    return `${chalk.blue('■')} ${label}`;
+  });
+  return rendered.join(' | ');
+}
+
+function renderProgressLine(label: string, value: number, labelWidth: number, barWidth: number): string {
+  const filled = Math.round((value / 100) * barWidth);
+  const empty = barWidth - filled;
+  const fill = chalk.white('█'.repeat(filled));
+  const bar = chalk.gray('░'.repeat(empty));
+  return `${label.padEnd(labelWidth)} [${fill}${bar}] ${value}%`;
+}
+
+function renderReportTable(lines: string[], indent: string): string[] {
+  const tableLines = lines.map((line) => line.trim()).filter(Boolean);
+  if (tableLines.length < 2) return [];
+
+  const header = parseTableRow(tableLines[0]);
+  const separatorIndex = tableLines.findIndex((line) => /^\s*\|?[\s:-]+\|?[\s:-]*$/.test(line));
+  const bodyLines = separatorIndex >= 0 ? tableLines.slice(separatorIndex + 1) : tableLines.slice(1);
+  const rows = bodyLines.filter((line) => line.includes('|')).map((line) => parseTableRow(line));
+
+  const priorityIndex = header.findIndex((cell) => cell.toLowerCase() === 'priority');
+  const progressIndex = header.findIndex((cell) => cell.toLowerCase() === 'progress');
+  const statusIndex = header.findIndex((cell) => cell.toLowerCase() === 'status');
+
+  const styledRows = rows.map((row) => {
+    const next = [...row];
+    if (priorityIndex >= 0 && next[priorityIndex]) {
+      next[priorityIndex] = decoratePriority(next[priorityIndex]);
+    }
+    if (progressIndex >= 0 && next[progressIndex]) {
+      next[progressIndex] = decorateProgress(next[progressIndex]);
+    }
+    if (statusIndex >= 0 && next[statusIndex]) {
+      next[statusIndex] = decorateStatus(next[statusIndex]);
+    }
+    return next;
+  });
+
+  return renderTable(header, styledRows).map((line) => indent + line);
+}
+
+function decoratePriority(value: string): string {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('high')) return `${chalk.red('●')} High`;
+  if (normalized.includes('medium')) return `${chalk.yellow('●')} Medium`;
+  if (normalized.includes('low')) return `${chalk.green('●')} Low`;
+  return value;
+}
+
+function decorateProgress(value: string): string {
+  const match = value.match(/(\d{1,3})/);
+  if (!match) return value;
+  const num = Math.max(0, Math.min(100, Number(match[1])));
+  if (num === 100) return `${chalk.green('■')} ${num}%`;
+  if (num === 0) return `${chalk.gray('■')} ${num}%`;
+  return `${chalk.yellow('■')} ${num}%`;
+}
+
+function decorateStatus(value: string): string {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('blocked')) return chalk.red(value);
+  if (normalized.includes('complete') || normalized.includes('done')) return chalk.green(value);
+  if (normalized.includes('progress')) return chalk.yellow(value);
+  return value;
+}
+
+function wrapAnsiLines(lines: string[], width: number): string[] {
+  const output: string[] = [];
+  for (const line of lines) {
+    output.push(...wrapAnsiLine(line, width));
+  }
+  return output;
+}
+
+function wrapAnsiLine(line: string, width: number): string[] {
+  if (width <= 0) return [line];
+  const result: string[] = [];
+  let current = '';
+  let visible = 0;
+  let i = 0;
+  while (i < line.length) {
+    const match = line.slice(i).match(/^\x1b\[[0-9;]*m/);
+    if (match) {
+      current += match[0];
+      i += match[0].length;
+      continue;
+    }
+    current += line[i];
+    visible += 1;
+    i += 1;
+    if (visible >= width) {
+      result.push(current);
+      current = '';
+      visible = 0;
+    }
+  }
+  if (current !== '') result.push(current);
+  return result.length > 0 ? result : [''];
+}
+
+function truncateAnsi(line: string, width: number): string {
+  if (stripAnsi(line).length <= width) return line;
+  const suffix = '...';
+  const target = Math.max(0, width - suffix.length);
+  let current = '';
+  let visible = 0;
+  let i = 0;
+  while (i < line.length && visible < target) {
+    const match = line.slice(i).match(/^\x1b\[[0-9;]*m/);
+    if (match) {
+      current += match[0];
+      i += match[0].length;
+      continue;
+    }
+    current += line[i];
+    visible += 1;
+    i += 1;
+  }
+  return current + suffix;
 }
 
 export const __test__ = {

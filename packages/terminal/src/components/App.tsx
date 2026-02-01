@@ -56,6 +56,8 @@ interface SessionUIState {
   messages: Message[];
   currentResponse: string;
   activityLog: ActivityEntry[];
+  toolCalls: ToolCall[];
+  toolResults: ToolResult[];
   tokenUsage: TokenUsage | undefined;
   processingStartTime: number | undefined;
   currentTurnTokens: number;
@@ -152,6 +154,7 @@ export function App({ cwd }: AppProps) {
   const toolCallsRef = useRef<ToolCall[]>([]);
   const toolResultsRef = useRef<ToolResult[]>([]);
   const activityLogRef = useRef<ActivityEntry[]>([]);
+  const prevDisplayCountRef = useRef(0);
   const skipNextDoneRef = useRef(false);
   const isProcessingRef = useRef(isProcessing);
 
@@ -254,6 +257,8 @@ export function App({ cwd }: AppProps) {
         messages,
         currentResponse: responseRef.current,
         activityLog: activityLogRef.current,
+        toolCalls: toolCallsRef.current,
+        toolResults: toolResultsRef.current,
         tokenUsage,
         processingStartTime,
         currentTurnTokens,
@@ -271,6 +276,9 @@ export function App({ cwd }: AppProps) {
       responseRef.current = state.currentResponse;
       setActivityLog(state.activityLog);
       activityLogRef.current = state.activityLog;
+      toolCallsRef.current = state.toolCalls;
+      toolResultsRef.current = state.toolResults;
+      setCurrentToolCall(undefined);
       setTokenUsage(state.tokenUsage);
       setProcessingStartTime(state.processingStartTime);
       setCurrentTurnTokens(state.currentTurnTokens);
@@ -282,6 +290,9 @@ export function App({ cwd }: AppProps) {
       responseRef.current = '';
       setActivityLog([]);
       activityLogRef.current = [];
+      toolCallsRef.current = [];
+      toolResultsRef.current = [];
+      setCurrentToolCall(undefined);
       setTokenUsage(undefined);
       setProcessingStartTime(undefined);
       setCurrentTurnTokens(0);
@@ -507,10 +518,26 @@ export function App({ cwd }: AppProps) {
     }
   }, [displayMessages.length, autoScroll]);
 
+  // Keep viewport stable when not auto-scrolling
+  useEffect(() => {
+    const prevCount = prevDisplayCountRef.current;
+    if (!autoScroll && displayMessages.length > prevCount) {
+      const delta = displayMessages.length - prevCount;
+      setScrollOffset((prev) => prev + delta);
+    }
+    prevDisplayCountRef.current = displayMessages.length;
+  }, [displayMessages.length, autoScroll]);
+
   // Max visible messages - reduce when processing to prevent overflow
   const baseMaxVisible = 10;
   const toolCallsHeight = isProcessing ? Math.min(toolCallsRef.current.length, 5) : 0;
   const maxVisibleMessages = Math.max(3, baseMaxVisible - toolCallsHeight);
+
+  // Clamp scroll offset to available range
+  useEffect(() => {
+    const maxOffset = Math.max(0, displayMessages.length - maxVisibleMessages);
+    setScrollOffset((prev) => Math.min(prev, maxOffset));
+  }, [displayMessages.length, maxVisibleMessages]);
 
   // Get session info
   const sessions = registry.listSessions();

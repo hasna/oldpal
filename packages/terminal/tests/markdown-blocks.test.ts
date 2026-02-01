@@ -28,4 +28,35 @@ Second
     const boxCount = (output.match(/┌/g) ?? []).length;
     expect(boxCount).toBeGreaterThanOrEqual(2);
   });
+
+  test('supports indented blocks', () => {
+    const markdown = `  :::block type=note title="Indented"\n  Line one\n  :::`;
+    const output = stripAnsi(__test__.parseMarkdown(markdown));
+    const firstLine = output.split('\n')[0] || '';
+    expect(firstLine.startsWith('  ┌')).toBe(true);
+  });
+
+  test('warns on malformed blocks', () => {
+    const markdown = `:::block type=info title="Oops"\nLine one`;
+    const output = stripAnsi(__test__.parseMarkdown(markdown));
+    expect(output).toContain('Malformed block');
+  });
+
+  test('renders report blocks with legend and progress', () => {
+    const markdown = `:::report
+legend: Not Started | In Progress | Complete | Blocked
+progress:
+- HIGH PRIORITY: 40
+- OVERALL: 13
+table:
+| # | Item | Priority | Progress | Status |
+|---|------|----------|----------|--------|
+| 1 | Prompt | High | 0% | Stub exists |
+:::`; 
+    const output = stripAnsi(__test__.parseMarkdown(markdown));
+    expect(output).toContain('Legend');
+    expect(output).toContain('Progress Overview');
+    expect(output).toContain('Detailed Status Table');
+    expect(output).toContain('HIGH PRIORITY');
+  });
 });
