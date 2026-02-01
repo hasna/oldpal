@@ -102,11 +102,33 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
               pendingMessageIds.push(message.messageId);
             }
             sendSessionMessage(sessionId, message.content).catch((error) => {
-              ws.send(JSON.stringify({ type: 'error', message: error.message }));
+              if (message.messageId) {
+                const idx = pendingMessageIds.indexOf(message.messageId);
+                if (idx >= 0) {
+                  pendingMessageIds.splice(idx, 1);
+                }
+                if (currentMessageId === message.messageId) {
+                  currentMessageId = null;
+                }
+              }
+              ws.send(JSON.stringify({
+                type: 'error',
+                message: error.message,
+                messageId: message.messageId ?? currentMessageId ?? undefined,
+              }));
             });
           }
 
           if (message.type === 'cancel') {
+            if (currentMessageId) {
+              const idx = pendingMessageIds.indexOf(currentMessageId);
+              if (idx >= 0) {
+                pendingMessageIds.splice(idx, 1);
+              }
+              currentMessageId = null;
+            } else if (pendingMessageIds.length > 0) {
+              pendingMessageIds.shift();
+            }
             stopSession(sessionId).catch(() => {});
           }
         } catch (error) {
