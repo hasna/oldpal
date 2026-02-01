@@ -26,6 +26,17 @@ const DEFAULT_CONFIG: OldpalConfig = {
     enabled: true,
     heartbeatIntervalMs: 30000,
   },
+  context: {
+    enabled: true,
+    maxContextTokens: 180000,
+    targetContextTokens: 150000,
+    summaryTriggerRatio: 0.8,
+    keepRecentMessages: 10,
+    keepSystemPrompt: true,
+    summaryStrategy: 'hybrid',
+    summaryMaxTokens: 2000,
+    maxMessages: 500,
+  },
   validation: {
     mode: 'strict',
     maxUserMessageLength: 100_000,
@@ -77,6 +88,10 @@ function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): Oldp
     scheduler: {
       ...(base.scheduler || {}),
       ...(override.scheduler || {}),
+    },
+    context: {
+      ...(base.context || {}),
+      ...(override.context || {}),
     },
     validation: {
       ...(base.validation || {}),

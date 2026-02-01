@@ -75,7 +75,11 @@ export class EmbeddedClient implements AssistantClient {
     this.logger.info('Initializing agent');
     await this.agent.initialize();
     if (this.initialMessages && this.initialMessages.length > 0) {
-      this.agent.getContext().import(this.initialMessages);
+      if (typeof (this.agent as any).importContext === 'function') {
+        (this.agent as any).importContext(this.initialMessages);
+      } else {
+        this.agent.getContext().import(this.initialMessages);
+      }
       this.messages = [...this.initialMessages];
     }
     this.initialized = true;

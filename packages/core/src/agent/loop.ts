@@ -1,6 +1,14 @@
 import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig, ScheduledCommand } from '@oldpal/shared';
 import { generateId } from '@oldpal/shared';
 import { AgentContext } from './context';
+import {
+  ContextManager,
+  HybridSummarizer,
+  LLMSummarizer,
+  TokenCounter,
+  type ContextConfig,
+  type ContextInfo,
+} from '../context';
 import { ToolRegistry } from '../tools/registry';
 import { ConnectorBridge } from '../tools/connector';
 import { BashTool } from '../tools/bash';
@@ -48,6 +56,8 @@ export interface AgentLoopOptions {
  */
 export class AgentLoop {
   private context: AgentContext;
+  private contextManager: ContextManager | null = null;
+  private contextConfig: ContextConfig | null = null;
   private toolRegistry: ToolRegistry;
   private connectorBridge: ConnectorBridge;
   private skillLoader: SkillLoader;
@@ -114,6 +124,8 @@ export class AgentLoop {
     this.config = config;
     configureLimits(this.config.validation);
     this.toolRegistry.setValidationConfig(this.config.validation);
+    this.contextConfig = this.buildContextConfig(this.config);
+    this.context.setMaxMessages(this.contextConfig.maxMessages);
 
     const connectorNames =
       this.config.connectors && this.config.connectors.length > 0 && !this.config.connectors.includes('*')
@@ -147,6 +159,20 @@ export class AgentLoop {
       this.commandLoader.loadAll(),
     ]);
 
+    if (this.llmClient && this.contextConfig) {
+      const summaryClient = await this.buildSummaryClient(this.contextConfig);
+      const tokenCounter = new TokenCounter(this.llmClient.getModel());
+      const llmSummarizer = new LLMSummarizer(summaryClient, {
+        maxTokens: this.contextConfig.summaryMaxTokens,
+        tokenCounter,
+      });
+      const summarizer =
+        this.contextConfig.summaryStrategy === 'hybrid'
+          ? new HybridSummarizer(llmSummarizer)
+          : llmSummarizer;
+      this.contextManager = new ContextManager(this.contextConfig, summarizer, tokenCounter);
+    }
+
     // Phase 3: Sync operations (fast)
     // Register built-in tools
     this.toolRegistry.register(BashTool.tool, BashTool.executor);
@@ -177,6 +203,7 @@ export class AgentLoop {
     if (this.extraSystemPrompt) {
       this.context.addSystemMessage(this.extraSystemPrompt);
     }
+    this.contextManager?.refreshState(this.context.getMessages());
 
     // Run session start hooks
     await this.hookExecutor.execute(this.hookLoader.getHooks('SessionStart'), {
@@ -265,6 +292,7 @@ export class AgentLoop {
       userMessage = enforceMessageLimit(userMessage, limits.maxUserMessageLength);
       this.context.addUserMessage(userMessage);
       await this.runLoop();
+      this.contextManager?.refreshState(this.context.getMessages());
 
       const messages = this.context.getMessages().slice(beforeCount);
       const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant');
@@ -291,6 +319,8 @@ export class AgentLoop {
     try {
       while (turn < maxTurns && !this.shouldStop) {
         turn++;
+
+        await this.maybeSummarizeContext();
 
         const messages = this.context.getMessages();
         const tools = this.filterAllowedTools(this.toolRegistry.getTools());
@@ -364,6 +394,27 @@ export class AgentLoop {
 
     if (streamError) {
       throw streamError;
+    }
+  }
+
+  private async maybeSummarizeContext(): Promise<void> {
+    if (!this.contextManager) return;
+    try {
+      const result = await this.contextManager.processMessages(this.context.getMessages());
+      if (!result.summarized) return;
+
+      this.context.import(result.messages);
+      const notice = `\n[Context summarized: ${result.summarizedCount} messages, ${result.tokensBefore.toLocaleString()} -> ${result.tokensAfter.toLocaleString()} tokens]\n`;
+      this.emit({ type: 'text', content: notice });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.errorAggregator.record(new AssistantError(message, {
+        code: ErrorCodes.LLM_API_ERROR,
+        recoverable: true,
+        retryable: false,
+        userFacing: true,
+      }));
+      this.emit({ type: 'text', content: `\n[Context summarization failed: ${message}]\n` });
     }
   }
 
@@ -525,6 +576,24 @@ export class AgentLoop {
           description: cmd.description,
         })),
       })),
+      getContextInfo: () => this.getContextInfo(),
+      summarizeContext: async () => {
+        if (!this.contextManager) {
+          return {
+            messages: this.context.getMessages(),
+            summarized: false,
+            summary: undefined,
+            tokensBefore: 0,
+            tokensAfter: 0,
+            summarizedCount: 0,
+          };
+        }
+        const result = await this.contextManager.summarizeNow(this.context.getMessages());
+        if (result.summarized) {
+          this.context.import(result.messages);
+        }
+        return result;
+      },
       clearMessages: () => {
         this.resetContext();
       },
@@ -627,6 +696,14 @@ export class AgentLoop {
   }
 
   /**
+   * Replace context messages (used for session restore)
+   */
+  importContext(messages: Message[]): void {
+    this.context.import(messages);
+    this.contextManager?.refreshState(messages);
+  }
+
+  /**
    * Get all available tools
    */
   getTools(): Tool[] {
@@ -652,6 +729,17 @@ export class AgentLoop {
    */
   getTokenUsage(): TokenUsage {
     return this.builtinCommands.getTokenUsage();
+  }
+
+  /**
+   * Get current context info
+   */
+  getContextInfo(): ContextInfo | null {
+    if (!this.contextManager || !this.contextConfig) return null;
+    return {
+      config: this.contextConfig,
+      state: this.contextManager.getState(),
+    };
   }
 
   /**
@@ -778,13 +866,15 @@ export class AgentLoop {
    * Reset context and re-apply system prompt
    */
   private resetContext(): void {
-    this.context = new AgentContext();
+    const maxMessages = this.contextConfig?.maxMessages ?? 100;
+    this.context = new AgentContext(maxMessages);
     if (this.systemPrompt) {
       this.context.addSystemMessage(this.systemPrompt);
     }
     if (this.extraSystemPrompt) {
       this.context.addSystemMessage(this.extraSystemPrompt);
     }
+    this.contextManager?.refreshState(this.context.getMessages());
   }
 
   /**
@@ -809,6 +899,47 @@ export class AgentLoop {
     }
 
     return parts.length > 0 ? parts.join('\n\n---\n\n') : undefined;
+  }
+
+  private buildContextConfig(config: OldpalConfig): ContextConfig {
+    const limits = getLimits();
+    const configuredMax = config.context?.maxContextTokens ?? limits.maxTotalContextTokens;
+    const maxContextTokens = Math.max(1000, Math.min(configuredMax, limits.maxTotalContextTokens));
+    const summaryTriggerRatioRaw = config.context?.summaryTriggerRatio ?? 0.8;
+    const summaryTriggerRatio = Math.min(0.95, Math.max(0.5, summaryTriggerRatioRaw));
+    const targetContextTokensRaw =
+      config.context?.targetContextTokens ?? Math.floor(maxContextTokens * 0.85);
+    const targetContextTokens = Math.min(maxContextTokens, Math.max(1000, targetContextTokensRaw));
+    const keepRecentMessages = Math.max(0, config.context?.keepRecentMessages ?? 10);
+    const maxMessages = Math.max(keepRecentMessages + 10, config.context?.maxMessages ?? 500);
+
+    return {
+      enabled: config.context?.enabled ?? true,
+      maxContextTokens,
+      targetContextTokens,
+      summaryTriggerRatio,
+      keepRecentMessages,
+      keepSystemPrompt: config.context?.keepSystemPrompt ?? true,
+      summaryStrategy: config.context?.summaryStrategy ?? 'hybrid',
+      summaryModel: config.context?.summaryModel,
+      summaryMaxTokens: config.context?.summaryMaxTokens ?? 2000,
+      maxMessages,
+    };
+  }
+
+  private async buildSummaryClient(contextConfig: ContextConfig): Promise<LLMClient> {
+    if (!this.config || !this.llmClient) {
+      throw new Error('LLM client not initialized');
+    }
+    const summaryModel = contextConfig.summaryModel;
+    if (!summaryModel || summaryModel === this.config.llm.model) {
+      return this.llmClient;
+    }
+    try {
+      return await createLLMClient({ ...this.config.llm, model: summaryModel });
+    } catch {
+      return this.llmClient;
+    }
   }
 
   /**

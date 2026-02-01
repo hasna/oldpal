@@ -29,6 +29,9 @@ export { HookExecutor } from './hooks/executor';
 export { MemoryStore } from './memory/store';
 export { SessionManager } from './memory/sessions';
 
+// Context
+export * from './context';
+
 // LLM
 export type { LLMClient } from './llm/client';
 export { createLLMClient } from './llm/client';

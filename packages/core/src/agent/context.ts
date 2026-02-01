@@ -13,6 +13,14 @@ export class AgentContext {
   }
 
   /**
+   * Update maximum message count
+   */
+  setMaxMessages(maxMessages: number): void {
+    this.maxMessages = maxMessages;
+    this.prune();
+  }
+
+  /**
    * Add a user message
    */
   addUserMessage(content: string): Message {

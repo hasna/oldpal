@@ -225,6 +225,7 @@ export interface OldpalConfig {
   skills?: string[];
   hooks?: HookConfig;
   scheduler?: SchedulerConfig;
+  context?: ContextConfig;
   validation?: ValidationConfig;
 }
 
@@ -262,6 +263,19 @@ export interface WakeConfig {
 export interface SchedulerConfig {
   enabled?: boolean;
   heartbeatIntervalMs?: number;
+}
+
+export interface ContextConfig {
+  enabled?: boolean;
+  maxContextTokens?: number;
+  targetContextTokens?: number;
+  summaryTriggerRatio?: number;
+  keepRecentMessages?: number;
+  keepSystemPrompt?: boolean;
+  summaryStrategy?: 'llm' | 'hybrid';
+  summaryModel?: string;
+  summaryMaxTokens?: number;
+  maxMessages?: number;
 }
 
 export interface ValidationConfig {

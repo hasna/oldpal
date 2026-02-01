@@ -85,6 +85,8 @@ export class BuiltinCommands {
     loader.register(this.sessionCommand());
     loader.register(this.statusCommand());
     loader.register(this.tokensCommand());
+    loader.register(this.contextCommand());
+    loader.register(this.summarizeCommand());
     loader.register(this.compactCommand());
     loader.register(this.configCommand());
     loader.register(this.initCommand());
@@ -308,6 +310,92 @@ export class BuiltinCommands {
   }
 
   /**
+   * /context - Show context summarization status
+   */
+  private contextCommand(): Command {
+    return {
+      name: 'context',
+      description: 'Show context summarization status',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const info = context.getContextInfo?.();
+        if (!info) {
+          context.emit('text', '\nContext summarization is not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const { config, state } = info;
+        const usedPercent = Math.round((state.totalTokens / config.maxContextTokens) * 100);
+
+        let message = '\n**Context Status**\n\n';
+        message += `**Messages:** ${state.messageCount}\n`;
+        message += `**Estimated Tokens:** ${state.totalTokens.toLocaleString()} / ${config.maxContextTokens.toLocaleString()} (${usedPercent}%)\n`;
+        message += `**Summary Count:** ${state.summaryCount}\n`;
+        message += `**Strategy:** ${config.summaryStrategy}\n`;
+        message += `**Keep Recent Messages:** ${config.keepRecentMessages}\n`;
+
+        if (state.lastSummaryAt) {
+          message += `**Last Summary:** ${state.lastSummaryAt}\n`;
+          if (state.lastSummaryTokensBefore && state.lastSummaryTokensAfter) {
+            message += `**Last Summary Tokens:** ${state.lastSummaryTokensBefore.toLocaleString()} -> ${state.lastSummaryTokensAfter.toLocaleString()}\n`;
+          }
+        }
+
+        // Visual progress bar
+        const barLength = 30;
+        const filledLength = Math.round((usedPercent / 100) * barLength);
+        const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
+        message += `\n[${bar}] ${usedPercent}%\n`;
+
+        context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /summarize - Force context summarization
+   */
+  private summarizeCommand(): Command {
+    return {
+      name: 'summarize',
+      description: 'Summarize and compress the current conversation',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        if (!context.summarizeContext) {
+          context.emit('text', '\nContext summarization is not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const result = await context.summarizeContext();
+        if (!result.summarized) {
+          context.emit('text', '\nNothing to summarize right now.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        let message = '\n**Context Summary Generated**\n\n';
+        message += `Summarized ${result.summarizedCount} message(s).\n`;
+        message += `Tokens: ${result.tokensBefore.toLocaleString()} -> ${result.tokensAfter.toLocaleString()}\n\n`;
+        if (result.summary) {
+          message += `${result.summary}\n`;
+        }
+
+        context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
    * /skills - List available skills
    */
   private skillsCommand(loader: CommandLoader): Command {
@@ -374,6 +462,20 @@ export class BuiltinCommands {
         const filledLength = Math.round((usedPercent / 100) * barLength);
         const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
         message += `\n  [${bar}] ${usedPercent}%\n`;
+
+        const contextInfo = context.getContextInfo?.();
+        if (contextInfo) {
+          const contextUsedPercent = Math.round(
+            (contextInfo.state.totalTokens / contextInfo.config.maxContextTokens) * 100
+          );
+          message += '\n**Context Summary:**\n';
+          message += `  Messages: ${contextInfo.state.messageCount}\n`;
+          message += `  Estimated Tokens: ${contextInfo.state.totalTokens.toLocaleString()} / ${contextInfo.config.maxContextTokens.toLocaleString()} (${contextUsedPercent}%)\n`;
+          message += `  Summaries: ${contextInfo.state.summaryCount}\n`;
+          if (contextInfo.state.lastSummaryAt) {
+            message += `  Last Summary: ${contextInfo.state.lastSummaryAt}\n`;
+          }
+        }
 
         const errorStats = context.getErrorStats?.() ?? [];
         if (errorStats.length > 0) {

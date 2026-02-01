@@ -1,5 +1,6 @@
 import type { Tool, TokenUsage } from '@oldpal/shared';
 import type { ErrorStats } from '../errors';
+import type { ContextInfo, ContextProcessResult } from '../context';
 
 // Re-export TokenUsage from shared
 export type { TokenUsage } from '@oldpal/shared';
@@ -60,6 +61,8 @@ export interface CommandContext {
   skills: Array<{ name: string; description: string; argumentHint?: string }>;
   connectors: ConnectorInfo[];
   getErrorStats?: () => ErrorStats[];
+  getContextInfo?: () => ContextInfo | null;
+  summarizeContext?: () => Promise<ContextProcessResult>;
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;
   emit: (type: 'text' | 'done' | 'error', content?: string) => void;
