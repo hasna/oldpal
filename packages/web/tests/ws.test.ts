@@ -57,6 +57,7 @@ describe('ChatWebSocket', () => {
 
     const state = useChatStore.getState();
     expect(state.sessionId).toBeTruthy();
+    expect(ws.sent.some((data) => JSON.parse(data).type === 'session')).toBe(true);
 
     useChatStore.getState().addMessage({
       id: 'assistant-1',

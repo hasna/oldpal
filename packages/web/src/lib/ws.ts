@@ -15,8 +15,9 @@ class ChatWebSocket {
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
       const store = useChatStore.getState();
-      if (!store.sessionId) {
-        store.createSession('Session 1');
+      const currentSessionId = store.sessionId || store.createSession('Session 1');
+      if (currentSessionId) {
+        this.ws?.send(JSON.stringify({ type: 'session', sessionId: currentSessionId }));
       }
       if (this.pending.length > 0) {
         for (const message of this.pending) {
