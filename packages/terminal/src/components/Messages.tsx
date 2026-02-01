@@ -283,7 +283,7 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
         </Box>
       )}
       {toolCalls.length > 0 && (
-        <Box marginLeft={hasContent ? 2 : 0} marginTop={hasContent ? 1 : 0}>
+        <Box marginTop={hasContent ? 1 : 0}>
           <ToolCallPanel toolCalls={toolCalls} toolResults={toolResults} />
         </Box>
       )}
