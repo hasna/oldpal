@@ -55,6 +55,11 @@ export class EmbeddedClient implements AssistantClient {
         for (const callback of this.chunkCallbacks) {
           callback(chunk);
         }
+        if (chunk.type === 'done' || chunk.type === 'error') {
+          queueMicrotask(() => {
+            void this.drainQueue();
+          });
+        }
       },
       onToolStart: (toolCall) => {
         // Only log - tool_use chunk is already emitted from LLM stream
@@ -106,14 +111,12 @@ export class EmbeddedClient implements AssistantClient {
       await this.initialize();
     }
 
-    // If agent is already processing, queue the message
-    if (this.agent.isProcessing()) {
-      this.logger.info('Queuing message (agent busy)', { message, queueLength: this.messageQueue.length + 1 });
-      this.messageQueue.push(message);
+    this.messageQueue.push(message);
+    if (this.agent.isProcessing() || this.processingQueue) {
+      this.logger.info('Queuing message (agent busy)', { message, queueLength: this.messageQueue.length });
       return;
     }
 
-    await this.processMessage(message);
     await this.drainQueue();
   }
 

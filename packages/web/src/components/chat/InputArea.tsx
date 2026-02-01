@@ -25,8 +25,9 @@ export function InputArea() {
     };
     addMessage(userMessage);
 
+    const assistantId = generateId();
     const assistantMessage = {
-      id: generateId(),
+      id: assistantId,
       role: 'assistant' as const,
       content: '',
       timestamp: now(),
@@ -34,7 +35,7 @@ export function InputArea() {
     addMessage(assistantMessage);
 
     setStreaming(true);
-    chatWs.send({ type: 'message', content: trimmed, sessionId: effectiveSessionId });
+    chatWs.send({ type: 'message', content: trimmed, sessionId: effectiveSessionId, messageId: assistantId });
     setValue('');
   };
 

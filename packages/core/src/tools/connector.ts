@@ -374,23 +374,27 @@ export class ConnectorBridge {
 
       const lowerCommand = command.toLowerCase();
       const lowerArgs = args.map((arg) => arg.toLowerCase());
+      const combined = [lowerCommand, ...lowerArgs].join(' ');
       const isAuthLogin =
-        (lowerCommand.includes('auth') && (lowerCommand.includes('login') || lowerCommand.includes('authorize'))) ||
-        (lowerCommand.includes('auth') && (lowerArgs.includes('login') || lowerArgs.includes('authorize'))) ||
-        (lowerArgs.includes('auth') && (lowerArgs.includes('login') || lowerArgs.includes('authorize')));
+        /\bauth\b/.test(combined) &&
+        /(login|authorize|authorization|oauth|signin|sign-in|connect)/.test(combined);
+      const runInBackground = options.background === true;
 
-      if (isAuthLogin) {
+      if (isAuthLogin || runInBackground) {
         try {
-          Bun.spawn(cmdParts, {
+          const proc = Bun.spawn(cmdParts, {
             cwd,
             stdin: 'ignore',
             stdout: 'ignore',
             stderr: 'pipe',
           });
+          proc.unref?.();
         } catch {
           // ignore spawn errors; fall through to error message below
         }
-        return 'Auth login started in the background. Complete it in your browser, then run auth status to confirm.';
+        return isAuthLogin
+          ? 'Auth login started in the background. Complete it in your browser, then run auth status to confirm.'
+          : 'Command started in the background.';
       }
 
       try {
