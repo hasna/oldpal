@@ -7,6 +7,7 @@ import { getConfigDir } from '../config';
 import { generateId } from '@oldpal/shared';
 import { saveFeedbackEntry, type FeedbackType } from '../tools/feedback';
 import type { ScheduledCommand } from '@oldpal/shared';
+import { getSecurityLogger, severityFromString } from '../security/logger';
 import {
   saveSchedule,
   listSchedules,
@@ -98,6 +99,7 @@ export class BuiltinCommands {
     loader.register(this.pauseScheduleCommand());
     loader.register(this.resumeScheduleCommand());
     loader.register(this.connectorsCommand());
+    loader.register(this.securityLogCommand());
     loader.register(this.exitCommand());
   }
 
@@ -911,6 +913,61 @@ Keep it concise but comprehensive.`,
           message += '**Commands:**\n';
           message += '  `/connectors <name>` - Show details for a connector\n';
           message += '  `connect-<name> auth login` - Authenticate a connector\n';
+        }
+
+        context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /security-log - Show recent security events
+   */
+  private securityLogCommand(): Command {
+    return {
+      name: 'security-log',
+      description: 'Show recent security events (optional: limit, severity, type)',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const parts = splitArgs(args);
+        let limit = 20;
+        let severity = undefined as ReturnType<typeof severityFromString>;
+        let eventType: 'blocked_command' | 'path_violation' | 'validation_failure' | undefined;
+
+        for (const part of parts) {
+          if (/^\d+$/.test(part)) {
+            limit = Math.min(Number(part), 200);
+            continue;
+          }
+          const parsedSeverity = severityFromString(part);
+          if (parsedSeverity) {
+            severity = parsedSeverity;
+            continue;
+          }
+          if (part === 'blocked_command' || part === 'path_violation' || part === 'validation_failure') {
+            eventType = part;
+          }
+        }
+
+        const logger = getSecurityLogger();
+        const events = logger.getEvents({ severity, eventType }).slice(-limit);
+
+        if (events.length === 0) {
+          context.emit('text', '\n**Security Log**\n\nNo security events recorded.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        let message = '\n**Security Log**\n\n';
+        message += '| Time | Severity | Type | Details |\n';
+        message += '| --- | --- | --- | --- |\n';
+        for (const event of events) {
+          const detail = event.details.reason.replace(/\n/g, ' ');
+          message += `| ${event.timestamp} | ${event.severity} | ${event.eventType} | ${detail} |\n`;
         }
 
         context.emit('text', message);

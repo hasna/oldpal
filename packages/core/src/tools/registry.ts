@@ -3,6 +3,7 @@ import { sleep } from '@oldpal/shared';
 import { AssistantError, ErrorAggregator, ErrorCodes, ToolExecutionError } from '../errors';
 import { enforceToolOutputLimit, getLimits } from '../validation/limits';
 import { validateToolInput, type ValidationMode } from '../validation/schema';
+import { getSecurityLogger } from '../security/logger';
 
 /**
  * Tool executor function type
@@ -118,6 +119,15 @@ export class ToolRegistry {
           suggestion: 'Review tool arguments and try again.',
         });
         if (validationMode === 'strict') {
+          getSecurityLogger().log({
+            eventType: 'validation_failure',
+            severity: 'medium',
+            details: {
+              tool: toolCall.name,
+              reason: message,
+            },
+            sessionId: (toolCall.input as Record<string, unknown>)?.sessionId as string || 'unknown',
+          });
           this.errorAggregator?.record(error);
           return {
             toolCallId: toolCall.id,

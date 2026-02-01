@@ -1,6 +1,8 @@
 import type { Tool } from '@oldpal/shared';
 import type { ToolExecutor } from './registry';
 import { ErrorCodes, ToolExecutionError } from '../errors';
+import { getSecurityLogger } from '../security/logger';
+import { validateBashCommand } from '../security/bash-validator';
 
 /**
  * Bash tool - execute shell commands (restricted to safe, read-only operations)
@@ -104,9 +106,41 @@ export class BashTool {
 
     const commandForChecks = command.replace(/\s*2>&1\s*/g, ' ');
 
+    const securityCheck = validateBashCommand(commandForChecks);
+    if (!securityCheck.valid) {
+      getSecurityLogger().log({
+        eventType: 'blocked_command',
+        severity: securityCheck.severity || 'high',
+        details: {
+          tool: 'bash',
+          command,
+          reason: securityCheck.reason || 'Blocked command',
+        },
+        sessionId: (input.sessionId as string) || 'unknown',
+      });
+      throw new ToolExecutionError(securityCheck.reason || 'Blocked command', {
+        toolName: 'bash',
+        toolInput: input,
+        code: ErrorCodes.TOOL_PERMISSION_DENIED,
+        recoverable: false,
+        retryable: false,
+        suggestion: 'Use read-only commands only.',
+      });
+    }
+
     // Check against blocked patterns
     for (const pattern of this.BLOCKED_PATTERNS) {
       if (pattern.test(commandForChecks)) {
+        getSecurityLogger().log({
+          eventType: 'blocked_command',
+          severity: 'high',
+          details: {
+            tool: 'bash',
+            command,
+            reason: 'Blocked command pattern detected',
+          },
+          sessionId: (input.sessionId as string) || 'unknown',
+        });
         throw new ToolExecutionError(
           'This command is not allowed. Only read-only commands are permitted (ls, cat, grep, find, git status/log/diff, etc.)',
           {
@@ -132,6 +166,16 @@ export class BashTool {
     }
 
     if (!isAllowed) {
+      getSecurityLogger().log({
+        eventType: 'blocked_command',
+        severity: 'medium',
+        details: {
+          tool: 'bash',
+          command,
+          reason: 'Command not in allowlist',
+        },
+        sessionId: (input.sessionId as string) || 'unknown',
+      });
       throw new ToolExecutionError(
         'Command not in allowed list. Permitted commands: cat, head, tail, ls, find, grep, wc, file, stat, pwd, which, echo, git status/log/diff/branch/show, connect-*',
         {

@@ -60,6 +60,9 @@ export * from './utils/retry';
 // Validation
 export * from './validation';
 
+// Security
+export * from './security';
+
 // Errors
 export * from './errors';
 

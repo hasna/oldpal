@@ -6,6 +6,8 @@ import { Glob } from 'bun';
 import { ErrorCodes, ToolExecutionError } from '../errors';
 import { validatePath } from '../validation/paths';
 import { exceedsFileReadLimit, getLimits } from '../validation/limits';
+import { getSecurityLogger } from '../security/logger';
+import { isPathSafe } from '../security/path-validator';
 
 // Session ID for temp folder (set during registration)
 let currentSessionId: string = 'default';
@@ -90,6 +92,27 @@ export class FilesystemTools {
     const limit = input.limit as number | undefined;
 
     try {
+      const safety = await isPathSafe(path, 'read', { cwd: baseCwd });
+      if (!safety.safe) {
+        getSecurityLogger().log({
+          eventType: 'path_violation',
+          severity: 'high',
+          details: {
+            tool: 'read',
+            path,
+            reason: safety.reason || 'Blocked path',
+          },
+          sessionId: (input.sessionId as string) || 'unknown',
+        });
+        throw new ToolExecutionError(safety.reason || 'Blocked path', {
+          toolName: 'read',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+        });
+      }
+
       const validated = await validatePath(path, { allowSymlinks: true });
       if (!validated.valid) {
         throw new ToolExecutionError(validated.error || 'Invalid path', {
@@ -229,6 +252,27 @@ export class FilesystemTools {
           recoverable: false,
           retryable: false,
           suggestion: 'Write only within the allowed scripts folder.',
+        });
+      }
+
+      const safety = await isPathSafe(validated.resolved, 'write', { cwd: baseCwd });
+      if (!safety.safe) {
+        getSecurityLogger().log({
+          eventType: 'path_violation',
+          severity: 'high',
+          details: {
+            tool: 'write',
+            path: validated.resolved,
+            reason: safety.reason || 'Blocked path',
+          },
+          sessionId: (input.sessionId as string) || 'unknown',
+        });
+        throw new ToolExecutionError(safety.reason || 'Blocked path', {
+          toolName: 'write',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
         });
       }
 

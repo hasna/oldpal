@@ -27,8 +27,8 @@ describe('validateToolInput', () => {
     expect(result.coerced?.count).toBe(2);
   });
 
-  test('should reject invalid types', () => {
-    const result = validateToolInput('sample', sampleSchema, { name: 123 });
+  test('should reject missing required fields', () => {
+    const result = validateToolInput('sample', sampleSchema, {});
     expect(result.valid).toBe(false);
     expect(result.errors?.length).toBeGreaterThan(0);
   });

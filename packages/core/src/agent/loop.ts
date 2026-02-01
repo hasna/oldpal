@@ -379,6 +379,9 @@ export class AgentLoop {
       if (toolInput.cwd === undefined) {
         toolInput.cwd = this.cwd;
       }
+      if (toolInput.sessionId === undefined) {
+        toolInput.sessionId = this.sessionId;
+      }
       toolCall.input = toolInput;
 
       if (!this.isToolAllowed(toolCall.name)) {

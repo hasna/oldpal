@@ -43,7 +43,7 @@ describe('BashTool', () => {
   });
 
   test('should block unsafe commands', async () => {
-    await expect(BashTool.executor({ command: 'rm -rf /' })).rejects.toThrow('not allowed');
+    await expect(BashTool.executor({ command: 'rm -rf /' })).rejects.toThrow('Blocked command');
   });
 
   test('should reject commands not in allowlist', async () => {
