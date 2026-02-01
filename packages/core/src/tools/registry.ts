@@ -1,5 +1,5 @@
-import type { Tool, ToolCall, ToolResult, ValidationConfig } from '@oldpal/shared';
-import { sleep } from '@oldpal/shared';
+import type { Tool, ToolCall, ToolResult, ValidationConfig } from '@hasna/assistants-shared';
+import { sleep } from '@hasna/assistants-shared';
 import { AssistantError, ErrorAggregator, ErrorCodes, ToolExecutionError } from '../errors';
 import { enforceToolOutputLimit, getLimits } from '../validation/limits';
 import { validateToolInput, type ValidationMode } from '../validation/schema';

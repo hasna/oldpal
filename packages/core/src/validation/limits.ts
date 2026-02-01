@@ -1,4 +1,4 @@
-import type { ValidationConfig } from '@oldpal/shared';
+import type { ValidationConfig } from '@hasna/assistants-shared';
 
 export interface SizeLimits {
   maxUserMessageLength: number;

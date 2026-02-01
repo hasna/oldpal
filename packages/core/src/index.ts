@@ -1,4 +1,4 @@
-// Core exports for oldpal
+// Core exports for assistants
 
 // Agent
 export { AgentLoop } from './agent/loop';
@@ -46,6 +46,12 @@ export { AudioRecorder } from './voice/recorder';
 export { WhisperSTT, SystemSTT } from './voice/stt';
 export { ElevenLabsTTS, SystemTTS } from './voice/tts';
 
+// Identity
+export * from './identity';
+
+// Migration
+export * from './migration';
+
 // LLM
 export type { LLMClient } from './llm/client';
 export { createLLMClient } from './llm/client';
@@ -65,7 +71,7 @@ export { SessionRegistry } from './sessions/registry';
 export type { SessionInfo, PersistedSession } from './sessions/registry';
 
 // Logger
-export { Logger, SessionStorage, initOldpalDir } from './logger';
+export { Logger, SessionStorage, initAssistantsDir } from './logger';
 export type { SessionData, SavedSessionInfo } from './logger';
 
 // Errors
@@ -84,4 +90,4 @@ export * from './security';
 export * from './errors';
 
 // Re-export shared types
-export * from '@oldpal/shared';
+export * from '@hasna/assistants-shared';

@@ -138,7 +138,7 @@ export class SystemTTS {
       if (!say) {
         throw new Error('System TTS not available: missing "say" command.');
       }
-      const output = join(tmpdir(), `oldpal-tts-${Date.now()}.aiff`);
+      const output = join(tmpdir(), `assistants-tts-${Date.now()}.aiff`);
       const args: string[] = [];
       if (this.voiceId) {
         args.push('-v', this.voiceId);
@@ -161,7 +161,7 @@ export class SystemTTS {
 
     const espeak = findExecutable('espeak') || findExecutable('espeak-ng');
     if (espeak) {
-      const output = join(tmpdir(), `oldpal-tts-${Date.now()}.wav`);
+      const output = join(tmpdir(), `assistants-tts-${Date.now()}.wav`);
       const args: string[] = ['-w', output];
       if (this.voiceId) {
         args.push('-v', this.voiceId);

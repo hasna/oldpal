@@ -1,5 +1,5 @@
-import type { HookHandler, HookInput, StreamChunk } from '@oldpal/shared';
-import { generateId, sleep } from '@oldpal/shared';
+import type { HookHandler, HookInput, StreamChunk } from '@hasna/assistants-shared';
+import { generateId, sleep } from '@hasna/assistants-shared';
 import { AgentLoop } from './loop';
 
 const DEFAULT_HOOK_TOOLS = ['read', 'glob', 'grep'];

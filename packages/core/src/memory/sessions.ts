@@ -1,8 +1,8 @@
 import { Database } from 'bun:sqlite';
 import { join } from 'path';
-import { homedir } from 'os';
-import type { Session, Message } from '@oldpal/shared';
-import { generateId, now } from '@oldpal/shared';
+import { getConfigDir } from '../config';
+import type { Session, Message } from '@hasna/assistants-shared';
+import { generateId, now } from '@hasna/assistants-shared';
 
 /**
  * Session manager - handles conversation session persistence
@@ -10,10 +10,11 @@ import { generateId, now } from '@oldpal/shared';
 export class SessionManager {
   private db: Database;
 
-  constructor(dbPath?: string) {
-    const envHome = process.env.HOME || process.env.USERPROFILE;
-    const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
-    const path = dbPath || join(homeDir, '.oldpal', 'memory.db');
+  constructor(dbPath?: string, assistantId?: string | null) {
+    const baseDir = getConfigDir();
+    const path = dbPath || (assistantId
+      ? join(baseDir, 'assistants', assistantId, 'memory.db')
+      : join(baseDir, 'memory.db'));
     this.db = new Database(path, { create: true });
     this.initialize();
   }

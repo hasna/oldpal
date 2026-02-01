@@ -1,6 +1,6 @@
 import { dirname } from 'path';
-import type { Skill } from '@oldpal/shared';
-import { substituteVariables } from '@oldpal/shared';
+import type { Skill } from '@hasna/assistants-shared';
+import { substituteVariables } from '@hasna/assistants-shared';
 
 /**
  * Skill executor - prepares and executes skills

@@ -1,4 +1,4 @@
-import type { HookConfig, HookMatcher, HookEvent } from '@oldpal/shared';
+import type { HookConfig, HookMatcher, HookEvent } from '@hasna/assistants-shared';
 
 /**
  * Hook loader - manages hook configuration

@@ -1,6 +1,6 @@
-import type { EnergyConfig, EnergyCosts, EnergyState } from '@oldpal/shared';
+import type { EnergyConfig, EnergyCosts, EnergyState } from '@hasna/assistants-shared';
 
-export type { EnergyConfig, EnergyCosts, EnergyState } from '@oldpal/shared';
+export type { EnergyConfig, EnergyCosts, EnergyState } from '@hasna/assistants-shared';
 
 export type EnergyLevel = 'energetic' | 'tired' | 'exhausted';
 

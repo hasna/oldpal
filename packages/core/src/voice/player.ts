@@ -14,7 +14,7 @@ export class AudioPlayer {
 
   async play(audio: ArrayBuffer, options: PlayOptions = {}): Promise<void> {
     const format = options.format ?? 'mp3';
-    const tempFile = join(tmpdir(), `oldpal-audio-${Date.now()}.${format}`);
+    const tempFile = join(tmpdir(), `assistants-audio-${Date.now()}.${format}`);
     writeFileSync(tempFile, Buffer.from(audio));
 
     const player = this.resolvePlayer(format);

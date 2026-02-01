@@ -1,4 +1,4 @@
-import type { Tool } from '@oldpal/shared';
+import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor } from './registry';
 import { ErrorCodes, ToolExecutionError } from '../errors';
 import { getSecurityLogger } from '../security/logger';

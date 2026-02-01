@@ -1,5 +1,5 @@
-import type { StreamChunk, Message, TokenUsage } from '@oldpal/shared';
-import { generateId } from '@oldpal/shared';
+import type { StreamChunk, Message, TokenUsage } from '@hasna/assistants-shared';
+import { generateId } from '@hasna/assistants-shared';
 import { EmbeddedClient } from '../client';
 
 /**

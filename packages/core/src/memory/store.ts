@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { join } from 'path';
-import { homedir } from 'os';
+import { getConfigDir } from '../config';
 
 /**
  * Memory store - SQLite-based persistent storage
@@ -8,10 +8,11 @@ import { homedir } from 'os';
 export class MemoryStore {
   private db: Database;
 
-  constructor(dbPath?: string) {
-    const envHome = process.env.HOME || process.env.USERPROFILE;
-    const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
-    const path = dbPath || join(homeDir, '.oldpal', 'memory.db');
+  constructor(dbPath?: string, assistantId?: string | null) {
+    const baseDir = getConfigDir();
+    const path = dbPath || (assistantId
+      ? join(baseDir, 'assistants', assistantId, 'memory.db')
+      : join(baseDir, 'memory.db'));
     this.db = new Database(path, { create: true });
     this.initialize();
   }

@@ -1,6 +1,6 @@
-import type { Tool } from '@oldpal/shared';
+import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor } from './registry';
-import { generateId } from '@oldpal/shared';
+import { generateId } from '@hasna/assistants-shared';
 import { join } from 'path';
 import { mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';

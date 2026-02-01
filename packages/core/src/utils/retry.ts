@@ -1,4 +1,4 @@
-import { sleep } from '@oldpal/shared';
+import { sleep } from '@hasna/assistants-shared';
 
 export interface RetryOptions {
   maxRetries: number;

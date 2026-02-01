@@ -1,6 +1,6 @@
-import type { HookMatcher, HookHandler, HookInput, HookOutput, Message } from '@oldpal/shared';
+import type { HookMatcher, HookHandler, HookInput, HookOutput, Message } from '@hasna/assistants-shared';
 import type { LLMClient } from '../llm/client';
-import { generateId, sleep } from '@oldpal/shared';
+import { generateId, sleep } from '@hasna/assistants-shared';
 
 function killSpawnedProcess(proc: { kill: () => void }): void {
   proc.kill();

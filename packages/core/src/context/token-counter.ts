@@ -1,4 +1,4 @@
-import type { Message } from '@oldpal/shared';
+import type { Message } from '@hasna/assistants-shared';
 import { encoding_for_model, get_encoding, type Tiktoken } from 'tiktoken';
 
 const DEFAULT_MODEL = 'gpt-4';

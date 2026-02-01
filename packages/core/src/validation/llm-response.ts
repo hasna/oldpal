@@ -1,4 +1,4 @@
-import type { Tool, ToolCall } from '@oldpal/shared';
+import type { Tool, ToolCall } from '@hasna/assistants-shared';
 import { ErrorCodes, ValidationError } from '../errors';
 import { validateToolInput } from './schema';
 

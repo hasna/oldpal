@@ -26,7 +26,7 @@ export class AudioRecorder {
     const duration = options.durationSeconds ?? 5;
     const sampleRate = options.sampleRate ?? 16000;
     const channels = options.channels ?? 1;
-    const output = join(tmpdir(), `oldpal-record-${Date.now()}.wav`);
+    const output = join(tmpdir(), `assistants-record-${Date.now()}.wav`);
 
     const recorder = this.resolveRecorder(sampleRate, channels, duration, output);
     if (!recorder) {

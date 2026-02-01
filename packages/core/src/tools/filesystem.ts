@@ -1,4 +1,4 @@
-import type { Tool } from '@oldpal/shared';
+import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname, sep } from 'path';
 import { getProjectConfigDir } from '../config';
@@ -31,7 +31,7 @@ function isInScriptsFolder(path: string, cwd: string): boolean {
 
 /**
  * Filesystem tools - read, write, glob, grep
- * Write operations are RESTRICTED to .oldpal/scripts/{session-id}/
+ * Write operations are RESTRICTED to .assistants/scripts/{session-id}/
  */
 export class FilesystemTools {
   /**
@@ -182,13 +182,13 @@ export class FilesystemTools {
 
   static readonly writeTool: Tool = {
     name: 'write',
-    description: 'Write content to a file. RESTRICTED: Can only write to .oldpal/scripts/{session}/ in the current project. Provide a filename and it will be saved under the scripts folder.',
+    description: 'Write content to a file. RESTRICTED: Can only write to .assistants/scripts/{session}/ in the current project. Provide a filename and it will be saved under the scripts folder.',
     parameters: {
       type: 'object',
       properties: {
         filename: {
           type: 'string',
-          description: 'The filename to write to (will be saved in .oldpal/scripts)',
+          description: 'The filename to write to (will be saved in .assistants/scripts)',
         },
         content: {
           type: 'string',
@@ -237,7 +237,7 @@ export class FilesystemTools {
         code: ErrorCodes.TOOL_PERMISSION_DENIED,
         recoverable: false,
         retryable: false,
-        suggestion: 'Write only within the .oldpal/scripts/ folder.',
+        suggestion: 'Write only within the .assistants/scripts/ folder.',
       });
     }
 

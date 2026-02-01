@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { homedir } from 'os';
-import type { OldpalConfig, HookConfig } from '@oldpal/shared';
+import type { OldpalConfig, HookConfig } from '@hasna/assistants-shared';
 
 const DEFAULT_CONFIG: OldpalConfig = {
   llm: {
@@ -136,16 +136,20 @@ function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): Oldp
 }
 
 /**
- * Get the path to the oldpal config directory
+ * Get the path to the assistants config directory
  */
 export function getConfigDir(): string {
-  const override = process.env.OLDPAL_DIR;
-  if (override && override.trim()) {
-    return override;
+  const assistantsOverride = process.env.ASSISTANTS_DIR;
+  if (assistantsOverride && assistantsOverride.trim()) {
+    return assistantsOverride;
+  }
+  const legacyOverride = process.env.OLDPAL_DIR;
+  if (legacyOverride && legacyOverride.trim()) {
+    return legacyOverride;
   }
   const envHome = process.env.HOME || process.env.USERPROFILE;
   const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
-  return join(homeDir, '.oldpal');
+  return join(homeDir, '.assistants');
 }
 
 /**
@@ -159,7 +163,7 @@ export function getConfigPath(filename: string): string {
  * Get the path to the project config directory
  */
 export function getProjectConfigDir(cwd: string = process.cwd()): string {
-  return join(cwd, '.oldpal');
+  return join(cwd, '.assistants');
 }
 
 /**
@@ -170,18 +174,24 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<OldpalCon
   let config: OldpalConfig = { ...DEFAULT_CONFIG };
 
   // Load user config
-  const userConfigPath = getConfigPath('settings.json');
-  const userConfig = await loadJsonFile<Partial<OldpalConfig>>(userConfigPath);
+  const userConfigPath = getConfigPath('config.json');
+  const legacyUserConfigPath = getConfigPath('settings.json');
+  const userConfig = (await loadJsonFile<Partial<OldpalConfig>>(userConfigPath))
+    || (await loadJsonFile<Partial<OldpalConfig>>(legacyUserConfigPath));
   config = mergeConfig(config, userConfig || undefined);
 
   // Load project config
-  const projectConfigPath = join(getProjectConfigDir(cwd), 'settings.json');
-  const projectConfig = await loadJsonFile<Partial<OldpalConfig>>(projectConfigPath);
+  const projectConfigPath = join(getProjectConfigDir(cwd), 'config.json');
+  const legacyProjectConfigPath = join(cwd, '.oldpal', 'settings.json');
+  const projectConfig = (await loadJsonFile<Partial<OldpalConfig>>(projectConfigPath))
+    || (await loadJsonFile<Partial<OldpalConfig>>(legacyProjectConfigPath));
   config = mergeConfig(config, projectConfig || undefined);
 
   // Load project local config (git-ignored)
-  const localConfigPath = join(getProjectConfigDir(cwd), 'settings.local.json');
-  const localConfig = await loadJsonFile<Partial<OldpalConfig>>(localConfigPath);
+  const localConfigPath = join(getProjectConfigDir(cwd), 'config.local.json');
+  const legacyLocalConfigPath = join(cwd, '.oldpal', 'settings.local.json');
+  const localConfig = (await loadJsonFile<Partial<OldpalConfig>>(localConfigPath))
+    || (await loadJsonFile<Partial<OldpalConfig>>(legacyLocalConfigPath));
   config = mergeConfig(config, localConfig || undefined);
 
   return config;
@@ -247,8 +257,10 @@ export async function ensureConfigDir(sessionId?: string): Promise<void> {
   // Create all directories in parallel
   const dirs = [
     mkdir(configDir, { recursive: true }),
-    mkdir(join(configDir, 'sessions'), { recursive: true }),
-    mkdir(join(configDir, 'skills'), { recursive: true }),
+    mkdir(join(configDir, 'logs'), { recursive: true }),
+    mkdir(join(configDir, 'assistants'), { recursive: true }),
+    mkdir(join(configDir, 'shared', 'skills'), { recursive: true }),
+    mkdir(join(configDir, 'migration'), { recursive: true }),
     mkdir(join(configDir, 'temp'), { recursive: true }),
     mkdir(join(configDir, 'heartbeats'), { recursive: true }),
     mkdir(join(configDir, 'state'), { recursive: true }),
@@ -271,26 +283,24 @@ export function getTempFolder(sessionId: string): string {
 }
 
 /**
- * Load system prompt from OLDPAL.md files
- * Priority: project .oldpal/OLDPAL.md > global ~/.oldpal/OLDPAL.md
+ * Load system prompt from ASSISTANTS.md files
+ * Priority: project .assistants/ASSISTANTS.md > global ~/.assistants/ASSISTANTS.md
  * If both exist, they are concatenated (global first, then project)
  */
 export async function loadSystemPrompt(cwd: string = process.cwd()): Promise<string | null> {
   const prompts: string[] = [];
 
   // Load global system prompt
-  const globalPromptPath = getConfigPath('OLDPAL.md');
-  const globalPrompt = await loadTextFile(globalPromptPath);
-  if (globalPrompt) {
-    prompts.push(globalPrompt);
-  }
+  const globalPromptPath = getConfigPath('ASSISTANTS.md');
+  const legacyGlobalPromptPath = getConfigPath('OLDPAL.md');
+  const globalPrompt = (await loadTextFile(globalPromptPath)) ?? (await loadTextFile(legacyGlobalPromptPath));
+  if (globalPrompt) prompts.push(globalPrompt);
 
   // Load project system prompt
-  const projectPromptPath = join(getProjectConfigDir(cwd), 'OLDPAL.md');
-  const projectPrompt = await loadTextFile(projectPromptPath);
-  if (projectPrompt) {
-    prompts.push(projectPrompt);
-  }
+  const projectPromptPath = join(getProjectConfigDir(cwd), 'ASSISTANTS.md');
+  const legacyProjectPromptPath = join(cwd, '.oldpal', 'OLDPAL.md');
+  const projectPrompt = (await loadTextFile(projectPromptPath)) ?? (await loadTextFile(legacyProjectPromptPath));
+  if (projectPrompt) prompts.push(projectPrompt);
 
   if (prompts.length === 0) {
     return null;

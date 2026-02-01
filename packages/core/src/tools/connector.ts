@@ -1,4 +1,4 @@
-import type { Tool, Connector, ConnectorCommand } from '@oldpal/shared';
+import type { Tool, Connector, ConnectorCommand } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { homedir } from 'os';
 import { join, delimiter } from 'path';

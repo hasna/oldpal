@@ -1,5 +1,5 @@
-import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig, ScheduledCommand, VoiceState } from '@oldpal/shared';
-import { generateId } from '@oldpal/shared';
+import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig, ScheduledCommand, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
+import { generateId } from '@hasna/assistants-shared';
 import { join } from 'path';
 import { AgentContext } from './context';
 import {
@@ -49,11 +49,13 @@ import {
   updateSchedule,
 } from '../scheduler/store';
 import { VoiceManager } from '../voice/manager';
+import { AssistantManager, IdentityManager } from '../identity';
 
 export interface AgentLoopOptions {
   config?: OldpalConfig;
   cwd?: string;
   sessionId?: string;
+  assistantId?: string;
   allowedTools?: string[];
   extraSystemPrompt?: string;
   llmClient?: LLMClient;
@@ -104,6 +106,10 @@ export class AgentLoop {
   private drainingScheduled = false;
   private errorAggregator = new ErrorAggregator();
   private voiceManager: VoiceManager | null = null;
+  private assistantManager: AssistantManager | null = null;
+  private identityManager: IdentityManager | null = null;
+  private identityContext: string | null = null;
+  private assistantId: string | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -114,6 +120,7 @@ export class AgentLoop {
   constructor(options: AgentLoopOptions = {}) {
     this.cwd = options.cwd || process.cwd();
     this.sessionId = options.sessionId || generateId();
+    this.assistantId = options.assistantId || null;
     this.context = new AgentContext();
     this.toolRegistry = new ToolRegistry();
     this.toolRegistry.setErrorAggregator(this.errorAggregator);
@@ -152,6 +159,7 @@ export class AgentLoop {
     if (this.config.voice) {
       this.voiceManager = new VoiceManager(this.config.voice);
     }
+    await this.initializeIdentitySystem();
 
     const connectorNames =
       this.config.connectors && this.config.connectors.length > 0 && !this.config.connectors.includes('*')
@@ -653,6 +661,19 @@ export class AgentLoop {
         return result;
       },
       getEnergyState: () => this.getEnergyState(),
+      getAssistantManager: () => this.assistantManager,
+      getIdentityManager: () => this.identityManager,
+      refreshIdentityContext: async () => {
+        if (this.identityManager) {
+          this.identityContext = await this.identityManager.buildSystemPromptContext();
+        }
+      },
+      switchAssistant: async (assistantId: string) => {
+        await this.switchAssistant(assistantId);
+      },
+      switchIdentity: async (identityId: string) => {
+        await this.switchIdentity(identityId);
+      },
       getVoiceState: () => this.getVoiceState(),
       enableVoice: () => {
         if (!this.voiceManager) {
@@ -799,6 +820,44 @@ export class AgentLoop {
    */
   getVoiceState(): VoiceState | null {
     return this.voiceManager?.getState() ?? null;
+  }
+
+  getAssistantId(): string | null {
+    return this.assistantManager?.getActiveId() ?? null;
+  }
+
+  getIdentityInfo(): ActiveIdentityInfo {
+    return {
+      assistant: this.assistantManager?.getActive() ?? null,
+      identity: this.identityManager?.getActive() ?? null,
+    };
+  }
+
+  private async switchAssistant(assistantId: string): Promise<void> {
+    if (!this.assistantManager) {
+      throw new Error('Assistant manager not initialized');
+    }
+    await this.assistantManager.switchAssistant(assistantId);
+    const active = this.assistantManager.getActive();
+    if (!active) {
+      this.identityManager = null;
+      this.identityContext = null;
+      return;
+    }
+    this.identityManager = this.assistantManager.getIdentityManager(active.id);
+    await this.identityManager.initialize();
+    if (this.identityManager.listIdentities().length === 0) {
+      await this.identityManager.createIdentity({ name: 'Default' });
+    }
+    this.identityContext = await this.identityManager.buildSystemPromptContext();
+  }
+
+  private async switchIdentity(identityId: string): Promise<void> {
+    if (!this.identityManager) {
+      throw new Error('Identity manager not initialized');
+    }
+    await this.identityManager.switchIdentity(identityId);
+    this.identityContext = await this.identityManager.buildSystemPromptContext();
   }
 
   /**
@@ -1103,6 +1162,9 @@ export class AgentLoop {
     if (this.extraSystemPrompt) {
       parts.push(this.extraSystemPrompt);
     }
+    if (this.identityContext) {
+      parts.push(`## Your Identity\n${this.identityContext}`);
+    }
 
     for (const msg of messages) {
       if (msg.role !== 'system') continue;
@@ -1113,6 +1175,38 @@ export class AgentLoop {
     }
 
     return parts.length > 0 ? parts.join('\n\n---\n\n') : undefined;
+  }
+
+  private async initializeIdentitySystem(): Promise<void> {
+    const basePath = getConfigDir();
+    this.assistantManager = new AssistantManager(basePath);
+    await this.assistantManager.initialize();
+
+    if (this.assistantManager.listAssistants().length === 0) {
+      const created = await this.assistantManager.createAssistant({
+        name: 'Default Assistant',
+        settings: { model: this.config?.llm?.model || 'claude-sonnet-4-20250514' },
+      });
+      this.assistantId = created.id;
+    }
+
+    if (this.assistantId) {
+      try {
+        await this.assistantManager.switchAssistant(this.assistantId);
+      } catch {
+        this.assistantId = null;
+      }
+    }
+
+    const active = this.assistantManager.getActive();
+    if (active) {
+      this.identityManager = this.assistantManager.getIdentityManager(active.id);
+      await this.identityManager.initialize();
+      if (this.identityManager.listIdentities().length === 0) {
+        await this.identityManager.createIdentity({ name: 'Default' });
+      }
+      this.identityContext = await this.identityManager.buildSystemPromptContext();
+    }
   }
 
   private buildContextConfig(config: OldpalConfig): ContextConfig {

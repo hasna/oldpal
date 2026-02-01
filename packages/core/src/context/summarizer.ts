@@ -1,5 +1,5 @@
-import type { Message } from '@oldpal/shared';
-import { generateId, now } from '@oldpal/shared';
+import type { Message } from '@hasna/assistants-shared';
+import { generateId, now } from '@hasna/assistants-shared';
 import type { LLMClient } from '../llm/client';
 import type { TokenCounter } from './token-counter';
 

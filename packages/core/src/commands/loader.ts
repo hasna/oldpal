@@ -7,8 +7,8 @@ import type { Command, CommandFrontmatter } from './types';
  * CommandLoader - discovers and loads slash commands from disk
  *
  * Command locations (in priority order):
- * 1. Project-level: .oldpal/commands/
- * 2. Global-level: ~/.oldpal/commands/
+ * 1. Project-level: .assistants/commands/
+ * 2. Global-level: ~/.assistants/commands/
  *
  * File format:
  * - Markdown files (.md) with optional YAML frontmatter
@@ -32,12 +32,18 @@ export class CommandLoader {
     // Load global commands first (lower priority)
     const envHome = process.env.HOME || process.env.USERPROFILE;
     const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
-    const globalDir = join(homeDir, '.oldpal', 'commands');
+    const globalDir = join(homeDir, '.assistants', 'commands');
     await this.loadFromDirectory(globalDir, 'global');
 
     // Load project commands (higher priority, will override global)
-    const projectDir = join(this.cwd, '.oldpal', 'commands');
+    const projectDir = join(this.cwd, '.assistants', 'commands');
     await this.loadFromDirectory(projectDir, 'project');
+
+    // Legacy fallback
+    const legacyGlobalDir = join(homeDir, '.oldpal', 'commands');
+    const legacyProjectDir = join(this.cwd, '.oldpal', 'commands');
+    await this.loadFromDirectory(legacyGlobalDir, 'global');
+    await this.loadFromDirectory(legacyProjectDir, 'project');
   }
 
   /**

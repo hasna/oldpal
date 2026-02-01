@@ -1,4 +1,4 @@
-import type { Message } from '@oldpal/shared';
+import type { Message } from '@hasna/assistants-shared';
 
 export interface ContextConfig {
   enabled: boolean;

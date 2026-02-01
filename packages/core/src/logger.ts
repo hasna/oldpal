@@ -12,16 +12,16 @@ interface LogEntry {
 }
 
 /**
- * Logger that writes to ~/.oldpal/logs/
+ * Logger that writes to ~/.assistants/logs/
  */
 export class Logger {
   private logDir: string;
   private logFile: string;
   private sessionId: string;
 
-  constructor(sessionId: string) {
+  constructor(sessionId: string, basePath?: string) {
     this.sessionId = sessionId;
-    this.logDir = join(getConfigDir(), 'logs');
+    this.logDir = join(basePath || getConfigDir(), 'logs');
     this.ensureDir(this.logDir);
 
     const date = new Date().toISOString().split('T')[0];
@@ -72,16 +72,19 @@ export class Logger {
 }
 
 /**
- * Session storage - saves conversations to ~/.oldpal/sessions/
+ * Session storage - saves conversations to ~/.assistants/assistants/{id}/sessions/
  */
 export class SessionStorage {
   private sessionsDir: string;
   private sessionFile: string;
   private sessionId: string;
 
-  constructor(sessionId: string) {
+  constructor(sessionId: string, basePath?: string, assistantId?: string | null) {
     this.sessionId = sessionId;
-    this.sessionsDir = join(getConfigDir(), 'sessions');
+    const root = basePath || getConfigDir();
+    this.sessionsDir = assistantId
+      ? join(root, 'assistants', assistantId, 'sessions')
+      : join(root, 'sessions');
     this.ensureDir(this.sessionsDir);
     this.sessionFile = join(this.sessionsDir, `${sessionId}.json`);
   }
@@ -121,11 +124,35 @@ export class SessionStorage {
     }
   }
 
+  private static getActiveAssistantId(): string | null {
+    try {
+      const activePath = join(getConfigDir(), 'active.json');
+      if (!existsSync(activePath)) return null;
+      const raw = readFileSync(activePath, 'utf-8');
+      const data = JSON.parse(raw) as { id?: string };
+      return data.id || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static resolveSessionsDir(assistantId?: string | null): string {
+    const root = getConfigDir();
+    const resolvedId = assistantId ?? SessionStorage.getActiveAssistantId();
+    if (resolvedId) {
+      const assistantDir = join(root, 'assistants', resolvedId, 'sessions');
+      if (existsSync(assistantDir)) {
+        return assistantDir;
+      }
+    }
+    return join(root, 'sessions');
+  }
+
   /**
    * List all saved sessions
    */
-  static listSessions(): SavedSessionInfo[] {
-    const sessionsDir = join(getConfigDir(), 'sessions');
+  static listSessions(assistantId?: string | null): SavedSessionInfo[] {
+    const sessionsDir = SessionStorage.resolveSessionsDir(assistantId);
     if (!existsSync(sessionsDir)) return [];
 
     const sessions: SavedSessionInfo[] = [];
@@ -158,16 +185,16 @@ export class SessionStorage {
   /**
    * Get the most recent session
    */
-  static getLatestSession(): SavedSessionInfo | null {
-    const sessions = SessionStorage.listSessions();
+  static getLatestSession(assistantId?: string | null): SavedSessionInfo | null {
+    const sessions = SessionStorage.listSessions(assistantId);
     return sessions[0] || null;
   }
 
   /**
    * Load a session by ID
    */
-  static loadSession(sessionId: string): SessionData | null {
-    const sessionsDir = join(getConfigDir(), 'sessions');
+  static loadSession(sessionId: string, assistantId?: string | null): SessionData | null {
+    const sessionsDir = SessionStorage.resolveSessionsDir(assistantId);
     const sessionFile = join(sessionsDir, `${sessionId}.json`);
 
     try {
@@ -201,15 +228,21 @@ export interface SavedSessionInfo {
 }
 
 /**
- * Initialize .oldpal directory structure
+ * Initialize .assistants directory structure
  */
-export function initOldpalDir(): void {
+export function initAssistantsDir(): void {
   const baseDir = getConfigDir();
   const dirs = [
     baseDir,
-    join(baseDir, 'sessions'),
     join(baseDir, 'logs'),
-    join(baseDir, 'skills'),
+    join(baseDir, 'assistants'),
+    join(baseDir, 'shared', 'skills'),
+    join(baseDir, 'commands'),
+    join(baseDir, 'temp'),
+    join(baseDir, 'heartbeats'),
+    join(baseDir, 'state'),
+    join(baseDir, 'energy'),
+    join(baseDir, 'migration'),
   ];
 
   for (const dir of dirs) {

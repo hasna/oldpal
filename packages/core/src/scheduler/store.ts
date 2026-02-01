@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { mkdir, readdir, readFile, unlink, writeFile, open } from 'fs/promises';
-import type { ScheduledCommand } from '@oldpal/shared';
+import type { ScheduledCommand } from '@hasna/assistants-shared';
 import { getProjectConfigDir } from '../config';
 import { getNextCronRun } from './cron';
 

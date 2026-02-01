@@ -3,8 +3,8 @@ import { readFileSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import type { LLMClient } from './client';
-import type { Message, Tool, StreamChunk, LLMConfig, ToolCall } from '@oldpal/shared';
-import { generateId } from '@oldpal/shared';
+import type { Message, Tool, StreamChunk, LLMConfig, ToolCall } from '@hasna/assistants-shared';
+import { generateId } from '@hasna/assistants-shared';
 import { ErrorCodes, LLMError } from '../errors';
 import { LLMRetryConfig, withRetry } from '../utils/retry';
 

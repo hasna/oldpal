@@ -1,4 +1,4 @@
-import type { Tool } from '@oldpal/shared';
+import type { Tool } from '@hasna/assistants-shared';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import type { ToolExecutor } from './registry';
 import { ErrorCodes, ToolExecutionError } from '../errors';
@@ -79,7 +79,7 @@ export class WebFetchTool {
           signal: controller.signal,
           redirect: 'manual',
           headers: {
-            'User-Agent': 'oldpal/1.0 (AI Assistant)',
+            'User-Agent': 'assistants/1.0 (AI Assistant)',
             'Accept': extractType === 'json' ? 'application/json' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           },
         });
@@ -227,7 +227,7 @@ export class WebSearchTool {
 
       const response = await fetch(searchUrl, {
         headers: {
-          'User-Agent': 'oldpal/1.0 (AI Assistant)',
+          'User-Agent': 'assistants/1.0 (AI Assistant)',
           'Accept': 'text/html',
         },
       });
@@ -425,7 +425,7 @@ export class CurlTool {
           signal: controller.signal,
           redirect: 'manual',
           headers: {
-            'User-Agent': 'oldpal/1.0 (AI Assistant)',
+            'User-Agent': 'assistants/1.0 (AI Assistant)',
             ...headers,
           },
           body: body && ['POST', 'PUT'].includes(method) ? body : undefined,

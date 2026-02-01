@@ -2,14 +2,26 @@ import { existsSync, writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { Tool } from '@oldpal/shared';
+import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor } from './registry';
-import { generateId } from '@oldpal/shared';
+import { generateId } from '@hasna/assistants-shared';
 
 /**
  * Check if viu is available
  */
 async function getViuPath(): Promise<string | null> {
+  const explicitPath = process.env.ASSISTANTS_VIU_PATH || process.env.VIU_PATH;
+  if (explicitPath) {
+    try {
+      const result = await Bun.$`${explicitPath} --version`.quiet().nothrow();
+      if (result.exitCode === 0) {
+        return explicitPath;
+      }
+    } catch {
+      // Fall through to search
+    }
+  }
+
   // Check common locations
   const envHome = process.env.HOME || process.env.USERPROFILE;
   const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
@@ -91,7 +103,7 @@ export class ImageDisplayTool {
 
         const buffer = await response.arrayBuffer();
         const ext = contentType.split('/')[1]?.split(';')[0] || 'png';
-        tempFile = join(tmpdir(), `oldpal-image-${generateId()}.${ext}`);
+        tempFile = join(tmpdir(), `assistants-image-${generateId()}.${ext}`);
         writeFileSync(tempFile, Buffer.from(buffer));
         localPath = tempFile;
       } catch (error) {

@@ -1,7 +1,7 @@
-import type { AssistantClient, StreamChunk, Tool, Skill, Message, TokenUsage, EnergyState, VoiceState } from '@oldpal/shared';
-import { generateId } from '@oldpal/shared';
+import type { AssistantClient, StreamChunk, Tool, Skill, Message, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
+import { generateId } from '@hasna/assistants-shared';
 import { AgentLoop } from './agent/loop';
-import { Logger, SessionStorage, initOldpalDir } from './logger';
+import { Logger, SessionStorage, initAssistantsDir } from './logger';
 import type { Command } from './commands';
 
 /**
@@ -18,6 +18,7 @@ export class EmbeddedClient implements AssistantClient {
   private cwd: string;
   private startedAt: string;
   private initialMessages: Message[] | null = null;
+  private assistantId: string | null = null;
 
   constructor(
     cwd?: string,
@@ -30,8 +31,8 @@ export class EmbeddedClient implements AssistantClient {
       agentFactory?: (options: ConstructorParameters<typeof AgentLoop>[0]) => AgentLoop;
     }
   ) {
-    // Initialize .oldpal directory structure
-    initOldpalDir();
+    // Initialize .assistants directory structure
+    initAssistantsDir();
 
     const sessionId = options?.sessionId || generateId();
     this.logger = new Logger(sessionId);
@@ -74,6 +75,12 @@ export class EmbeddedClient implements AssistantClient {
     if (this.initialized) return;
     this.logger.info('Initializing agent');
     await this.agent.initialize();
+    if (typeof (this.agent as any).getAssistantId === 'function') {
+      this.assistantId = (this.agent as any).getAssistantId();
+      if (this.assistantId) {
+        this.session = new SessionStorage(this.session.getSessionId(), undefined, this.assistantId);
+      }
+    }
     if (this.initialMessages && this.initialMessages.length > 0) {
       if (typeof (this.agent as any).importContext === 'function') {
         (this.agent as any).importContext(this.initialMessages);
@@ -233,6 +240,16 @@ export class EmbeddedClient implements AssistantClient {
   getVoiceState(): VoiceState | null {
     if (typeof (this.agent as any).getVoiceState === 'function') {
       return (this.agent as any).getVoiceState();
+    }
+    return null;
+  }
+
+  /**
+   * Get current assistant/identity info
+   */
+  getIdentityInfo(): ActiveIdentityInfo | null {
+    if (typeof (this.agent as any).getIdentityInfo === 'function') {
+      return (this.agent as any).getIdentityInfo();
     }
     return null;
   }

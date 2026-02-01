@@ -1,5 +1,5 @@
-import type { Message, ToolCall, ToolResult } from '@oldpal/shared';
-import { generateId, now } from '@oldpal/shared';
+import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
+import { generateId, now } from '@hasna/assistants-shared';
 
 /**
  * Agent context - manages conversation state

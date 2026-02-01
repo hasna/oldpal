@@ -1,8 +1,8 @@
 import { join, basename, dirname } from 'path';
 import { homedir } from 'os';
 import { Glob } from 'bun';
-import type { Skill, SkillFrontmatter } from '@oldpal/shared';
-import { parseFrontmatter } from '@oldpal/shared';
+import type { Skill, SkillFrontmatter } from '@hasna/assistants-shared';
+import { parseFrontmatter } from '@hasna/assistants-shared';
 
 /**
  * Skill loader - discovers and loads SKILL.md files
@@ -17,15 +17,21 @@ export class SkillLoader {
     // Load user skills
     const envHome = process.env.HOME || process.env.USERPROFILE;
     const userHome = envHome && envHome.trim().length > 0 ? envHome : homedir();
-    const userSkillsDir = join(userHome, '.oldpal', 'skills');
+    const userSkillsDir = join(userHome, '.assistants', 'shared', 'skills');
     await this.loadFromDirectory(userSkillsDir);
 
     // Load project skills
-    const projectSkillsDir = join(projectDir, '.oldpal', 'skills');
+    const projectSkillsDir = join(projectDir, '.assistants', 'skills');
     await this.loadFromDirectory(projectSkillsDir);
 
-    // Also check nested .oldpal/skills in monorepo
-    const nestedGlob = new Glob('**/.oldpal/skills/*/SKILL.md');
+    // Legacy fallback
+    const legacyUserSkillsDir = join(userHome, '.oldpal', 'skills');
+    const legacyProjectSkillsDir = join(projectDir, '.oldpal', 'skills');
+    await this.loadFromDirectory(legacyUserSkillsDir);
+    await this.loadFromDirectory(legacyProjectSkillsDir);
+
+    // Also check nested .assistants/skills in monorepo
+    const nestedGlob = new Glob('**/.assistants/skills/*/SKILL.md');
     for await (const file of nestedGlob.scan({ cwd: projectDir, dot: true })) {
       await this.loadSkillFile(join(projectDir, file));
     }

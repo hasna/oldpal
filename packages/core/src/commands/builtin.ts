@@ -4,9 +4,9 @@ import { join } from 'path';
 import { homedir, platform, release, arch } from 'os';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
-import { generateId } from '@oldpal/shared';
+import { generateId } from '@hasna/assistants-shared';
 import { saveFeedbackEntry, type FeedbackType } from '../tools/feedback';
-import type { ScheduledCommand } from '@oldpal/shared';
+import type { ScheduledCommand } from '@hasna/assistants-shared';
 import { getSecurityLogger, severityFromString } from '../security/logger';
 import {
   saveSchedule,
@@ -65,7 +65,7 @@ function splitArgs(input: string): string[] {
 }
 
 /**
- * Built-in slash commands for oldpal
+ * Built-in slash commands for assistants
  */
 export class BuiltinCommands {
   private tokenUsage: TokenUsage = {
@@ -91,6 +91,9 @@ export class BuiltinCommands {
     loader.register(this.voiceCommand());
     loader.register(this.sayCommand());
     loader.register(this.listenCommand());
+    loader.register(this.assistantCommand());
+    loader.register(this.identityCommand());
+    loader.register(this.whoamiCommand());
     loader.register(this.compactCommand());
     loader.register(this.configCommand());
     loader.register(this.initCommand());
@@ -242,6 +245,268 @@ export class BuiltinCommands {
   }
 
   /**
+   * /assistant - Manage assistants
+   */
+  private assistantCommand(): Command {
+    return {
+      name: 'assistant',
+      description: 'Manage assistants (list, create, switch, delete)',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const manager = context.getAssistantManager?.();
+        if (!manager) {
+          context.emit('text', 'Assistant manager not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const [action, ...rest] = args.trim().split(/\s+/).filter(Boolean);
+        const target = rest.join(' ');
+
+        if (!action) {
+          const active = manager.getActive();
+          if (!active) {
+            context.emit('text', 'No active assistant.\n');
+          } else {
+            context.emit('text', `Current assistant: ${active.name}\n`);
+            context.emit('text', `ID: ${active.id}\n`);
+            if (active.description) context.emit('text', `Description: ${active.description}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'list') {
+          const assistants = manager.listAssistants();
+          if (assistants.length === 0) {
+            context.emit('text', 'No assistants found.\n');
+          } else {
+            context.emit('text', '\nAssistants:\n');
+            for (const assistant of assistants) {
+              const marker = manager.getActiveId() === assistant.id ? '*' : ' ';
+              context.emit('text', ` ${marker} ${assistant.name} (${assistant.id})\n`);
+            }
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'create') {
+          if (!target) {
+            context.emit('text', 'Usage: /assistant create <name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const created = await manager.createAssistant({ name: target });
+          context.emit('text', `Created assistant ${created.name} (${created.id}).\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'switch') {
+          if (!target) {
+            context.emit('text', 'Usage: /assistant switch <name|id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const assistants = manager.listAssistants();
+          const match = assistants.find((assistant) =>
+            assistant.id === target || assistant.name.toLowerCase() === target.toLowerCase()
+          );
+          if (!match) {
+            context.emit('text', `Assistant not found: ${target}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          await context.switchAssistant?.(match.id);
+          context.emit('text', `Switched to ${match.name}.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'delete') {
+          if (!target) {
+            context.emit('text', 'Usage: /assistant delete <name|id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const assistants = manager.listAssistants();
+          const match = assistants.find((assistant) =>
+            assistant.id === target || assistant.name.toLowerCase() === target.toLowerCase()
+          );
+          if (!match) {
+            context.emit('text', `Assistant not found: ${target}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          await manager.deleteAssistant(match.id);
+          context.emit('text', `Deleted assistant ${match.name}.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'settings') {
+          const active = manager.getActive();
+          if (!active) {
+            context.emit('text', 'No active assistant.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          context.emit('text', `Assistant settings for ${active.name}:\n`);
+          context.emit('text', JSON.stringify(active.settings, null, 2) + '\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', 'Unknown /assistant command.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /identity - Manage identities
+   */
+  private identityCommand(): Command {
+    return {
+      name: 'identity',
+      description: 'Manage identities for the current assistant',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const manager = context.getIdentityManager?.();
+        if (!manager) {
+          context.emit('text', 'Identity manager not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const [action, ...rest] = args.trim().split(/\s+/).filter(Boolean);
+        const target = rest.join(' ');
+
+        if (!action) {
+          const active = manager.getActive();
+          if (!active) {
+            context.emit('text', 'No active identity.\n');
+          } else {
+            context.emit('text', `Current identity: ${active.name}\n`);
+            context.emit('text', `ID: ${active.id}\n`);
+            context.emit('text', `Display name: ${active.profile.displayName}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'list') {
+          const identities = manager.listIdentities();
+          if (identities.length === 0) {
+            context.emit('text', 'No identities found.\n');
+          } else {
+            context.emit('text', '\nIdentities:\n');
+            for (const identity of identities) {
+              const marker = manager.getActive()?.id === identity.id ? '*' : ' ';
+              context.emit('text', ` ${marker} ${identity.name} (${identity.id})\n`);
+            }
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'create') {
+          if (!target) {
+            context.emit('text', 'Usage: /identity create <name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const created = await manager.createIdentity({ name: target });
+          await context.refreshIdentityContext?.();
+          context.emit('text', `Created identity ${created.name} (${created.id}).\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'switch') {
+          if (!target) {
+            context.emit('text', 'Usage: /identity switch <name|id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const identities = manager.listIdentities();
+          const match = identities.find((identity) =>
+            identity.id === target || identity.name.toLowerCase() === target.toLowerCase()
+          );
+          if (!match) {
+            context.emit('text', `Identity not found: ${target}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          await context.switchIdentity?.(match.id);
+          context.emit('text', `Switched to ${match.name}.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (action === 'delete') {
+          if (!target) {
+            context.emit('text', 'Usage: /identity delete <name|id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const identities = manager.listIdentities();
+          const match = identities.find((identity) =>
+            identity.id === target || identity.name.toLowerCase() === target.toLowerCase()
+          );
+          if (!match) {
+            context.emit('text', `Identity not found: ${target}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          await manager.deleteIdentity(match.id);
+          await context.refreshIdentityContext?.();
+          context.emit('text', `Deleted identity ${match.name}.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', 'Unknown /identity command.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /whoami - Show current assistant + identity
+   */
+  private whoamiCommand(): Command {
+    return {
+      name: 'whoami',
+      description: 'Show active assistant and identity',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (_args, context) => {
+        const assistant = context.getAssistantManager?.()?.getActive();
+        const identity = context.getIdentityManager?.()?.getActive();
+        if (!assistant || !identity) {
+          context.emit('text', 'No active assistant or identity.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+        context.emit('text', `Assistant: ${assistant.name}\n`);
+        context.emit('text', `Identity: ${identity.name}\n`);
+        context.emit('text', `Display name: ${identity.profile.displayName}\n`);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
    * Update token usage
    */
   updateTokenUsage(usage: Partial<TokenUsage>): void {
@@ -306,8 +571,8 @@ export class BuiltinCommands {
         }
 
         message += '**Tips:**\n';
-        message += '  - Create custom commands in .oldpal/commands/*.md\n';
-        message += '  - Global commands go in ~/.oldpal/commands/*.md\n';
+        message += '  - Create custom commands in .assistants/commands/*.md\n';
+        message += '  - Global commands go in ~/.assistants/commands/*.md\n';
         message += '  - Use /init to create a starter command\n';
 
         context.emit('text', message);
@@ -362,12 +627,12 @@ export class BuiltinCommands {
   }
 
   /**
-   * /exit - Exit oldpal
+   * /exit - Exit assistants
    */
   private exitCommand(): Command {
     return {
       name: 'exit',
-      description: 'Exit oldpal',
+      description: 'Exit assistants',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -581,7 +846,7 @@ export class BuiltinCommands {
 
         if (context.skills.length === 0) {
           message += 'No skills loaded.\n';
-          message += '\nAdd skills to ~/.oldpal/skills/ or .oldpal/skills/\n';
+        message += '\nAdd skills to ~/.assistants/assistants-shared/skills/ or .assistants/skills/\n';
         } else {
           for (const skill of context.skills) {
             const hint = skill.argumentHint ? ` ${skill.argumentHint}` : '';
@@ -695,9 +960,9 @@ Format the summary as a brief bullet-point list. This summary will replace the c
       content: '',
       handler: async (args, context) => {
         const configPaths = [
-          join(context.cwd, '.oldpal', 'settings.json'),
-          join(context.cwd, '.oldpal', 'settings.local.json'),
-          join(getConfigDir(), 'settings.json'),
+          join(context.cwd, '.assistants', 'config.json'),
+          join(context.cwd, '.assistants', 'config.local.json'),
+          join(getConfigDir(), 'config.json'),
         ];
 
         let message = '\n**Configuration**\n\n';
@@ -711,8 +976,8 @@ Format the summary as a brief bullet-point list. This summary will replace the c
         const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
 
         message += '\n**Commands Directories:**\n';
-        message += `  - Project: ${join(context.cwd, '.oldpal', 'commands')}\n`;
-        message += `  - Global: ${join(homeDir, '.oldpal', 'commands')}\n`;
+        message += `  - Project: ${join(context.cwd, '.assistants', 'commands')}\n`;
+        message += `  - Global: ${join(homeDir, '.assistants', 'commands')}\n`;
 
         context.emit('text', message);
         context.emit('done');
@@ -722,17 +987,17 @@ Format the summary as a brief bullet-point list. This summary will replace the c
   }
 
   /**
-   * /init - Initialize oldpal in current project
+   * /init - Initialize assistants in current project
    */
   private initCommand(): Command {
     return {
       name: 'init',
-      description: 'Initialize oldpal config and create example command',
+      description: 'Initialize assistants config and create example command',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
-        const commandsDir = join(context.cwd, '.oldpal', 'commands');
+        const commandsDir = join(context.cwd, '.assistants', 'commands');
 
         // Create directories
         mkdirSync(commandsDir, { recursive: true });
@@ -758,11 +1023,11 @@ Please summarize the last interaction and suggest 2-3 next steps.
           writeFileSync(examplePath, exampleCommand);
         }
 
-        let message = '\n**Initialized oldpal**\n\n';
+        let message = '\n**Initialized assistants**\n\n';
         message += `Created: ${commandsDir}\n`;
         message += `Example: ${examplePath}\n\n`;
         message += 'You can now:\n';
-        message += '  - Add custom commands to .oldpal/commands/\n';
+        message += '  - Add custom commands to .assistants/commands/\n';
         message += '  - Use /reflect to try the example command\n';
         message += '  - Run /help to see all available commands\n';
 
@@ -1285,7 +1550,7 @@ Keep it concise but comprehensive.`,
         };
 
         // GitHub repo URL
-        const repoUrl = 'https://github.com/hasna/oldpal';
+        const repoUrl = 'https://github.com/hasna/assistants';
 
         // Build issue body template
         const issueBody = `## Description
@@ -1308,7 +1573,7 @@ Keep it concise but comprehensive.`,
 
 ## System Information
 
-- **oldpal version**: ${systemInfo.version}
+- **assistants version**: ${systemInfo.version}
 - **Platform**: ${systemInfo.platform} ${systemInfo.release} (${systemInfo.arch})
 - **Bun version**: ${systemInfo.bunVersion}
 - **Node version**: ${systemInfo.nodeVersion}
@@ -1371,7 +1636,7 @@ Keep it concise but comprehensive.`,
 
 ## System Information
 
-- **oldpal version**: ${systemInfo.version}
+- **assistants version**: ${systemInfo.version}
 - **Platform**: ${systemInfo.platform} (${systemInfo.arch})
 - **Bun version**: ${systemInfo.bunVersion}
 `;
@@ -1407,7 +1672,7 @@ Keep it concise but comprehensive.`,
             message += `Saved locally: ${localPath}\n\n`;
           }
           message += '**System Information:**\n';
-          message += `- oldpal version: ${systemInfo.version}\n`;
+          message += `- assistants version: ${systemInfo.version}\n`;
           message += `- Platform: ${systemInfo.platform} ${systemInfo.release}\n`;
           message += `- Bun version: ${systemInfo.bunVersion}\n`;
 

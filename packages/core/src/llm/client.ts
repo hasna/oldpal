@@ -1,4 +1,4 @@
-import type { Message, Tool, StreamChunk, LLMConfig } from '@oldpal/shared';
+import type { Message, Tool, StreamChunk, LLMConfig } from '@hasna/assistants-shared';
 
 /**
  * Abstract LLM client interface

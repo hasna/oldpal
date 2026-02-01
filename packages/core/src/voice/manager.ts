@@ -1,4 +1,4 @@
-import type { VoiceConfig } from '@oldpal/shared';
+import type { VoiceConfig } from '@hasna/assistants-shared';
 import type { STTProvider, TTSProvider, VoiceState } from './types';
 import type { RecordOptions } from './recorder';
 import { WhisperSTT, SystemSTT } from './stt';

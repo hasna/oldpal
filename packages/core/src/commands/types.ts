@@ -1,10 +1,11 @@
-import type { Tool, TokenUsage, EnergyState, VoiceState } from '@oldpal/shared';
+import type { Tool, TokenUsage, EnergyState, VoiceState } from '@hasna/assistants-shared';
 import type { RecordOptions } from '../voice/recorder';
 import type { ErrorStats } from '../errors';
 import type { ContextInfo, ContextProcessResult } from '../context';
+import type { AssistantManager, IdentityManager } from '../identity';
 
 // Re-export TokenUsage from shared
-export type { TokenUsage } from '@oldpal/shared';
+export type { TokenUsage } from '@hasna/assistants-shared';
 
 /**
  * Command definition loaded from a markdown file
@@ -72,6 +73,11 @@ export interface CommandContext {
   listen?: (options?: RecordOptions) => Promise<string>;
   stopSpeaking?: () => void;
   stopListening?: () => void;
+  getAssistantManager?: () => AssistantManager | null;
+  getIdentityManager?: () => IdentityManager | null;
+  refreshIdentityContext?: () => Promise<void>;
+  switchAssistant?: (assistantId: string) => Promise<void>;
+  switchIdentity?: (identityId: string) => Promise<void>;
   restEnergy?: (amount?: number) => void;
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;
