@@ -2,10 +2,11 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { BashTool } from '../src/tools/bash';
 import { FilesystemTools } from '../src/tools/filesystem';
 import { WebFetchTool, WebSearchTool, CurlTool, WebTools, setDnsLookupForTests } from '../src/tools/web';
+import { FeedbackTool } from '../src/tools/feedback';
 import { ImageDisplayTool, ImageTools } from '../src/tools/image';
 import { ToolRegistry } from '../src/tools/registry';
 import { ConnectorBridge } from '../src/tools/connector';
-import { mkdtemp, rm, writeFile, mkdir, chmod } from 'fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, chmod, readdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -107,11 +108,11 @@ describe('FilesystemTools', () => {
     expect(new FilesystemTools()).toBeInstanceOf(FilesystemTools);
   });
 
-  test('should write and read within temp folder', async () => {
-    const writeResult = await FilesystemTools.writeExecutor({ filename: 'test.txt', content: 'hello' });
+  test('should write and read within scripts folder', async () => {
+    const writeResult = await FilesystemTools.writeExecutor({ filename: 'test.txt', content: 'hello', cwd: tempDir });
     expect(writeResult).toContain('Successfully wrote');
 
-    const readResult = await FilesystemTools.readExecutor({ path: join(tempDir, 'temp', 'test', 'test.txt') });
+    const readResult = await FilesystemTools.readExecutor({ path: join(tempDir, '.oldpal', 'scripts', 'test', 'test.txt') });
     expect(readResult).toContain('hello');
   });
 
@@ -121,32 +122,32 @@ describe('FilesystemTools', () => {
   });
 
   test('should reject empty filenames', async () => {
-    const writeResult = await FilesystemTools.writeExecutor({ filename: '   ', content: 'hello' });
+    const writeResult = await FilesystemTools.writeExecutor({ filename: '   ', content: 'hello', cwd: tempDir });
     expect(writeResult).toContain('filename is required');
   });
 
-  test('should sanitize filenames to stay within temp folder', async () => {
-    const writeResult = await FilesystemTools.writeExecutor({ filename: '../outside.txt', content: 'safe' });
+  test('should sanitize filenames to stay within scripts folder', async () => {
+    const writeResult = await FilesystemTools.writeExecutor({ filename: '../outside.txt', content: 'safe', cwd: tempDir });
     expect(writeResult).toContain('Successfully wrote');
     expect(writeResult).toContain('outside.txt');
   });
 
   test('should glob and grep files', async () => {
-    await FilesystemTools.writeExecutor({ filename: 'notes.txt', content: 'alpha\nbeta' });
+    await FilesystemTools.writeExecutor({ filename: 'notes.txt', content: 'alpha\nbeta', cwd: tempDir });
 
-    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.txt', path: join(tempDir, 'temp') });
+    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.txt', path: join(tempDir, '.oldpal', 'scripts') });
     expect(globResult).toContain('notes.txt');
 
-    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'beta', path: join(tempDir, 'temp') });
+    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'beta', path: join(tempDir, '.oldpal', 'scripts') });
     expect(grepResult).toContain('beta');
   });
 
   test('should handle glob and grep misses', async () => {
-    await mkdir(join(tempDir, 'temp'), { recursive: true });
-    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.nope', path: join(tempDir, 'temp') });
+    await mkdir(join(tempDir, '.oldpal', 'scripts'), { recursive: true });
+    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.nope', path: join(tempDir, '.oldpal', 'scripts') });
     expect(globResult).toContain('No files found');
 
-    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'nope', path: join(tempDir, 'temp') });
+    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'nope', path: join(tempDir, '.oldpal', 'scripts') });
     expect(grepResult).toContain('No matches found');
   });
 
@@ -706,5 +707,26 @@ describe('ToolRegistry', () => {
     expect(registry.hasTool('temp')).toBe(true);
     registry.unregister('temp');
     expect(registry.hasTool('temp')).toBe(false);
+  });
+});
+
+describe('FeedbackTool', () => {
+  test('should save feedback locally', async () => {
+    const result = await FeedbackTool.executor({
+      type: 'feedback',
+      title: 'Test feedback',
+      description: 'Something went wrong',
+    });
+
+    expect(result).toContain('Feedback saved locally');
+
+    const feedbackDir = join(tempDir, 'feedback');
+    const files = await readdir(feedbackDir);
+    expect(files.length).toBe(1);
+
+    const data = JSON.parse(await readFile(join(feedbackDir, files[0]), 'utf8'));
+    expect(data.title).toBe('Test feedback');
+    expect(data.description).toBe('Something went wrong');
+    expect(data.type).toBe('feedback');
   });
 });

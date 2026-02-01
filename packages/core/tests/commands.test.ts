@@ -287,16 +287,16 @@ describe('CommandExecutor', () => {
 
     test('should return prompt for non-self-handled command', async () => {
       loader.register({
-        name: 'review',
-        description: 'Review code',
-        content: 'Please review the code. $ARGUMENTS',
+        name: 'summarize',
+        description: 'Summarize topic',
+        content: 'Please summarize: $ARGUMENTS',
         selfHandled: false,
       });
 
-      const result = await executor.execute('/review main.ts', mockContext);
+      const result = await executor.execute('/summarize main.ts', mockContext);
 
       expect(result.handled).toBe(false);
-      expect(result.prompt).toContain('Please review the code.');
+      expect(result.prompt).toContain('Please summarize:');
       expect(result.prompt).toContain('main.ts');
     });
 
@@ -609,24 +609,6 @@ describe('BuiltinCommands', () => {
       expect(cmd?.selfHandled).toBe(false);
       expect(cmd?.content).toContain('summary');
     });
-
-    test('/bug should support arguments', () => {
-      const cmd = loader.getCommand('bug');
-      expect(cmd).toBeDefined();
-      expect(cmd?.content).toContain('$ARGUMENTS');
-    });
-
-    test('/review should support arguments', () => {
-      const cmd = loader.getCommand('review');
-      expect(cmd).toBeDefined();
-      expect(cmd?.content).toContain('$ARGUMENTS');
-    });
-
-    test('/pr should create pull request prompt', () => {
-      const cmd = loader.getCommand('pr');
-      expect(cmd).toBeDefined();
-      expect(cmd?.content).toContain('pull request');
-    });
   });
 
   describe('/tokens command', () => {
@@ -735,7 +717,7 @@ describe('BuiltinCommands', () => {
         const result = await cmd.handler('', mockContext);
         expect(result.handled).toBe(true);
         expect(emittedContent.some(c => c.includes('Initialized oldpal'))).toBe(true);
-        expect(existsSync(join(tempDir, '.oldpal', 'commands', 'review.md'))).toBe(true);
+        expect(existsSync(join(tempDir, '.oldpal', 'commands', 'reflect.md'))).toBe(true);
       }
     });
   });

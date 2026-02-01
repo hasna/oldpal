@@ -42,12 +42,14 @@ describe('Function coverage helpers', () => {
     expect(result.stdout.toString()).toBe('{}');
   });
 
-  test('filesystem helpers compute temp folder and containment', () => {
-    const tempFolder = fsTest.getTempFolder();
-    expect(tempFolder).toContain('temp');
-    expect(fsTest.isInTempFolder(tempFolder)).toBe(true);
-    expect(fsTest.isInTempFolder(tempFolder + '/file.txt')).toBe(true);
-    expect(fsTest.isInTempFolder('/tmp/not-oldpal')).toBe(false);
+  test('filesystem helpers compute scripts folder and containment', () => {
+    const cwd = process.cwd();
+    const scriptsFolder = fsTest.getScriptsFolder(cwd);
+    expect(scriptsFolder).toContain('.oldpal');
+    expect(scriptsFolder).toContain('scripts');
+    expect(fsTest.isInScriptsFolder(scriptsFolder, cwd)).toBe(true);
+    expect(fsTest.isInScriptsFolder(scriptsFolder + '/file.txt', cwd)).toBe(true);
+    expect(fsTest.isInScriptsFolder('/tmp/not-oldpal', cwd)).toBe(false);
   });
 
   test('image getViuPath handles missing viu', async () => {
