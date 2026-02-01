@@ -1,32 +1,32 @@
 import type { Tool } from '@oldpal/shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname, sep } from 'path';
-import { getConfigDir } from '../config';
+import { getProjectConfigDir } from '../config';
 import { Glob } from 'bun';
 
 // Session ID for temp folder (set during registration)
 let currentSessionId: string = 'default';
 
 /**
- * Get the temp folder path for the current session
+ * Get the scripts folder path for the current session
  */
-function getTempFolder(): string {
-  return join(getConfigDir(), 'temp', currentSessionId);
+function getScriptsFolder(cwd: string): string {
+  return join(getProjectConfigDir(cwd), 'scripts', currentSessionId);
 }
 
 /**
- * Check if a path is within the allowed temp folder
+ * Check if a path is within the allowed scripts folder
  */
-function isInTempFolder(path: string): boolean {
-  const tempFolder = resolve(getTempFolder());
+function isInScriptsFolder(path: string, cwd: string): boolean {
+  const scriptsFolder = resolve(getScriptsFolder(cwd));
   const resolved = resolve(path);
-  if (resolved === tempFolder) return true;
-  return resolved.startsWith(`${tempFolder}${sep}`);
+  if (resolved === scriptsFolder) return true;
+  return resolved.startsWith(`${scriptsFolder}${sep}`);
 }
 
 /**
  * Filesystem tools - read, write, glob, grep
- * Write operations are RESTRICTED to ~/.oldpal/temp/{session-id}/
+ * Write operations are RESTRICTED to .oldpal/scripts/{session-id}/
  */
 export class FilesystemTools {
   /**
@@ -118,17 +118,21 @@ export class FilesystemTools {
 
   static readonly writeTool: Tool = {
     name: 'write',
-    description: 'Write content to a file. RESTRICTED: Can only write to ~/.oldpal/temp/{session}/ folder. Provide just the filename and it will be saved to the temp folder.',
+    description: 'Write content to a file. RESTRICTED: Can only write to .oldpal/scripts/{session}/ in the current project. Provide a filename and it will be saved under the scripts folder.',
     parameters: {
       type: 'object',
       properties: {
         filename: {
           type: 'string',
-          description: 'The filename to write to (will be saved in temp folder)',
+          description: 'The filename to write to (will be saved in .oldpal/scripts)',
         },
         content: {
           type: 'string',
           description: 'The content to write',
+        },
+        cwd: {
+          type: 'string',
+          description: 'Base working directory for the project (optional)',
         },
       },
       required: ['filename', 'content'],
@@ -138,9 +142,10 @@ export class FilesystemTools {
   static readonly writeExecutor: ToolExecutor = async (input) => {
     const filename = input.filename as string || input.path as string;
     const content = input.content as string;
+    const baseCwd = (input.cwd as string) || process.cwd();
 
-    // Always write to temp folder
-    const tempFolder = getTempFolder();
+    // Always write to scripts folder
+    const scriptsFolder = getScriptsFolder(baseCwd);
 
     if (!filename || !filename.trim()) {
       return 'Error: filename is required';
@@ -151,20 +156,20 @@ export class FilesystemTools {
       .replace(/\.\.[/\\]/g, '')
       .replace(/\.\./g, '')
       .replace(/^[/\\]+/, '');
-    const path = join(tempFolder, sanitizedFilename);
+    const path = join(scriptsFolder, sanitizedFilename);
 
-    // Double check we're in temp folder
-    if (!isInTempFolder(path)) {
-      return `Error: Cannot write outside temp folder. Files are saved to ${tempFolder}`;
+    // Double check we're in scripts folder
+    if (!isInScriptsFolder(path, baseCwd)) {
+      return `Error: Cannot write outside scripts folder. Files are saved to ${scriptsFolder}`;
     }
 
     try {
-      // Ensure temp directory exists
+      // Ensure scripts directory exists
       const dir = dirname(path);
       await Bun.$`mkdir -p ${dir}`.quiet();
 
       await Bun.write(path, content);
-      return `Successfully wrote ${content.length} characters to ${path}\n\nYou can review and copy this file to your project if needed.`;
+      return `Successfully wrote ${content.length} characters to ${path}`;
     } catch (error) {
       return `Error: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -303,6 +308,6 @@ export class FilesystemTools {
 }
 
 export const __test__ = {
-  getTempFolder,
-  isInTempFolder,
+  getScriptsFolder,
+  isInScriptsFolder,
 };
