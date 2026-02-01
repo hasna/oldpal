@@ -1,7 +1,7 @@
 # Plan: Voice Input/Output Features
 
 **Plan ID:** 00010
-**Status:** Draft
+**Status:** Complete
 **Priority:** Low
 **Estimated Effort:** Large (5+ days)
 **Dependencies:** None
@@ -363,68 +363,68 @@ const voiceCommands = {
 ## Implementation Steps
 
 ### Step 1: Add Voice Types
-- [ ] Define VoiceConfig
-- [ ] Define STT types
-- [ ] Define TTS types
-- [ ] Create defaults
+- [x] Define VoiceConfig
+- [x] Define STT types
+- [x] Define TTS types
+- [x] Create defaults
 
 **Files:**
 - `packages/core/src/voice/types.ts`
 
 ### Step 2: Implement STT Providers
-- [ ] Implement WhisperSTT
-- [ ] Implement SystemSTT
-- [ ] Add audio recording
+- [x] Implement WhisperSTT
+- [x] Implement SystemSTT
+- [x] Add audio recording
 
 **Files:**
 - `packages/core/src/voice/stt.ts`
 - `packages/core/src/voice/recorder.ts`
 
 ### Step 3: Implement TTS Providers
-- [ ] Implement ElevenLabsTTS
-- [ ] Implement SystemTTS
-- [ ] Add streaming support
+- [x] Implement ElevenLabsTTS
+- [x] Implement SystemTTS
+- [x] Add streaming support
 
 **Files:**
 - `packages/core/src/voice/tts.ts`
 
 ### Step 4: Implement Audio Player
-- [ ] Create AudioPlayer class
-- [ ] Add playback control
-- [ ] Add streaming playback
+- [x] Create AudioPlayer class
+- [x] Add playback control
+- [x] Add streaming playback
 
 **Files:**
 - `packages/core/src/voice/player.ts`
 
 ### Step 5: Implement VoiceManager
-- [ ] Create VoiceManager class
-- [ ] Integrate STT and TTS
-- [ ] Add listen/speak methods
+- [x] Create VoiceManager class
+- [x] Integrate STT and TTS
+- [x] Add listen/speak methods
 
 **Files:**
 - `packages/core/src/voice/manager.ts`
 
 ### Step 6: Add Commands
-- [ ] Add /voice command
-- [ ] Add /say command
-- [ ] Add keyboard shortcuts
+- [x] Add /voice command
+- [x] Add /say command
+- [x] Add /listen command
 
 **Files:**
 - `packages/core/src/commands/builtin.ts`
 
 ### Step 7: Integrate with Terminal
-- [ ] Add voice mode UI
-- [ ] Add speaking indicator
-- [ ] Handle interrupts
+- [x] Add voice mode UI
+- [x] Add speaking indicator
+- [x] Handle interrupts
 
 **Files:**
 - `packages/terminal/src/components/App.tsx`
 - `packages/terminal/src/components/VoiceIndicator.tsx`
 
 ### Step 8: Add Tests
-- [ ] Test STT providers
-- [ ] Test TTS providers
-- [ ] Test VoiceManager
+- [x] Test STT providers
+- [x] Test TTS providers
+- [x] Test VoiceManager
 
 **Files:**
 - `packages/core/tests/voice.test.ts`
