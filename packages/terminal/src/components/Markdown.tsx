@@ -4,6 +4,7 @@ import chalk from 'chalk';
 
 interface MarkdownProps {
   content: string;
+  preRendered?: boolean;
 }
 
 /**
@@ -12,11 +13,18 @@ interface MarkdownProps {
  * - Handles bold text
  * - Handles code blocks and inline code
  */
-export function Markdown({ content }: MarkdownProps) {
+export function Markdown({ content, preRendered = false }: MarkdownProps) {
+  if (preRendered) {
+    return <Text>{content}</Text>;
+  }
   const { columns } = useStdout();
   const maxWidth = columns ? Math.max(20, columns - 2) : undefined;
   const rendered = parseMarkdown(content, { maxWidth });
   return <Text>{rendered}</Text>;
+}
+
+export function renderMarkdown(text: string, options?: { maxWidth?: number }): string {
+  return parseMarkdown(text, { maxWidth: options?.maxWidth });
 }
 
 function parseMarkdown(text: string, options?: { skipBlocks?: boolean; maxWidth?: number }): string {
@@ -65,7 +73,7 @@ function parseMarkdown(text: string, options?: { skipBlocks?: boolean; maxWidth?
   result = result.replace(/\b(Error|Failed|Failure|Denied|Blocked)\b/gi, (match) => chalk.red(match));
 
   // Format markdown tables (before restoring code blocks)
-  result = formatMarkdownTables(result);
+  result = formatMarkdownTables(result, options?.maxWidth);
 
   // Restore block sections
   result = result.replace(/@@BLOCKSECTION(\d+)@@/g, (_, index) => {
@@ -89,6 +97,8 @@ type BlockSection =
   | { kind: 'block'; type: string; title?: string; body: string; indent: string }
   | { kind: 'grid'; columns: number; cards: { type: string; title?: string; body: string }[]; body: string; indent: string }
   | { kind: 'report'; body: string; indent: string };
+
+const ALLOWED_BLOCK_TYPES = new Set(['info', 'success', 'warning', 'error', 'note', 'command']);
 
 function extractBlockSections(text: string, blocks: BlockSection[]): string {
   const lines = text.split('\n');
@@ -119,6 +129,9 @@ function extractBlockSections(text: string, blocks: BlockSection[]): string {
         i += 1;
         continue;
       }
+      if (parsed.warning) {
+        output.push(createMalformedBlock(blocks, indent, 'grid', parsed.warning));
+      }
 
       const bodyLines = stripIndent(parsed.bodyLines, indent);
       const body = bodyLines.join('\n');
@@ -133,7 +146,7 @@ function extractBlockSections(text: string, blocks: BlockSection[]): string {
       const indent = blockMatch[1] ?? '';
       const header = blockMatch[2] ?? '';
       const attrs = parseAttributes(header);
-      const type = String(attrs.type || 'info');
+      let type = String(attrs.type || 'info');
       const title = attrs.title ? String(attrs.title) : undefined;
       const parsed = parseDelimitedBlock(lines, i, indent);
       if (!parsed) {
@@ -141,6 +154,14 @@ function extractBlockSections(text: string, blocks: BlockSection[]): string {
         output.push(createMalformedBlock(blocks, indent, 'block'));
         i += 1;
         continue;
+      }
+      const normalizedType = type.toLowerCase();
+      if (!ALLOWED_BLOCK_TYPES.has(normalizedType)) {
+        output.push(createMalformedBlock(blocks, indent, 'block', `Unknown block type "${type}". Using info.`));
+        type = 'info';
+      }
+      if (parsed.warning) {
+        output.push(createMalformedBlock(blocks, indent, 'block', parsed.warning));
       }
       const body = stripIndent(parsed.bodyLines, indent).join('\n');
       blocks.push({ kind: 'block', type, title, body, indent });
@@ -157,6 +178,9 @@ function extractBlockSections(text: string, blocks: BlockSection[]): string {
         output.push(createMalformedBlock(blocks, indent, 'report'));
         i += 1;
         continue;
+      }
+      if (parsed.warning) {
+        output.push(createMalformedBlock(blocks, indent, 'report', parsed.warning));
       }
       const body = stripIndent(parsed.bodyLines, indent).join('\n');
       blocks.push({ kind: 'report', body, indent });
@@ -191,10 +215,14 @@ function extractCards(body: string): { type: string; title?: string; body: strin
     const title = attrs.title ? String(attrs.title) : undefined;
     const bodyLines: string[] = [];
     let closed = false;
+    let indentWarning: string | undefined;
     i += 1;
     while (i < lines.length) {
       const current = lines[i];
-      if (current.trim() === ':::' && current.startsWith(indent)) {
+      if (current.trim() === ':::') {
+        if (indent.length > 0 && !current.startsWith(indent)) {
+          indentWarning = 'Card closing ::: indentation did not match opening.';
+        }
         closed = true;
         i += 1;
         break;
@@ -211,6 +239,13 @@ function extractCards(body: string): { type: string; title?: string; body: strin
       break;
     }
     const stripped = stripIndent(bodyLines, indent);
+    if (indentWarning) {
+      cards.push({
+        type: 'warning',
+        title: 'Malformed card',
+        body: indentWarning,
+      });
+    }
     cards.push({ type, title, body: stripped.join('\n') });
   }
 
@@ -221,9 +256,10 @@ function parseDelimitedBlock(
   lines: string[],
   startIndex: number,
   indent: string
-): { bodyLines: string[]; nextIndex: number } | null {
+): { bodyLines: string[]; nextIndex: number; warning?: string } | null {
   const bodyLines: string[] = [];
   let openCards = 0;
+  let warning: string | undefined;
   let i = startIndex + 1;
 
   while (i < lines.length) {
@@ -237,14 +273,18 @@ function parseDelimitedBlock(
       continue;
     }
 
-    if (trimmed === ':::' && current.startsWith(indent)) {
+    if (trimmed === ':::') {
+      const indentMismatch = indent.length > 0 && !current.startsWith(indent);
       if (openCards > 0) {
         openCards -= 1;
         bodyLines.push(current);
         i += 1;
         continue;
       }
-      return { bodyLines, nextIndex: i + 1 };
+      if (indentMismatch) {
+        warning = 'Closing ::: indentation did not match opening. Adjust indentation for consistency.';
+      }
+      return { bodyLines, nextIndex: i + 1, warning };
     }
 
     bodyLines.push(current);
@@ -463,7 +503,7 @@ function formatBoxRow(line: string, width: number): string {
   return `│ ${padded} │`;
 }
 
-function formatMarkdownTables(text: string): string {
+function formatMarkdownTables(text: string, maxWidth?: number): string {
   const lines = text.split('\n');
   const output: string[] = [];
 
@@ -484,7 +524,7 @@ function formatMarkdownTables(text: string): string {
         i += 1;
       }
 
-      const table = renderTable(header, rows);
+      const table = renderTable(header, rows, maxWidth);
       output.push(...table);
       continue;
     }
@@ -502,7 +542,7 @@ function parseTableRow(line: string): string[] {
   return withoutEdges.split('|').map((cell) => cell.trim());
 }
 
-function renderTable(header: string[], rows: string[][]): string[] {
+function renderTable(header: string[], rows: string[][], maxWidth?: number): string[] {
   const colCount = Math.max(header.length, ...rows.map((r) => r.length));
   const widths = new Array(colCount).fill(0);
 
@@ -515,10 +555,29 @@ function renderTable(header: string[], rows: string[][]): string[] {
     }
   }
 
+  const minCellWidth = 4;
+  const availableCellWidth = maxWidth
+    ? Math.max(colCount * minCellWidth, maxWidth - (colCount - 1) * 3 - 4)
+    : undefined;
+  if (availableCellWidth) {
+    const total = widths.reduce((sum, width) => sum + width, 0);
+    if (total > availableCellWidth) {
+      const minWidth = Math.max(1, Math.floor(availableCellWidth / colCount));
+      while (widths.reduce((sum, width) => sum + width, 0) > availableCellWidth) {
+        const maxWidthValue = Math.max(...widths);
+        const idx = widths.findIndex((width) => width === maxWidthValue);
+        if (idx === -1) break;
+        if (widths[idx] <= minWidth) break;
+        widths[idx] -= 1;
+      }
+    }
+  }
+
   const pad = (value: string, width: number) => {
-    const len = stripAnsi(value).length;
-    if (len >= width) return value;
-    return value + ' '.repeat(width - len);
+    const rendered = width > 0 ? truncateAnsi(value, width) : value;
+    const len = stripAnsi(rendered).length;
+    if (len >= width) return rendered;
+    return rendered + ' '.repeat(width - len);
   };
 
   const top = '┌' + widths.map((w) => '─'.repeat(w + 2)).join('┬') + '┐';
@@ -612,7 +671,8 @@ function renderReport(body: string, maxWidth?: number, indent = ''): string {
 
   if (tableLines.length > 0) {
     output.push(indent + chalk.bold('Detailed Status Table'));
-    const rendered = renderReportTable(tableLines, indent);
+    const adjustedWidth = maxWidth ? Math.max(20, maxWidth - indent.length) : undefined;
+    const rendered = renderReportTable(tableLines, indent, adjustedWidth);
     output.push(...rendered);
   }
 
@@ -640,7 +700,7 @@ function renderProgressLine(label: string, value: number, labelWidth: number, ba
   return `${label.padEnd(labelWidth)} [${fill}${bar}] ${value}%`;
 }
 
-function renderReportTable(lines: string[], indent: string): string[] {
+function renderReportTable(lines: string[], indent: string, maxWidth?: number): string[] {
   const tableLines = lines.map((line) => line.trim()).filter(Boolean);
   if (tableLines.length < 2) return [];
 
@@ -667,7 +727,7 @@ function renderReportTable(lines: string[], indent: string): string[] {
     return next;
   });
 
-  return renderTable(header, styledRows).map((line) => indent + line);
+  return renderTable(header, styledRows, maxWidth).map((line) => indent + line);
 }
 
 function decoratePriority(value: string): string {
@@ -731,6 +791,23 @@ function wrapAnsiLine(line: string, width: number): string[] {
 
 function truncateAnsi(line: string, width: number): string {
   if (stripAnsi(line).length <= width) return line;
+  if (width <= 3) {
+    let result = '';
+    let visible = 0;
+    let i = 0;
+    while (i < line.length && visible < width) {
+      const match = line.slice(i).match(/^\x1b\[[0-9;]*m/);
+      if (match) {
+        result += match[0];
+        i += match[0].length;
+        continue;
+      }
+      result += line[i];
+      visible += 1;
+      i += 1;
+    }
+    return result;
+  }
   const suffix = '...';
   const target = Math.max(0, width - suffix.length);
   let current = '';

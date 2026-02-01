@@ -138,7 +138,12 @@ export class BashTool {
     const cwd = (input.cwd as string) || process.cwd();
     const timeout = (input.timeout as number) || 30000; // Reduced default timeout
 
-    const commandForChecks = command.replace(/\s*2>&1\s*/g, ' ');
+    const baseCommand = command.replace(/\s*2>&1\s*/g, ' ').trim();
+    const baseTrimmed = baseCommand.toLowerCase();
+    const allowConnectorNewlines = baseTrimmed.startsWith('connect-');
+    const commandForChecks = allowConnectorNewlines
+      ? baseCommand.replace(/[\r\n]+/g, ' ').trim()
+      : baseCommand;
     const commandSansQuotes = stripQuotedSegments(commandForChecks);
 
     const securityCheck = validateBashCommand(commandForChecks);
@@ -225,7 +230,7 @@ export class BashTool {
     }
 
     try {
-      const proc = Bun.spawn(['bash', '-c', command], {
+      const proc = Bun.spawn(['bash', '-c', commandForChecks], {
         cwd,
         stdout: 'pipe',
         stderr: 'pipe',

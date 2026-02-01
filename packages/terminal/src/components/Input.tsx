@@ -14,10 +14,13 @@ const COMMANDS = [
   { name: '/model', description: 'show model information' },
   { name: '/skills', description: 'list available skills' },
   { name: '/config', description: 'show configuration' },
+  { name: '/projects', description: 'manage projects in this folder' },
+  { name: '/plans', description: 'manage project plans' },
   { name: '/connectors', description: 'list available connectors' },
   { name: '/init', description: 'initialize assistants in project' },
   { name: '/compact', description: 'summarize to save context' },
   { name: '/memory', description: 'show what AI remembers' },
+  { name: '/context', description: 'manage injected project context' },
   { name: '/feedback', description: 'submit feedback on GitHub' },
   { name: '/schedule', description: 'schedule a command' },
   { name: '/schedules', description: 'list scheduled commands' },
@@ -34,7 +37,7 @@ interface SkillInfo {
 }
 
 interface InputProps {
-  onSubmit: (value: string, mode: 'normal' | 'interrupt' | 'queue') => void;
+  onSubmit: (value: string, mode: 'normal' | 'interrupt' | 'queue' | 'inline') => void;
   isProcessing?: boolean;
   queueLength?: number;
   commands?: { name: string; description: string }[];
@@ -89,15 +92,23 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
   // Handle keyboard input for autocomplete
   useInput((input, key) => {
     // Tab: autocomplete selected item
-    if (key.tab && autocompleteItems.length > 0) {
-      const selected = autocompleteItems[selectedIndex] || autocompleteItems[0];
-      if (autocompleteMode === 'skill') {
-        setValue('$' + selected.name + ' ');
-      } else {
-        setValue(selected.name + ' ');
+    if (key.tab) {
+      if (autocompleteItems.length > 0) {
+        const selected = autocompleteItems[selectedIndex] || autocompleteItems[0];
+        if (autocompleteMode === 'skill') {
+          setValue('$' + selected.name + ' ');
+        } else {
+          setValue(selected.name + ' ');
+        }
+        setSelectedIndex(0);
+        return;
       }
-      setSelectedIndex(0);
-      return;
+      if (value.trim()) {
+        onSubmit(value, 'queue');
+        setValue('');
+        setSelectedIndex(0);
+        return;
+      }
     }
 
     // Arrow keys for autocomplete navigation
@@ -144,20 +155,15 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
     ) {
       const selected = filteredCommands[selectedIndex] || filteredCommands[0];
       if (selected) {
-        if (isProcessing) {
-          onSubmit(selected.name, 'queue');
-        } else {
-          onSubmit(selected.name, 'normal');
-        }
+        onSubmit(selected.name, isProcessing ? 'inline' : 'normal');
         setValue('');
         setSelectedIndex(0);
         return;
       }
     }
 
-    // Normal submit: queue if processing, send otherwise
     if (isProcessing) {
-      onSubmit(submittedValue, 'queue');
+      onSubmit(submittedValue, 'inline');
     } else {
       onSubmit(submittedValue, 'normal');
     }
@@ -171,7 +177,9 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
 
   if (isProcessing) {
     prompt = '⋯';
-    placeholder = queueLength > 0 ? 'Type to queue another...' : 'Type to queue (Enter) or interrupt (Shift+Enter)...';
+    placeholder = queueLength > 0
+      ? 'Type to send (Enter) or queue (Tab) · Shift+Enter to interrupt...'
+      : 'Type to send (Enter) or queue (Tab) · Shift+Enter to interrupt...';
   }
 
   // Truncate description to fit in terminal

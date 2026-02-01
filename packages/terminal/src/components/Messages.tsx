@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Markdown } from './Markdown';
 
@@ -12,10 +12,12 @@ interface ActivityEntry {
   timestamp: number;
 }
 
+type DisplayMessage = Message & { __rendered?: boolean };
+
 interface MessagesProps {
-  messages: Message[];
+  messages: DisplayMessage[];
   currentResponse?: string;
-  streamingMessages?: Message[];
+  streamingMessages?: DisplayMessage[];
   currentToolCall?: ToolCall;
   lastToolResult?: ToolResult;
   activityLog?: ActivityEntry[];
@@ -171,15 +173,15 @@ function formatDuration(ms: number): string {
 }
 
 type MessageGroup =
-  | { type: 'single'; message: Message }
-  | { type: 'grouped'; messages: Message[] };
+  | { type: 'single'; message: DisplayMessage }
+  | { type: 'grouped'; messages: DisplayMessage[] };
 
 /**
  * Group consecutive assistant messages that only have tool calls (no text content)
  */
-function groupConsecutiveToolMessages(messages: Message[]): MessageGroup[] {
+function groupConsecutiveToolMessages(messages: DisplayMessage[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
-  let currentToolGroup: Message[] = [];
+  let currentToolGroup: DisplayMessage[] = [];
 
   for (const msg of messages) {
     const isToolOnlyAssistant =
@@ -219,7 +221,7 @@ function groupConsecutiveToolMessages(messages: Message[]): MessageGroup[] {
 /**
  * Render multiple tool-only messages as a single combined row
  */
-function CombinedToolMessage({ messages }: { messages: Message[] }) {
+function CombinedToolMessage({ messages }: { messages: DisplayMessage[] }) {
   // Collect all tool calls from all messages
   const allToolCalls: ToolCall[] = [];
   const allToolResults: ToolResult[] = [];
@@ -238,7 +240,7 @@ function CombinedToolMessage({ messages }: { messages: Message[] }) {
 }
 
 interface MessageBubbleProps {
-  message: Message;
+  message: DisplayMessage;
   queuedMessageIds?: Set<string>;
 }
 
@@ -278,7 +280,7 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
         <Box>
           <Text dimColor>{isContinuation ? '  ' : '● '} </Text>
           <Box flexGrow={1}>
-            <Markdown content={message.content} />
+            <Markdown content={message.content} preRendered={Boolean(message.__rendered)} />
           </Box>
         </Box>
       )}
@@ -300,6 +302,9 @@ function ToolCallPanel({
 }) {
   if (toolCalls.length === 0) return null;
 
+  const { columns } = useStdout();
+  const panelWidth = columns ? Math.max(24, columns - 4) : undefined;
+
   const resultMap = new Map<string, ToolResult>();
   for (const result of toolResults || []) {
     resultMap.set(result.toolCallId, result);
@@ -315,7 +320,7 @@ function ToolCallPanel({
       borderStyle="round"
       borderColor={borderColor}
       paddingX={1}
-      width="100%"
+      width={panelWidth ?? '100%'}
     >
       <Box justifyContent="space-between">
         <Text color={borderColor} bold>Tool Calls</Text>
@@ -329,6 +334,8 @@ function ToolCallPanel({
         const statusColor = result ? (result.isError ? 'red' : 'green') : 'yellow';
         const displayName = getToolDisplayName(toolCall);
         const context = getToolContext(toolCall);
+        const maxLine = panelWidth ? Math.max(20, panelWidth - 8) : 80;
+        const summaryLine = truncate(formatToolCall(toolCall), maxLine);
         return (
           <Box key={toolCall.id} flexDirection="column" marginTop={1}>
             <Box>
@@ -336,7 +343,7 @@ function ToolCallPanel({
               <Text color={statusColor} bold>{displayName}</Text>
               {context && <Text dimColor> · {context}</Text>}
             </Box>
-            <Text dimColor>{formatToolCall(toolCall)}</Text>
+            <Text dimColor>{summaryLine}</Text>
             {result && (
               <Box marginLeft={2}>
                 <Text dimColor>↳ {truncateToolResult(result, 4, 400)}</Text>

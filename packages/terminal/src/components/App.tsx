@@ -5,6 +5,7 @@ import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyStat
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
+import { renderMarkdown } from './Markdown';
 import { Status } from './Status';
 import { Spinner } from './Spinner';
 import { ProcessingIndicator } from './ProcessingIndicator';
@@ -12,32 +13,6 @@ import { WelcomeBanner } from './WelcomeBanner';
 import { SessionSelector } from './SessionSelector';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1' || process.env.OLDPAL_DEBUG === '1';
-
-// Format tool name for compact display
-function formatToolName(toolCall: ToolCall): string {
-  const { name, input } = toolCall;
-  switch (name) {
-    case 'bash':
-      return `bash`;
-    case 'read':
-      const path = String(input.path || input.file_path || '');
-      return `read ${path.split('/').pop() || ''}`;
-    case 'write':
-      const writePath = String(input.filename || input.path || input.file_path || '');
-      return `write ${writePath.split('/').pop() || ''}`;
-    case 'glob':
-      return `glob`;
-    case 'grep':
-      return `grep`;
-    case 'web_search':
-      return `search`;
-    case 'web_fetch':
-    case 'curl':
-      return `fetch`;
-    default:
-      return name;
-  }
-}
 
 function parseErrorMessage(error: string): { code?: string; message: string; suggestion?: string } {
   const lines = error.split('\n');
@@ -93,13 +68,85 @@ interface QueuedMessage {
   sessionId: string;
   content: string;
   queuedAt: number;
+  mode: 'queued' | 'inline';
 }
 
 const MESSAGE_CHUNK_LINES = 12;
 const MESSAGE_WRAP_CHARS = 120;
 
-function buildDisplayMessages(messages: Message[], chunkLines: number, wrapChars: number): Message[] {
-  const display: Message[] = [];
+type DisplayMessage = Message & { __rendered?: boolean };
+
+function wrapTextLines(text: string, wrapChars: number): string[] {
+  const rawLines = text.split('\n');
+  const lines: string[] = [];
+  for (const line of rawLines) {
+    if (line.length <= wrapChars) {
+      lines.push(line);
+      continue;
+    }
+    for (let i = 0; i < line.length; i += wrapChars) {
+      lines.push(line.slice(i, i + wrapChars));
+    }
+  }
+  return lines;
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
+function chunkRenderedLines(lines: string[], chunkLines: number): string[][] {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let i = 0;
+
+  const isBoxStart = (line: string) => stripAnsi(line).trimStart().startsWith('┌');
+  const isBoxEnd = (line: string) => stripAnsi(line).trimStart().startsWith('└');
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (isBoxStart(line)) {
+      let end = i + 1;
+      while (end < lines.length && !isBoxEnd(lines[end])) {
+        end += 1;
+      }
+      if (end < lines.length) end += 1;
+      const boxLines = lines.slice(i, end);
+      if (current.length > 0 && current.length + boxLines.length > chunkLines) {
+        chunks.push(current);
+        current = [];
+      }
+      if (boxLines.length >= chunkLines) {
+        chunks.push(boxLines);
+      } else {
+        current.push(...boxLines);
+      }
+      i = end;
+      continue;
+    }
+
+    if (current.length >= chunkLines) {
+      chunks.push(current);
+      current = [];
+    }
+    current.push(line);
+    i += 1;
+  }
+
+  if (current.length > 0) {
+    chunks.push(current);
+  }
+
+  return chunks;
+}
+
+function buildDisplayMessages(
+  messages: Message[],
+  chunkLines: number,
+  wrapChars: number,
+  options?: { maxWidth?: number }
+): DisplayMessage[] {
+  const display: DisplayMessage[] = [];
 
   for (const msg of messages) {
     const content = msg.content ?? '';
@@ -109,31 +156,31 @@ function buildDisplayMessages(messages: Message[], chunkLines: number, wrapChars
       continue;
     }
 
-    const rawLines = content.split('\n');
-    const lines: string[] = [];
-    for (const line of rawLines) {
-      if (line.length <= wrapChars) {
-        lines.push(line);
-        continue;
-      }
-      for (let i = 0; i < line.length; i += wrapChars) {
-        lines.push(line.slice(i, i + wrapChars));
-      }
-    }
+    const lines = wrapTextLines(content, wrapChars);
     if (lines.length <= chunkLines) {
-      display.push(msg);
+      if (msg.role === 'assistant') {
+        const rendered = renderMarkdown(lines.join('\n'), { maxWidth: options?.maxWidth });
+        display.push({ ...msg, content: rendered, __rendered: true });
+      } else {
+        display.push(msg);
+      }
       continue;
     }
 
-    const totalChunks = Math.ceil(lines.length / chunkLines);
-    for (let i = 0; i < totalChunks; i++) {
-      const chunkContent = lines.slice(i * chunkLines, (i + 1) * chunkLines).join('\n');
+    const baseContent = lines.join('\n');
+    const renderAssistant = msg.role === 'assistant';
+    const rendered = renderAssistant ? renderMarkdown(baseContent, { maxWidth: options?.maxWidth }) : baseContent;
+    const renderedLines = rendered.split('\n');
+    const chunks = chunkRenderedLines(renderedLines, chunkLines);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkContent = chunks[i].join('\n');
       display.push({
         ...msg,
         id: `${msg.id}::chunk-${i}`,
         content: chunkContent,
-        toolCalls: i === totalChunks - 1 ? msg.toolCalls : undefined,
-        toolResults: i === totalChunks - 1 ? msg.toolResults : undefined,
+        __rendered: renderAssistant,
+        toolCalls: i === chunks.length - 1 ? msg.toolCalls : undefined,
+        toolResults: i === chunks.length - 1 ? msg.toolResults : undefined,
       });
     }
   }
@@ -553,14 +600,15 @@ export function App({ cwd, version }: AppProps) {
     ? messageQueue.filter((msg) => msg.sessionId === activeSessionId)
     : [];
   const queuedMessageIds = useMemo(
-    () => new Set(activeQueue.map((msg) => msg.id)),
+    () => new Set(activeQueue.filter((msg) => msg.mode === 'queued').map((msg) => msg.id)),
     [activeQueue]
   );
 
   const wrapChars = columns ? Math.max(40, columns - 4) : MESSAGE_WRAP_CHARS;
+  const renderWidth = columns ? Math.max(20, columns - 2) : undefined;
   const displayMessages = useMemo(
-    () => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES, wrapChars),
-    [messages, wrapChars]
+    () => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth }),
+    [messages, wrapChars, renderWidth]
   );
   const streamingMessages = useMemo(() => {
     if (!isProcessing || !currentResponse.trim()) return [];
@@ -570,8 +618,8 @@ export function App({ cwd, version }: AppProps) {
       content: currentResponse,
       timestamp: now(),
     };
-    return buildDisplayMessages([streamingMessage], MESSAGE_CHUNK_LINES, wrapChars);
-  }, [currentResponse, isProcessing, wrapChars]);
+    return buildDisplayMessages([streamingMessage], MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth });
+  }, [currentResponse, isProcessing, wrapChars, renderWidth]);
   const displayCount = displayMessages.length + streamingMessages.length;
 
   // Process queue when not processing
@@ -752,7 +800,7 @@ export function App({ cwd, version }: AppProps) {
 
   // Handle message submission
   const handleSubmit = useCallback(
-    async (input: string, mode: 'normal' | 'interrupt' | 'queue' = 'normal') => {
+    async (input: string, mode: 'normal' | 'interrupt' | 'queue' | 'inline' = 'normal') => {
       if (!activeSession || !input.trim()) return;
 
       const trimmedInput = input.trim();
@@ -785,12 +833,18 @@ export function App({ cwd, version }: AppProps) {
       }
 
       // Queue mode: add to queue for later
-      if (mode === 'queue' || (isProcessing && mode === 'normal')) {
+      if (mode === 'queue' || mode === 'inline') {
         if (!activeSessionId) return;
         const queuedId = generateId();
         setMessageQueue((prev) => [
           ...prev,
-          { id: queuedId, sessionId: activeSessionId, content: trimmedInput, queuedAt: now() },
+          {
+            id: queuedId,
+            sessionId: activeSessionId,
+            content: trimmedInput,
+            queuedAt: now(),
+            mode: mode === 'inline' ? 'inline' : 'queued',
+          },
         ]);
         setMessages((prev) => [
           ...prev,
@@ -909,6 +963,8 @@ export function App({ cwd, version }: AppProps) {
     if (text.length <= maxLen) return text;
     return text.slice(0, maxLen - 3) + '...';
   };
+  const queuedCount = activeQueue.filter((msg) => msg.mode === 'queued').length;
+  const inlineCount = activeQueue.filter((msg) => msg.mode === 'inline').length;
 
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
@@ -918,7 +974,7 @@ export function App({ cwd, version }: AppProps) {
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
-          version={version ?? '0.6.13'}
+          version={version ?? 'unknown'}
           model="claude-sonnet-4"
           directory={activeSession?.cwd || cwd}
         />
@@ -954,32 +1010,18 @@ export function App({ cwd, version }: AppProps) {
         maxVisible={maxVisibleMessages}
       />
 
-      {/* Tool calls - show last 3 tool calls inline during processing */}
-      {isProcessing && toolCallEntries.length > 0 && (
-        <Box marginY={1} flexDirection="column">
-          {toolCallEntries.slice(-3).map(({ toolCall, result }) => (
-            <Box key={toolCall.id}>
-              <Text dimColor>
-                {result ? '✓' : '⚙'} {formatToolName(toolCall)}
-                {result?.isError && <Text color="red"> (error)</Text>}
-              </Text>
-            </Box>
-          ))}
-          {toolCallEntries.length > 3 && (
-            <Text dimColor>  ... and {toolCallEntries.length - 3} more tools</Text>
-          )}
-        </Box>
-      )}
-
       {/* Queue indicator */}
       {activeQueue.length > 0 && (
         <Box marginY={1} flexDirection="column">
           <Text dimColor>
-            {activeQueue.length} message{activeQueue.length > 1 ? 's' : ''} queued
+            {activeQueue.length} pending message{activeQueue.length > 1 ? 's' : ''}
+            {inlineCount > 0 || queuedCount > 0
+              ? ` · ${inlineCount} in-stream · ${queuedCount} queued`
+              : ''}
           </Text>
           {activeQueue.slice(0, MAX_QUEUED_PREVIEW).map((queued) => (
             <Box key={queued.id} marginLeft={2}>
-              <Text dimColor>❯ {truncateQueued(queued.content)}</Text>
+              <Text dimColor>{queued.mode === 'inline' ? '↳' : '⏳'} {truncateQueued(queued.content)}</Text>
             </Box>
           ))}
           {activeQueue.length > MAX_QUEUED_PREVIEW && (
