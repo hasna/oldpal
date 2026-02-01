@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import type { EnergyState } from '@oldpal/shared';
+import type { EnergyState, VoiceState } from '@oldpal/shared';
 import { EnergyBar } from './EnergyBar';
 
 interface TokenUsage {
@@ -16,6 +16,7 @@ interface StatusProps {
   queueLength?: number;
   tokenUsage?: TokenUsage;
   energyState?: EnergyState;
+  voiceState?: VoiceState;
   sessionIndex?: number;
   sessionCount?: number;
   backgroundProcessingCount?: number;
@@ -29,6 +30,7 @@ export function Status({
   queueLength = 0,
   tokenUsage,
   energyState,
+  voiceState,
   sessionIndex,
   sessionCount,
   backgroundProcessingCount = 0,
@@ -75,6 +77,10 @@ export function Status({
     ? ` (${backgroundProcessingCount} processing)`
     : '';
 
+  const voiceInfo = voiceState?.enabled
+    ? `voice ${voiceState.isListening ? 'listening' : voiceState.isSpeaking ? 'speaking' : 'on'}`
+    : '';
+
   return (
     <Box marginTop={1} justifyContent="space-between">
       <Text dimColor>/help for commands{sessionCount && sessionCount > 1 ? ' | Ctrl+S sessions' : ''}</Text>
@@ -84,6 +90,7 @@ export function Status({
             <EnergyBar current={energyState.current} max={energyState.max} />
           </Box>
         )}
+        {voiceInfo && <Text dimColor>{voiceInfo} · </Text>}
         {isProcessing && <Text dimColor>esc to stop · </Text>}
         {sessionInfo && (
           <Text dimColor>

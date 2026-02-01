@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import { SessionRegistry, type SessionInfo } from '@oldpal/core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState } from '@oldpal/shared';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState } from '@oldpal/shared';
 import { generateId, now } from '@oldpal/shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
@@ -80,6 +80,7 @@ interface SessionUIState {
   toolResults: ToolResult[];
   tokenUsage: TokenUsage | undefined;
   energyState: EnergyState | undefined;
+  voiceState: VoiceState | undefined;
   processingStartTime: number | undefined;
   currentTurnTokens: number;
   error: string | null;
@@ -163,6 +164,7 @@ export function App({ cwd }: AppProps) {
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | undefined>();
   const [energyState, setEnergyState] = useState<EnergyState | undefined>();
+  const [voiceState, setVoiceState] = useState<VoiceState | undefined>();
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -283,12 +285,13 @@ export function App({ cwd }: AppProps) {
         toolResults: toolResultsRef.current,
         tokenUsage,
         energyState,
+        voiceState,
         processingStartTime,
         currentTurnTokens,
         error,
       });
     }
-  }, [activeSessionId, messages, tokenUsage, energyState, processingStartTime, currentTurnTokens, error]);
+  }, [activeSessionId, messages, tokenUsage, energyState, voiceState, processingStartTime, currentTurnTokens, error]);
 
   // Load session UI state
   const loadSessionState = useCallback((sessionId: string) => {
@@ -304,6 +307,7 @@ export function App({ cwd }: AppProps) {
       setCurrentToolCall(undefined);
       setTokenUsage(state.tokenUsage);
       setEnergyState(state.energyState);
+      setVoiceState(state.voiceState);
       setProcessingStartTime(state.processingStartTime);
       setCurrentTurnTokens(state.currentTurnTokens);
       setError(state.error);
@@ -319,6 +323,7 @@ export function App({ cwd }: AppProps) {
       setCurrentToolCall(undefined);
       setTokenUsage(undefined);
       setEnergyState(undefined);
+      setVoiceState(undefined);
       setProcessingStartTime(undefined);
       setCurrentTurnTokens(0);
       setError(null);
@@ -422,6 +427,7 @@ export function App({ cwd }: AppProps) {
       if (activeSession) {
         setTokenUsage(activeSession.client.getTokenUsage());
         setEnergyState(activeSession.client.getEnergyState() ?? undefined);
+        setVoiceState(activeSession.client.getVoiceState() ?? undefined);
       }
     }
   }, [registry, exit, finalizeResponse, resetTurnState]);
@@ -455,6 +461,7 @@ export function App({ cwd }: AppProps) {
           argumentHint: s.argumentHint,
         })));
         setEnergyState(session.client.getEnergyState() ?? undefined);
+        setVoiceState(session.client.getVoiceState() ?? undefined);
 
         setIsInitializing(false);
       } catch (err) {
@@ -594,6 +601,7 @@ export function App({ cwd }: AppProps) {
       setIsProcessing(session.isProcessing);
       isProcessingRef.current = session.isProcessing;
       setEnergyState(session.client.getEnergyState() ?? undefined);
+      setVoiceState(session.client.getVoiceState() ?? undefined);
     }
 
     // Now switch session in registry (may replay buffered chunks to the reset state)
@@ -622,6 +630,7 @@ export function App({ cwd }: AppProps) {
       setIsProcessing(false);
       isProcessingRef.current = false;
       setEnergyState(newSession.client.getEnergyState() ?? undefined);
+      setVoiceState(newSession.client.getVoiceState() ?? undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
     }
@@ -976,6 +985,7 @@ export function App({ cwd }: AppProps) {
         queueLength={activeQueue.length}
         tokenUsage={tokenUsage}
         energyState={energyState}
+        voiceState={voiceState}
         sessionIndex={sessionIndex}
         sessionCount={sessionCount}
         backgroundProcessingCount={backgroundProcessingCount}
