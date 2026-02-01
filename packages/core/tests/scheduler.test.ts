@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import type { ScheduledCommand } from '@oldpal/shared';
+import type { ScheduledCommand } from '@hasna/assistants-shared';
 import { computeNextRun, listSchedules, saveSchedule } from '../src/scheduler/store';
 import { getNextCronRun } from '../src/scheduler/cron';
 
@@ -18,7 +18,7 @@ describe('Scheduler', () => {
   });
 
   test('save and list schedules', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'oldpal-sched-'));
+    const tempDir = await mkdtemp(join(tmpdir(), 'assistants-sched-'));
     try {
       const schedule: ScheduledCommand = {
         id: 'sched-1',

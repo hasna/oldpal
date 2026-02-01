@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { AgentLoop } from '../src/agent/loop';
-import type { Tool } from '@oldpal/shared';
+import type { Tool } from '@hasna/assistants-shared';
 
 const makeTool = (name: string): Tool => ({
   name,

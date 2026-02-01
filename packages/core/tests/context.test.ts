@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message } from '@oldpal/shared';
+import type { Message } from '@hasna/assistants-shared';
 import type { LLMClient } from '../src/llm/client';
 import { TokenCounter } from '../src/context/token-counter';
 import { ContextManager } from '../src/context/manager';

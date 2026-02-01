@@ -8,7 +8,7 @@ import {
   truncate,
   formatBytes,
   formatDuration,
-} from '@oldpal/shared';
+} from '@hasna/assistants-shared';
 
 describe('shared utils coverage', () => {
   test('covers utility helpers', async () => {

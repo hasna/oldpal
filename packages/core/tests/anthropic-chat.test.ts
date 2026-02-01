@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, mock, test } from 'bun:test';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import type { StreamChunk } from '@oldpal/shared';
+import type { StreamChunk } from '@hasna/assistants-shared';
 
 let behavior: 'success' | 'invalid-json' | 'error' = 'success';
 
@@ -111,7 +111,7 @@ describe('AnthropicClient secrets loading', () => {
   let originalApiKey: string | undefined;
 
   beforeEach(() => {
-    tempHome = mkdtempSync(join(tmpdir(), 'oldpal-home-'));
+    tempHome = mkdtempSync(join(tmpdir(), 'assistants-home-'));
     originalHome = process.env.HOME;
     originalApiKey = process.env.ANTHROPIC_API_KEY;
     process.env.HOME = tempHome;

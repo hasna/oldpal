@@ -27,8 +27,8 @@ describe('Bash Security', () => {
 
 describe('Path Security', () => {
   test('should block symlink outside working directory', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'oldpal-sec-'));
-    const outside = await mkdtemp(join(tmpdir(), 'oldpal-outside-'));
+    const base = await mkdtemp(join(tmpdir(), 'assistants-sec-'));
+    const outside = await mkdtemp(join(tmpdir(), 'assistants-outside-'));
     const target = join(outside, 'secret.txt');
     await writeFile(target, 'secret');
 
@@ -42,7 +42,7 @@ describe('Path Security', () => {
 
 describe('Security Logger', () => {
   test('should log and persist events', async () => {
-    const logDir = await mkdtemp(join(tmpdir(), 'oldpal-sec-log-'));
+    const logDir = await mkdtemp(join(tmpdir(), 'assistants-sec-log-'));
     const logFile = join(logDir, 'security.log');
     const logger = new SecurityLogger(logFile);
 

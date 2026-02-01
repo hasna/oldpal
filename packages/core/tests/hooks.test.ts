@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach } from 'bun:test';
 import { HookLoader } from '../src/hooks/loader';
 import { HookExecutor } from '../src/hooks/executor';
 import type { LLMClient } from '../src/llm/client';
-import type { HookConfig, HookMatcher, HookInput, HookEvent } from '@oldpal/shared';
+import type { HookConfig, HookMatcher, HookInput, HookEvent } from '@hasna/assistants-shared';
 
 describe('HookLoader', () => {
   let loader: HookLoader;

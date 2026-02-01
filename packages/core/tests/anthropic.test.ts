@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach, mock } from 'bun:test';
 import { AnthropicClient } from '../src/llm/anthropic';
-import type { Message, Tool, LLMConfig } from '@oldpal/shared';
+import type { Message, Tool, LLMConfig } from '@hasna/assistants-shared';
 
 describe('AnthropicClient', () => {
   const mockConfig: LLMConfig = {

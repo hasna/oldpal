@@ -12,7 +12,7 @@ const originalHome = process.env.HOME;
 let tempHome: string | null = null;
 
 beforeEach(() => {
-  tempHome = mkdtempSync(join(tmpdir(), 'oldpal-voice-test-'));
+  tempHome = mkdtempSync(join(tmpdir(), 'assistants-voice-test-'));
   process.env.HOME = tempHome;
   delete process.env.OPENAI_API_KEY;
   delete process.env.ELEVENLABS_API_KEY;

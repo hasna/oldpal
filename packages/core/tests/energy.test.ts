@@ -8,7 +8,7 @@ import { EnergyStorage } from '../src/energy/storage';
 let tempDir: string;
 
 beforeEach(() => {
-  tempDir = mkdtempSync(join(tmpdir(), 'oldpal-energy-'));
+  tempDir = mkdtempSync(join(tmpdir(), 'assistants-energy-'));
 });
 
 afterEach(() => {

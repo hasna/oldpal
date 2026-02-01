@@ -5,16 +5,18 @@ import { tmpdir } from 'os';
 import { AgentLoop } from '../src/agent/loop';
 
 let tempDir: string;
+let originalAssistantsDir: string | undefined;
 let originalOldpalDir: string | undefined;
 
 beforeEach(() => {
+  originalAssistantsDir = process.env.ASSISTANTS_DIR;
   originalOldpalDir = process.env.OLDPAL_DIR;
-  tempDir = mkdtempSync(join(tmpdir(), 'oldpal-init-'));
-  process.env.OLDPAL_DIR = tempDir;
+  tempDir = mkdtempSync(join(tmpdir(), 'assistants-init-'));
+  process.env.ASSISTANTS_DIR = tempDir;
 
   // Minimal config to avoid connector discovery and provide API key
   writeFileSync(
-    join(tempDir, 'settings.json'),
+    join(tempDir, 'config.json'),
     JSON.stringify(
       {
         llm: { provider: 'anthropic', model: 'mock', apiKey: 'test-key' },
@@ -27,6 +29,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  process.env.ASSISTANTS_DIR = originalAssistantsDir;
   process.env.OLDPAL_DIR = originalOldpalDir;
   rmSync(tempDir, { recursive: true, force: true });
 });

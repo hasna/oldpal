@@ -14,8 +14,8 @@ describe('CommandLoader', () => {
   let commandsDir: string;
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `oldpal-test-${Date.now()}`);
-    commandsDir = join(testDir, '.oldpal', 'commands');
+    testDir = join(tmpdir(), `assistants-test-${Date.now()}`);
+    commandsDir = join(testDir, '.assistants', 'commands');
     mkdirSync(commandsDir, { recursive: true });
     loader = new CommandLoader(testDir);
   });
@@ -50,7 +50,7 @@ Test content here.
     test('should load global commands from HOME', async () => {
       const originalHome = process.env.HOME;
       const homeDir = join(testDir, 'home');
-      const globalDir = join(homeDir, '.oldpal', 'commands');
+      const globalDir = join(homeDir, '.assistants', 'commands');
       mkdirSync(globalDir, { recursive: true });
       writeFileSync(join(globalDir, 'global.md'), `---
 name: global
@@ -341,7 +341,7 @@ describe('CommandExecutor', () => {
     });
 
     test('should run shell commands from context cwd', async () => {
-      const tempDir = mkdtempSync(join(tmpdir(), 'oldpal-shell-'));
+      const tempDir = mkdtempSync(join(tmpdir(), 'assistants-shell-'));
       loader.register({
         name: 'cwd',
         description: 'Shell cwd command',
@@ -380,6 +380,7 @@ describe('BuiltinCommands', () => {
   let emittedContent: string[];
   let messagesCleared: boolean;
   let tempDir: string;
+  let originalAssistantsDir: string | undefined;
   let originalOldpalDir: string | undefined;
 
   beforeEach(() => {
@@ -387,9 +388,10 @@ describe('BuiltinCommands', () => {
     loader = new CommandLoader();
     emittedContent = [];
     messagesCleared = false;
-    tempDir = mkdtempSync(join(tmpdir(), 'oldpal-cmd-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'assistants-cmd-'));
+    originalAssistantsDir = process.env.ASSISTANTS_DIR;
     originalOldpalDir = process.env.OLDPAL_DIR;
-    process.env.OLDPAL_DIR = tempDir;
+    process.env.ASSISTANTS_DIR = tempDir;
 
     mockContext = {
       cwd: tempDir,
@@ -419,6 +421,7 @@ describe('BuiltinCommands', () => {
   });
 
   afterEach(() => {
+    process.env.ASSISTANTS_DIR = originalAssistantsDir;
     process.env.OLDPAL_DIR = originalOldpalDir;
     rmSync(tempDir, { recursive: true, force: true });
   });
@@ -717,8 +720,8 @@ describe('BuiltinCommands', () => {
       if (cmd?.handler) {
         const result = await cmd.handler('', mockContext);
         expect(result.handled).toBe(true);
-        expect(emittedContent.some(c => c.includes('Initialized oldpal'))).toBe(true);
-        expect(existsSync(join(tempDir, '.oldpal', 'commands', 'reflect.md'))).toBe(true);
+        expect(emittedContent.some(c => c.includes('Initialized assistants'))).toBe(true);
+        expect(existsSync(join(tempDir, '.assistants', 'commands', 'reflect.md'))).toBe(true);
       }
     });
   });

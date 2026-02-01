@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { LLMConfig } from '@oldpal/shared';
+import type { LLMConfig } from '@hasna/assistants-shared';
 import { createLLMClient } from '../src/llm/client';
 
 describe('createLLMClient', () => {

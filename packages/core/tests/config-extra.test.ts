@@ -5,15 +5,18 @@ import { tmpdir } from 'os';
 import { ensureConfigDir, loadHooksConfig, loadSystemPrompt, loadConfig, getTempFolder, getConfigDir } from '../src/config';
 
 let tempDir: string;
+let originalAssistantsDir: string | undefined;
 let originalOldpalDir: string | undefined;
 
 beforeEach(() => {
+  originalAssistantsDir = process.env.ASSISTANTS_DIR;
   originalOldpalDir = process.env.OLDPAL_DIR;
-  tempDir = mkdtempSync(join(tmpdir(), 'oldpal-config-'));
-  process.env.OLDPAL_DIR = tempDir;
+  tempDir = mkdtempSync(join(tmpdir(), 'assistants-config-'));
+  process.env.ASSISTANTS_DIR = tempDir;
 });
 
 afterEach(() => {
+  process.env.ASSISTANTS_DIR = originalAssistantsDir;
   process.env.OLDPAL_DIR = originalOldpalDir;
   rmSync(tempDir, { recursive: true, force: true });
 });
@@ -21,8 +24,8 @@ afterEach(() => {
 describe('config helpers', () => {
   test('ensureConfigDir creates base directories', async () => {
     await ensureConfigDir('sess');
-    expect(existsSync(join(tempDir, 'sessions'))).toBe(true);
-    expect(existsSync(join(tempDir, 'skills'))).toBe(true);
+    expect(existsSync(join(tempDir, 'assistants'))).toBe(true);
+    expect(existsSync(join(tempDir, 'shared', 'skills'))).toBe(true);
     expect(existsSync(join(tempDir, 'temp'))).toBe(true);
     expect(existsSync(join(tempDir, 'temp', 'sess'))).toBe(true);
   });
@@ -38,8 +41,8 @@ describe('config helpers', () => {
       )
     );
 
-    const projectDir = mkdtempSync(join(tmpdir(), 'oldpal-project-'));
-    const projectHooksDir = join(projectDir, '.oldpal');
+    const projectDir = mkdtempSync(join(tmpdir(), 'assistants-project-'));
+    const projectHooksDir = join(projectDir, '.assistants');
     mkdirSync(projectHooksDir, { recursive: true });
     writeFileSync(
       join(projectHooksDir, 'hooks.json'),
@@ -58,12 +61,12 @@ describe('config helpers', () => {
   });
 
   test('loadSystemPrompt combines global and project prompts', async () => {
-    writeFileSync(join(tempDir, 'OLDPAL.md'), 'global');
+    writeFileSync(join(tempDir, 'ASSISTANTS.md'), 'global');
 
-    const projectDir = mkdtempSync(join(tmpdir(), 'oldpal-project-'));
-    const projectConfigDir = join(projectDir, '.oldpal');
+    const projectDir = mkdtempSync(join(tmpdir(), 'assistants-project-'));
+    const projectConfigDir = join(projectDir, '.assistants');
     mkdirSync(projectConfigDir, { recursive: true });
-    writeFileSync(join(projectConfigDir, 'OLDPAL.md'), 'project');
+    writeFileSync(join(projectConfigDir, 'ASSISTANTS.md'), 'project');
 
     const prompt = await loadSystemPrompt(projectDir);
     expect(prompt).toContain('global');
@@ -92,7 +95,7 @@ describe('config helpers', () => {
   });
 
   test('loadConfig ignores invalid JSON files', async () => {
-    const invalidPath = join(tempDir, 'settings.json');
+    const invalidPath = join(tempDir, 'config.json');
     writeFileSync(invalidPath, '{ invalid json');
     const loaded = await loadConfig(tempDir);
     expect(loaded.llm.provider).toBeDefined();
@@ -103,20 +106,38 @@ describe('config helpers', () => {
     expect(tempPath).toBe(join(tempDir, 'temp', 'abc'));
   });
 
-  test('getConfigDir uses HOME when OLDPAL_DIR is unset', () => {
+  test('getConfigDir uses HOME when ASSISTANTS_DIR is unset', () => {
+    const originalAssistantsDir = process.env.ASSISTANTS_DIR;
     const originalOldpalDir = process.env.OLDPAL_DIR;
     const originalHome = process.env.HOME;
     const homeDir = join(tempDir, 'home');
     mkdirSync(homeDir, { recursive: true });
 
+    delete process.env.ASSISTANTS_DIR;
     delete process.env.OLDPAL_DIR;
     process.env.HOME = homeDir;
 
     try {
-      expect(getConfigDir()).toBe(join(homeDir, '.oldpal'));
+      expect(getConfigDir()).toBe(join(homeDir, '.assistants'));
     } finally {
+      process.env.ASSISTANTS_DIR = originalAssistantsDir;
       process.env.OLDPAL_DIR = originalOldpalDir;
       process.env.HOME = originalHome;
+    }
+  });
+
+  test('getConfigDir falls back to OLDPAL_DIR when provided', () => {
+    const originalAssistantsDir = process.env.ASSISTANTS_DIR;
+    const originalOldpalDir = process.env.OLDPAL_DIR;
+
+    delete process.env.ASSISTANTS_DIR;
+    process.env.OLDPAL_DIR = tempDir;
+
+    try {
+      expect(getConfigDir()).toBe(tempDir);
+    } finally {
+      process.env.ASSISTANTS_DIR = originalAssistantsDir;
+      process.env.OLDPAL_DIR = originalOldpalDir;
     }
   });
 });

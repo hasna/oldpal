@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { ConnectorBridge } from '../src/tools/connector';
 import { ToolRegistry } from '../src/tools/registry';
-import type { Connector, ConnectorCommand } from '@oldpal/shared';
+import type { Connector, ConnectorCommand } from '@hasna/assistants-shared';
 import { mkdtempSync, writeFileSync, chmodSync, rmSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -160,7 +160,7 @@ Commands:
 
   describe('discover', () => {
     test('should auto-discover connect-* binaries on PATH', async () => {
-      const binDir = mkdtempSync(join(tmpdir(), 'oldpal-bin-'));
+      const binDir = mkdtempSync(join(tmpdir(), 'assistants-bin-'));
       const cliPath = join(binDir, 'connect-demo');
       const dirPath = join(binDir, 'connect-dir');
       writeFileSync(cliPath, '#!/bin/sh\necho demo\n');
@@ -182,7 +182,7 @@ Commands:
     });
 
     test('should discover connector commands from help output', async () => {
-      const binDir = mkdtempSync(join(tmpdir(), 'oldpal-bin-help-'));
+      const binDir = mkdtempSync(join(tmpdir(), 'assistants-bin-help-'));
       const cliPath = join(binDir, 'connect-foo');
       const helpOutput = [
         'Usage: connect-foo <command>',
@@ -210,7 +210,7 @@ Commands:
     });
 
     test('should use manifest description when available', async () => {
-      const binDir = mkdtempSync(join(tmpdir(), 'oldpal-bin-manifest-'));
+      const binDir = mkdtempSync(join(tmpdir(), 'assistants-bin-manifest-'));
       const cliPath = join(binDir, 'connect-foo');
       const helpOutput = [
         'Usage: connect-foo <command>',
@@ -226,7 +226,7 @@ Commands:
       );
       chmodSync(cliPath, 0o755);
 
-      const homeDir = mkdtempSync(join(tmpdir(), 'oldpal-home-'));
+      const homeDir = mkdtempSync(join(tmpdir(), 'assistants-home-'));
       const originalHome = process.env.HOME;
       process.env.HOME = homeDir;
 

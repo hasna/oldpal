@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import type { Message, Tool, Skill, StreamChunk } from '@oldpal/shared';
+import type { Message, Tool, Skill, StreamChunk } from '@hasna/assistants-shared';
 import type { Command } from '../src/commands';
 import { EmbeddedClient } from '../src/client';
 
@@ -100,15 +100,18 @@ class MockAgentLoop {
 }
 
 let tempDir: string;
+let originalAssistantsDir: string | undefined;
 let originalOldpalDir: string | undefined;
 
 beforeEach(() => {
+  originalAssistantsDir = process.env.ASSISTANTS_DIR;
   originalOldpalDir = process.env.OLDPAL_DIR;
-  tempDir = mkdtempSync(join(tmpdir(), 'oldpal-client-'));
-  process.env.OLDPAL_DIR = tempDir;
+  tempDir = mkdtempSync(join(tmpdir(), 'assistants-client-'));
+  process.env.ASSISTANTS_DIR = tempDir;
 });
 
 afterEach(() => {
+  process.env.ASSISTANTS_DIR = originalAssistantsDir;
   process.env.OLDPAL_DIR = originalOldpalDir;
   rmSync(tempDir, { recursive: true, force: true });
 });

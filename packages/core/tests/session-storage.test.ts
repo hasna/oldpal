@@ -3,20 +3,24 @@ import { SessionStorage } from '../src/logger';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { writeFileSync, mkdirSync } from 'fs';
 
 let tempDir: string;
 let originalHome: string | undefined;
+let originalAssistantsDir: string | undefined;
 let originalOldpalDir: string | undefined;
 
 beforeEach(async () => {
   originalHome = process.env.HOME;
+  originalAssistantsDir = process.env.ASSISTANTS_DIR;
   originalOldpalDir = process.env.OLDPAL_DIR;
-  tempDir = await mkdtemp(join(tmpdir(), 'oldpal-sessions-'));
-  process.env.OLDPAL_DIR = tempDir;
+  tempDir = await mkdtemp(join(tmpdir(), 'assistants-sessions-'));
+  process.env.ASSISTANTS_DIR = tempDir;
 });
 
 afterEach(async () => {
   process.env.HOME = originalHome;
+  process.env.ASSISTANTS_DIR = originalAssistantsDir;
   process.env.OLDPAL_DIR = originalOldpalDir;
   await rm(tempDir, { recursive: true, force: true });
 });
@@ -62,5 +66,27 @@ describe('SessionStorage', () => {
 
     const loaded = SessionStorage.loadSession('session-1');
     expect(loaded?.cwd).toBe('/tmp/project1');
+  });
+
+  test('uses active assistant sessions when available', () => {
+    const assistantId = 'assistant-1';
+    const sessionsDir = join(tempDir, 'assistants', assistantId, 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(tempDir, 'active.json'), JSON.stringify({ id: assistantId }));
+
+    const storage = new SessionStorage('session-a', undefined, assistantId);
+    storage.save({
+      messages: [{ role: 'user', content: 'hello' }],
+      startedAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:05.000Z',
+      cwd: '/tmp/project-a',
+    });
+
+    const sessions = SessionStorage.listSessions();
+    expect(sessions.length).toBe(1);
+    expect(sessions[0].id).toBe('session-a');
+
+    const loaded = SessionStorage.loadSession('session-a');
+    expect(loaded?.cwd).toBe('/tmp/project-a');
   });
 });

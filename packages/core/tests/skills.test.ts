@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { SkillLoader } from '../src/skills/loader';
 import { SkillExecutor } from '../src/skills/executor';
-import type { Skill } from '@oldpal/shared';
+import type { Skill } from '@hasna/assistants-shared';
 import { join } from 'path';
 import { mkdtemp, writeFile, mkdir, rm } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -12,7 +12,7 @@ describe('SkillLoader', () => {
 
   beforeEach(async () => {
     loader = new SkillLoader();
-    tempDir = await mkdtemp(join(tmpdir(), 'oldpal-test-'));
+    tempDir = await mkdtemp(join(tmpdir(), 'assistants-test-'));
   });
 
   afterEach(async () => {
@@ -195,7 +195,7 @@ Content`);
       const originalHome = process.env.HOME;
       process.env.HOME = tempDir;
 
-      const userSkillsDir = join(tempDir, '.oldpal', 'skills', 'user-skill');
+      const userSkillsDir = join(tempDir, '.assistants', 'shared', 'skills', 'user-skill');
       await mkdir(userSkillsDir, { recursive: true });
       await writeFile(join(userSkillsDir, 'SKILL.md'), `---
 name: user-skill
@@ -204,7 +204,7 @@ description: User skill
 Content`);
 
       const projectDir = join(tempDir, 'project');
-      const projectSkillsDir = join(projectDir, '.oldpal', 'skills', 'project-skill');
+      const projectSkillsDir = join(projectDir, '.assistants', 'skills', 'project-skill');
       await mkdir(projectSkillsDir, { recursive: true });
       await writeFile(join(projectSkillsDir, 'SKILL.md'), `---
 name: project-skill
@@ -212,7 +212,7 @@ description: Project skill
 ---
 Content`);
 
-      const nestedSkillDir = join(projectDir, 'packages', 'app', '.oldpal', 'skills', 'nested-skill');
+      const nestedSkillDir = join(projectDir, 'packages', 'app', '.assistants', 'skills', 'nested-skill');
       await mkdir(nestedSkillDir, { recursive: true });
       await writeFile(join(nestedSkillDir, 'SKILL.md'), `---
 name: nested-skill

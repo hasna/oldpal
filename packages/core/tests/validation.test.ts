@@ -36,14 +36,14 @@ describe('validateToolInput', () => {
 
 describe('validatePath', () => {
   test('should detect path traversal outside allowed paths', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'oldpal-path-'));
+    const base = await mkdtemp(join(tmpdir(), 'assistants-path-'));
     const result = await validatePath(join(base, '..', 'outside.txt'), { allowedPaths: [base] });
     expect(result.valid).toBe(false);
   });
 
   test('should block symlink pointing outside allowed paths', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'oldpal-path-'));
-    const outside = await mkdtemp(join(tmpdir(), 'oldpal-outside-'));
+    const base = await mkdtemp(join(tmpdir(), 'assistants-path-'));
+    const outside = await mkdtemp(join(tmpdir(), 'assistants-outside-'));
     const target = join(outside, 'target.txt');
     await writeFile(target, 'hi');
     const linkPath = join(base, 'link.txt');

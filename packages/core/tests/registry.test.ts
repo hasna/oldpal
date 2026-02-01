@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { ToolRegistry } from '../src/tools/registry';
-import type { Tool, ToolCall } from '@oldpal/shared';
+import type { Tool, ToolCall } from '@hasna/assistants-shared';
 
 describe('ToolRegistry', () => {
   let registry: ToolRegistry;

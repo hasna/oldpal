@@ -1,11 +1,11 @@
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import type { Message } from '@oldpal/shared';
-import { generateId, now } from '@oldpal/shared';
+import type { Message } from '@hasna/assistants-shared';
+import { generateId, now } from '@hasna/assistants-shared';
 
 export async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), 'oldpal-test-'));
+  const dir = await mkdtemp(join(tmpdir(), 'assistants-test-'));
   try {
     return await fn(dir);
   } finally {

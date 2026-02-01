@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach, mock, spyOn } from 'bun:test';
 import { SessionRegistry, type SessionInfo } from '../src/sessions/registry';
 import { EmbeddedClient } from '../src/client';
-import type { StreamChunk } from '@oldpal/shared';
+import type { StreamChunk } from '@hasna/assistants-shared';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -112,12 +112,13 @@ describe('SessionRegistry', () => {
 
   describe('default client factory', () => {
     test('creates a session using EmbeddedClient when no factory provided', async () => {
+      const originalAssistantsDir = process.env.ASSISTANTS_DIR;
       const originalOldpalDir = process.env.OLDPAL_DIR;
-      const tempDir = mkdtempSync(join(tmpdir(), 'oldpal-registry-'));
-      process.env.OLDPAL_DIR = tempDir;
+      const tempDir = mkdtempSync(join(tmpdir(), 'assistants-registry-'));
+      process.env.ASSISTANTS_DIR = tempDir;
 
       writeFileSync(
-        join(tempDir, 'settings.json'),
+        join(tempDir, 'config.json'),
         JSON.stringify(
           {
             llm: { provider: 'anthropic', model: 'mock', apiKey: 'test-key' },
@@ -135,6 +136,7 @@ describe('SessionRegistry', () => {
         expect(session.cwd).toBe(tempDir);
         defaultRegistry.closeAll();
       } finally {
+        process.env.ASSISTANTS_DIR = originalAssistantsDir;
         process.env.OLDPAL_DIR = originalOldpalDir;
         rmSync(tempDir, { recursive: true, force: true });
       }

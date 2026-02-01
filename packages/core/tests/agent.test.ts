@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { AgentContext } from '../src/agent/context';
 import { AgentLoop } from '../src/agent/loop';
-import type { ToolCall, ToolResult } from '@oldpal/shared';
+import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
 
 describe('AgentContext', () => {
   let context: AgentContext;

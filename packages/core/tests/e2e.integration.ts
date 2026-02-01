@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { EmbeddedClient } from '../src/client';
-import type { StreamChunk, Message, Tool, Skill } from '@oldpal/shared';
+import type { StreamChunk, Message, Tool, Skill } from '@hasna/assistants-shared';
 import { mkdtemp, writeFile, mkdir, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -12,13 +12,13 @@ describe('E2E: EmbeddedClient', () => {
   let errors: Error[] = [];
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'oldpal-e2e-'));
+    tempDir = await mkdtemp(join(tmpdir(), 'assistants-e2e-'));
     chunks = [];
     errors = [];
 
     // Create minimal project structure
-    await mkdir(join(tempDir, '.oldpal'), { recursive: true });
-    await mkdir(join(tempDir, '.oldpal', 'skills'), { recursive: true });
+    await mkdir(join(tempDir, '.assistants'), { recursive: true });
+    await mkdir(join(tempDir, '.assistants', 'skills'), { recursive: true });
 
     client = new EmbeddedClient(tempDir);
 
@@ -55,7 +55,7 @@ describe('E2E: EmbeddedClient', () => {
   describe('skills', () => {
     test('should load skills from project directory', async () => {
       // Create a test skill
-      const skillDir = join(tempDir, '.oldpal', 'skills', 'test-skill');
+      const skillDir = join(tempDir, '.assistants', 'skills', 'test-skill');
       await mkdir(skillDir, { recursive: true });
       await writeFile(
         join(skillDir, 'SKILL.md'),
@@ -175,10 +175,10 @@ describe('E2E: Built-in Tools', () => {
   let responseText: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'oldpal-e2e-'));
+    tempDir = await mkdtemp(join(tmpdir(), 'assistants-e2e-'));
     responseText = '';
 
-    await mkdir(join(tempDir, '.oldpal'), { recursive: true });
+    await mkdir(join(tempDir, '.assistants'), { recursive: true });
 
     client = new EmbeddedClient(tempDir);
 
@@ -241,8 +241,8 @@ describe('E2E: Connector Discovery', () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'oldpal-e2e-'));
-    await mkdir(join(tempDir, '.oldpal'), { recursive: true });
+    tempDir = await mkdtemp(join(tmpdir(), 'assistants-e2e-'));
+    await mkdir(join(tempDir, '.assistants'), { recursive: true });
 
     client = new EmbeddedClient(tempDir);
     await client.initialize();

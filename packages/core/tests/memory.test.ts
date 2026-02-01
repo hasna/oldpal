@@ -1,8 +1,8 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { MemoryStore } from '../src/memory/store';
 import { SessionManager } from '../src/memory/sessions';
-import type { Message } from '@oldpal/shared';
-import { generateId, now } from '@oldpal/shared';
+import type { Message } from '@hasna/assistants-shared';
+import { generateId, now } from '@hasna/assistants-shared';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -12,7 +12,7 @@ describe('MemoryStore', () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'oldpal-test-'));
+    tempDir = await mkdtemp(join(tmpdir(), 'assistants-test-'));
     store = new MemoryStore(join(tempDir, 'test.db'));
   });
 
@@ -137,7 +137,7 @@ describe('SessionManager', () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'oldpal-test-'));
+    tempDir = await mkdtemp(join(tmpdir(), 'assistants-test-'));
     manager = new SessionManager(join(tempDir, 'test.db'));
   });
 

@@ -9,7 +9,7 @@ let originalHome: string | undefined;
 
 beforeEach(async () => {
   originalHome = process.env.HOME;
-  tempDir = await mkdtemp(join(tmpdir(), 'oldpal-config-'));
+  tempDir = await mkdtemp(join(tmpdir(), 'assistants-config-'));
   const fakeHome = join(tempDir, 'home');
   await mkdir(fakeHome, { recursive: true });
   process.env.HOME = fakeHome;
@@ -23,7 +23,7 @@ afterEach(async () => {
 describe('loadConfig', () => {
   test('should preserve defaults when partial config provided', async () => {
     const projectDir = join(tempDir, 'project');
-    const projectConfigDir = join(projectDir, '.oldpal');
+    const projectConfigDir = join(projectDir, '.assistants');
     await mkdir(projectConfigDir, { recursive: true });
 
     const config = {
@@ -31,7 +31,7 @@ describe('loadConfig', () => {
       voice: { enabled: true, tts: { voiceId: 'voice-1' } },
     };
 
-    await writeFile(join(projectConfigDir, 'settings.json'), JSON.stringify(config));
+    await writeFile(join(projectConfigDir, 'config.json'), JSON.stringify(config));
 
     const loaded = await loadConfig(projectDir);
 
@@ -48,15 +48,15 @@ describe('loadConfig', () => {
 
   test('should allow project local config to override project config', async () => {
     const projectDir = join(tempDir, 'project');
-    const projectConfigDir = join(projectDir, '.oldpal');
+    const projectConfigDir = join(projectDir, '.assistants');
     await mkdir(projectConfigDir, { recursive: true });
 
     await writeFile(
-      join(projectConfigDir, 'settings.json'),
+      join(projectConfigDir, 'config.json'),
       JSON.stringify({ llm: { model: 'project-model', maxTokens: 4096 } })
     );
     await writeFile(
-      join(projectConfigDir, 'settings.local.json'),
+      join(projectConfigDir, 'config.local.json'),
       JSON.stringify({ llm: { model: 'local-model' } })
     );
 

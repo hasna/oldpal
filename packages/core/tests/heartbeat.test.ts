@@ -10,7 +10,7 @@ import type { Heartbeat } from '../src/heartbeat/types';
 let tempDir: string;
 
 beforeEach(() => {
-  tempDir = mkdtempSync(join(tmpdir(), 'oldpal-heartbeat-'));
+  tempDir = mkdtempSync(join(tmpdir(), 'assistants-heartbeat-'));
 });
 
 afterEach(() => {

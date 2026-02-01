@@ -11,16 +11,19 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 let tempDir: string;
+let originalAssistantsDir: string | undefined;
 let originalOldpalDir: string | undefined;
 
 beforeEach(async () => {
+  originalAssistantsDir = process.env.ASSISTANTS_DIR;
   originalOldpalDir = process.env.OLDPAL_DIR;
-  tempDir = await mkdtemp(join(tmpdir(), 'oldpal-tools-'));
-  process.env.OLDPAL_DIR = tempDir;
+  tempDir = await mkdtemp(join(tmpdir(), 'assistants-tools-'));
+  process.env.ASSISTANTS_DIR = tempDir;
   FilesystemTools.setSessionId('test');
 });
 
 afterEach(async () => {
+  process.env.ASSISTANTS_DIR = originalAssistantsDir;
   process.env.OLDPAL_DIR = originalOldpalDir;
   await rm(tempDir, { recursive: true, force: true });
 });
@@ -105,7 +108,7 @@ describe('FilesystemTools', () => {
     const writeResult = await FilesystemTools.writeExecutor({ filename: 'test.txt', content: 'hello', cwd: tempDir });
     expect(writeResult).toContain('Successfully wrote');
 
-    const readResult = await FilesystemTools.readExecutor({ path: join(tempDir, '.oldpal', 'scripts', 'test', 'test.txt') });
+    const readResult = await FilesystemTools.readExecutor({ path: join(tempDir, '.assistants', 'scripts', 'test', 'test.txt') });
     expect(readResult).toContain('hello');
   });
 
@@ -128,19 +131,19 @@ describe('FilesystemTools', () => {
   test('should glob and grep files', async () => {
     await FilesystemTools.writeExecutor({ filename: 'notes.txt', content: 'alpha\nbeta', cwd: tempDir });
 
-    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.txt', path: join(tempDir, '.oldpal', 'scripts') });
+    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.txt', path: join(tempDir, '.assistants', 'scripts') });
     expect(globResult).toContain('notes.txt');
 
-    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'beta', path: join(tempDir, '.oldpal', 'scripts') });
+    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'beta', path: join(tempDir, '.assistants', 'scripts') });
     expect(grepResult).toContain('beta');
   });
 
   test('should handle glob and grep misses', async () => {
-    await mkdir(join(tempDir, '.oldpal', 'scripts'), { recursive: true });
-    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.nope', path: join(tempDir, '.oldpal', 'scripts') });
+    await mkdir(join(tempDir, '.assistants', 'scripts'), { recursive: true });
+    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.nope', path: join(tempDir, '.assistants', 'scripts') });
     expect(globResult).toContain('No files found');
 
-    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'nope', path: join(tempDir, '.oldpal', 'scripts') });
+    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'nope', path: join(tempDir, '.assistants', 'scripts') });
     expect(grepResult).toContain('No matches found');
   });
 
@@ -532,7 +535,7 @@ describe('ImageDisplayTool', () => {
   });
 
   test('should display image when viu is available', async () => {
-    const binDir = await mkdtemp(join(tmpdir(), 'oldpal-viu-'));
+    const binDir = await mkdtemp(join(tmpdir(), 'assistants-viu-'));
     const viuPath = join(binDir, 'viu');
     await writeFile(viuPath, '#!/bin/sh\necho "viu mock"\nexit 0\n');
     await chmod(viuPath, 0o755);
@@ -544,26 +547,26 @@ describe('ImageDisplayTool', () => {
     );
     await writeFile(imagePath, pngData);
 
-    const originalPath = process.env.PATH || '';
-    process.env.PATH = `${binDir}:${originalPath}`;
+    const originalViuPath = process.env.ASSISTANTS_VIU_PATH;
+    process.env.ASSISTANTS_VIU_PATH = viuPath;
 
     try {
       const result = await ImageDisplayTool.executor({ path: imagePath });
       expect(result).toMatch(/Image displayed|Error displaying image/);
     } finally {
-      process.env.PATH = originalPath;
+      process.env.ASSISTANTS_VIU_PATH = originalViuPath;
       await rm(binDir, { recursive: true, force: true });
     }
   });
 
   test('should handle image URLs when viu is available', async () => {
-    const binDir = await mkdtemp(join(tmpdir(), 'oldpal-viu-url-'));
+    const binDir = await mkdtemp(join(tmpdir(), 'assistants-viu-url-'));
     const viuPath = join(binDir, 'viu');
     await writeFile(viuPath, '#!/bin/sh\necho "viu mock"\nexit 0\n');
     await chmod(viuPath, 0o755);
 
-    const originalPath = process.env.PATH || '';
-    process.env.PATH = binDir;
+    const originalViuPath = process.env.ASSISTANTS_VIU_PATH;
+    process.env.ASSISTANTS_VIU_PATH = viuPath;
 
     const pngData = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/xcAAgMBAJ+lWQ0AAAAASUVORK5CYII=',
@@ -582,19 +585,19 @@ describe('ImageDisplayTool', () => {
       expect(result).toMatch(/Image displayed|Error displaying image/);
     } finally {
       globalThis.fetch = originalFetch;
-      process.env.PATH = originalPath;
+      process.env.ASSISTANTS_VIU_PATH = originalViuPath;
       await rm(binDir, { recursive: true, force: true });
     }
   });
 
   test('should reject non-image URL content types', async () => {
-    const binDir = await mkdtemp(join(tmpdir(), 'oldpal-viu-nonimage-'));
+    const binDir = await mkdtemp(join(tmpdir(), 'assistants-viu-nonimage-'));
     const viuPath = join(binDir, 'viu');
     await writeFile(viuPath, '#!/bin/sh\necho "viu mock"\nexit 0\n');
     await chmod(viuPath, 0o755);
 
-    const originalPath = process.env.PATH || '';
-    process.env.PATH = binDir;
+    const originalViuPath = process.env.ASSISTANTS_VIU_PATH;
+    process.env.ASSISTANTS_VIU_PATH = viuPath;
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () =>
@@ -608,7 +611,7 @@ describe('ImageDisplayTool', () => {
       expect(result).toContain('does not point to an image');
     } finally {
       globalThis.fetch = originalFetch;
-      process.env.PATH = originalPath;
+      process.env.ASSISTANTS_VIU_PATH = originalViuPath;
       await rm(binDir, { recursive: true, force: true });
     }
   });

@@ -1,5 +1,5 @@
 import type { LLMClient } from '../../src/llm/client';
-import type { StreamChunk, ToolCall, TokenUsage, Message } from '@oldpal/shared';
+import type { StreamChunk, ToolCall, TokenUsage, Message } from '@hasna/assistants-shared';
 
 export interface MockResponse {
   content: string;

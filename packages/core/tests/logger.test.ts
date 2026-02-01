@@ -2,28 +2,31 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { Logger, SessionStorage, initOldpalDir } from '../src/logger';
+import { Logger, SessionStorage, initAssistantsDir } from '../src/logger';
 
 let tempDir: string;
+let originalAssistantsDir: string | undefined;
 let originalOldpalDir: string | undefined;
 
 beforeEach(() => {
+  originalAssistantsDir = process.env.ASSISTANTS_DIR;
   originalOldpalDir = process.env.OLDPAL_DIR;
-  tempDir = mkdtempSync(join(tmpdir(), 'oldpal-logger-'));
-  process.env.OLDPAL_DIR = tempDir;
+  tempDir = mkdtempSync(join(tmpdir(), 'assistants-logger-'));
+  process.env.ASSISTANTS_DIR = tempDir;
 });
 
 afterEach(() => {
+  process.env.ASSISTANTS_DIR = originalAssistantsDir;
   process.env.OLDPAL_DIR = originalOldpalDir;
   rmSync(tempDir, { recursive: true, force: true });
 });
 
 describe('Logger', () => {
-  test('initOldpalDir creates base directories', () => {
-    initOldpalDir();
+  test('initAssistantsDir creates base directories', () => {
+    initAssistantsDir();
     expect(existsSync(join(tempDir, 'logs'))).toBe(true);
-    expect(existsSync(join(tempDir, 'sessions'))).toBe(true);
-    expect(existsSync(join(tempDir, 'skills'))).toBe(true);
+    expect(existsSync(join(tempDir, 'assistants'))).toBe(true);
+    expect(existsSync(join(tempDir, 'shared', 'skills'))).toBe(true);
   });
 
   test('writes log entries to file', () => {

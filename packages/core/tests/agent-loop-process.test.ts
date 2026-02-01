@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import type { StreamChunk } from '@oldpal/shared';
+import type { StreamChunk } from '@hasna/assistants-shared';
 import { AgentLoop } from '../src/agent/loop';
 
 let callCount = 0;
@@ -13,7 +13,7 @@ describe('AgentLoop process', () => {
   });
 
   test('executes tool calls and continues the loop', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-'));
     const agent = new AgentLoop({ cwd });
 
     // Inject a fake LLM client and minimal config to avoid network calls
@@ -53,7 +53,7 @@ describe('AgentLoop process', () => {
   });
 
   test('handles built-in commands without calling the LLM', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-cmd-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-cmd-'));
     const chunks: StreamChunk[] = [];
     const agent = new AgentLoop({
       cwd,
@@ -80,7 +80,7 @@ describe('AgentLoop process', () => {
   });
 
   test('stop halts streaming after first chunk', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-stop-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-stop-'));
     const chunks: StreamChunk[] = [];
     const agent = new AgentLoop({
       cwd,
@@ -111,7 +111,7 @@ describe('AgentLoop process', () => {
   });
 
   test('stop prevents tool execution after tool_use', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-stop-tools-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-stop-tools-'));
     let toolStartCalled = false;
     const agent = new AgentLoop({
       cwd,
@@ -147,7 +147,7 @@ describe('AgentLoop process', () => {
   });
 
   test('clear command resets context via command handler', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-clear-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-clear-'));
     const agent = new AgentLoop({ cwd });
 
     (agent as any).llmClient = {
@@ -168,7 +168,7 @@ describe('AgentLoop process', () => {
   });
 
   test('applies command allowed tools when executing prompt', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-cmdtools-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-cmdtools-'));
     const agent = new AgentLoop({ cwd });
     let receivedTools: Array<{ name: string }> | undefined;
 
@@ -208,7 +208,7 @@ describe('AgentLoop process', () => {
   });
 
   test('handles skill invocation and filters tools', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-skill-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-skill-'));
     const agent = new AgentLoop({ cwd });
     let receivedTools: Array<{ name: string }> | undefined;
     let receivedSystemPrompt: string | undefined;
@@ -252,7 +252,7 @@ describe('AgentLoop process', () => {
   });
 
   test('handles /skills and /connectors commands with context data', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-ctx-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-ctx-'));
     const chunks: StreamChunk[] = [];
     const agent = new AgentLoop({
       cwd,
@@ -291,7 +291,7 @@ describe('AgentLoop process', () => {
   });
 
   test('command context can add system messages', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'oldpal-agent-sysmsg-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-sysmsg-'));
     const agent = new AgentLoop({ cwd });
 
     (agent as any).llmClient = {
