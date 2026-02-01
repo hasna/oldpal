@@ -241,6 +241,7 @@ export function App({ cwd, version }: AppProps) {
   const skipNextDoneRef = useRef(false);
   const isProcessingRef = useRef(isProcessing);
   const processingStartTimeRef = useRef<number | undefined>(processingStartTime);
+  const turnIdRef = useRef(0);
 
   useEffect(() => {
     isProcessingRef.current = isProcessing;
@@ -406,15 +407,14 @@ export function App({ cwd, version }: AppProps) {
 
   // Handle chunk from registry
   const handleChunk = useCallback((chunk: StreamChunk) => {
-    if (!isProcessingRef.current && (
-      chunk.type === 'text'
-      || chunk.type === 'tool_use'
-      || chunk.type === 'tool_result'
-      || chunk.type === 'error'
-      || chunk.type === 'done'
-    )) {
+    const isStartChunk = chunk.type === 'text' || chunk.type === 'tool_use';
+    const isTerminalChunk = chunk.type === 'error' || chunk.type === 'done';
+    if (!isProcessingRef.current && (isStartChunk || isTerminalChunk)) {
       const active = registryRef.current.getActiveSession();
       if (active) {
+        turnIdRef.current += 1;
+        resetTurnState();
+        setError(null);
         registryRef.current.setProcessing(active.id, true);
         setIsProcessing(true);
         isProcessingRef.current = true;
@@ -518,9 +518,12 @@ export function App({ cwd, version }: AppProps) {
       if (active) {
         registryRef.current.setProcessing(active.id, false);
       }
+      const turnId = turnIdRef.current;
       // Defer clearing streaming state to avoid flicker where output disappears
       queueMicrotask(() => {
-        resetTurnState();
+        if (!isProcessingRef.current && turnIdRef.current === turnId) {
+          resetTurnState();
+        }
       });
 
       // Update token usage from client
