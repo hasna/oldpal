@@ -10,6 +10,7 @@ export { ConnectorBridge } from './tools/connector';
 export { BashTool } from './tools/bash';
 export { FilesystemTools } from './tools/filesystem';
 export { WebTools } from './tools/web';
+export { FeedbackTool } from './tools/feedback';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';
