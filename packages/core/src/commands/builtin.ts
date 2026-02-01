@@ -8,7 +8,7 @@ import { generateId } from '@oldpal/shared';
 import { saveFeedbackEntry, type FeedbackType } from '../tools/feedback';
 
 // Version constant - should match package.json
-const VERSION = '0.6.11';
+const VERSION = '0.6.12';
 
 type ConnectorAuthTimeoutResolve = (value: {
   exitCode: number;
