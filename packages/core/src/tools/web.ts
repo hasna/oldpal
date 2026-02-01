@@ -1,5 +1,10 @@
 import type { Tool } from '@oldpal/shared';
+import { lookup as dnsLookup } from 'node:dns/promises';
 import type { ToolExecutor } from './registry';
+
+function abortController(controller: AbortController): void {
+  controller.abort();
+}
 
 /**
  * WebFetch tool - fetch and extract content from URLs
@@ -36,35 +41,54 @@ export class WebFetchTool {
     const timeout = (input.timeout as number) || 30000;
 
     try {
-      // Validate URL
-      const parsedUrl = new URL(url);
+      let currentUrl = url;
+      let redirects = 0;
+      let response: Response | null = null;
 
-      // Block local/private IPs for security
+      while (true) {
+        // Validate URL
+        const parsedUrl = new URL(currentUrl);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+          return 'Error: Only http/https URLs are supported';
+        }
+
+        // Block local/private IPs for security
       const hostname = parsedUrl.hostname;
-      if (
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname.startsWith('192.168.') ||
-        hostname.startsWith('10.') ||
-        hostname.startsWith('172.')
-      ) {
+      if (await isPrivateHostOrResolved(hostname)) {
         return 'Error: Cannot fetch from local/private network addresses for security reasons';
       }
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(abortController, timeout, controller);
 
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'oldpal/1.0 (AI Assistant)',
-          'Accept': extractType === 'json' ? 'application/json' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      });
+        response = await fetch(currentUrl, {
+          signal: controller.signal,
+          redirect: 'manual',
+          headers: {
+            'User-Agent': 'oldpal/1.0 (AI Assistant)',
+            'Accept': extractType === 'json' ? 'application/json' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (!response.ok) {
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          const location = response.headers.get('location');
+          if (!location) {
+            return 'Error: Redirect response missing Location header';
+          }
+          redirects += 1;
+          if (redirects > 5) {
+            return 'Error: Too many redirects';
+          }
+          currentUrl = new URL(location, currentUrl).toString();
+          continue;
+        }
+
+        break;
+      }
+
+      if (!response || !response.ok) {
         return `Error: HTTP ${response.status} ${response.statusText}`;
       }
 
@@ -223,7 +247,13 @@ function parseDuckDuckGoResults(html: string, maxResults: number): Array<{ title
 
   let match;
   while ((match = resultRegex.exec(html)) !== null && results.length < maxResults) {
-    const url = decodeURIComponent(match[1].replace(/\/l\/\?uddg=/, '').split('&')[0]);
+    const rawUrl = match[1].replace(/\/l\/\?uddg=/, '').split('&')[0];
+    let url = rawUrl;
+    try {
+      url = decodeURIComponent(rawUrl);
+    } catch {
+      url = rawUrl;
+    }
     const title = match[2].trim();
     const snippet = match[3].trim().replace(/&[^;]+;/g, ' ');
 
@@ -288,34 +318,56 @@ export class CurlTool {
     const timeout = 30000;
 
     try {
-      const parsedUrl = new URL(url);
+      let currentUrl = url;
+      let redirects = 0;
+      let response: Response | null = null;
 
-      // Block local/private IPs
+      while (true) {
+        const parsedUrl = new URL(currentUrl);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+          return 'Error: Only http/https URLs are supported';
+        }
+
+        // Block local/private IPs
       const hostname = parsedUrl.hostname;
-      if (
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname.startsWith('192.168.') ||
-        hostname.startsWith('10.') ||
-        hostname.startsWith('172.')
-      ) {
+      if (await isPrivateHostOrResolved(hostname)) {
         return 'Error: Cannot fetch from local/private network addresses for security reasons';
       }
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(abortController, timeout, controller);
 
-      const response = await fetch(url, {
-        method,
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'oldpal/1.0 (AI Assistant)',
-          ...headers,
-        },
-        body: body && ['POST', 'PUT'].includes(method) ? body : undefined,
-      });
+        response = await fetch(currentUrl, {
+          method,
+          signal: controller.signal,
+          redirect: 'manual',
+          headers: {
+            'User-Agent': 'oldpal/1.0 (AI Assistant)',
+            ...headers,
+          },
+          body: body && ['POST', 'PUT'].includes(method) ? body : undefined,
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
+
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          if (!['GET', 'HEAD'].includes(method)) {
+            return `Error: Redirects are only supported for GET/HEAD requests`;
+          }
+          const location = response.headers.get('location');
+          if (!location) {
+            return 'Error: Redirect response missing Location header';
+          }
+          redirects += 1;
+          if (redirects > 5) {
+            return 'Error: Too many redirects';
+          }
+          currentUrl = new URL(location, currentUrl).toString();
+          continue;
+        }
+
+        break;
+      }
 
       const contentType = response.headers.get('content-type') || '';
       let responseBody: string;
@@ -365,3 +417,125 @@ export class WebTools {
     registry.register(CurlTool.tool, CurlTool.executor);
   }
 }
+
+type LookupFn = typeof dnsLookup;
+let lookupFn: LookupFn = dnsLookup;
+
+export function setDnsLookupForTests(fn?: LookupFn): void {
+  lookupFn = fn ?? dnsLookup;
+}
+
+async function isPrivateHostOrResolved(hostname: string): Promise<boolean> {
+  if (isPrivateHost(hostname)) {
+    return true;
+  }
+
+  const host = normalizeHostname(hostname);
+  if (host === '' || isIpLiteral(host)) {
+    return false;
+  }
+
+  try {
+    const results = await lookupFn(host, { all: true });
+    for (const result of results) {
+      if (isPrivateHost(result.address)) {
+        return true;
+      }
+    }
+  } catch {
+    // If DNS lookup fails, do not block by default.
+  }
+
+  return false;
+}
+
+function isIpLiteral(hostname: string): boolean {
+  if (hostname.includes(':')) return true;
+  if (/^\d+$/.test(hostname)) return true;
+  return /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+}
+
+function normalizeHostname(hostname: string): string {
+  let host = hostname.toLowerCase();
+  if (host.startsWith('[') && host.endsWith(']')) {
+    host = host.slice(1, -1);
+  }
+
+  const zoneIndex = host.indexOf('%');
+  if (zoneIndex !== -1) {
+    host = host.slice(0, zoneIndex);
+  }
+
+  host = host.replace(/\.$/, '');
+  return host;
+}
+
+function isPrivateHost(hostname: string): boolean {
+  let host = normalizeHostname(hostname);
+
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+  if (host === '127.0.0.1' || host === '::1' || host === '::' || host === '0:0:0:0:0:0:0:0') return true;
+  if (/^\d+$/.test(host)) return true;
+
+  if (host.startsWith('::ffff:')) {
+    const mapped = host.slice('::ffff:'.length);
+    if (mapped.includes('.')) {
+      return isPrivateHost(mapped);
+    }
+
+    const hexMatch = mapped.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+    if (hexMatch) {
+      const high = Number.parseInt(hexMatch[1], 16);
+      const low = Number.parseInt(hexMatch[2], 16);
+      const octets = [
+        (high >> 8) & 0xff,
+        high & 0xff,
+        (low >> 8) & 0xff,
+        low & 0xff,
+      ];
+      return isPrivateIPv4(octets);
+    }
+    return false;
+  }
+
+  if (host.includes(':')) {
+    if (host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:')) {
+      return true;
+    }
+    return false;
+  }
+
+  const match = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) return false;
+
+  const octets: number[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const value = Number.parseInt(match[i], 10);
+    if (Number.isNaN(value)) return false;
+    octets.push(value);
+  }
+
+  return isPrivateIPv4(octets);
+}
+
+function isPrivateIPv4(octets: number[]): boolean {
+  if (octets[0] === 0) return true;
+  if (octets[0] === 10) return true;
+  if (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127) return true;
+  if (octets[0] === 169 && octets[1] === 254) return true;
+  if (octets[0] === 192 && octets[1] === 168) return true;
+  if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
+  if (octets[0] === 127) return true;
+  return false;
+}
+
+export const __test__ = {
+  abortController,
+  extractReadableText,
+  parseDuckDuckGoResults,
+  isPrivateHostOrResolved,
+  isIpLiteral,
+  normalizeHostname,
+  isPrivateHost,
+  isPrivateIPv4,
+};
