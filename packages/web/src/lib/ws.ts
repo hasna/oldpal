@@ -7,13 +7,20 @@ class ChatWebSocket {
   private maxReconnectAttempts = 5;
   private url = '';
   private pending: ClientMessage[] = [];
+  private shouldReconnect = true;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   connect(url: string): void {
+    this.shouldReconnect = true;
     this.url = url;
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
       const store = useChatStore.getState();
       const currentSessionId = store.sessionId || store.createSession('Session 1');
       if (currentSessionId) {
@@ -28,15 +35,23 @@ class ChatWebSocket {
     };
 
     this.ws.onmessage = (event) => {
-      const message = JSON.parse(event.data) as ServerMessage;
-      this.handleMessage(message);
+      try {
+        const message = JSON.parse(event.data) as ServerMessage;
+        this.handleMessage(message);
+      } catch {
+        // Ignore malformed messages to avoid crashing the client
+      }
     };
 
     this.ws.onclose = () => {
+      if (!this.shouldReconnect) {
+        this.pending = [];
+        return;
+      }
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts += 1;
         const retryDelay = 1000 * this.reconnectAttempts;
-        setTimeout(() => this.connect(this.url), retryDelay);
+        this.reconnectTimer = setTimeout(() => this.connect(this.url), retryDelay);
       } else {
         const store = useChatStore.getState();
         store.finalizeToolCalls();
@@ -59,6 +74,11 @@ class ChatWebSocket {
   }
 
   disconnect(): void {
+    this.shouldReconnect = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.ws?.close();
     this.ws = null;
     this.pending = [];
