@@ -87,6 +87,7 @@ export class BuiltinCommands {
     loader.register(this.tokensCommand());
     loader.register(this.contextCommand());
     loader.register(this.summarizeCommand());
+    loader.register(this.restCommand());
     loader.register(this.compactCommand());
     loader.register(this.configCommand());
     loader.register(this.initCommand());
@@ -389,6 +390,40 @@ export class BuiltinCommands {
         }
 
         context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /rest - Recharge assistant energy
+   */
+  private restCommand(): Command {
+    return {
+      name: 'rest',
+      description: 'Recharge assistant energy',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        if (!context.restEnergy) {
+          context.emit('text', '\nEnergy system is not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const parsed = parseInt(args.trim(), 10);
+        const amount = Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+        context.restEnergy(amount);
+
+        const state = context.getEnergyState?.();
+        if (state) {
+          const percent = Math.round((state.current / Math.max(1, state.max)) * 100);
+          context.emit('text', `\nEnergy restored. Current level: ${percent}% (${state.current}/${state.max}).\n`);
+        } else {
+          context.emit('text', '\nEnergy restored.\n');
+        }
         context.emit('done');
         return { handled: true };
       },

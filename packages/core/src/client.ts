@@ -1,4 +1,4 @@
-import type { AssistantClient, StreamChunk, Tool, Skill, Message, TokenUsage } from '@oldpal/shared';
+import type { AssistantClient, StreamChunk, Tool, Skill, Message, TokenUsage, EnergyState } from '@oldpal/shared';
 import { generateId } from '@oldpal/shared';
 import { AgentLoop } from './agent/loop';
 import { Logger, SessionStorage, initOldpalDir } from './logger';
@@ -215,6 +215,16 @@ export class EmbeddedClient implements AssistantClient {
    */
   getTokenUsage(): TokenUsage {
     return this.agent.getTokenUsage();
+  }
+
+  /**
+   * Get current energy state
+   */
+  getEnergyState(): EnergyState | null {
+    if (typeof (this.agent as any).getEnergyState === 'function') {
+      return (this.agent as any).getEnergyState();
+    }
+    return null;
   }
 
   /**

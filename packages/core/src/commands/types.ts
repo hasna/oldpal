@@ -1,4 +1,4 @@
-import type { Tool, TokenUsage } from '@oldpal/shared';
+import type { Tool, TokenUsage, EnergyState } from '@oldpal/shared';
 import type { ErrorStats } from '../errors';
 import type { ContextInfo, ContextProcessResult } from '../context';
 
@@ -63,6 +63,8 @@ export interface CommandContext {
   getErrorStats?: () => ErrorStats[];
   getContextInfo?: () => ContextInfo | null;
   summarizeContext?: () => Promise<ContextProcessResult>;
+  getEnergyState?: () => EnergyState | null;
+  restEnergy?: (amount?: number) => void;
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;
   emit: (type: 'text' | 'done' | 'error', content?: string) => void;

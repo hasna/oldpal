@@ -35,6 +35,9 @@ export * from './context';
 // Heartbeat
 export * from './heartbeat';
 
+// Energy
+export * from './energy';
+
 // LLM
 export type { LLMClient } from './llm/client';
 export { createLLMClient } from './llm/client';

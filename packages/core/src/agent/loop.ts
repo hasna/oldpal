@@ -34,6 +34,7 @@ import {
   type Heartbeat,
   type HeartbeatConfig as HeartbeatRuntimeConfig,
 } from '../heartbeat';
+import { EnergyManager, EnergyStorage, applyPersonality, type EnergyEffects, type EnergyState } from '../energy';
 import { AssistantError, ErrorAggregator, ErrorCodes, type ErrorCode } from '../errors';
 import { configureLimits, enforceMessageLimit, getLimits } from '../validation/limits';
 import { validateToolCalls } from '../validation/llm-response';
@@ -74,6 +75,9 @@ export class AgentLoop {
   private lastUserMessage: string | null = null;
   private lastToolName: string | null = null;
   private pendingToolCalls: string[] = [];
+  private energyManager: EnergyManager | null = null;
+  private energyEffects: EnergyEffects | null = null;
+  private lastEnergyLevel: EnergyEffects['level'] | null = null;
   private toolRegistry: ToolRegistry;
   private connectorBridge: ConnectorBridge;
   private skillLoader: SkillLoader;
@@ -238,6 +242,7 @@ export class AgentLoop {
 
     this.startHeartbeat();
     this.startAgentHeartbeat();
+    await this.startEnergySystem();
   }
 
   /**
@@ -264,6 +269,7 @@ export class AgentLoop {
     const beforeCount = this.context.getMessages().length;
     this.lastUserMessage = userMessage;
     this.recordHeartbeatActivity('message');
+    this.consumeEnergy('message');
 
     try {
       if (source === 'user') {
@@ -352,8 +358,17 @@ export class AgentLoop {
         await this.maybeSummarizeContext();
 
         const messages = this.context.getMessages();
+        this.consumeEnergy('llmCall');
+        if (this.contextConfig && this.contextManager) {
+          const contextTokens = this.contextManager.getState().totalTokens;
+          if (contextTokens > this.contextConfig.maxContextTokens * 0.8) {
+            this.consumeEnergy('longContext');
+          }
+        }
+        await this.applyEnergyDelay();
+
         const tools = this.filterAllowedTools(this.toolRegistry.getTools());
-        const systemPrompt = this.buildSystemPrompt(messages);
+        const systemPrompt = this.applyEnergyPersonality(this.buildSystemPrompt(messages));
 
         let responseText = '';
         let toolCalls: ToolCall[] = [];
@@ -545,6 +560,7 @@ export class AgentLoop {
       }
 
       // Emit tool start
+      this.consumeEnergy('toolCall');
       this.recordHeartbeatActivity('tool');
       this.lastToolName = toolCall.name;
       this.pendingToolCalls.push(toolCall.name);
@@ -630,6 +646,13 @@ export class AgentLoop {
           this.context.import(result.messages);
         }
         return result;
+      },
+      getEnergyState: () => this.getEnergyState(),
+      restEnergy: (amount?: number) => {
+        if (this.energyManager) {
+          this.energyManager.rest(amount);
+          this.refreshEnergyEffects();
+        }
       },
       clearMessages: () => {
         this.resetContext();
@@ -783,6 +806,13 @@ export class AgentLoop {
   }
 
   /**
+   * Get current energy state
+   */
+  getEnergyState(): EnergyState | null {
+    return this.energyManager ? this.energyManager.getState() : null;
+  }
+
+  /**
    * Update token usage (called by LLM client)
    */
   updateTokenUsage(usage: Partial<TokenUsage>): void {
@@ -872,6 +902,44 @@ export class AgentLoop {
 
   private recordHeartbeatActivity(type: 'message' | 'tool' | 'error'): void {
     this.heartbeatManager?.recordActivity(type);
+  }
+
+  private async startEnergySystem(): Promise<void> {
+    if (!this.config || this.config.energy?.enabled === false) return;
+    const statePath = join(getConfigDir(), 'energy', 'state.json');
+    this.energyManager = new EnergyManager(this.config.energy, new EnergyStorage(statePath));
+    await this.energyManager.initialize();
+    this.refreshEnergyEffects();
+  }
+
+  private consumeEnergy(action: 'message' | 'toolCall' | 'llmCall' | 'longContext'): void {
+    if (!this.energyManager) return;
+    this.energyManager.consume(action);
+    this.refreshEnergyEffects();
+  }
+
+  private refreshEnergyEffects(): void {
+    if (!this.energyManager) return;
+    const effects = this.energyManager.getEffects();
+    this.energyEffects = effects;
+    if (this.lastEnergyLevel !== effects.level) {
+      this.lastEnergyLevel = effects.level;
+      if (effects.message) {
+        this.emit({ type: 'text', content: `\n${effects.message}\n` });
+      }
+    }
+  }
+
+  private async applyEnergyDelay(): Promise<void> {
+    const delay = this.energyEffects?.processingDelayMs ?? 0;
+    if (delay <= 0) return;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
+  private applyEnergyPersonality(systemPrompt: string | undefined): string | undefined {
+    if (!systemPrompt) return systemPrompt;
+    if (!this.energyEffects) return systemPrompt;
+    return applyPersonality(systemPrompt, this.energyEffects);
   }
 
   private startHeartbeat(): void {

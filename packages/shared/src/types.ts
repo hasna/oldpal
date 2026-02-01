@@ -227,6 +227,7 @@ export interface OldpalConfig {
   scheduler?: SchedulerConfig;
   heartbeat?: HeartbeatConfig;
   context?: ContextConfig;
+  energy?: EnergyConfig;
   validation?: ValidationConfig;
 }
 
@@ -286,6 +287,29 @@ export interface ContextConfig {
   maxMessages?: number;
 }
 
+export interface EnergyCosts {
+  message: number;
+  toolCall: number;
+  llmCall: number;
+  longContext: number;
+}
+
+export interface EnergyConfig {
+  enabled?: boolean;
+  costs?: Partial<EnergyCosts>;
+  regenRate?: number;
+  lowEnergyThreshold?: number;
+  criticalThreshold?: number;
+  maxEnergy?: number;
+}
+
+export interface EnergyState {
+  current: number;
+  max: number;
+  regenRate: number;
+  lastUpdate: string;
+}
+
 export interface ValidationConfig {
   mode?: 'strict' | 'lenient';
   maxUserMessageLength?: number;
@@ -332,6 +356,7 @@ export interface AssistantClient {
   onError(callback: (error: Error) => void): void;
   getTools(): Promise<Tool[]>;
   getSkills(): Promise<Skill[]>;
+  getEnergyState(): EnergyState | null;
   stop(): void;
   disconnect(): void;
 }

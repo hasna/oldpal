@@ -42,6 +42,19 @@ const DEFAULT_CONFIG: OldpalConfig = {
     summaryMaxTokens: 2000,
     maxMessages: 500,
   },
+  energy: {
+    enabled: true,
+    regenRate: 5,
+    lowEnergyThreshold: 30,
+    criticalThreshold: 10,
+    maxEnergy: 100,
+    costs: {
+      message: 2,
+      toolCall: 5,
+      llmCall: 3,
+      longContext: 10,
+    },
+  },
   validation: {
     mode: 'strict',
     maxUserMessageLength: 100_000,
@@ -101,6 +114,10 @@ function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): Oldp
     context: {
       ...(base.context || {}),
       ...(override.context || {}),
+    },
+    energy: {
+      ...(base.energy || {}),
+      ...(override.energy || {}),
     },
     validation: {
       ...(base.validation || {}),
@@ -230,6 +247,7 @@ export async function ensureConfigDir(sessionId?: string): Promise<void> {
     mkdir(join(configDir, 'temp'), { recursive: true }),
     mkdir(join(configDir, 'heartbeats'), { recursive: true }),
     mkdir(join(configDir, 'state'), { recursive: true }),
+    mkdir(join(configDir, 'energy'), { recursive: true }),
   ];
 
   // Create session-specific temp folder if provided
