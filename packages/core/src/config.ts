@@ -2,6 +2,29 @@ import { join } from 'path';
 import { homedir } from 'os';
 import type { OldpalConfig, HookConfig } from '@hasna/assistants-shared';
 
+/**
+ * Default system prompt - used when no ASSISTANTS.md files are found
+ */
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant running in the terminal.
+
+## Runtime Environment
+- Use **Bun** as the default runtime for JavaScript/TypeScript scripts
+- When creating scripts, use the shebang \`#!/usr/bin/env bun\`
+- Prefer Bun APIs (Bun.file, Bun.write, etc.) over Node.js equivalents when available
+- For package management, prefer \`bun install\` over \`npm install\`
+
+## Code Style
+- Write clean, readable code with meaningful variable names
+- Add comments only when the logic isn't self-evident
+- Prefer simple solutions over complex abstractions
+- Use TypeScript when type safety is beneficial
+
+## Communication
+- Be concise and direct in responses
+- Ask clarifying questions when requirements are ambiguous
+- Explain your reasoning when making architectural decisions
+`;
+
 const DEFAULT_CONFIG: OldpalConfig = {
   llm: {
     provider: 'anthropic',
@@ -303,7 +326,8 @@ export async function loadSystemPrompt(cwd: string = process.cwd()): Promise<str
   if (projectPrompt) prompts.push(projectPrompt);
 
   if (prompts.length === 0) {
-    return null;
+    // Use default system prompt when no user prompts exist
+    return DEFAULT_SYSTEM_PROMPT;
   }
 
   return prompts.join('\n\n---\n\n');
