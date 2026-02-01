@@ -67,9 +67,11 @@ class ChatWebSocket {
 
     switch (message.type) {
       case 'text_delta':
+        store.setStreaming(true);
         store.updateLastMessage(message.content);
         break;
       case 'tool_call':
+        store.setStreaming(true);
         store.addToolCall({
           id: message.id,
           name: message.name,
@@ -78,6 +80,7 @@ class ChatWebSocket {
         });
         break;
       case 'tool_result':
+        store.setStreaming(true);
         store.updateToolResult(message.id, {
           toolCallId: message.id,
           content: message.output,
@@ -85,10 +88,12 @@ class ChatWebSocket {
         });
         break;
       case 'message_complete':
+        store.finalizeToolCalls();
         store.setStreaming(false);
         store.clearToolCalls();
         break;
       case 'error':
+        store.finalizeToolCalls();
         store.setStreaming(false);
         store.clearToolCalls();
         break;

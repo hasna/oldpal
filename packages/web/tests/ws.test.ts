@@ -75,6 +75,13 @@ describe('ChatWebSocket', () => {
     const ws = MockWebSocket.instances[0];
     ws.onopen?.();
 
+    useChatStore.getState().addMessage({
+      id: 'assistant-1',
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+    });
+
     ws.onmessage?.({
       data: JSON.stringify({
         type: 'tool_call',
@@ -98,5 +105,14 @@ describe('ChatWebSocket', () => {
 
     state = useChatStore.getState();
     expect(state.currentToolCalls[0]?.result?.content).toBe('ok');
+
+    ws.onmessage?.({
+      data: JSON.stringify({ type: 'message_complete' }),
+    });
+
+    const finalized = useChatStore.getState();
+    const last = finalized.messages.at(-1);
+    expect(last?.toolCalls?.length).toBe(1);
+    expect(last?.toolResults?.[0]?.content).toBe('ok');
   });
 });

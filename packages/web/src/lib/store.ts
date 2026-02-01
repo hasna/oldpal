@@ -17,6 +17,7 @@ interface ChatState {
   setStreaming: (streaming: boolean) => void;
   addToolCall: (call: ToolCall) => void;
   updateToolResult: (id: string, result: ToolResult) => void;
+  finalizeToolCalls: () => void;
   clearToolCalls: () => void;
   clearMessages: () => void;
 }
@@ -38,6 +39,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       sessions: [...state.sessions, { id, label: sessionLabel, createdAt }],
       sessionId: id,
+      isStreaming: false,
       messages: [],
       currentToolCalls: [],
       sessionSnapshots: {
@@ -60,6 +62,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const snapshot = snapshots[sessionId] || { messages: [], toolCalls: [] };
       return {
         sessionId,
+        isStreaming: false,
         messages: snapshot.messages,
         currentToolCalls: snapshot.toolCalls,
         sessionSnapshots: snapshots,
@@ -136,7 +139,67 @@ export const useChatStore = create<ChatState>((set, get) => ({
         : state.sessionSnapshots,
     })),
 
-  clearToolCalls: () => set({ currentToolCalls: [] }),
+  finalizeToolCalls: () =>
+    set((state) => {
+      if (state.currentToolCalls.length === 0) {
+        return state;
+      }
 
-  clearMessages: () => set({ messages: [], currentToolCalls: [] }),
+      const messages = [...state.messages];
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i].role === 'assistant') {
+          const toolResults = (state.currentToolCalls as Array<ToolCall & { result?: ToolResult }>)
+            .map((call) => call.result)
+            .filter((result): result is ToolResult => Boolean(result));
+          messages[i] = {
+            ...messages[i],
+            toolCalls: state.currentToolCalls,
+            toolResults: toolResults.length > 0 ? toolResults : undefined,
+          };
+          break;
+        }
+      }
+
+      return {
+        messages,
+        sessionSnapshots: state.sessionId
+          ? {
+              ...state.sessionSnapshots,
+              [state.sessionId]: {
+                messages,
+                toolCalls: state.currentToolCalls,
+              },
+            }
+          : state.sessionSnapshots,
+      };
+    }),
+
+  clearToolCalls: () =>
+    set((state) => ({
+      currentToolCalls: [],
+      sessionSnapshots: state.sessionId
+        ? {
+            ...state.sessionSnapshots,
+            [state.sessionId]: {
+              messages: state.messages,
+              toolCalls: [],
+            },
+          }
+        : state.sessionSnapshots,
+    })),
+
+  clearMessages: () =>
+    set((state) => ({
+      messages: [],
+      currentToolCalls: [],
+      sessionSnapshots: state.sessionId
+        ? {
+            ...state.sessionSnapshots,
+            [state.sessionId]: {
+              messages: [],
+              toolCalls: [],
+            },
+          }
+        : state.sessionSnapshots,
+    })),
 }));
