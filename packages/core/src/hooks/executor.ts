@@ -1,5 +1,9 @@
 import type { HookMatcher, HookHandler, HookInput, HookOutput } from '@oldpal/shared';
 
+function killSpawnedProcess(proc: { kill: () => void }): void {
+  proc.kill();
+}
+
 /**
  * Hook executor - runs hooks and collects results
  */
@@ -126,7 +130,7 @@ export class HookExecutor {
       proc.stdin.end();
 
       // Set up timeout
-      const timeoutId = setTimeout(() => proc.kill(), timeout);
+      const timeoutId = setTimeout(killSpawnedProcess, timeout, proc);
 
       const [stdout, stderr] = await Promise.all([
         new Response(proc.stdout).text(),
@@ -195,3 +199,7 @@ export class HookExecutor {
     return null;
   }
 }
+
+export const __test__ = {
+  killSpawnedProcess,
+};

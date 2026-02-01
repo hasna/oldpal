@@ -8,6 +8,15 @@ import { getConfigDir } from '../config';
 // Version constant - should match package.json
 const VERSION = '0.6.7';
 
+type ConnectorAuthTimeoutResolve = (value: {
+  exitCode: number;
+  stdout: { toString: () => string };
+}) => void;
+
+function resolveAuthTimeout(resolve: ConnectorAuthTimeoutResolve): void {
+  resolve({ exitCode: 1, stdout: { toString: () => '{}' } });
+}
+
 /**
  * Built-in slash commands for oldpal
  */
@@ -70,23 +79,40 @@ export class BuiltinCommands {
       content: '',
       handler: async (args, context) => {
         const commands = loader.getCommands();
-        const builtinCmds = commands.filter(c => c.builtin);
-        const customCmds = commands.filter(c => !c.builtin);
+        const builtinByName = new Map<string, Command>();
+        const customByName = new Map<string, Command>();
+
+        for (const cmd of commands) {
+          if (cmd.builtin) {
+            builtinByName.set(cmd.name, cmd);
+          } else {
+            customByName.set(cmd.name, cmd);
+          }
+        }
+
+        const builtinNames = Array.from(builtinByName.keys());
+        const customNames = Array.from(customByName.keys());
+        builtinNames.sort();
+        customNames.sort();
 
         let message = '\n**Available Slash Commands**\n\n';
 
-        if (builtinCmds.length > 0) {
+        if (builtinNames.length > 0) {
           message += '**Built-in Commands:**\n';
-          for (const cmd of builtinCmds.sort((a, b) => a.name.localeCompare(b.name))) {
-            message += `  /${cmd.name} - ${cmd.description}\n`;
+          for (const name of builtinNames) {
+            const cmd = builtinByName.get(name);
+            if (!cmd) continue;
+            message += `  /${name} - ${cmd.description}\n`;
           }
           message += '\n';
         }
 
-        if (customCmds.length > 0) {
+        if (customNames.length > 0) {
           message += '**Custom Commands:**\n';
-          for (const cmd of customCmds.sort((a, b) => a.name.localeCompare(b.name))) {
-            message += `  /${cmd.name} - ${cmd.description}\n`;
+          for (const name of customNames) {
+            const cmd = customByName.get(name);
+            if (!cmd) continue;
+            message += `  /${name} - ${cmd.description}\n`;
           }
           message += '\n';
         }
@@ -349,9 +375,12 @@ Format the summary as a brief bullet-point list. This summary will replace the c
           message += `  ${exists ? '✓' : '○'} ${path}\n`;
         }
 
+        const envHome = process.env.HOME || process.env.USERPROFILE;
+        const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
+
         message += '\n**Commands Directories:**\n';
         message += `  - Project: ${join(context.cwd, '.oldpal', 'commands')}\n`;
-        message += `  - Global: ${join(homedir(), '.oldpal', 'commands')}\n`;
+        message += `  - Global: ${join(homeDir, '.oldpal', 'commands')}\n`;
 
         context.emit('text', message);
         context.emit('done');
@@ -596,9 +625,13 @@ If there are staged changes, review those. Otherwise, ask what to review.`,
 
         // If a specific connector is requested, show details
         if (connectorName) {
-          const connector = context.connectors.find(
-            c => c.name.toLowerCase() === connectorName
-          );
+          let connector: typeof context.connectors[number] | undefined;
+          for (const item of context.connectors) {
+            if (item.name.toLowerCase() === connectorName) {
+              connector = item;
+              break;
+            }
+          }
 
           if (!connector) {
             context.emit('text', `\nConnector "${connectorName}" not found.\n`);
@@ -651,39 +684,52 @@ If there are staged changes, review those. Otherwise, ask what to review.`,
           message += '  `bun add -g @hasnaxyz/connect-<name>`\n\n';
           message += 'Available connectors: notion, gmail, slack, linear, etc.\n';
         } else {
-          // Check auth status for each (in parallel for speed)
-          const statuses = await Promise.all(
-            context.connectors.map(async (connector) => {
-              try {
-                const result = await Promise.race([
-                  Bun.$`${connector.cli} auth status --format json`.quiet().nothrow(),
-                  new Promise<{ exitCode: number; stdout: { toString: () => string } }>((resolve) =>
-                    setTimeout(() => resolve({ exitCode: 1, stdout: { toString: () => '{}' } }), 1000)
-                  ),
-                ]);
-                if (result.exitCode === 0) {
-                  try {
-                    const status = JSON.parse(result.stdout.toString());
-                    return status.authenticated ? '✓' : '○';
-                  } catch {
-                    return '○';
-                  }
-                }
-                return '○';
-              } catch {
-                return '?';
+          // Check auth status for each
+          const statuses: string[] = [];
+          for (const connector of context.connectors) {
+            let status = '○';
+            let timeoutId: ReturnType<typeof setTimeout> | null = null;
+            try {
+              const timeoutPromise = new Promise<{ exitCode: number; stdout: { toString: () => string } }>((resolve) => {
+                timeoutId = setTimeout(resolveAuthTimeout, 1000, resolve);
+              });
+
+              const result = await Promise.race([
+                Bun.$`${connector.cli} auth status --format json`.quiet().nothrow(),
+                timeoutPromise,
+              ]);
+
+              if (timeoutId) {
+                clearTimeout(timeoutId);
               }
-            })
-          );
+
+              if (result.exitCode === 0) {
+                try {
+                  const parsed = JSON.parse(result.stdout.toString());
+                  status = parsed.authenticated ? '✓' : '○';
+                } catch {
+                  status = '○';
+                }
+              }
+            } catch {
+              status = '?';
+            } finally {
+              if (timeoutId) {
+                clearTimeout(timeoutId);
+              }
+            }
+            statuses.push(status);
+          }
 
           message += '| Status | Connector | Commands |\n';
           message += '|--------|-----------|----------|\n';
 
-          context.connectors.forEach((connector, i) => {
+          for (let i = 0; i < context.connectors.length; i++) {
+            const connector = context.connectors[i];
             const status = statuses[i];
             const cmdCount = connector.commands.length;
             message += `| ${status} | ${connector.name.padEnd(12)} | ${cmdCount} commands |\n`;
-          });
+          }
 
           message += `\n${context.connectors.length} connector(s) available.\n\n`;
           message += '**Legend:** ✓ authenticated | ○ not authenticated | ? unknown\n\n';
@@ -832,3 +878,7 @@ If there are staged changes, review those. Otherwise, ask what to review.`,
     };
   }
 }
+
+export const __test__ = {
+  resolveAuthTimeout,
+};

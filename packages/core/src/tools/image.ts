@@ -11,9 +11,12 @@ import { generateId } from '@oldpal/shared';
  */
 async function getViuPath(): Promise<string | null> {
   // Check common locations
+  const envHome = process.env.HOME || process.env.USERPROFILE;
+  const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
+
   const locations = [
     'viu',
-    join(homedir(), '.cargo', 'bin', 'viu'),
+    join(homeDir, '.cargo', 'bin', 'viu'),
     '/usr/local/bin/viu',
     '/opt/homebrew/bin/viu',
   ];
@@ -155,3 +158,7 @@ export class ImageTools {
     registry.register(ImageDisplayTool.tool, ImageDisplayTool.executor);
   }
 }
+
+export const __test__ = {
+  getViuPath,
+};

@@ -1,8 +1,14 @@
 import type { Tool, Connector, ConnectorCommand } from '@oldpal/shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { homedir } from 'os';
-import { join, basename } from 'path';
-import { readdirSync, statSync, readlinkSync } from 'fs';
+import { join, delimiter } from 'path';
+import { readdirSync, statSync } from 'fs';
+
+type TimeoutResolve = (value: { exitCode: number }) => void;
+
+function resolveTimeout(resolve: TimeoutResolve): void {
+  resolve({ exitCode: 1 });
+}
 
 /**
  * Connector bridge - wraps connect-* CLIs as tools
@@ -11,17 +17,23 @@ export class ConnectorBridge {
   private connectors: Map<string, Connector> = new Map();
   private static cache: Map<string, Connector | null> = new Map();
 
+  private getHomeDir(): string {
+    const envHome = process.env.HOME || process.env.USERPROFILE;
+    return envHome && envHome.trim().length > 0 ? envHome : homedir();
+  }
+
   /**
    * Auto-discover all connect-* CLIs in PATH
    */
   private autoDiscoverConnectorNames(): string[] {
     const connectorNames = new Set<string>();
-    const pathDirs = (process.env.PATH || '').split(':');
+    const pathDirs = (process.env.PATH || '').split(delimiter);
 
     // Also check common bun/npm global bin locations
+    const homeDir = this.getHomeDir();
     const extraDirs = [
-      join(homedir(), '.bun', 'bin'),
-      join(homedir(), '.npm-global', 'bin'),
+      join(homeDir, '.bun', 'bin'),
+      join(homeDir, '.npm-global', 'bin'),
       '/usr/local/bin',
     ];
 
@@ -31,12 +43,26 @@ export class ConnectorBridge {
       try {
         const files = readdirSync(dir);
         for (const file of files) {
-          if (file.startsWith('connect-')) {
-            const name = file.replace('connect-', '');
-            // Skip if it's a common non-connector (like connect.js or similar)
-            if (name && !name.includes('.') && name.length > 1) {
-              connectorNames.add(name);
-            }
+          if (!file.startsWith('connect-')) {
+            continue;
+          }
+
+          const fullPath = join(dir, file);
+          let stats;
+          try {
+            stats = statSync(fullPath);
+          } catch {
+            continue;
+          }
+
+          if (!stats.isFile()) {
+            continue;
+          }
+
+          const name = file.replace('connect-', '');
+          // Skip if it's a common non-connector (like connect.js or similar)
+          if (name && !name.includes('.') && name.length > 1) {
+            connectorNames.add(name);
           }
         }
       } catch {
@@ -62,38 +88,20 @@ export class ConnectorBridge {
     }
 
     // Check cache first
-    const uncached = names.filter(n => !ConnectorBridge.cache.has(n));
+    const uncached: string[] = [];
+    for (const name of names) {
+      if (!ConnectorBridge.cache.has(name)) {
+        uncached.push(name);
+      }
+    }
 
     if (uncached.length > 0) {
       // Discover uncached connectors in parallel (with timeout)
-      const results = await Promise.all(
-        uncached.map(async (name) => {
-          const cli = `connect-${name}`;
-
-          try {
-            // Quick existence check with timeout
-            const result = await Promise.race([
-              Bun.$`which ${cli}`.quiet().nothrow(),
-              new Promise<{ exitCode: number }>((_, reject) =>
-                setTimeout(() => reject(new Error('timeout')), 500)
-              )
-            ]);
-
-            if (result.exitCode !== 0) {
-              ConnectorBridge.cache.set(name, null);
-              return null;
-            }
-
-            // Lazy: don't run --help, just create minimal connector
-            const connector = this.createMinimalConnector(name, cli);
-            ConnectorBridge.cache.set(name, connector);
-            return connector;
-          } catch {
-            ConnectorBridge.cache.set(name, null);
-            return null;
-          }
-        })
-      );
+      const tasks: Array<Promise<void>> = [];
+      for (const name of uncached) {
+        tasks.push(this.populateCache(name));
+      }
+      await Promise.all(tasks);
     }
 
     // Return all cached connectors
@@ -127,6 +135,38 @@ export class ConnectorBridge {
     };
   }
 
+  private async populateCache(name: string): Promise<void> {
+    const cli = `connect-${name}`;
+
+    try {
+      // Quick existence check with timeout
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<{ exitCode: number }>((resolve) => {
+        timeoutId = setTimeout(resolveTimeout, 500, resolve);
+      });
+
+      const result = await Promise.race([
+        Bun.$`which ${cli}`.quiet().nothrow(),
+        timeoutPromise,
+      ]);
+
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      if (result.exitCode !== 0) {
+        ConnectorBridge.cache.set(name, null);
+        return;
+      }
+
+      // Lazy: don't run --help, just create minimal connector
+      const connector = this.createMinimalConnector(name, cli);
+      ConnectorBridge.cache.set(name, connector);
+    } catch {
+      ConnectorBridge.cache.set(name, null);
+    }
+  }
+
   /**
    * Discover a single connector's commands from its CLI help
    */
@@ -140,7 +180,7 @@ export class ConnectorBridge {
       const commands = this.parseHelpOutput(helpText, name);
 
       // Try to load manifest if available
-      const manifestPath = join(homedir(), `.connect-${name}`, 'manifest.json');
+      const manifestPath = join(this.getHomeDir(), `.connect-${name}`, 'manifest.json');
       let description = `${name} connector`;
 
       try {
@@ -234,16 +274,26 @@ export class ConnectorBridge {
    * Create a tool definition from a connector
    */
   private createTool(connector: Connector): Tool {
+    const commandNames: string[] = [];
+    for (const cmd of connector.commands) {
+      commandNames.push(cmd.name);
+    }
+
+    const commandDescriptions: string[] = [];
+    for (const cmd of connector.commands) {
+      commandDescriptions.push(`${cmd.name} (${cmd.description})`);
+    }
+
     // Create a single tool per connector with command as a parameter
     return {
       name: connector.name,
-      description: `${connector.description}. Available commands: ${connector.commands.map((c) => c.name).join(', ')}`,
+      description: `${connector.description}. Available commands: ${commandNames.join(', ')}`,
       parameters: {
         type: 'object',
         properties: {
           command: {
             type: 'string',
-            description: `The command to run. Available: ${connector.commands.map((c) => `${c.name} (${c.description})`).join('; ')}`,
+            description: `The command to run. Available: ${commandDescriptions.join('; ')}`,
           },
           args: {
             type: 'array',
@@ -315,3 +365,7 @@ export class ConnectorBridge {
     return Array.from(this.connectors.values());
   }
 }
+
+export const __test__ = {
+  resolveTimeout,
+};
