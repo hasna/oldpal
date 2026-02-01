@@ -257,10 +257,10 @@ describe('Config types', () => {
       enabled: true,
       stt: { provider: 'whisper', model: 'base', language: 'en' },
       tts: { provider: 'elevenlabs', voiceId: 'voice-123' },
-      wake: { enabled: true, word: 'hey oldpal' },
+      wake: { enabled: true, word: 'hey assistants' },
     };
     expect(voice.enabled).toBe(true);
-    expect(voice.wake?.word).toBe('hey oldpal');
+    expect(voice.wake?.word).toBe('hey assistants');
   });
 });
 
