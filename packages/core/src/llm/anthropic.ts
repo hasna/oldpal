@@ -10,7 +10,9 @@ import { generateId } from '@oldpal/shared';
  * Load API key from ~/.secrets file if not in environment
  */
 function loadApiKeyFromSecrets(): string | undefined {
-  const secretsPath = join(homedir(), '.secrets');
+  const envHome = process.env.HOME || process.env.USERPROFILE;
+  const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
+  const secretsPath = join(homeDir, '.secrets');
   if (existsSync(secretsPath)) {
     try {
       const content = readFileSync(secretsPath, 'utf-8');

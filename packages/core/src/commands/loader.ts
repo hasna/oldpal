@@ -30,7 +30,9 @@ export class CommandLoader {
     this.commands.clear();
 
     // Load global commands first (lower priority)
-    const globalDir = join(homedir(), '.oldpal', 'commands');
+    const envHome = process.env.HOME || process.env.USERPROFILE;
+    const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
+    const globalDir = join(homeDir, '.oldpal', 'commands');
     await this.loadFromDirectory(globalDir, 'global');
 
     // Load project commands (higher priority, will override global)

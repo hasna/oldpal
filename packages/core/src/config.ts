@@ -81,7 +81,9 @@ export function getConfigDir(): string {
   if (override && override.trim()) {
     return override;
   }
-  return join(homedir(), '.oldpal');
+  const envHome = process.env.HOME || process.env.USERPROFILE;
+  const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
+  return join(homeDir, '.oldpal');
 }
 
 /**

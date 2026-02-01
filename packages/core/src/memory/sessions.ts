@@ -11,7 +11,9 @@ export class SessionManager {
   private db: Database;
 
   constructor(dbPath?: string) {
-    const path = dbPath || join(homedir(), '.oldpal', 'memory.db');
+    const envHome = process.env.HOME || process.env.USERPROFILE;
+    const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
+    const path = dbPath || join(homeDir, '.oldpal', 'memory.db');
     this.db = new Database(path, { create: true });
     this.initialize();
   }
