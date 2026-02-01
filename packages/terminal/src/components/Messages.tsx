@@ -15,6 +15,7 @@ interface ActivityEntry {
 interface MessagesProps {
   messages: Message[];
   currentResponse?: string;
+  streamingMessages?: Message[];
   currentToolCall?: ToolCall;
   lastToolResult?: ToolResult;
   activityLog?: ActivityEntry[];
@@ -26,6 +27,7 @@ interface MessagesProps {
 export function Messages({
   messages,
   currentResponse,
+  streamingMessages = [],
   currentToolCall,
   lastToolResult,
   activityLog = [],
@@ -35,11 +37,20 @@ export function Messages({
 }: MessagesProps) {
   const [now, setNow] = useState(Date.now());
 
+  const combinedMessages = useMemo(
+    () => [...messages, ...streamingMessages],
+    [messages, streamingMessages]
+  );
+
   // Calculate visible messages based on scroll offset
   // scrollOffset 0 means showing the latest messages
-  const endIndex = messages.length - scrollOffset;
+  const endIndex = combinedMessages.length - scrollOffset;
   const startIndex = Math.max(0, endIndex - maxVisible);
-  const visibleMessages = messages.slice(startIndex, endIndex);
+  const visibleCombined = combinedMessages.slice(startIndex, endIndex);
+  const historicalCount = messages.length;
+  const splitIndex = Math.max(0, Math.min(visibleCombined.length, historicalCount - startIndex));
+  const visibleMessages = visibleCombined.slice(0, splitIndex);
+  const visibleStreaming = visibleCombined.slice(splitIndex);
 
   // Group consecutive tool-only assistant messages
   const groupedMessages = groupConsecutiveToolMessages(visibleMessages);
@@ -109,11 +120,14 @@ export function Messages({
           const elapsedMs = (resultEntry ? resultEntry.timestamp : now) - entry.timestamp;
           const elapsedText = formatDuration(elapsedMs);
           return (
-            <Box key={entry.id} marginY={1}>
-              <Text dimColor>⚙ </Text>
-              <Text dimColor>
-                {formatToolCall(entry.toolCall)} · {elapsedText}
-              </Text>
+            <Box key={entry.id} marginY={1} flexDirection="column">
+              <Box>
+                <Text dimColor>⚙ </Text>
+                <Text dimColor>{formatToolCall(entry.toolCall)}</Text>
+              </Box>
+              <Box marginLeft={2}>
+                <Text dimColor>{elapsedText} elapsed</Text>
+              </Box>
             </Box>
           );
         }
@@ -130,6 +144,10 @@ export function Messages({
         }
         return null;
       })}
+
+      {visibleStreaming.map((message) => (
+        <MessageBubble key={message.id} message={message} queuedMessageIds={queuedMessageIds} />
+      ))}
 
       {/* Show current streaming response (text being typed now) */}
       {currentResponse && (

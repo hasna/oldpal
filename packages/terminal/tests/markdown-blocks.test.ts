@@ -42,6 +42,18 @@ Second
     expect(output).toContain('Malformed block');
   });
 
+  test('warns on invalid grid columns', () => {
+    const markdown = `:::grid columns=oops\n:::card type=note title="A"\nBody\n:::\n:::`;
+    const output = stripAnsi(__test__.parseMarkdown(markdown));
+    expect(output).toContain('Malformed block');
+  });
+
+  test('warns on malformed cards', () => {
+    const markdown = `:::grid columns=2\n  :::card type=note title="A"\n  Body\n:::\n:::`;
+    const output = stripAnsi(__test__.parseMarkdown(markdown));
+    expect(output).toContain('Malformed card');
+  });
+
   test('renders report blocks with legend and progress', () => {
     const markdown = `:::report
 legend: Not Started | In Progress | Complete | Blocked

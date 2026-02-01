@@ -455,6 +455,10 @@ export function App({ cwd, version }: AppProps) {
           setError(err.message);
           setIsProcessing(false);
           isProcessingRef.current = false;
+          const active = registryRef.current.getActiveSession();
+          if (active) {
+            registryRef.current.setProcessing(active.id, false);
+          }
         });
 
         // Create first session
@@ -550,6 +554,17 @@ export function App({ cwd, version }: AppProps) {
     () => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES, wrapChars),
     [messages, wrapChars]
   );
+  const streamingMessages = useMemo(() => {
+    if (!isProcessing || !currentResponse.trim()) return [];
+    const streamingMessage: Message = {
+      id: 'streaming-response',
+      role: 'assistant',
+      content: currentResponse,
+      timestamp: now(),
+    };
+    return buildDisplayMessages([streamingMessage], MESSAGE_CHUNK_LINES, wrapChars);
+  }, [currentResponse, isProcessing, wrapChars]);
+  const displayCount = displayMessages.length + streamingMessages.length;
 
   // Process queue when not processing
   useEffect(() => {
@@ -563,17 +578,17 @@ export function App({ cwd, version }: AppProps) {
     if (autoScroll) {
       setScrollOffset(0);
     }
-  }, [displayMessages.length, autoScroll]);
+  }, [displayCount, autoScroll]);
 
   // Keep viewport stable when not auto-scrolling
   useEffect(() => {
     const prevCount = prevDisplayCountRef.current;
-    if (!autoScroll && displayMessages.length > prevCount) {
-      const delta = displayMessages.length - prevCount;
+    if (!autoScroll && displayCount > prevCount) {
+      const delta = displayCount - prevCount;
       setScrollOffset((prev) => prev + delta);
     }
-    prevDisplayCountRef.current = displayMessages.length;
-  }, [displayMessages.length, autoScroll]);
+    prevDisplayCountRef.current = displayCount;
+  }, [displayCount, autoScroll]);
 
   // Max visible messages - size to terminal height when available
   const reservedLines = 8;
@@ -583,9 +598,9 @@ export function App({ cwd, version }: AppProps) {
 
   // Clamp scroll offset to available range
   useEffect(() => {
-    const maxOffset = Math.max(0, displayMessages.length - maxVisibleMessages);
+    const maxOffset = Math.max(0, displayCount - maxVisibleMessages);
     setScrollOffset((prev) => Math.min(prev, maxOffset));
-  }, [displayMessages.length, maxVisibleMessages]);
+  }, [displayCount, maxVisibleMessages]);
 
   // Get session info
   const sessions = registry.listSessions();
@@ -697,7 +712,7 @@ export function App({ cwd, version }: AppProps) {
     // Page Up: scroll up through messages
     if (key.pageUp || (key.shift && key.upArrow)) {
       setScrollOffset((prev) => {
-        const maxOffset = Math.max(0, displayMessages.length - maxVisibleMessages);
+        const maxOffset = Math.max(0, displayCount - maxVisibleMessages);
         const newOffset = Math.min(prev + 3, maxOffset);
         if (newOffset > 0) setAutoScroll(false);
         return newOffset;
@@ -715,7 +730,7 @@ export function App({ cwd, version }: AppProps) {
 
     // Home: scroll to top
     if (key.ctrl && input === 'u') {
-      const maxOffset = Math.max(0, displayMessages.length - maxVisibleMessages);
+      const maxOffset = Math.max(0, displayCount - maxVisibleMessages);
       setScrollOffset(maxOffset);
       setAutoScroll(false);
     }
@@ -792,6 +807,7 @@ export function App({ cwd, version }: AppProps) {
         resetTurnState();
         setIsProcessing(false);
         isProcessingRef.current = false;
+        registry.setProcessing(activeSession.id, false);
         // Small delay to ensure stop is processed
         await new Promise((r) => setTimeout(r, 100));
       }
@@ -912,7 +928,7 @@ export function App({ cwd, version }: AppProps) {
       {/* Scroll indicator */}
       {scrollOffset > 0 && (
         <Box>
-          <Text dimColor>↑ {scrollOffset} more messages above (Shift+↓ or Ctrl+D to scroll down)</Text>
+          <Text dimColor>↑ {scrollOffset} more messages above (Shift+↓ or Page Down to scroll down)</Text>
         </Box>
       )}
 
@@ -920,7 +936,8 @@ export function App({ cwd, version }: AppProps) {
       <Messages
         key={activeSessionId || 'default'}
         messages={displayMessages}
-        currentResponse={isProcessing ? currentResponse : undefined}
+        currentResponse={undefined}
+        streamingMessages={streamingMessages}
         currentToolCall={undefined}
         lastToolResult={undefined}
         activityLog={isProcessing ? activityLog : []}

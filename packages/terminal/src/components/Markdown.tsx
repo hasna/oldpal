@@ -105,7 +105,13 @@ function extractBlockSections(text: string, blocks: BlockSection[]): string {
       const indent = gridMatch[1] ?? '';
       const header = gridMatch[2] ?? '';
       const attrs = parseAttributes(header);
-      const columns = Math.max(1, Math.min(4, Number(attrs.columns || attrs.cols || 2)));
+      const rawColumns = attrs.columns || attrs.cols;
+      let columns = Number(rawColumns ?? 2);
+      if (!Number.isFinite(columns) || columns <= 0) {
+        output.push(createMalformedBlock(blocks, indent, 'grid', `Invalid columns value "${rawColumns ?? ''}". Using 2.`));
+        columns = 2;
+      }
+      columns = Math.max(1, Math.min(4, Math.round(columns)));
       const parsed = parseDelimitedBlock(lines, i, indent);
       if (!parsed) {
         output.push(line);
@@ -173,25 +179,39 @@ function extractCards(body: string): { type: string; title?: string; body: strin
 
   while (i < lines.length) {
     const line = lines[i];
-    const match = line.match(/^\s*:::card(.*)$/);
+    const match = line.match(/^(\s*):::card(.*)$/);
     if (!match) {
       i += 1;
       continue;
     }
 
-    const attrs = parseAttributes(match[1] ?? '');
+    const indent = match[1] ?? '';
+    const attrs = parseAttributes(match[2] ?? '');
     const type = String(attrs.type || 'note');
     const title = attrs.title ? String(attrs.title) : undefined;
     const bodyLines: string[] = [];
+    let closed = false;
     i += 1;
-    while (i < lines.length && lines[i].trim() !== ':::') {
-      bodyLines.push(lines[i]);
+    while (i < lines.length) {
+      const current = lines[i];
+      if (current.trim() === ':::' && current.startsWith(indent)) {
+        closed = true;
+        i += 1;
+        break;
+      }
+      bodyLines.push(current);
       i += 1;
     }
-    if (i < lines.length && lines[i].trim() === ':::') {
-      i += 1;
+    if (!closed) {
+      cards.push({
+        type: 'warning',
+        title: 'Malformed card',
+        body: 'Missing closing ::: for card.',
+      });
+      break;
     }
-    cards.push({ type, title, body: bodyLines.join('\n') });
+    const stripped = stripIndent(bodyLines, indent);
+    cards.push({ type, title, body: stripped.join('\n') });
   }
 
   return cards;
@@ -239,12 +259,17 @@ function stripIndent(lines: string[], indent: string): string[] {
   return lines.map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line));
 }
 
-function createMalformedBlock(blocks: BlockSection[], indent: string, kind: 'block' | 'grid' | 'report'): string {
+function createMalformedBlock(
+  blocks: BlockSection[],
+  indent: string,
+  kind: 'block' | 'grid' | 'report',
+  message?: string
+): string {
   blocks.push({
     kind: 'block',
     type: 'warning',
     title: 'Malformed block',
-    body: `Missing closing ::: for ${kind}.`,
+    body: message || `Missing closing ::: for ${kind}.`,
     indent,
   });
   return `@@BLOCKSECTION${blocks.length - 1}@@`;
@@ -287,7 +312,7 @@ function renderBlock(type: string, title: string | undefined, body: string, maxW
   const header = formatBlockHeader(type, title);
   const content = parseMarkdown(body, { skipBlocks: true, maxWidth });
   const lines = content ? content.split('\n') : [];
-  return renderBox(header, lines, type, maxWidth, indent);
+  return renderBox(header, lines, type, maxWidth, indent, Boolean(maxWidth));
 }
 
 function renderCard(
@@ -310,13 +335,19 @@ function renderCardGrid(
 ): string {
   const gap = 2;
   const totalWidth = maxWidth ? Math.max(20, maxWidth) : undefined;
+  let effectiveColumns = columns;
+  if (totalWidth) {
+    const minCardWidth = 18;
+    const maxColumns = Math.max(1, Math.floor((totalWidth + gap) / (minCardWidth + gap)));
+    effectiveColumns = Math.min(columns, maxColumns);
+  }
   const cardTotalWidth = totalWidth
-    ? Math.max(20, Math.floor((totalWidth - gap * (columns - 1)) / columns))
+    ? Math.max(8, Math.floor((totalWidth - gap * (effectiveColumns - 1)) / effectiveColumns))
     : undefined;
   const cardLines = cards.map((card) => renderCard(card, cardTotalWidth, '', true));
   const rows: string[][][] = [];
-  for (let i = 0; i < cardLines.length; i += columns) {
-    rows.push(cardLines.slice(i, i + columns));
+  for (let i = 0; i < cardLines.length; i += effectiveColumns) {
+    rows.push(cardLines.slice(i, i + effectiveColumns));
   }
 
   const output: string[] = [];
@@ -364,8 +395,15 @@ function getBlockIcon(type: string): string {
   }
 }
 
-function renderBox(header: string, lines: string[], type: string, maxWidth?: number, indent = ''): string {
-  return renderBoxLines(header, lines, type, maxWidth, indent).join('\n');
+function renderBox(
+  header: string,
+  lines: string[],
+  type: string,
+  maxWidth?: number,
+  indent = '',
+  forceWidth = false
+): string {
+  return renderBoxLines(header, lines, type, maxWidth, indent, forceWidth).join('\n');
 }
 
 function renderBoxLines(
