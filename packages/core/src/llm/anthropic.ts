@@ -220,7 +220,7 @@ export class AnthropicClient implements LLMClient {
     return `You are a helpful personal AI assistant running in the terminal.
 
 You have access to various tools and connectors:
-- Connectors for Notion, Google Drive, Gmail, Calendar, Linear, Slack
+- Connectors discovered from installed connect-* CLIs
 - Filesystem operations (read, write, search files)
 - Shell command execution
 

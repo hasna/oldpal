@@ -21,14 +21,7 @@ const DEFAULT_CONFIG: OldpalConfig = {
       model: 'eleven_turbo_v2_5',
     },
   },
-  connectors: [
-    'notion',
-    'googledrive',
-    'gmail',
-    'googlecalendar',
-    'linear',
-    'slack',
-  ],
+  connectors: [],
 };
 
 function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): OldpalConfig {
