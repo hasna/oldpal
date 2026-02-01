@@ -56,6 +56,11 @@ class MockAgentLoop {
     if (message === 'fail') {
       throw new Error('boom');
     }
+    if (message === 'fail-stream') {
+      lastOptions?.onChunk?.({ type: 'error', error: 'boom' } as StreamChunk);
+      lastOptions?.onChunk?.({ type: 'done' } as StreamChunk);
+      throw new Error('boom');
+    }
     this.processing = true;
     this.context.addUserMessage(message);
     this.context.addAssistantMessage('ok');
@@ -272,6 +277,22 @@ describe('EmbeddedClient', () => {
 
     expect(errors.length).toBe(1);
     expect(errors[0].message).toBe('boom');
+  });
+
+  test('does not propagate errors when error chunk already emitted', async () => {
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => new MockAgentLoop(options) as any,
+    });
+    const errors: Error[] = [];
+    const chunks: StreamChunk[] = [];
+    client.onError((err) => errors.push(err));
+    client.onChunk((chunk) => chunks.push(chunk));
+
+    await client.send('fail-stream');
+
+    expect(errors.length).toBe(0);
+    expect(chunks.some((chunk) => chunk.type === 'error')).toBe(true);
   });
 
   test('drains queued messages when agent finishes', async () => {

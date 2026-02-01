@@ -21,6 +21,7 @@ export class EmbeddedClient implements AssistantClient {
   private assistantId: string | null = null;
   private messageQueue: string[] = [];
   private processingQueue = false;
+  private sawErrorChunk = false;
 
   constructor(
     cwd?: string,
@@ -54,6 +55,9 @@ export class EmbeddedClient implements AssistantClient {
       onChunk: (chunk) => {
         for (const callback of this.chunkCallbacks) {
           callback(chunk);
+        }
+        if (chunk.type === 'error') {
+          this.sawErrorChunk = true;
         }
         if (chunk.type === 'done' || chunk.type === 'error') {
           queueMicrotask(() => {
@@ -125,6 +129,7 @@ export class EmbeddedClient implements AssistantClient {
    */
   private async processMessage(message: string): Promise<void> {
     this.logger.info('User message', { message });
+    this.sawErrorChunk = false;
 
     try {
       await this.agent.process(message);
@@ -146,6 +151,9 @@ export class EmbeddedClient implements AssistantClient {
       // Save session
       this.saveSession();
     } catch (error) {
+      if (this.sawErrorChunk) {
+        return;
+      }
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error('Error processing message', { error: err.message });
       for (const callback of this.errorCallbacks) {
