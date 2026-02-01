@@ -17,6 +17,7 @@
     "build:packages": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:coverage": "turbo run test -- --coverage",
     "lint": "turbo run lint",
     "clean": "turbo run clean && rm -rf node_modules dist",
     "prepublishOnly": "bun run build"
