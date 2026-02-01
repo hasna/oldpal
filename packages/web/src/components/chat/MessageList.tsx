@@ -1,6 +1,6 @@
 'use client';
 
-import type { Message } from '@oldpal/shared';
+import type { Message } from '@hasna/assistants-shared';
 import { MessageBubble } from './MessageBubble';
 import { useChatStore } from '@/lib/store';
 

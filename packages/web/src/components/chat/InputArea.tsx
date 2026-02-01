@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useChatStore } from '@/lib/store';
 import { chatWs } from '@/lib/ws';
-import { now, generateId } from '@oldpal/shared';
+import { now, generateId } from '@hasna/assistants-shared';
 
 export function InputArea() {
   const [value, setValue] = useState('');
@@ -39,7 +39,7 @@ export function InputArea() {
   return (
     <div className="flex items-center gap-3 border-t border-slate-800 bg-slate-950/80 px-6 py-4">
       <Input
-        placeholder="Ask Oldpal anything..."
+        placeholder="Ask Assistants anything..."
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {

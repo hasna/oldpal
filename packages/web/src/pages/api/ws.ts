@@ -1,7 +1,7 @@
 import type { NextApiRequest } from 'next';
 import type { Server as HTTPServer } from 'http';
 import { WebSocketServer } from 'ws';
-import type { StreamChunk } from '@oldpal/shared';
+import type { StreamChunk } from '@hasna/assistants-shared';
 import { randomUUID } from 'crypto';
 import type { ClientMessage, ServerMessage } from '@/lib/protocol';
 import { subscribeToSession, sendSessionMessage, stopSession } from '@/lib/server/agent-pool';

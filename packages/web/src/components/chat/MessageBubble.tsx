@@ -1,4 +1,4 @@
-import type { Message, ToolCall, ToolResult } from '@oldpal/shared';
+import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ToolCallCard } from './ToolCallCard';
 import { cn } from '@/lib/utils';

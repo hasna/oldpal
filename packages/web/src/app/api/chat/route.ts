@@ -1,4 +1,4 @@
-import type { StreamChunk } from '@oldpal/shared';
+import type { StreamChunk } from '@hasna/assistants-shared';
 import { randomUUID } from 'crypto';
 import { subscribeToSession, sendSessionMessage, stopSession } from '@/lib/server/agent-pool';
 import type { ServerMessage } from '@/lib/protocol';

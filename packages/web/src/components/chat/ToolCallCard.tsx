@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { ToolCall, ToolResult } from '@oldpal/shared';
+import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';

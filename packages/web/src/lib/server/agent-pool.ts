@@ -1,5 +1,5 @@
-import type { StreamChunk } from '@oldpal/shared';
-import { EmbeddedClient } from '@oldpal/core';
+import type { StreamChunk } from '@hasna/assistants-shared';
+import { EmbeddedClient } from '@hasna/assistants-core';
 
 type ChunkListener = (chunk: StreamChunk) => void;
 type ErrorListener = (error: Error) => void;

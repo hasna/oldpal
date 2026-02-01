@@ -1,0 +1,16 @@
+{
+  "name": "Assistants Web",
+  "short_name": "Assistants",
+  "description": "Assistants web interface",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

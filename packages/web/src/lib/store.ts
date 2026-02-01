@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Message, ToolCall, ToolResult } from '@oldpal/shared';
+import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 
 interface ChatState {
   messages: Message[];

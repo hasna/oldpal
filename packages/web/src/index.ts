@@ -1,8 +1,8 @@
 /**
- * Web UI for oldpal
- * TODO: Implement in Phase 4
+ * Web UI entrypoint for assistants.
+ * Next.js handles routing; this is kept for package completeness.
  */
 
 export function init() {
-  console.log('Web UI coming in Phase 4');
+  // No-op: Next.js app bootstraps itself.
 }

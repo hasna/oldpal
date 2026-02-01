@@ -4,10 +4,36 @@
 
 :root {
   color-scheme: dark;
+  --background: 222 47% 11%;
+  --foreground: 210 40% 96%;
+  --card: 222 47% 11%;
+  --card-foreground: 210 40% 96%;
+  --popover: 222 47% 11%;
+  --popover-foreground: 210 40% 96%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 215 28% 17%;
+  --secondary-foreground: 210 40% 96%;
+  --muted: 215 28% 17%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 199 89% 48%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 62% 50%;
+  --destructive-foreground: 210 40% 96%;
+  --border: 215 27% 20%;
+  --input: 215 27% 20%;
+  --ring: 199 89% 48%;
+  --radius: 0.75rem;
 }
 
 body {
   @apply bg-slate-950 text-slate-100;
+}
+
+@layer base {
+  * {
+    @apply border-slate-800;
+  }
 }
 
 .shadow-glow {

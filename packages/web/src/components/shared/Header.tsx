@@ -11,7 +11,7 @@ export function Header() {
   return (
     <header className="glass flex items-center justify-between px-6 py-4">
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Oldpal</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Assistants</p>
         <h1 className="font-display text-xl text-slate-100">Operations Console</h1>
       </div>
       <div className="flex items-center gap-3">
