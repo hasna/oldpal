@@ -4,6 +4,8 @@ import { join, resolve, dirname, sep } from 'path';
 import { getProjectConfigDir } from '../config';
 import { Glob } from 'bun';
 import { ErrorCodes, ToolExecutionError } from '../errors';
+import { validatePath } from '../validation/paths';
+import { exceedsFileReadLimit, getLimits } from '../validation/limits';
 
 // Session ID for temp folder (set during registration)
 let currentSessionId: string = 'default';
@@ -88,7 +90,19 @@ export class FilesystemTools {
     const limit = input.limit as number | undefined;
 
     try {
-      const file = Bun.file(path);
+      const validated = await validatePath(path, { allowSymlinks: true });
+      if (!validated.valid) {
+        throw new ToolExecutionError(validated.error || 'Invalid path', {
+          toolName: 'read',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Provide a valid file path.',
+        });
+      }
+
+      const file = Bun.file(validated.resolved);
       if (!(await file.exists())) {
         throw new ToolExecutionError(`File not found: ${path}`, {
           toolName: 'read',
@@ -97,6 +111,18 @@ export class FilesystemTools {
           recoverable: false,
           retryable: false,
           suggestion: 'Check the file path and try again.',
+        });
+      }
+
+      const limits = getLimits();
+      if (exceedsFileReadLimit(file.size, limits.maxFileReadSize)) {
+        throw new ToolExecutionError(`File exceeds size limit (${limits.maxFileReadSize} bytes)`, {
+          toolName: 'read',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Use a smaller file or narrow the read range.',
         });
       }
 
@@ -194,11 +220,23 @@ export class FilesystemTools {
 
     try {
       // Ensure scripts directory exists
-      const dir = dirname(path);
+      const validated = await validatePath(path, { allowSymlinks: false, allowedPaths: [scriptsFolder] });
+      if (!validated.valid) {
+        throw new ToolExecutionError(validated.error || 'Invalid path', {
+          toolName: 'write',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Write only within the allowed scripts folder.',
+        });
+      }
+
+      const dir = dirname(validated.resolved);
       await Bun.$`mkdir -p ${dir}`.quiet();
 
-      await Bun.write(path, content);
-      return `Successfully wrote ${content.length} characters to ${path}`;
+      await Bun.write(validated.resolved, content);
+      return `Successfully wrote ${content.length} characters to ${validated.resolved}`;
     } catch (error) {
       if (error instanceof ToolExecutionError) throw error;
       throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {

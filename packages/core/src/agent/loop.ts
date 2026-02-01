@@ -18,6 +18,8 @@ import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type 
 import { createLLMClient, type LLMClient } from '../llm/client';
 import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir } from '../config';
 import { AssistantError, ErrorAggregator, ErrorCodes, type ErrorCode } from '../errors';
+import { configureLimits, enforceMessageLimit, getLimits } from '../validation/limits';
+import { validateToolCalls } from '../validation/llm-response';
 import {
   acquireScheduleLock,
   DEFAULT_LOCK_TTL_MS,
@@ -110,6 +112,8 @@ export class AgentLoop {
       ensureConfigDir(this.sessionId),
     ]);
     this.config = config;
+    configureLimits(this.config.validation);
+    this.toolRegistry.setValidationConfig(this.config.validation);
 
     const connectorNames =
       this.config.connectors && this.config.connectors.length > 0 && !this.config.connectors.includes('*')
@@ -257,6 +261,8 @@ export class AgentLoop {
         }
       }
 
+      const limits = getLimits();
+      userMessage = enforceMessageLimit(userMessage, limits.maxUserMessageLength);
       this.context.addUserMessage(userMessage);
       await this.runLoop();
 
@@ -291,7 +297,7 @@ export class AgentLoop {
         const systemPrompt = this.buildSystemPrompt(messages);
 
         let responseText = '';
-        const toolCalls: ToolCall[] = [];
+        let toolCalls: ToolCall[] = [];
 
         // Stream response from LLM
         for await (const chunk of this.llmClient!.chat(messages, tools, systemPrompt)) {
@@ -327,6 +333,16 @@ export class AgentLoop {
         // If no tool calls, we're done
         if (toolCalls.length === 0) {
           break;
+        }
+
+        const validation = validateToolCalls(toolCalls, tools);
+        if (validation.errors.length > 0) {
+          for (const error of validation.errors) {
+            this.errorAggregator.record(error);
+          }
+        }
+        if (validation.validated.size > 0) {
+          toolCalls = toolCalls.map((call) => validation.validated.get(call.id) ?? call);
         }
 
         // Execute tool calls

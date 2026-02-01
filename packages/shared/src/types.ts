@@ -225,6 +225,7 @@ export interface OldpalConfig {
   skills?: string[];
   hooks?: HookConfig;
   scheduler?: SchedulerConfig;
+  validation?: ValidationConfig;
 }
 
 export interface LLMConfig {
@@ -261,6 +262,15 @@ export interface WakeConfig {
 export interface SchedulerConfig {
   enabled?: boolean;
   heartbeatIntervalMs?: number;
+}
+
+export interface ValidationConfig {
+  mode?: 'strict' | 'lenient';
+  maxUserMessageLength?: number;
+  maxToolOutputLength?: number;
+  maxTotalContextTokens?: number;
+  maxFileReadSize?: number;
+  perTool?: Record<string, { mode?: 'strict' | 'lenient'; maxOutputLength?: number }>;
 }
 
 // ============================================

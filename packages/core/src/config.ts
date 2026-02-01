@@ -26,6 +26,13 @@ const DEFAULT_CONFIG: OldpalConfig = {
     enabled: true,
     heartbeatIntervalMs: 30000,
   },
+  validation: {
+    mode: 'strict',
+    maxUserMessageLength: 100_000,
+    maxToolOutputLength: 50_000,
+    maxTotalContextTokens: 180_000,
+    maxFileReadSize: 10 * 1024 * 1024,
+  },
 };
 
 function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): OldpalConfig {
@@ -70,6 +77,14 @@ function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): Oldp
     scheduler: {
       ...(base.scheduler || {}),
       ...(override.scheduler || {}),
+    },
+    validation: {
+      ...(base.validation || {}),
+      ...(override.validation || {}),
+      perTool: {
+        ...(base.validation?.perTool || {}),
+        ...(override.validation?.perTool || {}),
+      },
     },
   };
 }

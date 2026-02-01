@@ -57,6 +57,9 @@ export * from './errors';
 // Utils
 export * from './utils/retry';
 
+// Validation
+export * from './validation';
+
 // Errors
 export * from './errors';
 

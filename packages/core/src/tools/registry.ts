@@ -1,6 +1,8 @@
-import type { Tool, ToolCall, ToolResult } from '@oldpal/shared';
+import type { Tool, ToolCall, ToolResult, ValidationConfig } from '@oldpal/shared';
 import { sleep } from '@oldpal/shared';
 import { AssistantError, ErrorAggregator, ErrorCodes, ToolExecutionError } from '../errors';
+import { enforceToolOutputLimit, getLimits } from '../validation/limits';
+import { validateToolInput, type ValidationMode } from '../validation/schema';
 
 /**
  * Tool executor function type
@@ -21,6 +23,7 @@ interface RegisteredTool {
 export class ToolRegistry {
   private tools: Map<string, RegisteredTool> = new Map();
   private errorAggregator?: ErrorAggregator;
+  private validationConfig?: ValidationConfig;
 
   /**
    * Register a tool
@@ -34,6 +37,13 @@ export class ToolRegistry {
    */
   setErrorAggregator(aggregator?: ErrorAggregator): void {
     this.errorAggregator = aggregator;
+  }
+
+  /**
+   * Configure validation behavior for tool inputs and outputs
+   */
+  setValidationConfig(config?: ValidationConfig): void {
+    this.validationConfig = config;
   }
 
   /**
@@ -93,13 +103,37 @@ export class ToolRegistry {
     }
 
     try {
-      const input = toolCall.input as Record<string, unknown>;
+      const validationMode = this.getValidationMode(toolCall.name);
+      const validation = validateToolInput(toolCall.name, registered.tool.parameters, toolCall.input);
+      const input = validation.coerced ?? (toolCall.input as Record<string, unknown>);
+
+      if (!validation.valid) {
+        const message = validation.errors?.map((err) => err.message).join('; ') || 'Invalid tool input';
+        const error = new ToolExecutionError(message, {
+          toolName: toolCall.name,
+          toolInput: toolCall.input,
+          code: ErrorCodes.VALIDATION_SCHEMA_ERROR,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Review tool arguments and try again.',
+        });
+        if (validationMode === 'strict') {
+          this.errorAggregator?.record(error);
+          return {
+            toolCallId: toolCall.id,
+            content: formatToolError(error),
+            isError: true,
+            toolName: toolCall.name,
+          };
+        }
+      }
+
       const timeoutMsRaw = input?.timeoutMs ?? input?.timeout;
       const timeoutMsParsed = typeof timeoutMsRaw === 'string' ? Number(timeoutMsRaw) : timeoutMsRaw;
       const timeoutMs = typeof timeoutMsParsed === 'number' && timeoutMsParsed > 0 ? timeoutMsParsed : 60000;
 
       const result = await Promise.race([
-        registered.executor(toolCall.input),
+        registered.executor(input),
         sleep(timeoutMs).then(() => {
           throw new ToolExecutionError(`Tool timeout after ${Math.round(timeoutMs / 1000)}s`, {
             toolName: toolCall.name,
@@ -112,20 +146,24 @@ export class ToolRegistry {
         }),
       ]);
       const isError = isErrorResult(result);
+      const outputLimit = this.getToolOutputLimit(toolCall.name);
+      const content = enforceToolOutputLimit(result, outputLimit);
       return {
         toolCallId: toolCall.id,
-        content: result,
+        content,
         isError,
         toolName: toolCall.name,
       };
     } catch (error) {
       const toolError = normalizeToolError(error, toolCall);
+      const outputLimit = this.getToolOutputLimit(toolCall.name);
+      const content = enforceToolOutputLimit(formatToolError(toolError), outputLimit);
       if (toolError instanceof AssistantError) {
         this.errorAggregator?.record(toolError);
       }
       return {
         toolCallId: toolCall.id,
-        content: formatToolError(toolError),
+        content,
         isError: true,
         toolName: toolCall.name,
       };
@@ -142,6 +180,22 @@ export class ToolRegistry {
     }
     return Promise.all(tasks);
   }
+
+  private getValidationMode(toolName: string): ValidationMode {
+    const config = this.validationConfig;
+    return resolveMode(config?.mode as ValidationMode, config?.perTool?.[toolName]?.mode as ValidationMode | undefined);
+  }
+
+  private getToolOutputLimit(toolName: string): number {
+    const config = this.validationConfig;
+    const limits = getLimits();
+    return config?.perTool?.[toolName]?.maxOutputLength ?? config?.maxToolOutputLength ?? limits.maxToolOutputLength;
+  }
+}
+
+// Helpers
+function resolveMode(defaultMode: ValidationMode | undefined, override?: ValidationMode): ValidationMode {
+  return override ?? defaultMode ?? 'strict';
 }
 
 function normalizeToolError(error: unknown, toolCall: ToolCall): AssistantError {
