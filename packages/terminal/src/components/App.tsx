@@ -240,10 +240,15 @@ export function App({ cwd, version }: AppProps) {
   const prevDisplayLineCountRef = useRef(0);
   const skipNextDoneRef = useRef(false);
   const isProcessingRef = useRef(isProcessing);
+  const processingStartTimeRef = useRef<number | undefined>(processingStartTime);
 
   useEffect(() => {
     isProcessingRef.current = isProcessing;
   }, [isProcessing]);
+
+  useEffect(() => {
+    processingStartTimeRef.current = processingStartTime;
+  }, [processingStartTime]);
 
   useEffect(() => {
     if (isProcessing && !processingStartTime) {
@@ -306,8 +311,8 @@ export function App({ cwd, version }: AppProps) {
       content = content ? `${content}\n\n[error]` : '[error]';
     }
 
-    if (processingStartTime) {
-      const workedFor = formatElapsedDuration(Date.now() - processingStartTime);
+    if (processingStartTimeRef.current) {
+      const workedFor = formatElapsedDuration(Date.now() - processingStartTimeRef.current);
       content = content ? `${content}\n\n✻ Worked for ${workedFor}` : `✻ Worked for ${workedFor}`;
     }
 
@@ -324,7 +329,7 @@ export function App({ cwd, version }: AppProps) {
     ]);
 
     return true;
-  }, [buildFullResponse, processingStartTime]);
+  }, [buildFullResponse]); // Note: processingStartTime accessed via ref to avoid dependency chain issues
 
   const resetTurnState = useCallback(() => {
     setCurrentResponse('');
