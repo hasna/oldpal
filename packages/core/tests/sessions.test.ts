@@ -2,6 +2,9 @@ import { describe, expect, test, beforeEach, mock, spyOn } from 'bun:test';
 import { SessionRegistry, type SessionInfo } from '../src/sessions/registry';
 import { EmbeddedClient } from '../src/client';
 import type { StreamChunk } from '@oldpal/shared';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 // Mock EmbeddedClient to avoid actual initialization
 const createMockClient = (sessionId: string, cwd: string) => {
@@ -75,6 +78,67 @@ describe('SessionRegistry', () => {
     test('getSessionIndex should return 0 for non-existent session', () => {
       expect(registry.getSessionIndex('non-existent-id')).toBe(0);
     });
+
+    test('getSession should return existing session', async () => {
+      const session = await registry.createSession('/tmp/one');
+      const fetched = registry.getSession(session.id);
+      expect(fetched?.id).toBe(session.id);
+    });
+
+    test('listSessions should order by updatedAt descending', async () => {
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+      registry.setProcessing(session1.id, true);
+
+      const sessions = registry.listSessions();
+      expect(sessions.length).toBe(2);
+      expect(sessions[0].id).toBe(session1.id);
+      expect(sessions[1].id).toBe(session2.id);
+    });
+
+    test('getSessionIndex should return index for existing session', async () => {
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+      registry.setProcessing(session2.id, true);
+
+      const sessions = registry.listSessions();
+      const firstSessionId = sessions[0]?.id;
+      expect(firstSessionId).toBeDefined();
+
+      const index = registry.getSessionIndex(firstSessionId as string);
+      expect(index).toBe(1);
+    });
+  });
+
+  describe('default client factory', () => {
+    test('creates a session using EmbeddedClient when no factory provided', async () => {
+      const originalOldpalDir = process.env.OLDPAL_DIR;
+      const tempDir = mkdtempSync(join(tmpdir(), 'oldpal-registry-'));
+      process.env.OLDPAL_DIR = tempDir;
+
+      writeFileSync(
+        join(tempDir, 'settings.json'),
+        JSON.stringify(
+          {
+            llm: { provider: 'anthropic', model: 'mock', apiKey: 'test-key' },
+            connectors: [],
+          },
+          null,
+          2
+        )
+      );
+
+      try {
+        const defaultRegistry = new SessionRegistry();
+        const session = await defaultRegistry.createSession(tempDir);
+        expect(session.id).toBeDefined();
+        expect(session.cwd).toBe(tempDir);
+        defaultRegistry.closeAll();
+      } finally {
+        process.env.OLDPAL_DIR = originalOldpalDir;
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('chunk callback registration', () => {
@@ -97,17 +161,41 @@ describe('SessionRegistry', () => {
     test('should not throw for non-existent session', () => {
       expect(() => registry.setProcessing('non-existent', true)).not.toThrow();
     });
+
+    test('should update processing state for existing session', async () => {
+      const session = await registry.createSession('/tmp/one');
+      registry.setProcessing(session.id, true);
+      expect(registry.getSession(session.id)?.isProcessing).toBe(true);
+    });
   });
 
   describe('hasProcessingSession', () => {
     test('should return false when no sessions exist', () => {
       expect(registry.hasProcessingSession()).toBe(false);
     });
+
+    test('should return true when a session is processing', async () => {
+      const session = await registry.createSession('/tmp/one');
+      registry.setProcessing(session.id, true);
+      expect(registry.hasProcessingSession()).toBe(true);
+    });
   });
 
   describe('getBackgroundProcessingSessions', () => {
     test('should return empty array when no sessions', () => {
       expect(registry.getBackgroundProcessingSessions()).toEqual([]);
+    });
+
+    test('should return background processing sessions', async () => {
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+
+      registry.setProcessing(session2.id, true);
+
+      const sessions = registry.getBackgroundProcessingSessions();
+      expect(sessions.length).toBe(1);
+      expect(sessions[0].id).toBe(session2.id);
+      expect(sessions[0].id).not.toBe(session1.id);
     });
   });
 

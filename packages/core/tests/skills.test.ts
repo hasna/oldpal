@@ -67,6 +67,22 @@ Content`;
       expect(skill?.allowedTools).toEqual(['bash', 'notion']);
     });
 
+    test('should format argument-hint when provided as array', async () => {
+      const skillDir = join(tempDir, 'hint-array');
+      await mkdir(skillDir, { recursive: true });
+
+      const skillContent = `---
+name: hint-array
+argument-hint: [one, two]
+---
+
+Content`;
+      await writeFile(join(skillDir, 'SKILL.md'), skillContent);
+
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+      expect(skill?.argumentHint).toBe('[one, two]');
+    });
+
     test('should infer name from directory when not in frontmatter', async () => {
       const skillDir = join(tempDir, 'calendar');
       await mkdir(skillDir, { recursive: true });
@@ -152,6 +168,19 @@ Content 2`);
       const skills = loader.getSkills();
       expect(skills.length).toBe(2);
       expect(skills.map((s) => s.name).sort()).toEqual(['skill1', 'skill2']);
+    });
+
+    test('should load skills from skill-* directories', async () => {
+      const skillsDir = join(tempDir, 'skills');
+      await mkdir(join(skillsDir, 'skill-alpha'), { recursive: true });
+      await writeFile(join(skillsDir, 'skill-alpha', 'SKILL.md'), `---
+name: alpha
+description: Alpha skill
+---
+Content`);
+
+      await loader.loadFromDirectory(skillsDir);
+      expect(loader.getSkill('alpha')).toBeDefined();
     });
 
     test('should handle non-existent directory gracefully', async () => {
@@ -378,6 +407,14 @@ describe('SkillExecutor', () => {
       const result = await executor.prepare(skill, []);
 
       expect(result).toContain('Command failed');
+    });
+
+    test('should return content unchanged when no dynamic context markers exist', async () => {
+      const result = await (executor as any).executeDynamicContext(
+        'No dynamic content here',
+        `${process.cwd()}/test-skill.md`
+      );
+      expect(result).toBe('No dynamic content here');
     });
   });
 

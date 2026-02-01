@@ -46,6 +46,26 @@ Test content here.
       expect(testCmd?.content).toBe('Test content here.');
     });
 
+    test('should load global commands from HOME', async () => {
+      const originalHome = process.env.HOME;
+      const homeDir = join(testDir, 'home');
+      const globalDir = join(homeDir, '.oldpal', 'commands');
+      mkdirSync(globalDir, { recursive: true });
+      writeFileSync(join(globalDir, 'global.md'), `---
+name: global
+description: Global command
+---
+Global content`);
+
+      process.env.HOME = homeDir;
+      const homeLoader = new CommandLoader(testDir);
+      await homeLoader.loadAll();
+
+      expect(homeLoader.hasCommand('global')).toBe(true);
+
+      process.env.HOME = originalHome;
+    });
+
     test('should handle missing directory', async () => {
       const emptyLoader = new CommandLoader('/nonexistent/path');
       await emptyLoader.loadAll();
@@ -91,6 +111,21 @@ Content.
 
       await loader.loadAll();
       const cmd = loader.getCommand('restricted');
+      expect(cmd?.allowedTools).toEqual(['bash', 'read']);
+    });
+
+    test('should parse allowed-tools array from frontmatter', async () => {
+      writeFileSync(join(commandsDir, 'restricted-array.md'), `---
+name: restricted-array
+description: Restricted tools array
+allowed-tools: [bash, read]
+---
+
+Content.
+`);
+
+      await loader.loadAll();
+      const cmd = loader.getCommand('restricted-array');
       expect(cmd?.allowedTools).toEqual(['bash', 'read']);
     });
 
@@ -414,6 +449,26 @@ describe('BuiltinCommands', () => {
         expect(emittedContent.some(c => c.includes('Available Slash Commands'))).toBe(true);
       }
     });
+
+    test('should include and sort custom commands', async () => {
+      loader.register({ name: 'zeta', description: 'Zeta cmd', content: 'z', builtin: false });
+      loader.register({ name: 'alpha', description: 'Alpha cmd', content: 'a', builtin: false });
+
+      const cmd = loader.getCommand('help');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+
+        const output = emittedContent.join('\n');
+        const alphaIndex = output.indexOf('/alpha - Alpha cmd');
+        const zetaIndex = output.indexOf('/zeta - Zeta cmd');
+        expect(alphaIndex).toBeGreaterThanOrEqual(0);
+        expect(zetaIndex).toBeGreaterThanOrEqual(0);
+        expect(alphaIndex).toBeLessThan(zetaIndex);
+      }
+    });
   });
 
   describe('/clear command', () => {
@@ -450,6 +505,28 @@ describe('BuiltinCommands', () => {
         expect(emittedContent.some(c => c.includes('session-123'))).toBe(true);
       }
     });
+
+    test('should include cache token usage when available', async () => {
+      builtins.updateTokenUsage({
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        maxContextTokens: 200000,
+        cacheReadTokens: 25,
+        cacheWriteTokens: 10,
+      });
+
+      const cmd = loader.getCommand('status');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        const output = emittedContent.join('\n');
+        expect(output).toContain('Cache Read');
+        expect(output).toContain('Cache Write');
+      }
+    });
   });
 
   describe('/cost command', () => {
@@ -469,6 +546,25 @@ describe('BuiltinCommands', () => {
         expect(result.handled).toBe(true);
         expect(emittedContent.some(c => c.includes('Estimated Session Cost'))).toBe(true);
         expect(emittedContent.some(c => c.includes('$'))).toBe(true);
+      }
+    });
+
+    test('should include cache savings when cache tokens exist', async () => {
+      builtins.updateTokenUsage({
+        inputTokens: 10000,
+        outputTokens: 5000,
+        totalTokens: 15000,
+        maxContextTokens: 200000,
+        cacheReadTokens: 5000,
+      });
+
+      const cmd = loader.getCommand('cost');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        expect(emittedContent.some(c => c.includes('Cache savings'))).toBe(true);
       }
     });
   });
@@ -655,6 +751,24 @@ describe('BuiltinCommands', () => {
       }
     });
 
+    test('should report unknown connector when name not found', async () => {
+      const cmd = loader.getCommand('connectors');
+      expect(cmd).toBeDefined();
+
+      const contextWithConnector = {
+        ...mockContext,
+        connectors: [
+          { name: 'demo', description: 'Demo connector', cli: 'connect-demo', commands: [] },
+        ],
+      };
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('missing', contextWithConnector);
+        expect(result.handled).toBe(true);
+        expect(emittedContent.some(c => c.includes('not found'))).toBe(true);
+      }
+    });
+
     test('should show connector details when name provided', async () => {
       const cmd = loader.getCommand('connectors');
       expect(cmd).toBeDefined();
@@ -729,6 +843,48 @@ describe('BuiltinCommands', () => {
         (Bun as any).$ = originalDollar;
       }
     });
+
+    test('should fall back to timeout status when auth check hangs', async () => {
+      const cmd = loader.getCommand('connectors');
+      expect(cmd).toBeDefined();
+
+      const originalDollar = (Bun as any).$;
+      const originalSetTimeout = globalThis.setTimeout;
+
+      (Bun as any).$ = () => ({
+        quiet: () => ({
+          nothrow: () => new Promise(() => {}),
+        }),
+      });
+      globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+        fn(...args);
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout;
+
+      const contextWithConnector = {
+        ...mockContext,
+        connectors: [
+          {
+            name: 'demo',
+            description: 'Demo connector',
+            cli: 'connect-demo',
+            commands: [{ name: 'list', description: 'List items' }],
+          },
+        ],
+      };
+
+      try {
+        if (cmd?.handler) {
+          const result = await cmd.handler('', contextWithConnector);
+          expect(result.handled).toBe(true);
+          expect(emittedContent.some(c => c.includes('Available Connectors'))).toBe(true);
+          expect(emittedContent.some(c => c.includes('| ○ |'))).toBe(true);
+        }
+      } finally {
+        globalThis.setTimeout = originalSetTimeout;
+        (Bun as any).$ = originalDollar;
+      }
+    });
   });
 
   describe('/feedback command', () => {
@@ -768,6 +924,26 @@ describe('BuiltinCommands', () => {
           const result = await cmd.handler('', mockContext);
           expect(result.handled).toBe(true);
           expect(emittedContent.some(c => c.includes('Submit Feedback'))).toBe(true);
+        }
+      } finally {
+        (Bun as any).$ = originalDollar;
+      }
+    });
+
+    test('should label bug feedback appropriately', async () => {
+      const cmd = loader.getCommand('feedback');
+      expect(cmd).toBeDefined();
+
+      const originalDollar = (Bun as any).$;
+      (Bun as any).$ = () => ({
+        quiet: async () => {},
+      });
+
+      try {
+        if (cmd?.handler) {
+          const result = await cmd.handler('bug', mockContext);
+          expect(result.handled).toBe(true);
+          expect(emittedContent.some(c => c.includes('Opening GitHub'))).toBe(true);
         }
       } finally {
         (Bun as any).$ = originalDollar;

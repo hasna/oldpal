@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach } from 'bun:test';
 import { ConnectorBridge } from '../src/tools/connector';
 import { ToolRegistry } from '../src/tools/registry';
 import type { Connector, ConnectorCommand } from '@oldpal/shared';
-import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -142,14 +142,30 @@ Commands:
     test('should return empty array when no connectors discovered', () => {
       expect(bridge.getConnectors()).toEqual([]);
     });
+
+    test('should return existing connector entries', () => {
+      const connector: Connector = {
+        name: 'demo',
+        cli: 'connect-demo',
+        description: 'Demo connector',
+        commands: [{ name: 'list', description: 'List items', args: [], options: [] }],
+      };
+      (bridge as any).connectors.set('demo', connector);
+
+      const fetched = bridge.getConnector('demo');
+      expect(fetched?.name).toBe('demo');
+      expect(bridge.getConnectors().length).toBe(1);
+    });
   });
 
   describe('discover', () => {
     test('should auto-discover connect-* binaries on PATH', async () => {
       const binDir = mkdtempSync(join(tmpdir(), 'oldpal-bin-'));
       const cliPath = join(binDir, 'connect-demo');
+      const dirPath = join(binDir, 'connect-dir');
       writeFileSync(cliPath, '#!/bin/sh\necho demo\n');
       chmodSync(cliPath, 0o755);
+      mkdirSync(dirPath, { recursive: true });
 
       const originalPath = process.env.PATH;
       process.env.PATH = `${binDir}:${originalPath || ''}`;
@@ -158,6 +174,7 @@ Commands:
         (ConnectorBridge as any).cache = new Map();
         const discovered = await bridge.discover();
         expect(discovered.some((c) => c.name === 'demo')).toBe(true);
+        expect(discovered.some((c) => c.name === 'dir')).toBe(false);
       } finally {
         process.env.PATH = originalPath;
         rmSync(binDir, { recursive: true, force: true });
@@ -189,6 +206,65 @@ Commands:
         expect(connector?.commands.some((cmd: { name: string }) => cmd.name === 'help')).toBe(false);
       } finally {
         rmSync(binDir, { recursive: true, force: true });
+      }
+    });
+
+    test('should use manifest description when available', async () => {
+      const binDir = mkdtempSync(join(tmpdir(), 'oldpal-bin-manifest-'));
+      const cliPath = join(binDir, 'connect-foo');
+      const helpOutput = [
+        'Usage: connect-foo <command>',
+        '',
+        'Commands:',
+        '  list    List items',
+        '',
+      ].join('\\n');
+
+      writeFileSync(
+        cliPath,
+        `#!/bin/sh\necho "${helpOutput.replace(/"/g, '\\"')}"\n`
+      );
+      chmodSync(cliPath, 0o755);
+
+      const homeDir = mkdtempSync(join(tmpdir(), 'oldpal-home-'));
+      const originalHome = process.env.HOME;
+      process.env.HOME = homeDir;
+
+      const manifestDir = join(homeDir, '.connect-foo');
+      mkdirSync(manifestDir, { recursive: true });
+      writeFileSync(join(manifestDir, 'manifest.json'), JSON.stringify({ description: 'Foo connector' }));
+
+      try {
+        const connector = await (bridge as any).discoverConnector('foo', cliPath);
+        expect(connector?.description).toBe('Foo connector');
+      } finally {
+        process.env.HOME = originalHome;
+        rmSync(homeDir, { recursive: true, force: true });
+        rmSync(binDir, { recursive: true, force: true });
+      }
+    });
+
+    test('should handle timeouts when discovery hangs', async () => {
+      const originalDollar = (Bun as any).$;
+      const originalSetTimeout = globalThis.setTimeout;
+
+      (Bun as any).$ = () => ({
+        quiet: () => ({
+          nothrow: () => new Promise(() => {}),
+        }),
+      });
+      globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+        fn(...args);
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout;
+
+      try {
+        (ConnectorBridge as any).cache = new Map();
+        const discovered = await bridge.discover(['demo']);
+        expect(discovered).toEqual([]);
+      } finally {
+        globalThis.setTimeout = originalSetTimeout;
+        (Bun as any).$ = originalDollar;
       }
     });
   });

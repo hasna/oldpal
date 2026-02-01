@@ -274,6 +274,30 @@ describe('HookExecutor', () => {
       const result = await executor.execute(matchers, createInput());
       expect(result?.permissionDecision).toBe('deny');
     });
+
+    test('should execute prompt hook when matched', async () => {
+      const matchers: HookMatcher[] = [
+        {
+          matcher: 'bash',
+          hooks: [{ type: 'prompt', prompt: 'Is this safe?' }],
+        },
+      ];
+
+      const result = await executor.execute(matchers, createInput({ tool_name: 'bash' }));
+      expect(result).toBeNull();
+    });
+
+    test('should execute agent hook when matched', async () => {
+      const matchers: HookMatcher[] = [
+        {
+          matcher: 'bash',
+          hooks: [{ type: 'agent', prompt: 'Review request' }],
+        },
+      ];
+
+      const result = await executor.execute(matchers, createInput({ tool_name: 'bash' }));
+      expect(result).toBeNull();
+    });
   });
 
   describe('executeHook', () => {
@@ -397,6 +421,16 @@ describe('HookExecutor', () => {
       expect(result).toBeNull();
     });
 
+    test('should kill long-running command when timeout is reached', async () => {
+      const result = await executeCommandHook(
+        executor,
+        { type: 'command', command: 'sleep 1' },
+        createInput(),
+        1
+      );
+      expect(result).toBeNull();
+    });
+
     test('should return null when spawn throws', async () => {
       const originalSpawn = Bun.spawn;
       (Bun as any).spawn = () => {
@@ -413,6 +447,56 @@ describe('HookExecutor', () => {
       } finally {
         (Bun as any).spawn = originalSpawn;
       }
+    });
+  });
+
+  describe('prompt and agent hook execution', () => {
+    const executePromptHook = (
+      executor: HookExecutor,
+      hook: { type: string; prompt?: string },
+      input: HookInput,
+      timeout: number
+    ) => {
+      return (executor as any).executePromptHook(hook, input, timeout);
+    };
+
+    const executeAgentHook = (
+      executor: HookExecutor,
+      hook: { type: string; prompt?: string },
+      input: HookInput,
+      timeout: number
+    ) => {
+      return (executor as any).executeAgentHook(hook, input, timeout);
+    };
+
+    test('should return null when prompt is missing', async () => {
+      const result = await executePromptHook(executor, { type: 'prompt' }, createInput(), 1000);
+      expect(result).toBeNull();
+    });
+
+    test('should return null for prompt hook with prompt', async () => {
+      const result = await executePromptHook(
+        executor,
+        { type: 'prompt', prompt: 'Decision needed' },
+        createInput(),
+        1000
+      );
+      expect(result).toBeNull();
+    });
+
+    test('should return null when agent prompt is missing', async () => {
+      const result = await executeAgentHook(executor, { type: 'agent' }, createInput(), 1000);
+      expect(result).toBeNull();
+    });
+
+    test('should return null for agent hook with prompt', async () => {
+      const result = await executeAgentHook(
+        executor,
+        { type: 'agent', prompt: 'Investigate' },
+        createInput(),
+        1000
+      );
+      expect(result).toBeNull();
     });
   });
 });

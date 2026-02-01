@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ensureConfigDir, loadHooksConfig, loadSystemPrompt, loadConfig, getTempFolder } from '../src/config';
+import { ensureConfigDir, loadHooksConfig, loadSystemPrompt, loadConfig, getTempFolder, getConfigDir } from '../src/config';
 
 let tempDir: string;
 let originalOldpalDir: string | undefined;
@@ -101,5 +101,22 @@ describe('config helpers', () => {
   test('getTempFolder uses config dir', () => {
     const tempPath = getTempFolder('abc');
     expect(tempPath).toBe(join(tempDir, 'temp', 'abc'));
+  });
+
+  test('getConfigDir uses HOME when OLDPAL_DIR is unset', () => {
+    const originalOldpalDir = process.env.OLDPAL_DIR;
+    const originalHome = process.env.HOME;
+    const homeDir = join(tempDir, 'home');
+    mkdirSync(homeDir, { recursive: true });
+
+    delete process.env.OLDPAL_DIR;
+    process.env.HOME = homeDir;
+
+    try {
+      expect(getConfigDir()).toBe(join(homeDir, '.oldpal'));
+    } finally {
+      process.env.OLDPAL_DIR = originalOldpalDir;
+      process.env.HOME = originalHome;
+    }
   });
 });

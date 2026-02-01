@@ -1,8 +1,8 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { BashTool } from '../src/tools/bash';
 import { FilesystemTools } from '../src/tools/filesystem';
-import { WebFetchTool, WebSearchTool, CurlTool, WebTools } from '../src/tools/web';
-import { ImageDisplayTool } from '../src/tools/image';
+import { WebFetchTool, WebSearchTool, CurlTool, WebTools, setDnsLookupForTests } from '../src/tools/web';
+import { ImageDisplayTool, ImageTools } from '../src/tools/image';
 import { ToolRegistry } from '../src/tools/registry';
 import { ConnectorBridge } from '../src/tools/connector';
 import { mkdtemp, rm, writeFile, mkdir, chmod } from 'fs/promises';
@@ -25,6 +25,10 @@ afterEach(async () => {
 });
 
 describe('BashTool', () => {
+  test('can instantiate tool class for coverage', () => {
+    expect(new BashTool()).toBeInstanceOf(BashTool);
+  });
+
   test('should allow safe commands', async () => {
     const output = await BashTool.executor({ command: 'echo hello' });
     expect(output).toBe('hello');
@@ -47,18 +51,62 @@ describe('BashTool', () => {
     expect(output).toContain('not in allowed list');
   });
 
+  test('should block shell chaining operators', async () => {
+    const output = await BashTool.executor({ command: 'ls; uname -a' });
+    expect(output).toContain('not allowed');
+  });
+
+  test('should block newline command separators', async () => {
+    const output = await BashTool.executor({ command: 'ls\nuname -a' });
+    expect(output).toContain('not allowed');
+  });
+
+  test('should block git remote modifications', async () => {
+    const output = await BashTool.executor({ command: 'git remote add origin https://example.com/repo.git' });
+    expect(output).toContain('not allowed');
+  });
+
+  test('should block git branch deletions', async () => {
+    const output = await BashTool.executor({ command: 'git branch -D feature' });
+    expect(output).toContain('not allowed');
+  });
+
+  test('should block git tag deletions', async () => {
+    const output = await BashTool.executor({ command: 'git tag -d v1.0.0' });
+    expect(output).toContain('not allowed');
+  });
+
+  test('should report when command produces no output', async () => {
+    const output = await BashTool.executor({ command: 'echo -n' });
+    expect(output).toContain('Command completed successfully');
+  });
+
   test('should report non-zero exit codes', async () => {
     const output = await BashTool.executor({ command: 'ls /nonexistent' });
     expect(output).toContain('Exit code');
   });
 
   test('should kill commands that exceed timeout', async () => {
-    const output = await BashTool.executor({ command: 'tail -f /dev/null', timeout: 10 });
-    expect(output).toContain('Exit code');
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+      fn(...args);
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+
+    try {
+      const output = await BashTool.executor({ command: 'tail -f /dev/null', timeout: 10 });
+      expect(output).toContain('Exit code');
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
   });
 });
 
 describe('FilesystemTools', () => {
+  test('can instantiate tool class for coverage', () => {
+    expect(new FilesystemTools()).toBeInstanceOf(FilesystemTools);
+  });
+
   test('should write and read within temp folder', async () => {
     const writeResult = await FilesystemTools.writeExecutor({ filename: 'test.txt', content: 'hello' });
     expect(writeResult).toContain('Successfully wrote');
@@ -75,6 +123,12 @@ describe('FilesystemTools', () => {
   test('should reject empty filenames', async () => {
     const writeResult = await FilesystemTools.writeExecutor({ filename: '   ', content: 'hello' });
     expect(writeResult).toContain('filename is required');
+  });
+
+  test('should sanitize filenames to stay within temp folder', async () => {
+    const writeResult = await FilesystemTools.writeExecutor({ filename: '../outside.txt', content: 'safe' });
+    expect(writeResult).toContain('Successfully wrote');
+    expect(writeResult).toContain('outside.txt');
   });
 
   test('should glob and grep files', async () => {
@@ -120,15 +174,115 @@ describe('FilesystemTools', () => {
 });
 
 describe('Web tools', () => {
+  test('can instantiate web tool classes for coverage', () => {
+    expect(new WebFetchTool()).toBeInstanceOf(WebFetchTool);
+    expect(new WebSearchTool()).toBeInstanceOf(WebSearchTool);
+    expect(new CurlTool()).toBeInstanceOf(CurlTool);
+    expect(new WebTools()).toBeInstanceOf(WebTools);
+  });
+
   const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    setDnsLookupForTests(async () => [{ address: '93.184.216.34', family: 4 }]);
+  });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    setDnsLookupForTests();
   });
 
   test('WebFetchTool should block localhost', async () => {
     const result = await WebFetchTool.executor({ url: 'http://localhost' });
     expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block localhost with trailing dot', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://localhost.' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block localhost subdomains', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://foo.localhost' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block .local domains', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://printer.local' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block hostnames resolving to private IPs', async () => {
+    setDnsLookupForTests(async () => [{ address: '127.0.0.1', family: 4 }]);
+    const result = await WebFetchTool.executor({ url: 'http://example.test' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should allow hostnames resolving to public IPs', async () => {
+    setDnsLookupForTests(async () => [{ address: '93.184.216.34', family: 4 }]);
+    globalThis.fetch = async () =>
+      new Response('<html><body>ok</body></html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      });
+    const result = await WebFetchTool.executor({ url: 'http://example.test' });
+    expect(result).toContain('ok');
+  });
+
+  test('WebFetchTool should block private 172.16.x.x addresses', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://172.16.0.1' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block 0.0.0.0/8 addresses', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://0.0.0.0' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block carrier-grade NAT addresses', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://100.64.0.1' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block link-local addresses', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://169.254.1.1' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block IPv6 loopback', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://[::1]' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block IPv6 unique local addresses', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://[fd00::1]' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block IPv4-mapped IPv6 loopback', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://[::ffff:127.0.0.1]' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should block IPv4-mapped IPv6 loopback (hex form)', async () => {
+    const result = await WebFetchTool.executor({ url: 'http://[::ffff:7f00:0001]' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should reject non-http protocols', async () => {
+    const result = await WebFetchTool.executor({ url: 'file:///etc/passwd' });
+    expect(result).toContain('Only http/https');
+  });
+
+  test('WebFetchTool should allow public 172.x.x.x addresses', async () => {
+    globalThis.fetch = async () =>
+      new Response('<html><body>ok</body></html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      });
+
+    const result = await WebFetchTool.executor({ url: 'http://172.32.0.1' });
+    expect(result).toContain('ok');
   });
 
   test('WebFetchTool should extract text from HTML', async () => {
@@ -181,6 +335,69 @@ describe('Web tools', () => {
     expect(result).toContain('timed out');
   });
 
+  test('WebFetchTool should block redirects to private hosts', async () => {
+    let callCount = 0;
+    globalThis.fetch = async (input) => {
+      callCount += 1;
+      if (callCount === 1) {
+        return new Response('', {
+          status: 302,
+          headers: { location: 'http://localhost' },
+        });
+      }
+      return new Response('<html><body>ok</body></html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      });
+    };
+
+    const result = await WebFetchTool.executor({ url: 'https://example.com' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('WebFetchTool should error on excessive redirects', async () => {
+    globalThis.fetch = async () =>
+      new Response('', {
+        status: 302,
+        headers: { location: 'https://example.com/loop' },
+      });
+
+    const result = await WebFetchTool.executor({ url: 'https://example.com' });
+    expect(result).toContain('Too many redirects');
+  });
+
+  test('WebFetchTool should respect immediate timeout', async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+      fn(...args);
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+
+    globalThis.fetch = (_input, init) =>
+      new Promise((_resolve, reject) => {
+        if (init?.signal) {
+          if (init.signal.aborted) {
+            const err = new Error('aborted');
+            (err as any).name = 'AbortError';
+            reject(err);
+            return;
+          }
+          init.signal.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            (err as any).name = 'AbortError';
+            reject(err);
+          });
+        }
+      });
+
+    try {
+      const result = await WebFetchTool.executor({ url: 'https://example.com', timeout: 5 });
+      expect(result).toContain('timed out');
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
+
   test('WebSearchTool should parse results', async () => {
     const html = `
       <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com">Example</a>
@@ -209,6 +426,20 @@ describe('Web tools', () => {
     expect(result).toContain('https://fallback.test');
   });
 
+  test('WebSearchTool should tolerate invalid encoded URLs', async () => {
+    const html = `
+      <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2F%ZZ">Bad URL</a>
+      <a class="result__snippet">Snippet</a>
+    `;
+
+    globalThis.fetch = async () =>
+      new Response(html, { status: 200, headers: { 'content-type': 'text/html' } });
+
+    const result = await WebSearchTool.executor({ query: 'bad' });
+    expect(result).toContain('Bad URL');
+    expect(result).toContain('https%3A%2F%2Fexample.com');
+  });
+
   test('CurlTool should return JSON', async () => {
     globalThis.fetch = async () =>
       new Response(JSON.stringify({ ok: true }), {
@@ -226,6 +457,85 @@ describe('Web tools', () => {
     expect(result).toContain('Cannot fetch');
   });
 
+  test('CurlTool should block localhost with trailing dot', async () => {
+    const result = await CurlTool.executor({ url: 'http://localhost.', method: 'GET' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('CurlTool should block localhost subdomains', async () => {
+    const result = await CurlTool.executor({ url: 'http://foo.localhost', method: 'GET' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('CurlTool should block .local domains', async () => {
+    const result = await CurlTool.executor({ url: 'http://printer.local', method: 'GET' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('CurlTool should block hostnames resolving to private IPs', async () => {
+    setDnsLookupForTests(async () => [{ address: '10.0.0.1', family: 4 }]);
+    const result = await CurlTool.executor({ url: 'http://example.test', method: 'GET' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('CurlTool should block IPv6 loopback', async () => {
+    const result = await CurlTool.executor({ url: 'http://[::1]', method: 'GET' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('CurlTool should block IPv4-mapped IPv6 loopback', async () => {
+    const result = await CurlTool.executor({ url: 'http://[::ffff:127.0.0.1]', method: 'GET' });
+    expect(result).toContain('Cannot fetch');
+  });
+
+  test('CurlTool should reject non-http protocols', async () => {
+    const result = await CurlTool.executor({ url: 'ftp://example.com', method: 'GET' });
+    expect(result).toContain('Only http/https');
+  });
+
+  test('CurlTool should reject redirects for non-GET methods', async () => {
+    globalThis.fetch = async () =>
+      new Response('', {
+        status: 302,
+        headers: { location: 'https://example.com/redirect' },
+      });
+
+    const result = await CurlTool.executor({ url: 'https://example.com', method: 'POST', body: 'x' });
+    expect(result).toContain('Redirects are only supported');
+  });
+
+  test('CurlTool should timeout on slow response', async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+      fn(...args);
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+
+    globalThis.fetch = (_input, init) =>
+      new Promise((_resolve, reject) => {
+        if (init?.signal) {
+          if (init.signal.aborted) {
+            const err = new Error('aborted');
+            (err as any).name = 'AbortError';
+            reject(err);
+            return;
+          }
+          init.signal.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            (err as any).name = 'AbortError';
+            reject(err);
+          });
+        }
+      });
+
+    try {
+      const result = await CurlTool.executor({ url: 'https://example.com', method: 'GET' });
+      expect(result).toContain('timed out');
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
+
   test('WebTools registerAll should register tools', () => {
     const names: string[] = [];
     WebTools.registerAll({
@@ -240,6 +550,11 @@ describe('Web tools', () => {
 });
 
 describe('ImageDisplayTool', () => {
+  test('can instantiate image tool classes for coverage', () => {
+    expect(new ImageDisplayTool()).toBeInstanceOf(ImageDisplayTool);
+    expect(new ImageTools()).toBeInstanceOf(ImageTools);
+  });
+
   test('should report missing viu or missing file', async () => {
     const result = await ImageDisplayTool.executor({ path: 'missing.png' });
     expect(result).toMatch(/viu is not installed|Image file not found/);
@@ -300,6 +615,44 @@ describe('ImageDisplayTool', () => {
       await rm(binDir, { recursive: true, force: true });
     }
   });
+
+  test('should reject non-image URL content types', async () => {
+    const binDir = await mkdtemp(join(tmpdir(), 'oldpal-viu-nonimage-'));
+    const viuPath = join(binDir, 'viu');
+    await writeFile(viuPath, '#!/bin/sh\necho "viu mock"\nexit 0\n');
+    await chmod(viuPath, 0o755);
+
+    const originalPath = process.env.PATH || '';
+    process.env.PATH = binDir;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response('not an image', {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      });
+
+    try {
+      const result = await ImageDisplayTool.executor({ path: 'https://example.com/not-image' });
+      expect(result).toContain('does not point to an image');
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.PATH = originalPath;
+      await rm(binDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('ImageTools', () => {
+  test('registerAll should register image tools', () => {
+    const names: string[] = [];
+    ImageTools.registerAll({
+      register: (tool) => {
+        names.push(tool.name);
+      },
+    });
+    expect(names).toContain('display_image');
+  });
 });
 
 describe('ConnectorBridge', () => {
@@ -320,5 +673,38 @@ describe('ConnectorBridge', () => {
 
     const result = await registry.execute({ id: '1', name: 'echo', input: { command: 'hello' } });
     expect(result.content).toContain('hello');
+  });
+});
+
+describe('ToolRegistry', () => {
+  test('should execute multiple tool calls', async () => {
+    const registry = new ToolRegistry();
+    registry.register(
+      { name: 'one', description: 'one', parameters: { type: 'object', properties: {} } },
+      async () => 'first'
+    );
+    registry.register(
+      { name: 'two', description: 'two', parameters: { type: 'object', properties: {} } },
+      async () => 'second'
+    );
+
+    const results = await registry.executeAll([
+      { id: '1', name: 'one', input: {} },
+      { id: '2', name: 'two', input: {} },
+    ]);
+
+    expect(results.map((r) => r.content)).toEqual(['first', 'second']);
+  });
+
+  test('should unregister tools', () => {
+    const registry = new ToolRegistry();
+    registry.register(
+      { name: 'temp', description: 'temp', parameters: { type: 'object', properties: {} } },
+      async () => 'ok'
+    );
+
+    expect(registry.hasTool('temp')).toBe(true);
+    registry.unregister('temp');
+    expect(registry.hasTool('temp')).toBe(false);
   });
 });

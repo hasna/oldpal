@@ -114,6 +114,11 @@ afterEach(() => {
 });
 
 describe('EmbeddedClient', () => {
+  test('uses default agent factory when none provided', () => {
+    const client = new EmbeddedClient(tempDir, { sessionId: 'sess-default' });
+    expect(client.getSessionId()).toBe('sess-default');
+  });
+
   test('initializes with initial messages', async () => {
     const initialMessages: Message[] = [
       { id: '1', role: 'user', content: 'hi', timestamp: 1 },
