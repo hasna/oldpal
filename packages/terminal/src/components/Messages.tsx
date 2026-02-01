@@ -264,6 +264,8 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
   const chunkMatch = message.id.match(/::chunk-(\d+)$/);
   const chunkIndex = chunkMatch ? Number(chunkMatch[1]) : -1;
   const isContinuation = chunkIndex > 0;
+  const content = message.content ?? '';
+  const leadingBullet = !isContinuation && !startsWithListOrTable(content);
 
   if (isSystem) {
     return null;
@@ -285,13 +287,13 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
   // Assistant message
   const toolCalls = message.toolCalls || [];
   const toolResults = message.toolResults || [];
-  const hasContent = message.content && message.content.trim();
+  const hasContent = content && content.trim();
 
   return (
     <Box marginY={isContinuation ? 0 : 1} flexDirection="column">
       {hasContent && (
         <Box>
-          <Text dimColor>{isContinuation ? '  ' : '● '} </Text>
+          <Text dimColor>{isContinuation || !leadingBullet ? '  ' : '● '} </Text>
           <Box flexGrow={1}>
             <Markdown content={message.content} preRendered={Boolean(message.__rendered)} />
           </Box>
@@ -304,6 +306,19 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
       )}
     </Box>
   );
+}
+
+function startsWithListOrTable(content: string): boolean {
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    if (!trimmed) continue;
+    if (/^[-*•]\s+/.test(trimmed)) return true;
+    if (/^\d+\.\s+/.test(trimmed)) return true;
+    if (trimmed.startsWith('|')) return true;
+    return false;
+  }
+  return false;
 }
 
 function ToolCallPanel({
