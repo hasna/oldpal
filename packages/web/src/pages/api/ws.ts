@@ -114,6 +114,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
         sessionId = nextSessionId;
         pendingMessageIds.length = 0;
         currentMessageId = null;
+        suppressNextDone = false;
         await attachListener();
       };
 
