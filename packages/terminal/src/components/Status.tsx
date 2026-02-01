@@ -84,6 +84,8 @@ export function Status({
     ? voiceState.isListening ? '🎤' : voiceState.isSpeaking ? '🔊' : '🎙'
     : '';
 
+  const sessionLabel = sessionId ? `id ${sessionId}` : '';
+
   return (
     <Box marginTop={1} justifyContent="space-between">
       <Text dimColor>/help{sessionCount && sessionCount > 1 ? ' · Ctrl+S' : ''}</Text>
@@ -94,6 +96,9 @@ export function Status({
         {contextInfo && <Text dimColor>{contextInfo}</Text>}
         {isProcessing && processingStartTime && (
           <Text dimColor> · {formatDuration(elapsed)}</Text>
+        )}
+        {sessionLabel && (
+          <Text dimColor>{(contextInfo || (isProcessing && processingStartTime) || sessionInfo) ? ' · ' : ''}{sessionLabel}</Text>
         )}
       </Box>
     </Box>
