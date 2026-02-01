@@ -408,6 +408,10 @@ export function App({ cwd, version }: AppProps) {
       setError(chunk.error);
       setIsProcessing(false);
       isProcessingRef.current = false;
+      const active = registryRef.current.getActiveSession();
+      if (active) {
+        registryRef.current.setProcessing(active.id, false);
+      }
     } else if (chunk.type === 'exit') {
       // Exit command was issued
       registry.closeAll();
@@ -424,6 +428,10 @@ export function App({ cwd, version }: AppProps) {
       }
       setIsProcessing(false);
       isProcessingRef.current = false;
+      const active = registryRef.current.getActiveSession();
+      if (active) {
+        registryRef.current.setProcessing(active.id, false);
+      }
       // Defer clearing streaming state to avoid flicker where output disappears
       queueMicrotask(() => {
         resetTurnState();
