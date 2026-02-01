@@ -22,4 +22,25 @@ describe('message line estimation', () => {
     };
     expect(__test__.estimateMessageLines(msg, 3)).toBe(2);
   });
+
+  test('counts multi-line tool results', () => {
+    const msg: Message = {
+      id: 'msg-3',
+      role: 'assistant',
+      content: '',
+      timestamp: 0,
+      toolCalls: [
+        { id: 'tool-1', name: 'bash', input: {}, type: 'tool' },
+      ],
+      toolResults: [
+        {
+          toolCallId: 'tool-1',
+          toolName: 'bash',
+          content: ['1', '2', '3', '4', '5', '6'].join('\n'),
+          isError: false,
+        },
+      ],
+    };
+    expect(__test__.estimateMessageLines(msg)).toBe(11);
+  });
 });

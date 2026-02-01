@@ -11,9 +11,9 @@ function estimateToolPanelLines(
     return 0;
   }
 
-  const resultMap = new Set<string>();
+  const resultLines = new Map<string, number>();
   for (const result of toolResults || []) {
-    resultMap.add(result.toolCallId);
+    resultLines.set(result.toolCallId, estimateToolResultLines(result));
   }
 
   // Ink borders add top + bottom lines, plus a header line.
@@ -26,13 +26,21 @@ function estimateToolPanelLines(
   for (const call of toolCalls) {
     // marginTop + name line + summary line
     lines += 3;
-    if (resultMap.has(call.id)) {
-      // result line
-      lines += 1;
+    const toolResultLines = resultLines.get(call.id);
+    if (toolResultLines && toolResultLines > 0) {
+      lines += toolResultLines;
     }
   }
 
   return lines;
+}
+
+function estimateToolResultLines(result: ToolResult, maxLines = 4): number {
+  const content = String(result.content || '');
+  if (!content) return 1;
+  const lines = content.replace(/\x1B\[[0-9;]*m/g, '').split('\n');
+  if (lines.length <= maxLines) return Math.max(1, lines.length);
+  return maxLines + 1; // include truncation line
 }
 
 export function estimateMessageLines(message: DisplayMessage, maxWidth?: number): number {
@@ -44,7 +52,7 @@ export function estimateMessageLines(message: DisplayMessage, maxWidth?: number)
   const contentLines = content.length > 0 ? content.split('\n') : [];
   const hasContent = contentLines.length > 0;
   const wrappedLines = contentLines.length > 0 ? countWrappedLines(contentLines, maxWidth) : 0;
-  let lines = Math.max(1, wrappedLines);
+  let lines = hasContent ? Math.max(1, wrappedLines) : 0;
 
   if (message.role === 'assistant' && message.toolCalls?.length) {
     lines += estimateToolPanelLines(message.toolCalls, message.toolResults, hasContent);
