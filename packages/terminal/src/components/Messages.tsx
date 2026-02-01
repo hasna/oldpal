@@ -61,7 +61,7 @@ export function Messages({
         }}
       </Static>
 
-      {/* Show activity log - only text entries (tool calls shown in ToolCallBox) */}
+      {/* Show activity log - text, tool calls, and tool results */}
       {activityLog.map((entry) => {
         if (entry.type === 'text' && entry.content) {
           return (
@@ -69,6 +69,25 @@ export function Messages({
               <Text dimColor>● </Text>
               <Box flexGrow={1}>
                 <Markdown content={entry.content} />
+              </Box>
+            </Box>
+          );
+        }
+        if (entry.type === 'tool_call' && entry.toolCall) {
+          return (
+            <Box key={entry.id} marginY={1}>
+              <Text dimColor>⚙ </Text>
+              <Text dimColor>{formatToolCall(entry.toolCall)}</Text>
+            </Box>
+          );
+        }
+        if (entry.type === 'tool_result' && entry.toolResult) {
+          const output = truncateToolResult(entry.toolResult);
+          return (
+            <Box key={entry.id} marginY={1}>
+              <Text dimColor>↳ </Text>
+              <Box flexGrow={1}>
+                <Text dimColor>{output}</Text>
               </Box>
             </Box>
           );
@@ -194,12 +213,26 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
   // Content with optional tool summary inline
   return (
-    <Box marginY={1}>
-      <Text dimColor>● </Text>
-      <Box flexGrow={1}>
-        <Markdown content={message.content} />
-        {toolSummary && <Text dimColor> {toolSummary}</Text>}
+    <Box marginY={1} flexDirection="column">
+      <Box>
+        <Text dimColor>● </Text>
+        <Box flexGrow={1}>
+          <Markdown content={message.content} />
+          {toolSummary && <Text dimColor> {toolSummary}</Text>}
+        </Box>
       </Box>
+      {message.toolResults && message.toolResults.length > 0 && (
+        <Box flexDirection="column" marginLeft={2}>
+          {message.toolResults.slice(0, 3).map((r) => (
+            <Text dimColor key={r.toolCallId}>
+              ↳ {truncateToolResult(r, 5, 500)}
+            </Text>
+          ))}
+          {message.toolResults.length > 3 && (
+            <Text dimColor>  ... and {message.toolResults.length - 3} more results</Text>
+          )}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -253,7 +286,7 @@ function getToolContext(toolCall: ToolCall): string {
       const path = String(input.path || input.file_path || '');
       return path.split('/').pop() || '';
     case 'write':
-      const writePath = String(input.path || input.file_path || '');
+      const writePath = String(input.filename || input.path || input.file_path || '');
       return writePath.split('/').pop() || '';
     case 'glob':
       return truncate(String(input.pattern || ''), 20);
@@ -315,7 +348,7 @@ function formatToolCall(toolCall: ToolCall): string {
     case 'read':
       return `Reading: ${truncate(String(input.path || input.file_path || ''), 60)}`;
     case 'write':
-      return `Writing: ${truncate(String(input.path || input.file_path || ''), 60)}`;
+      return `Writing: ${truncate(String(input.filename || input.path || input.file_path || ''), 60)}`;
     case 'glob':
       return `Finding: ${truncate(String(input.pattern || ''), 60)}`;
     case 'grep':
@@ -340,4 +373,33 @@ function formatToolCall(toolCall: ToolCall): string {
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength - 3) + '...';
+}
+
+/**
+ * Truncate tool result for display - keeps it readable
+ */
+function truncateToolResult(toolResult: ToolResult, maxLines = 15, maxChars = 3000): string {
+  const toolName = toolResult.toolName || 'tool';
+  const prefix = toolResult.isError ? `Error from ${toolName}: ` : `${toolName}: `;
+
+  let content = String(toolResult.content || '');
+
+  // Strip ANSI codes
+  content = content.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+
+  // Replace tabs with spaces
+  content = content.replace(/\t/g, '  ');
+
+  // Truncate by lines first
+  const lines = content.split('\n');
+  if (lines.length > maxLines) {
+    content = lines.slice(0, maxLines).join('\n') + `\n... (${lines.length - maxLines} more lines)`;
+  }
+
+  // Then truncate by chars
+  if (content.length > maxChars) {
+    content = content.slice(0, maxChars) + '...';
+  }
+
+  return prefix + content.trim();
 }

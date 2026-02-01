@@ -21,7 +21,7 @@ function formatToolName(toolCall: ToolCall): string {
       const path = String(input.path || input.file_path || '');
       return `read ${path.split('/').pop() || ''}`;
     case 'write':
-      const writePath = String(input.path || input.file_path || '');
+      const writePath = String(input.filename || input.path || input.file_path || '');
       return `write ${writePath.split('/').pop() || ''}`;
     case 'glob':
       return `glob`;
@@ -676,7 +676,7 @@ export function App({ cwd }: AppProps) {
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
-          version="0.6.7"
+          version="0.6.10"
           model="claude-sonnet-4"
           directory={activeSession?.cwd || cwd}
         />
@@ -703,21 +703,27 @@ export function App({ cwd }: AppProps) {
         key={activeSessionId || 'default'}
         messages={messages}
         currentResponse={isProcessing ? currentResponse : undefined}
-        currentToolCall={undefined} // Moved to ToolCallBox
+        currentToolCall={undefined}
         lastToolResult={undefined}
-        activityLog={isProcessing ? activityLog.filter((e) => e.type === 'text') : []}
+        activityLog={isProcessing ? activityLog : []}
         scrollOffset={scrollOffset}
         maxVisible={maxVisibleMessages}
       />
 
-      {/* Tool calls - show compact single line during processing */}
+      {/* Tool calls - show last 3 tool calls inline during processing */}
       {isProcessing && toolCallEntries.length > 0 && (
-        <Box marginY={1}>
-          <Text dimColor>
-            ⚙ {toolCallEntries.length} tool{toolCallEntries.length > 1 ? 's' : ''} running
-            {toolCallEntries.length > 0 && `: ${formatToolName(toolCallEntries[toolCallEntries.length - 1].toolCall)}`}
-            {toolCallEntries.length > 1 && ` (+${toolCallEntries.length - 1} more)`}
-          </Text>
+        <Box marginY={1} flexDirection="column">
+          {toolCallEntries.slice(-3).map(({ toolCall, result }) => (
+            <Box key={toolCall.id}>
+              <Text dimColor>
+                {result ? '✓' : '⚙'} {formatToolName(toolCall)}
+                {result?.isError && <Text color="red"> (error)</Text>}
+              </Text>
+            </Box>
+          ))}
+          {toolCallEntries.length > 3 && (
+            <Text dimColor>  ... and {toolCallEntries.length - 3} more tools</Text>
+          )}
         </Box>
       )}
 
