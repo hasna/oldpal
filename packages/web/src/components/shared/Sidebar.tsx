@@ -4,7 +4,7 @@ import { useChatStore } from '@/lib/store';
 import { chatWs } from '@/lib/ws';
 
 export function Sidebar() {
-  const { sessions, sessionId, switchSession } = useChatStore();
+  const { sessions, sessionId, switchSession, isStreaming } = useChatStore();
 
   return (
     <aside className="glass flex h-full w-72 flex-col gap-6 border-r border-slate-800 px-6 py-6">
@@ -25,8 +25,10 @@ export function Sidebar() {
                   : 'border-transparent bg-slate-900/40 text-slate-200 hover:border-slate-700'
               }`}
               onClick={() => {
+                if (isStreaming && sessionId) {
+                  chatWs.send({ type: 'cancel', sessionId });
+                }
                 switchSession(session.id);
-                chatWs.send({ type: 'cancel', sessionId: session.id });
               }}
             >
               {session.label}

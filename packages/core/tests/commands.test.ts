@@ -2,6 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { CommandLoader } from '../src/commands/loader';
 import { CommandExecutor } from '../src/commands/executor';
 import { BuiltinCommands } from '../src/commands/builtin';
+import { listProjects, readProject } from '../src/projects/store';
 import type { CommandContext, CommandResult } from '../src/commands/types';
 import { mkdirSync, writeFileSync, rmSync, existsSync, mkdtempSync } from 'fs';
 import { join } from 'path';
@@ -382,12 +383,16 @@ describe('BuiltinCommands', () => {
   let tempDir: string;
   let originalAssistantsDir: string | undefined;
   let originalOldpalDir: string | undefined;
+  let activeProjectId: string | null;
+  let projectContextContent: string | null;
 
   beforeEach(() => {
     builtins = new BuiltinCommands();
     loader = new CommandLoader();
     emittedContent = [];
     messagesCleared = false;
+    activeProjectId = null;
+    projectContextContent = null;
     tempDir = mkdtempSync(join(tmpdir(), 'assistants-cmd-'));
     originalAssistantsDir = process.env.ASSISTANTS_DIR;
     originalOldpalDir = process.env.OLDPAL_DIR;
@@ -408,6 +413,9 @@ describe('BuiltinCommands', () => {
         { name: 'alpha', description: 'Alpha skill', argumentHint: '[arg]' },
       ],
       connectors: [],
+      getActiveProjectId: () => activeProjectId,
+      setActiveProjectId: (id) => { activeProjectId = id; },
+      setProjectContext: (content) => { projectContextContent = content; },
       clearMessages: () => { messagesCleared = true; },
       addSystemMessage: () => {},
       emit: (type, content) => {
@@ -895,6 +903,48 @@ describe('BuiltinCommands', () => {
       if (cmd?.handler) {
         const result = await cmd.handler('', mockContext);
         expect(result.handled).toBe(true);
+      }
+    });
+  });
+
+  describe('/projects and /plans commands', () => {
+    test('should create and switch to a project', async () => {
+      const cmd = loader.getCommand('projects');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('new Alpha', mockContext);
+        expect(result.handled).toBe(true);
+        expect(activeProjectId).toBeTruthy();
+        expect(projectContextContent).toContain('Project: Alpha');
+
+        const projects = await listProjects(tempDir);
+        expect(projects.length).toBe(1);
+        const saved = await readProject(tempDir, projects[0].id);
+        expect(saved?.name).toBe('Alpha');
+      }
+    });
+
+    test('should add a plan and step', async () => {
+      const projectsCmd = loader.getCommand('projects');
+      const plansCmd = loader.getCommand('plans');
+      expect(projectsCmd).toBeDefined();
+      expect(plansCmd).toBeDefined();
+
+      if (projectsCmd?.handler && plansCmd?.handler) {
+        await projectsCmd.handler('new Beta', mockContext);
+        const createResult = await plansCmd.handler('new Launch Plan', mockContext);
+        expect(createResult.handled).toBe(true);
+
+        const activeId = activeProjectId as string;
+        const project = await readProject(tempDir, activeId);
+        expect(project?.plans.length).toBe(1);
+        const planId = project?.plans[0].id as string;
+
+        const addResult = await plansCmd.handler(`add ${planId} Define requirements`, mockContext);
+        expect(addResult.handled).toBe(true);
+        const updated = await readProject(tempDir, activeId);
+        expect(updated?.plans[0].steps.length).toBe(1);
       }
     });
   });

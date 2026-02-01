@@ -432,6 +432,7 @@ export interface ScheduledCommand {
   createdAt: number;
   updatedAt: number;
   createdBy: 'user' | 'agent';
+  sessionId?: string;
   command: string;
   description?: string;
   status: 'active' | 'paused' | 'completed' | 'error';

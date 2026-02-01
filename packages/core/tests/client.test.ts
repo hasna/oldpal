@@ -63,7 +63,76 @@ class MockAgentLoop {
     lastOptions?.onToolStart?.(toolCall);
     lastOptions?.onToolEnd?.(toolCall, { toolCallId: 't1', content: 'ok', isError: false });
     lastOptions?.onChunk?.({ type: 'text', content: 'ok' } as StreamChunk);
+    lastOptions?.onChunk?.({ type: 'done' } as StreamChunk);
     this.processing = false;
+  }
+
+  getContext() {
+    return this.context;
+  }
+
+  getTools(): Tool[] {
+    return [{ name: 'tool', description: 't', parameters: { type: 'object', properties: {} } }];
+  }
+
+  getSkills(): Skill[] {
+    return [{ name: 'skill', description: 's' }];
+  }
+
+  getCommands(): Command[] {
+    return [{ name: 'cmd', description: 'c', content: '', builtin: true }];
+  }
+
+  getTokenUsage() {
+    return { inputTokens: 1, outputTokens: 2, totalTokens: 3, maxContextTokens: 10 };
+  }
+
+  stop() {
+    this.processing = false;
+  }
+
+  isProcessing() {
+    return this.processing;
+  }
+
+  clearConversation() {
+    this.context.clear();
+  }
+}
+
+class BlockingAgentLoop {
+  private context = new MockContext();
+  private processing = false;
+  private block = true;
+  private releaseBlock: (() => void) | null = null;
+  private blocker: Promise<void>;
+
+  constructor(options: any) {
+    lastOptions = options;
+    this.blocker = new Promise((resolve) => {
+      this.releaseBlock = resolve;
+    });
+  }
+
+  async initialize() {}
+
+  async process(message: string) {
+    this.processing = true;
+    this.context.addUserMessage(message);
+    this.context.addAssistantMessage('ok');
+    lastOptions?.onChunk?.({ type: 'text', content: 'ok' } as StreamChunk);
+
+    if (this.block) {
+      await this.blocker;
+      this.block = false;
+    }
+
+    this.processing = false;
+    lastOptions?.onChunk?.({ type: 'done' } as StreamChunk);
+  }
+
+  release() {
+    this.releaseBlock?.();
   }
 
   getContext() {
@@ -206,5 +275,30 @@ describe('EmbeddedClient', () => {
 
     expect(errors.length).toBe(1);
     expect(errors[0].message).toBe('boom');
+  });
+
+  test('drains queued messages when agent finishes', async () => {
+    let agent: BlockingAgentLoop | null = null;
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => {
+        agent = new BlockingAgentLoop(options);
+        return agent as any;
+      },
+    });
+    await client.initialize();
+
+    const first = client.send('first');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await client.send('second');
+    expect(client.getQueueLength()).toBe(1);
+
+    agent?.release();
+    await first;
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(client.getQueueLength()).toBe(0);
+    expect(client.getMessages().some((msg) => msg.role === 'assistant')).toBe(true);
   });
 });

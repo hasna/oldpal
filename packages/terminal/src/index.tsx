@@ -6,6 +6,7 @@ import { App } from './components/App';
 import { runHeadless } from './headless';
 
 const VERSION = '0.6.19';
+process.env.ASSISTANTS_VERSION ??= VERSION;
 
 // Parse CLI arguments
 function parseArgs(argv: string[]) {

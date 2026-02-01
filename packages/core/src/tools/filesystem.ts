@@ -16,19 +16,20 @@ let currentSessionId: string = 'default';
 /**
  * Get the scripts folder path for the current session
  */
-function getScriptsFolder(cwd: string): string {
+function getScriptsFolder(cwd: string, sessionId?: string): string {
+  const resolvedSessionId = sessionId || currentSessionId;
   const legacyDir = join(cwd, '.oldpal');
   if (existsSync(legacyDir)) {
-    return join(legacyDir, 'scripts', currentSessionId);
+    return join(legacyDir, 'scripts', resolvedSessionId);
   }
-  return join(getProjectConfigDir(cwd), 'scripts', currentSessionId);
+  return join(getProjectConfigDir(cwd), 'scripts', resolvedSessionId);
 }
 
 /**
  * Check if a path is within the allowed scripts folder
  */
-function isInScriptsFolder(path: string, cwd: string): boolean {
-  const scriptsFolder = resolve(getScriptsFolder(cwd));
+function isInScriptsFolder(path: string, cwd: string, sessionId?: string): boolean {
+  const scriptsFolder = resolve(getScriptsFolder(cwd, sessionId));
   const resolved = resolve(path);
   if (resolved === scriptsFolder) return true;
   return resolved.startsWith(`${scriptsFolder}${sep}`);
@@ -214,7 +215,7 @@ export class FilesystemTools {
     const baseCwd = (input.cwd as string) || process.cwd();
 
     // Always write to scripts folder
-    const scriptsFolder = getScriptsFolder(baseCwd);
+    const scriptsFolder = getScriptsFolder(baseCwd, input.sessionId as string | undefined);
 
     if (!filename || !filename.trim()) {
       throw new ToolExecutionError('Filename is required', {
@@ -235,7 +236,7 @@ export class FilesystemTools {
     const path = join(scriptsFolder, sanitizedFilename);
 
     // Double check we're in scripts folder
-    if (!isInScriptsFolder(path, baseCwd)) {
+    if (!isInScriptsFolder(path, baseCwd, input.sessionId as string | undefined)) {
       throw new ToolExecutionError(`Cannot write outside scripts folder. Files are saved to ${scriptsFolder}`, {
         toolName: 'write',
         toolInput: input,

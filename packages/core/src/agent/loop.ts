@@ -109,6 +109,8 @@ export class AgentLoop {
   private assistantManager: AssistantManager | null = null;
   private identityManager: IdentityManager | null = null;
   private identityContext: string | null = null;
+  private projectContext: string | null = null;
+  private activeProjectId: string | null = null;
   private assistantId: string | null = null;
 
   // Event callbacks
@@ -527,9 +529,14 @@ export class AgentLoop {
       // Apply updated input from hook if provided
       if (preHookResult?.updatedInput) {
         toolCall.input = { ...preHookResult.updatedInput };
-        if ((toolCall.input as Record<string, unknown>).cwd === undefined) {
-          (toolCall.input as Record<string, unknown>).cwd = this.cwd;
-        }
+      }
+
+      const input = toolCall.input as Record<string, unknown>;
+      if (input.cwd === undefined) {
+        input.cwd = this.cwd;
+      }
+      if (input.sessionId === undefined) {
+        input.sessionId = this.sessionId;
       }
 
       // Check if hook blocked the tool (either via continue: false or permissionDecision: deny)
@@ -674,6 +681,13 @@ export class AgentLoop {
       },
       switchIdentity: async (identityId: string) => {
         await this.switchIdentity(identityId);
+      },
+      getActiveProjectId: () => this.activeProjectId,
+      setActiveProjectId: (projectId: string | null) => {
+        this.activeProjectId = projectId;
+      },
+      setProjectContext: (content: string | null) => {
+        this.setProjectContext(content);
       },
       getVoiceState: () => this.getVoiceState(),
       enableVoice: () => {
@@ -937,6 +951,24 @@ export class AgentLoop {
     return this.sessionId;
   }
 
+  getActiveProjectId(): string | null {
+    return this.activeProjectId;
+  }
+
+  setActiveProjectId(projectId: string | null): void {
+    this.activeProjectId = projectId;
+  }
+
+  setProjectContext(content: string | null): void {
+    const tag = '[Project Context]';
+    this.projectContext = content;
+    this.context.removeSystemMessages((message) => message.startsWith(tag));
+    if (content && content.trim()) {
+      this.context.addSystemMessage(`${tag}\n${content.trim()}`);
+    }
+    this.contextManager?.refreshState(this.context.getMessages());
+  }
+
   /**
    * Clear conversation
    */
@@ -1062,6 +1094,9 @@ export class AgentLoop {
       const now = Date.now();
       const due = await getDueSchedules(this.cwd, now);
       for (const schedule of due) {
+        if (schedule.sessionId && schedule.sessionId !== this.sessionId) {
+          continue;
+        }
         const locked = await acquireScheduleLock(this.cwd, schedule.id, this.sessionId);
         if (!locked) continue;
         const alreadyQueued = this.scheduledQueue.some((item) => item.id === schedule.id);
@@ -1089,7 +1124,13 @@ export class AgentLoop {
         if (!schedule) break;
 
         const current = await readSchedule(this.cwd, schedule.id);
-        if (!current || current.status !== 'active' || !current.nextRunAt || current.nextRunAt > Date.now()) {
+        if (
+          !current ||
+          current.status !== 'active' ||
+          !current.nextRunAt ||
+          current.nextRunAt > Date.now() ||
+          (current.sessionId && current.sessionId !== this.sessionId)
+        ) {
           await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
           continue;
         }
@@ -1147,6 +1188,9 @@ export class AgentLoop {
     }
     if (this.extraSystemPrompt) {
       this.context.addSystemMessage(this.extraSystemPrompt);
+    }
+    if (this.projectContext) {
+      this.setProjectContext(this.projectContext);
     }
     this.contextManager?.refreshState(this.context.getMessages());
   }

@@ -78,6 +78,9 @@ export interface CommandContext {
   refreshIdentityContext?: () => Promise<void>;
   switchAssistant?: (assistantId: string) => Promise<void>;
   switchIdentity?: (identityId: string) => Promise<void>;
+  getActiveProjectId?: () => string | null;
+  setActiveProjectId?: (projectId: string | null) => void;
+  setProjectContext?: (content: string | null) => void;
   restEnergy?: (amount?: number) => void;
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;

@@ -43,6 +43,10 @@ export class SchedulerTool {
           type: 'string',
           description: 'Optional description for this schedule',
         },
+        sessionId: {
+          type: 'string',
+          description: 'Session id to scope the schedule to',
+        },
         id: {
           type: 'string',
           description: 'Schedule id (for delete/pause/resume)',
@@ -89,6 +93,7 @@ export class SchedulerTool {
         createdAt: now,
         updatedAt: now,
         createdBy: 'agent',
+        sessionId: typeof input.sessionId === 'string' ? input.sessionId : undefined,
         command,
         description: input.description as string | undefined,
         status: 'active',

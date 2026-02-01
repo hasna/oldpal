@@ -82,6 +82,16 @@ export class AgentContext {
   }
 
   /**
+   * Remove system messages matching a predicate
+   */
+  removeSystemMessages(predicate: (content: string) => boolean): void {
+    this.messages = this.messages.filter((msg) => {
+      if (msg.role !== 'system') return true;
+      return !predicate(msg.content);
+    });
+  }
+
+  /**
    * Get all messages
    */
   getMessages(): Message[] {

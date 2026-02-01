@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useChatStore } from '@/lib/store';
+import { chatWs } from '@/lib/ws';
 
 const commands = [
   { id: 'new', label: 'New session', action: 'new' },
@@ -10,7 +11,7 @@ const commands = [
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
-  const { createSession, clearMessages } = useChatStore();
+  const { createSession, clearMessages, isStreaming, sessionId } = useChatStore();
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -40,6 +41,9 @@ export function CommandPalette() {
               className="flex w-full items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 hover:border-slate-600"
               onClick={() => {
                 if (command.action === 'new') {
+                  if (isStreaming && sessionId) {
+                    chatWs.send({ type: 'cancel', sessionId });
+                  }
                   createSession();
                 }
                 if (command.action === 'clear') {
