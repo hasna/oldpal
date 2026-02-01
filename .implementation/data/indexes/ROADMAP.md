@@ -23,11 +23,13 @@ This document outlines the planned features, missing functionality, and detailed
 
 ```
 HIGH PRIORITY     [████████░░░░░░░░░░░░] 40% (4/10 subtasks)
-MEDIUM PRIORITY   [██░░░░░░░░░░░░░░░░░░] 10% (2/20 subtasks)
+MEDIUM PRIORITY   [██░░░░░░░░░░░░░░░░░░]  8% (2/25 subtasks)
 LOW PRIORITY      [░░░░░░░░░░░░░░░░░░░░]  0% (0/15 subtasks)
 ─────────────────────────────────────────────────────────
-OVERALL           [███░░░░░░░░░░░░░░░░░] 13% (6/45 subtasks)
+OVERALL           [██░░░░░░░░░░░░░░░░░░] 12% (6/50 subtasks)
 ```
+
+**13 roadmap items tracked** | Last updated: 2025-02-01
 
 ### Detailed Status Table
 
@@ -44,6 +46,8 @@ OVERALL           [███░░░░░░░░░░░░░░░░░]
 | 9 | Stamina/Energy System | 🟢 Low | ⬜ 0% | Planned | M | - | - |
 | 10 | Voice Features | 🟢 Low | ⬜ 5% | Stub only | L | - | - |
 | 11 | Web UI | 🟢 Low | ⬜ 0% | Not started | L | - | - |
+| 12 | Identity & Multi-Assistant | 🟡 Med | ⬜ 0% | Planning | L | - | 2025-02-01 |
+| 13 | Rename to "assistants" | 🟡 Med | ⬜ 0% | Planning | M | - | 2025-02-01 |
 
 ### Subtask Breakdown
 

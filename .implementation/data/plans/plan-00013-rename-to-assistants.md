@@ -1,10 +1,14 @@
 # Plan: Rename from "oldpal" to "assistants"
 
 **Plan ID:** 00013
-**Status:** Draft
+**Status:** MERGED INTO plan-00012
 **Priority:** Medium
 **Estimated Effort:** Medium (2-3 days)
 **Dependencies:** plan-00012 (Identity & Multi-Assistant System)
+
+> **Note:** This plan has been merged with plan-00012 (Identity & Multi-Assistant System).
+> The rename will be implemented together with the identity system for a cleaner migration.
+> See plan-00012 for the combined implementation details.
 
 ---
 

@@ -1,7 +1,7 @@
-# Plan: Identity & Multi-Assistant System
+# Plan: Identity & Multi-Assistant System + Rename to "assistants"
 
 **Plan ID:** 00012
-**Status:** Draft
+**Status:** Draft (User Requirements Confirmed)
 **Priority:** Medium
 **Estimated Effort:** Large (7+ days)
 **Dependencies:** None
@@ -10,77 +10,119 @@
 
 ## Overview
 
-Implement an identity system that stores assistant metadata (email, phone, preferences) and supports multiple assistants with different configurations. Each assistant can have multiple identities for different contexts (work, personal, etc.).
+Rename the project from "oldpal" to "assistants" and implement a comprehensive identity system supporting multiple assistants, each with multiple identities. This is a combined effort for cleaner migration.
 
-## Current State
+## User Requirements (Confirmed)
 
-- Single anonymous assistant
-- No identity storage
-- No multi-assistant support
-- Settings are global
+- **Storage**: Consolidated identity.json per identity
+- **Structure**: Each assistant has its own identities (1 assistant → many identities)
+- **Location**: New ~/.assistants/ global directory
+- **Scope**: Implement rename + identity system together
 
-## Requirements
+---
 
-### Functional
-1. Store assistant identities (email, phone, address, preferences)
-2. Support multiple assistants with unique configurations
-3. Support multiple identities per assistant (contexts)
-4. Identity-aware responses (assistant knows who it is)
-5. Switch between assistants easily
+## Directory Structure
 
-### Non-Functional
-1. Secure storage for sensitive identity data
-2. Fast assistant switching
-3. Backward compatible with single-assistant use
-4. Extensible identity schema
+```
+~/.assistants/                          # New global config (renamed from .oldpal)
+├── config.json                         # Global settings (was settings.json)
+├── hooks.json                          # Global hooks
+├── active.json                         # Currently active assistant ID
+├── assistants/                         # Multi-assistant storage
+│   ├── index.json                      # List of all assistant IDs
+│   └── {assistant-id}/
+│       ├── config.json                 # Assistant-specific settings
+│       ├── identities/
+│       │   ├── index.json              # List of identity IDs for this assistant
+│       │   ├── {identity-id}.json      # Consolidated identity data
+│       │   └── ...
+│       ├── sessions/
+│       │   └── {session-id}.json
+│       └── memory.db                   # Per-assistant SQLite
+├── shared/                             # Shared resources across assistants
+│   ├── skills/
+│   └── connectors/
+├── logs/                               # Global logs
+│   └── {YYYY-MM-DD}.log
+└── migration/
+    └── .migrated-from-oldpal           # Migration marker
 
-## Technical Design
+{project}/.assistants/                  # Project-level (replaces .oldpal)
+├── config.json
+├── hooks.json
+├── skills/
+└── schedules/
+```
 
-### Data Model
+---
+
+## Data Models
+
+### Assistant
 
 ```typescript
 // packages/core/src/identity/types.ts
 
 interface Assistant {
-  id: string;              // UUID
-  name: string;            // Display name
-  avatar?: string;         // URL or local path
-  defaultIdentity: string; // Default identity ID
-  identities: Identity[];
+  id: string;                    // UUID
+  name: string;                  // Display name ("Work Assistant", "Personal")
+  description?: string;          // What this assistant is for
+  avatar?: string;               // Emoji or image path
+  defaultIdentityId?: string;    // Primary identity for this assistant
   settings: AssistantSettings;
+  createdAt: string;             // ISO timestamp
+  updatedAt: string;
+}
+
+interface AssistantSettings {
+  model: string;                 // "claude-sonnet-4-20250514"
+  maxTokens?: number;
+  temperature?: number;
+  systemPromptAddition?: string; // Added to base system prompt
+  enabledTools?: string[];       // Tool whitelist (null = all)
+  disabledTools?: string[];      // Tool blacklist
+  skillDirectories?: string[];   // Additional skill paths
+}
+```
+
+### Identity
+
+```typescript
+interface Identity {
+  id: string;                    // UUID
+  name: string;                  // "Work", "Personal", "Client A"
+  isDefault: boolean;
+  profile: IdentityProfile;
+  contacts: IdentityContacts;
+  preferences: IdentityPreferences;
+  context?: string;              // Custom system prompt addition
   createdAt: string;
   updatedAt: string;
 }
 
-interface Identity {
-  id: string;
-  name: string;           // e.g., "Work", "Personal"
-  isDefault: boolean;
-  contact: ContactInfo;
-  preferences: Preferences;
-  context?: string;       // System prompt addition
+interface IdentityProfile {
+  displayName: string;           // "John Smith"
+  title?: string;                // "Software Engineer"
+  company?: string;
+  bio?: string;
+  timezone: string;              // "America/New_York"
+  locale: string;                // "en-US"
 }
 
-interface ContactInfo {
-  emails: EmailIdentity[];
-  phones: PhoneIdentity[];
-  addresses: AddressIdentity[];
-  social?: SocialIdentity[];
+interface IdentityContacts {
+  emails: ContactEntry[];        // [{value, label, isPrimary}]
+  phones: ContactEntry[];
+  addresses: AddressEntry[];
+  social?: SocialEntry[];        // GitHub, Twitter, etc.
 }
 
-interface EmailIdentity {
-  email: string;
-  label: string;          // "primary", "work", "personal"
-  verified?: boolean;
+interface ContactEntry {
+  value: string;
+  label: string;                 // "work", "personal", "primary"
+  isPrimary?: boolean;
 }
 
-interface PhoneIdentity {
-  number: string;
-  label: string;
-  type: 'mobile' | 'work' | 'home';
-}
-
-interface AddressIdentity {
+interface AddressEntry {
   street: string;
   city: string;
   state?: string;
@@ -89,481 +131,225 @@ interface AddressIdentity {
   label: string;
 }
 
-interface SocialIdentity {
-  platform: string;       // "github", "twitter", etc.
-  username: string;
-  url?: string;
-}
-
-interface Preferences {
-  language: string;
-  timezone: string;
-  dateFormat: string;
-  communicationStyle?: 'formal' | 'casual' | 'professional';
+interface IdentityPreferences {
+  language: string;              // "en"
+  dateFormat: string;            // "YYYY-MM-DD"
+  communicationStyle: 'formal' | 'casual' | 'professional';
+  responseLength: 'concise' | 'detailed' | 'balanced';
   codeStyle?: {
     indentation: 'tabs' | 'spaces';
     indentSize: number;
     quoteStyle: 'single' | 'double';
   };
-  responseLength?: 'concise' | 'detailed' | 'balanced';
-  customPreferences: Record<string, any>;
-}
-
-interface AssistantSettings {
-  model: string;
-  temperature: number;
-  maxTokens?: number;
-  tools: {
-    enabled: string[];
-    disabled: string[];
-  };
-  hooks?: string;         // Path to hooks.json
-  skills?: string[];      // Skill directories
+  custom: Record<string, unknown>;
 }
 ```
 
-### Storage Structure
+---
 
-```
-~/.assistants/
-├── assistants.json       # List of assistants
-├── active.json           # Currently active assistant
-└── {assistant-id}/
-    ├── config.json       # Assistant settings
-    ├── identities/
-    │   ├── {identity-id}.json
-    │   └── ...
-    ├── sessions/         # Session history
-    └── memory.db         # SQLite database
-```
+## Core Implementation
 
-### Assistant Manager
+### AssistantManager
 
 ```typescript
-// packages/core/src/identity/manager.ts
+// packages/core/src/identity/assistant-manager.ts
 
 class AssistantManager {
-  private basePath: string;
-  private assistants: Map<string, Assistant> = new Map();
-  private activeId: string | null = null;
+  private basePath: string = expandPath('~/.assistants');
+  private assistants: Map<string, Assistant>;
+  private activeId: string | null;
 
-  constructor(basePath: string = '~/.assistants') {
-    this.basePath = expandPath(basePath);
-  }
+  // Lifecycle
+  async initialize(): Promise<void>
 
-  async initialize(): Promise<void> {
-    await this.ensureDirectories();
-    await this.loadAssistants();
-    await this.loadActive();
-  }
+  // CRUD
+  async createAssistant(options: CreateAssistantOptions): Promise<Assistant>
+  async updateAssistant(id: string, updates: Partial<Assistant>): Promise<Assistant>
+  async deleteAssistant(id: string): Promise<void>
 
-  async createAssistant(options: CreateAssistantOptions): Promise<Assistant> {
-    const id = generateUUID();
-    const now = new Date().toISOString();
+  // Selection
+  async switchAssistant(id: string): Promise<Assistant>
+  getActive(): Assistant | null
+  listAssistants(): Assistant[]
 
-    const assistant: Assistant = {
-      id,
-      name: options.name,
-      avatar: options.avatar,
-      defaultIdentity: '',
-      identities: [],
-      settings: {
-        model: options.model || 'claude-sonnet-4-20250514',
-        temperature: options.temperature || 0.7,
-        tools: { enabled: [], disabled: [] },
-      },
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    // Create default identity
-    const defaultIdentity = await this.createIdentity(id, {
-      name: 'Default',
-      isDefault: true,
-      contact: { emails: [], phones: [], addresses: [] },
-      preferences: {
-        language: 'en',
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        dateFormat: 'YYYY-MM-DD',
-        customPreferences: {},
-      },
-    });
-
-    assistant.defaultIdentity = defaultIdentity.id;
-    assistant.identities.push(defaultIdentity);
-
-    // Save
-    await this.saveAssistant(assistant);
-    this.assistants.set(id, assistant);
-
-    return assistant;
-  }
-
-  async switchAssistant(id: string): Promise<Assistant> {
-    const assistant = this.assistants.get(id);
-    if (!assistant) {
-      throw new Error(`Assistant not found: ${id}`);
-    }
-
-    this.activeId = id;
-    await this.saveActive();
-
-    return assistant;
-  }
-
-  getActive(): Assistant | null {
-    return this.activeId ? this.assistants.get(this.activeId) || null : null;
-  }
-
-  listAssistants(): Assistant[] {
-    return Array.from(this.assistants.values());
-  }
-
-  async createIdentity(
-    assistantId: string,
-    options: CreateIdentityOptions
-  ): Promise<Identity> {
-    const identity: Identity = {
-      id: generateUUID(),
-      name: options.name,
-      isDefault: options.isDefault || false,
-      contact: options.contact,
-      preferences: options.preferences,
-      context: options.context,
-    };
-
-    const identityPath = join(
-      this.basePath,
-      assistantId,
-      'identities',
-      `${identity.id}.json`
-    );
-    await writeFile(identityPath, JSON.stringify(identity, null, 2));
-
-    return identity;
-  }
-
-  async updateIdentity(
-    assistantId: string,
-    identityId: string,
-    updates: Partial<Identity>
-  ): Promise<Identity> {
-    const assistant = this.assistants.get(assistantId);
-    if (!assistant) throw new Error('Assistant not found');
-
-    const identity = assistant.identities.find(i => i.id === identityId);
-    if (!identity) throw new Error('Identity not found');
-
-    Object.assign(identity, updates);
-
-    const identityPath = join(
-      this.basePath,
-      assistantId,
-      'identities',
-      `${identityId}.json`
-    );
-    await writeFile(identityPath, JSON.stringify(identity, null, 2));
-
-    return identity;
-  }
-
-  getActiveIdentity(): Identity | null {
-    const assistant = this.getActive();
-    if (!assistant) return null;
-
-    return assistant.identities.find(i => i.id === assistant.defaultIdentity) ||
-           assistant.identities.find(i => i.isDefault) ||
-           assistant.identities[0] || null;
-  }
-
-  buildIdentityContext(identity: Identity): string {
-    const lines: string[] = [];
-
-    if (identity.contact.emails.length > 0) {
-      const primary = identity.contact.emails.find(e => e.label === 'primary') ||
-                     identity.contact.emails[0];
-      lines.push(`Your email address is ${primary.email}.`);
-    }
-
-    if (identity.contact.phones.length > 0) {
-      const primary = identity.contact.phones[0];
-      lines.push(`Your phone number is ${primary.number}.`);
-    }
-
-    if (identity.contact.addresses.length > 0) {
-      const addr = identity.contact.addresses[0];
-      lines.push(`Your address is ${addr.street}, ${addr.city}, ${addr.country}.`);
-    }
-
-    if (identity.preferences.timezone) {
-      lines.push(`You operate in the ${identity.preferences.timezone} timezone.`);
-    }
-
-    if (identity.context) {
-      lines.push(identity.context);
-    }
-
-    return lines.join(' ');
-  }
-
-  private async ensureDirectories(): Promise<void> {
-    await mkdir(this.basePath, { recursive: true });
-  }
-
-  private async loadAssistants(): Promise<void> {
-    const listPath = join(this.basePath, 'assistants.json');
-    try {
-      const content = await readFile(listPath, 'utf-8');
-      const list = JSON.parse(content) as { assistants: string[] };
-
-      for (const id of list.assistants) {
-        const assistant = await this.loadAssistant(id);
-        if (assistant) {
-          this.assistants.set(id, assistant);
-        }
-      }
-    } catch {
-      // No assistants yet
-    }
-  }
-
-  private async loadAssistant(id: string): Promise<Assistant | null> {
-    const configPath = join(this.basePath, id, 'config.json');
-    try {
-      const content = await readFile(configPath, 'utf-8');
-      return JSON.parse(content);
-    } catch {
-      return null;
-    }
-  }
-
-  private async saveAssistant(assistant: Assistant): Promise<void> {
-    const dir = join(this.basePath, assistant.id);
-    await mkdir(dir, { recursive: true });
-    await mkdir(join(dir, 'identities'), { recursive: true });
-    await mkdir(join(dir, 'sessions'), { recursive: true });
-
-    const configPath = join(dir, 'config.json');
-    await writeFile(configPath, JSON.stringify(assistant, null, 2));
-
-    // Update list
-    const listPath = join(this.basePath, 'assistants.json');
-    const list = { assistants: Array.from(this.assistants.keys()) };
-    if (!list.assistants.includes(assistant.id)) {
-      list.assistants.push(assistant.id);
-    }
-    await writeFile(listPath, JSON.stringify(list, null, 2));
-  }
-
-  private async loadActive(): Promise<void> {
-    const activePath = join(this.basePath, 'active.json');
-    try {
-      const content = await readFile(activePath, 'utf-8');
-      const { activeId } = JSON.parse(content);
-      if (this.assistants.has(activeId)) {
-        this.activeId = activeId;
-      }
-    } catch {
-      // No active assistant
-    }
-  }
-
-  private async saveActive(): Promise<void> {
-    const activePath = join(this.basePath, 'active.json');
-    await writeFile(activePath, JSON.stringify({ activeId: this.activeId }));
-  }
+  // Identity delegation
+  getIdentityManager(assistantId: string): IdentityManager
 }
 ```
 
-### Commands
+### IdentityManager
 
 ```typescript
-// Add to packages/core/src/commands/builtin.ts
+// packages/core/src/identity/identity-manager.ts
 
-const assistantCommands = {
-  '/assistant': {
-    description: 'Manage assistants',
-    usage: '/assistant [list|create|switch|delete] [args]',
-    execute: async (args, context) => {
-      const [action, ...rest] = args.split(' ');
-      const manager = context.assistantManager;
+class IdentityManager {
+  private assistantPath: string;
+  private identities: Map<string, Identity>;
 
-      switch (action) {
-        case 'list':
-          const assistants = manager.listAssistants();
-          const active = manager.getActive();
-          return assistants.map(a =>
-            `${a.id === active?.id ? '*' : ' '} ${a.name} (${a.id.slice(0, 8)})`
-          ).join('\n') || 'No assistants. Use /assistant create <name>';
+  constructor(assistantId: string, basePath: string)
 
-        case 'create':
-          const name = rest.join(' ') || 'New Assistant';
-          const assistant = await manager.createAssistant({ name });
-          await manager.switchAssistant(assistant.id);
-          return `Created and switched to: ${assistant.name}`;
+  // CRUD
+  async createIdentity(options: CreateIdentityOptions): Promise<Identity>
+  async updateIdentity(id: string, updates: Partial<Identity>): Promise<Identity>
+  async deleteIdentity(id: string): Promise<void>
 
-        case 'switch':
-          const target = rest[0];
-          const found = manager.listAssistants().find(
-            a => a.id.startsWith(target) || a.name.toLowerCase() === target.toLowerCase()
-          );
-          if (!found) return `Assistant not found: ${target}`;
-          await manager.switchAssistant(found.id);
-          return `Switched to: ${found.name}`;
+  // Selection
+  async switchIdentity(id: string): Promise<Identity>
+  getActive(): Identity | null
+  listIdentities(): Identity[]
 
-        case 'delete':
-          // Implementation...
-          break;
-
-        default:
-          const current = manager.getActive();
-          return current
-            ? `Current assistant: ${current.name}\nUse /assistant list to see all.`
-            : 'No active assistant. Use /assistant create <name>';
-      }
-    },
-  },
-
-  '/identity': {
-    description: 'Manage identities',
-    usage: '/identity [list|add|edit|switch] [args]',
-    execute: async (args, context) => {
-      // Implementation for identity management
-    },
-  },
-
-  '/whoami': {
-    description: 'Show current identity',
-    execute: async (args, context) => {
-      const manager = context.assistantManager;
-      const assistant = manager.getActive();
-      const identity = manager.getActiveIdentity();
-
-      if (!assistant || !identity) {
-        return 'No active assistant/identity.';
-      }
-
-      const lines = [
-        `Assistant: ${assistant.name}`,
-        `Identity: ${identity.name}`,
-      ];
-
-      if (identity.contact.emails.length > 0) {
-        lines.push(`Email: ${identity.contact.emails[0].email}`);
-      }
-      if (identity.contact.phones.length > 0) {
-        lines.push(`Phone: ${identity.contact.phones[0].number}`);
-      }
-
-      return lines.join('\n');
-    },
-  },
-};
+  // Context building
+  buildSystemPromptContext(): string  // Returns identity info for LLM
+}
 ```
+
+### Migration System
+
+```typescript
+// packages/core/src/migration/migrate-to-assistants.ts
+
+interface MigrationResult {
+  success: boolean;
+  migrated: string[];
+  errors: string[];
+  backupPath?: string;
+}
+
+async function migrateFromOldpal(): Promise<MigrationResult> {
+  // 1. Check if ~/.oldpal exists
+  // 2. Check if ~/.assistants already exists (abort if so)
+  // 3. Create ~/.assistants structure
+  // 4. Copy config: settings.json → config.json
+  // 5. Copy hooks.json, skills/, sessions/, logs/
+  // 6. Create default assistant from old config
+  // 7. Create default identity with empty contacts
+  // 8. Rename ~/.oldpal → ~/.oldpal.backup
+  // 9. Create migration marker
+}
+```
+
+---
+
+## Commands
+
+### /assistant
+
+```
+/assistant                     # Show current assistant info
+/assistant list                # List all assistants
+/assistant create <name>       # Create new assistant
+/assistant switch <name|id>    # Switch to assistant
+/assistant delete <name|id>    # Delete assistant
+/assistant settings            # Show/edit settings
+```
+
+### /identity
+
+```
+/identity                      # Show current identity
+/identity list                 # List identities for current assistant
+/identity create <name>        # Create new identity
+/identity switch <name|id>     # Switch identity
+/identity edit                 # Interactive identity editor
+/identity delete <name|id>     # Delete identity
+```
+
+### /whoami
+
+```
+/whoami                        # Quick display of current assistant + identity
+```
+
+---
 
 ## Implementation Steps
 
-### Step 1: Create Identity Types
-- [ ] Define Assistant interface
-- [ ] Define Identity interface
-- [ ] Define ContactInfo interfaces
-- [ ] Define Preferences interface
+### Step 1: Core Types & Managers
+- [ ] Create `packages/core/src/identity/types.ts`
+- [ ] Create `packages/core/src/identity/assistant-manager.ts`
+- [ ] Create `packages/core/src/identity/identity-manager.ts`
+- [ ] Create `packages/core/src/identity/index.ts`
+- [ ] Add types to `packages/shared/src/types.ts`
 
-**Files:**
-- `packages/core/src/identity/types.ts`
+### Step 2: Migration System
+- [ ] Create `packages/core/src/migration/index.ts`
+- [ ] Create `packages/core/src/migration/migrate-to-assistants.ts`
+- [ ] Create `packages/core/src/migration/validators.ts`
 
-### Step 2: Implement Storage Layer
-- [ ] Create directory structure helpers
-- [ ] Implement file-based storage
-- [ ] Add migration support
+### Step 3: Integration
+- [ ] Modify `packages/core/src/config.ts` - update paths
+- [ ] Modify `packages/core/src/agent/loop.ts` - inject identity
+- [ ] Modify `packages/core/src/client.ts` - use AssistantManager
+- [ ] Modify `packages/core/src/index.ts` - export modules
 
-**Files:**
-- `packages/core/src/identity/storage.ts`
+### Step 4: Commands
+- [ ] Add /assistant command to `builtin.ts`
+- [ ] Add /identity command to `builtin.ts`
+- [ ] Add /whoami command to `builtin.ts`
 
-### Step 3: Implement AssistantManager
-- [ ] Create AssistantManager class
-- [ ] Add assistant CRUD
-- [ ] Add identity CRUD
-- [ ] Add switching logic
+### Step 5: Package Rename
+- [ ] Update `package.json` - name: @hasna/assistants
+- [ ] Update all `packages/*/package.json`
+- [ ] Replace "oldpal" → "assistants" in all source files
+- [ ] Update `README.md`
 
-**Files:**
-- `packages/core/src/identity/manager.ts`
+### Step 6: Terminal UI
+- [ ] Modify `Status.tsx` - show assistant/identity
+- [ ] Modify `index.tsx` - run migration on startup
 
-### Step 4: Add Commands
-- [ ] Implement /assistant command
-- [ ] Implement /identity command
-- [ ] Implement /whoami command
+---
 
-**Files:**
-- `packages/core/src/commands/builtin.ts`
+## Identity Context Injection
 
-### Step 5: Integrate with Agent
-- [ ] Pass identity context to system prompt
-- [ ] Load assistant settings on startup
-- [ ] Handle assistant switching
-
-**Files:**
-- `packages/core/src/agent/loop.ts`
-- `packages/core/src/client.ts`
-
-### Step 6: Add UI Elements
-- [ ] Show current assistant in status
-- [ ] Add assistant selector
-- [ ] Show identity info
-
-**Files:**
-- `packages/terminal/src/components/Status.tsx`
-- `packages/terminal/src/components/AssistantSelector.tsx`
-
-### Step 7: Add Tests
-- [ ] Test assistant CRUD
-- [ ] Test identity CRUD
-- [ ] Test switching
-- [ ] Test context building
-
-**Files:**
-- `packages/core/tests/identity.test.ts`
-
-## Testing Strategy
+The active identity is injected into the system prompt:
 
 ```typescript
-describe('AssistantManager', () => {
-  it('should create assistant with default identity');
-  it('should switch between assistants');
-  it('should list all assistants');
-  it('should persist to disk');
-});
+// In AgentLoop.buildSystemPrompt()
 
-describe('Identity', () => {
-  it('should create identities');
-  it('should build context from identity');
-  it('should switch identities');
-});
+const identityContext = this.identityManager?.buildSystemPromptContext();
+if (identityContext) {
+  systemPrompt += `\n\n## Your Identity\n${identityContext}`;
+}
 ```
 
-## Rollout Plan
+Example output:
+```
+## Your Identity
+You are operating as "Work Assistant" with the "Work" identity.
+- Name: John Smith
+- Email: john@company.com (primary)
+- Timezone: America/New_York
+- Communication style: professional
+```
 
-1. Create identity types
-2. Implement storage layer
-3. Build AssistantManager
-4. Add commands
-5. Integrate with agent
-6. Add UI elements
-7. Test and document
+---
 
-## Risks & Mitigations
+## Verification Steps
+
+1. **Fresh install**: `npm install -g assistants` → creates ~/.assistants
+2. **Migration**: Run with existing ~/.oldpal → migrates to ~/.assistants
+3. **Create assistant**: `/assistant create "Work"` → creates assistant
+4. **Create identity**: `/identity create "Office"` → creates identity
+5. **Switch**: `/assistant switch Work` → changes active assistant
+6. **Whoami**: `/whoami` → shows current assistant/identity
+7. **Context**: Ask "what's my email?" → LLM knows from identity
+
+---
+
+## Risk Mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Sensitive data exposure | High | Encrypt sensitive fields |
-| Migration complexity | Medium | Version schema, migration scripts |
-| Breaking single-user flow | Medium | Default assistant auto-created |
+| Data loss during migration | High | Create ~/.oldpal.backup before migration |
+| Breaking existing users | High | Deprecation package with clear message |
+| npm name conflicts | Medium | Use @hasna/assistants scoped name |
+| Complex multi-file rename | Medium | Automated search/replace with tests |
 
 ---
 
 ## Approval
 
-- [ ] Technical design approved
-- [ ] Implementation steps clear
-- [ ] Tests defined
+- [x] User requirements confirmed
+- [x] Technical design approved
+- [x] Implementation steps clear
 - [ ] Ready to implement
