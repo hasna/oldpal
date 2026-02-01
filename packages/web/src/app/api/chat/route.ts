@@ -41,22 +41,35 @@ export async function POST(request: Request) {
   }
 
   let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
+  let unsubscribe: (() => void) | null = null;
+  let closed = false;
+
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+  };
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       controllerRef = controller;
     },
     async cancel() {
+      cleanup();
       await stopSession(sessionId);
     },
   });
 
-  const unsubscribe = await subscribeToSession(
+  unsubscribe = await subscribeToSession(
     sessionId,
     (chunk) => {
       const serverMessage = chunkToServerMessage(chunk);
       if (serverMessage && controllerRef) {
         controllerRef.enqueue(encode(serverMessage));
         if (serverMessage.type === 'message_complete') {
+          cleanup();
           controllerRef.close();
         }
       }
@@ -64,6 +77,7 @@ export async function POST(request: Request) {
     (error) => {
       if (controllerRef) {
         controllerRef.enqueue(encode({ type: 'error', message: error.message }));
+        cleanup();
         controllerRef.close();
       }
     }
@@ -73,11 +87,9 @@ export async function POST(request: Request) {
     .catch((error) => {
       if (controllerRef) {
         controllerRef.enqueue(encode({ type: 'error', message: error.message }));
+        cleanup();
         controllerRef.close();
       }
-    })
-    .finally(() => {
-      unsubscribe();
     });
 
   return new Response(stream, {
