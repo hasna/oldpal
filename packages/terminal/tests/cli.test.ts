@@ -23,7 +23,7 @@ describe('CLI', () => {
   test('prints version with --version', async () => {
     const result = await runCli(['--version']);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('oldpal v');
+    expect(result.stdout).toContain('assistants v');
   });
 
   test('prints help with --help', async () => {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import type { EnergyState, VoiceState } from '@oldpal/shared';
+import type { EnergyState, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
 import { EnergyBar } from './EnergyBar';
 
 interface TokenUsage {
@@ -17,6 +17,7 @@ interface StatusProps {
   tokenUsage?: TokenUsage;
   energyState?: EnergyState;
   voiceState?: VoiceState;
+  identityInfo?: ActiveIdentityInfo;
   sessionIndex?: number;
   sessionCount?: number;
   backgroundProcessingCount?: number;
@@ -31,6 +32,7 @@ export function Status({
   tokenUsage,
   energyState,
   voiceState,
+  identityInfo,
   sessionIndex,
   sessionCount,
   backgroundProcessingCount = 0,
@@ -80,6 +82,9 @@ export function Status({
   const voiceInfo = voiceState?.enabled
     ? `voice ${voiceState.isListening ? 'listening' : voiceState.isSpeaking ? 'speaking' : 'on'}`
     : '';
+  const identityLabel = identityInfo?.assistant && identityInfo?.identity
+    ? `${identityInfo.assistant.name} · ${identityInfo.identity.name}`
+    : '';
 
   return (
     <Box marginTop={1} justifyContent="space-between">
@@ -90,6 +95,7 @@ export function Status({
             <EnergyBar current={energyState.current} max={energyState.max} />
           </Box>
         )}
+        {identityLabel && <Text dimColor>{identityLabel} · </Text>}
         {voiceInfo && <Text dimColor>{voiceInfo} · </Text>}
         {isProcessing && <Text dimColor>esc to stop · </Text>}
         {sessionInfo && (

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text } from 'ink';
-import type { Message, ToolCall, ToolResult } from '@oldpal/shared';
+import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Markdown } from './Markdown';
 
 interface ActivityEntry {

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
-import { SessionRegistry, type SessionInfo } from '@oldpal/core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState } from '@oldpal/shared';
-import { generateId, now } from '@oldpal/shared';
+import { Box, Text, useApp, useInput, useStdout } from 'ink';
+import { SessionRegistry, type SessionInfo } from '@hasna/assistants-core';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
+import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
 import { Status } from './Status';
@@ -11,7 +11,7 @@ import { ProcessingIndicator } from './ProcessingIndicator';
 import { WelcomeBanner } from './WelcomeBanner';
 import { SessionSelector } from './SessionSelector';
 
-const SHOW_ERROR_CODES = process.env.OLDPAL_DEBUG === '1';
+const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1' || process.env.OLDPAL_DEBUG === '1';
 
 // Format tool name for compact display
 function formatToolName(toolCall: ToolCall): string {
@@ -81,6 +81,7 @@ interface SessionUIState {
   tokenUsage: TokenUsage | undefined;
   energyState: EnergyState | undefined;
   voiceState: VoiceState | undefined;
+  identityInfo: ActiveIdentityInfo | undefined;
   processingStartTime: number | undefined;
   currentTurnTokens: number;
   error: string | null;
@@ -141,6 +142,7 @@ function buildDisplayMessages(messages: Message[], chunkLines: number): Message[
 
 export function App({ cwd }: AppProps) {
   const { exit } = useApp();
+  const { rows } = useStdout();
 
   // Session registry
   const [registry] = useState(() => new SessionRegistry());
@@ -165,6 +167,7 @@ export function App({ cwd }: AppProps) {
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | undefined>();
   const [energyState, setEnergyState] = useState<EnergyState | undefined>();
   const [voiceState, setVoiceState] = useState<VoiceState | undefined>();
+  const [identityInfo, setIdentityInfo] = useState<ActiveIdentityInfo | undefined>();
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -286,12 +289,13 @@ export function App({ cwd }: AppProps) {
         tokenUsage,
         energyState,
         voiceState,
+        identityInfo,
         processingStartTime,
         currentTurnTokens,
         error,
       });
     }
-  }, [activeSessionId, messages, tokenUsage, energyState, voiceState, processingStartTime, currentTurnTokens, error]);
+  }, [activeSessionId, messages, tokenUsage, energyState, voiceState, identityInfo, processingStartTime, currentTurnTokens, error]);
 
   // Load session UI state
   const loadSessionState = useCallback((sessionId: string) => {
@@ -308,6 +312,7 @@ export function App({ cwd }: AppProps) {
       setTokenUsage(state.tokenUsage);
       setEnergyState(state.energyState);
       setVoiceState(state.voiceState);
+      setIdentityInfo(state.identityInfo);
       setProcessingStartTime(state.processingStartTime);
       setCurrentTurnTokens(state.currentTurnTokens);
       setError(state.error);
@@ -324,6 +329,7 @@ export function App({ cwd }: AppProps) {
       setTokenUsage(undefined);
       setEnergyState(undefined);
       setVoiceState(undefined);
+      setIdentityInfo(undefined);
       setProcessingStartTime(undefined);
       setCurrentTurnTokens(0);
       setError(null);
@@ -428,6 +434,7 @@ export function App({ cwd }: AppProps) {
         setTokenUsage(activeSession.client.getTokenUsage());
         setEnergyState(activeSession.client.getEnergyState() ?? undefined);
         setVoiceState(activeSession.client.getVoiceState() ?? undefined);
+        setIdentityInfo(activeSession.client.getIdentityInfo() ?? undefined);
       }
     }
   }, [registry, exit, finalizeResponse, resetTurnState]);
@@ -462,6 +469,7 @@ export function App({ cwd }: AppProps) {
         })));
         setEnergyState(session.client.getEnergyState() ?? undefined);
         setVoiceState(session.client.getVoiceState() ?? undefined);
+        setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
 
         setIsInitializing(false);
       } catch (err) {
@@ -562,8 +570,9 @@ export function App({ cwd }: AppProps) {
     prevDisplayCountRef.current = displayMessages.length;
   }, [displayMessages.length, autoScroll]);
 
-  // Max visible messages - reduce when processing to prevent overflow
-  const baseMaxVisible = 10;
+  // Max visible messages - size to terminal height when available
+  const reservedLines = 8;
+  const baseMaxVisible = rows ? Math.max(3, rows - reservedLines) : 10;
   const toolCallsHeight = isProcessing ? Math.min(toolCallsRef.current.length, 5) : 0;
   const maxVisibleMessages = Math.max(3, baseMaxVisible - toolCallsHeight);
 
@@ -602,6 +611,7 @@ export function App({ cwd }: AppProps) {
       isProcessingRef.current = session.isProcessing;
       setEnergyState(session.client.getEnergyState() ?? undefined);
       setVoiceState(session.client.getVoiceState() ?? undefined);
+      setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
     }
 
     // Now switch session in registry (may replay buffered chunks to the reset state)
@@ -631,6 +641,7 @@ export function App({ cwd }: AppProps) {
       isProcessingRef.current = false;
       setEnergyState(newSession.client.getEnergyState() ?? undefined);
       setVoiceState(newSession.client.getVoiceState() ?? undefined);
+      setIdentityInfo(newSession.client.getIdentityInfo() ?? undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
     }
@@ -986,6 +997,7 @@ export function App({ cwd }: AppProps) {
         tokenUsage={tokenUsage}
         energyState={energyState}
         voiceState={voiceState}
+        identityInfo={identityInfo}
         sessionIndex={sessionIndex}
         sessionCount={sessionCount}
         backgroundProcessingCount={backgroundProcessingCount}

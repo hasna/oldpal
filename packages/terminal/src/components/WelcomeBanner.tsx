@@ -19,7 +19,7 @@ export function WelcomeBanner({ version, model, directory }: WelcomeBannerProps)
       <Box>
         <Text color="cyan" bold>{'>'}</Text>
         <Text color="cyan" bold>_ </Text>
-        <Text bold>oldpal</Text>
+        <Text bold>assistants</Text>
         <Text dimColor> (v{version})</Text>
       </Box>
       <Box marginTop={1}>

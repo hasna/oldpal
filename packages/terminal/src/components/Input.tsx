@@ -15,7 +15,7 @@ const COMMANDS = [
   { name: '/skills', description: 'list available skills' },
   { name: '/config', description: 'show configuration' },
   { name: '/connectors', description: 'list available connectors' },
-  { name: '/init', description: 'initialize oldpal in project' },
+  { name: '/init', description: 'initialize assistants in project' },
   { name: '/compact', description: 'summarize to save context' },
   { name: '/memory', description: 'show what AI remembers' },
   { name: '/feedback', description: 'submit feedback on GitHub' },
@@ -24,7 +24,7 @@ const COMMANDS = [
   { name: '/unschedule', description: 'delete a scheduled command' },
   { name: '/pause', description: 'pause a scheduled command' },
   { name: '/resume', description: 'resume a scheduled command' },
-  { name: '/exit', description: 'exit oldpal' },
+  { name: '/exit', description: 'exit assistants' },
 ];
 
 interface SkillInfo {

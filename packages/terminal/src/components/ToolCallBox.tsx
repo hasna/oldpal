@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import type { ToolCall, ToolResult } from '@oldpal/shared';
+import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
 
 interface ToolCallEntry {
   toolCall: ToolCall;

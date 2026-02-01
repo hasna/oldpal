@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import type { SessionInfo } from '@oldpal/core';
+import type { SessionInfo } from '@hasna/assistants-core';
 
 interface SessionSelectorProps {
   sessions: SessionInfo[];

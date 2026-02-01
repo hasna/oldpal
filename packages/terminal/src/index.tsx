@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import React from 'react';
 import { render } from 'ink';
+import { migrateFromOldpal } from '@hasna/assistants-core';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 
@@ -118,18 +119,18 @@ const options = parseArgs(process.argv);
 
 // Handle version
 if (options.version) {
-  console.log(`oldpal v${VERSION}`);
+  console.log(`assistants v${VERSION}`);
   process.exit(0);
 }
 
 // Handle help
 if (options.help) {
   console.log(`
-oldpal - Your personal AI assistant
+assistants - Your personal AI assistant
 
 Usage:
-  oldpal [options]                    Start interactive mode
-  oldpal -p "<prompt>" [options]      Run in headless mode
+  assistants [options]                    Start interactive mode
+  assistants -p "<prompt>" [options]      Run in headless mode
 
 Options:
   -h, --help                   Show this help message
@@ -147,22 +148,22 @@ Headless Mode:
 
 Examples:
   # Ask a question
-  oldpal -p "What does the auth module do?"
+  assistants -p "What does the auth module do?"
 
   # Run with JSON output
-  oldpal -p "Summarize this project" --output-format json
+  assistants -p "Summarize this project" --output-format json
 
   # Stream JSON events
-  oldpal -p "Explain this code" --output-format stream-json
+  assistants -p "Explain this code" --output-format stream-json
 
   # Auto-approve tools
-  oldpal -p "Fix the bug in auth.py" --allowed-tools "Read,Edit,Bash"
+  assistants -p "Fix the bug in auth.py" --allowed-tools "Read,Edit,Bash"
 
   # Get structured output
-  oldpal -p "List all functions" --output-format json --json-schema '{"type":"array","items":{"type":"string"}}'
+  assistants -p "List all functions" --output-format json --json-schema '{"type":"array","items":{"type":"string"}}'
 
   # Continue conversation
-  oldpal -p "What else can you tell me?" --continue
+  assistants -p "What else can you tell me?" --continue
 
 Interactive Mode:
   - Type your message and press Enter to send
@@ -172,6 +173,15 @@ Interactive Mode:
   - Press Ctrl+C to exit
 `);
   process.exit(0);
+}
+
+try {
+  const result = await migrateFromOldpal();
+  if (!result.success && result.errors.length > 0) {
+    console.error(`Migration warning: ${result.errors.join('; ')}`);
+  }
+} catch (error) {
+  console.error(`Migration warning: ${error instanceof Error ? error.message : String(error)}`);
 }
 
 // Headless mode

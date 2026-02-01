@@ -1,5 +1,5 @@
-import { EmbeddedClient, SessionStorage } from '@oldpal/core';
-import type { StreamChunk, TokenUsage, Message } from '@oldpal/shared';
+import { EmbeddedClient, SessionStorage } from '@hasna/assistants-core';
+import type { StreamChunk, TokenUsage, Message } from '@hasna/assistants-shared';
 
 export interface HeadlessOptions {
   prompt: string;
@@ -25,7 +25,7 @@ interface JsonOutput {
 }
 
 /**
- * Run oldpal in headless (non-interactive) mode
+ * Run assistants in headless (non-interactive) mode
  */
 export async function runHeadless(options: HeadlessOptions): Promise<void> {
   const {
