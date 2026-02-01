@@ -17,6 +17,11 @@ function resolveTimeout(resolve: TimeoutResolve): void {
 export class ConnectorBridge {
   private connectors: Map<string, Connector> = new Map();
   private static cache: Map<string, Connector | null> = new Map();
+  private cwd?: string;
+
+  constructor(cwd?: string) {
+    this.cwd = cwd;
+  }
 
   private getHomeDir(): string {
     const envHome = process.env.HOME || process.env.USERPROFILE;
@@ -29,10 +34,12 @@ export class ConnectorBridge {
   private autoDiscoverConnectorNames(): string[] {
     const connectorNames = new Set<string>();
     const pathDirs = (process.env.PATH || '').split(delimiter);
+    const baseCwd = this.cwd || process.cwd();
 
     // Also check common bun/npm global bin locations
     const homeDir = this.getHomeDir();
     const extraDirs = [
+      join(baseCwd, 'node_modules', '.bin'),
       join(homeDir, '.bun', 'bin'),
       join(homeDir, '.npm-global', 'bin'),
       '/usr/local/bin',

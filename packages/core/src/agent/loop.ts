@@ -126,7 +126,7 @@ export class AgentLoop {
     this.context = new AgentContext();
     this.toolRegistry = new ToolRegistry();
     this.toolRegistry.setErrorAggregator(this.errorAggregator);
-    this.connectorBridge = new ConnectorBridge();
+    this.connectorBridge = new ConnectorBridge(this.cwd);
     this.skillLoader = new SkillLoader();
     this.skillExecutor = new SkillExecutor();
     this.hookLoader = new HookLoader();
