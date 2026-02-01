@@ -1,8 +1,8 @@
-# oldpal - Development Guide
+# assistants - Development Guide
 
 ## Project Overview
 
-oldpal is a personal AI assistant that runs in the terminal, uses existing `connect-*` CLI connectors, and supports skills and hooks similar to Claude Code.
+assistants is a personal AI assistant that runs in the terminal, uses existing `connect-*` CLI connectors, and supports skills and hooks similar to Claude Code.
 
 ## Tech Stack
 
@@ -95,7 +95,7 @@ bun run packages/terminal/src/index.tsx
 ## Adding a New Connector
 
 1. Ensure the `connect-{name}` CLI is installed and in PATH
-2. Add the connector name to `config/settings.json` connectors array
+2. Add the connector name to `config/config.json` connectors array
 3. The ConnectorBridge will auto-discover it on startup
 
 ## Adding a New Skill
@@ -106,6 +106,6 @@ bun run packages/terminal/src/index.tsx
 
 ## Adding a New Hook
 
-1. Edit `config/hooks.json` or `.oldpal/hooks.json`
+1. Edit `config/hooks.json` or `.assistants/hooks.json` (legacy: `.oldpal/hooks.json`)
 2. Add hook configuration under the appropriate event
 3. Hooks are loaded on startup and merged from multiple sources

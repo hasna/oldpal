@@ -1,5 +1,5 @@
 {
-  "name": "@oldpal/core",
+  "name": "@hasna/assistants-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",
-    "@oldpal/shared": "workspace:*",
+    "@hasna/assistants-shared": "workspace:*",
     "ajv": "^8.17.1",
     "tiktoken": "^1.0.12"
   },

@@ -1,10 +1,11 @@
 {
-  "name": "@oldpal/terminal",
+  "name": "@hasna/assistants-terminal",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "oldpal": "./src/index.tsx"
+    "assistants": "./src/index.tsx",
+    "ast": "./src/index.tsx"
   },
   "scripts": {
     "dev": "bun run src/index.tsx",
@@ -13,8 +14,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@oldpal/core": "workspace:*",
-    "@oldpal/shared": "workspace:*",
+    "@hasna/assistants-core": "workspace:*",
+    "@hasna/assistants-shared": "workspace:*",
     "chalk": "^5.3.0",
     "ink": "^5.0.1",
     "ink-spinner": "^5.0.0",

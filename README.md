@@ -1,11 +1,11 @@
-# oldpal
+# assistants
 
 Your personal AI assistant - terminal first, connector powered.
 
 ## Installation
 
 ```bash
-bun add -g @hasna/oldpal
+bun add -g @hasna/assistants
 ```
 
 **Requirements:**
@@ -18,7 +18,7 @@ bun add -g @hasna/oldpal
 export ANTHROPIC_API_KEY="your-key"
 
 # Run
-oldpal
+assistants
 ```
 
 Or add to `~/.secrets`:
@@ -35,8 +35,8 @@ export ANTHROPIC_API_KEY="your-key"
 
 ## Configuration
 
-User config: `~/.oldpal/settings.json`
-Project config: `.oldpal/settings.json`
+User config: `~/.assistants/config.json`
+Project config: `.assistants/config.json`
 
 ```json
 {
