@@ -14,12 +14,14 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "paths": {
-      "@oldpal/core": ["./packages/core/src"],
-      "@oldpal/core/*": ["./packages/core/src/*"],
-      "@oldpal/terminal": ["./packages/terminal/src"],
-      "@oldpal/terminal/*": ["./packages/terminal/src/*"],
-      "@oldpal/shared": ["./packages/shared/src"],
-      "@oldpal/shared/*": ["./packages/shared/src/*"]
+      "@hasna/assistants-core": ["./packages/core/src"],
+      "@hasna/assistants-core/*": ["./packages/core/src/*"],
+      "@hasna/assistants-terminal": ["./packages/terminal/src"],
+      "@hasna/assistants-terminal/*": ["./packages/terminal/src/*"],
+      "@hasna/assistants-shared": ["./packages/shared/src"],
+      "@hasna/assistants-shared/*": ["./packages/shared/src/*"],
+      "@hasna/assistants-web": ["./packages/web/src"],
+      "@hasna/assistants-web/*": ["./packages/web/src/*"]
     }
   },
   "exclude": ["node_modules", "dist"]

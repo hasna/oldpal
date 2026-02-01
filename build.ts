@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Build script for oldpal CLI
+ * Build script for assistants CLI
  * Bundles the terminal app into a single distributable file
  */
 
@@ -8,7 +8,7 @@ import { $ } from 'bun';
 
 const outdir = './dist';
 
-console.log('Building oldpal...');
+console.log('Building assistants...');
 
 // Clean dist
 await $`rm -rf ${outdir}`;
@@ -64,7 +64,7 @@ if (!content.startsWith('#!/usr/bin/env bun')) {
 await $`chmod +x ${outputFile}`;
 
 // Copy skills directory
-await $`cp -r .oldpal ${outdir}/.oldpal 2>/dev/null || true`;
+await $`cp -r .assistants ${outdir}/.assistants 2>/dev/null || true`;
 
 // Copy config directory
 await $`cp -r config ${outdir}/config 2>/dev/null || true`;

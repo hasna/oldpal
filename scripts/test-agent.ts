@@ -3,8 +3,8 @@
  * Test script to verify agent functionality without TTY requirements
  */
 
-import { EmbeddedClient } from '@oldpal/core';
-import type { StreamChunk } from '@oldpal/shared';
+import { EmbeddedClient } from '@hasna/assistants-core';
+import type { StreamChunk } from '@hasna/assistants-shared';
 
 async function main() {
   console.log('=== Oldpal Agent Test ===\n');
@@ -72,7 +72,7 @@ async function main() {
   console.log(`   ✓ Total: ${skills.length} skills\n`);
 
   // Test a simple message
-  const testMessage = process.argv[2] || 'Say "Hello from oldpal!" in exactly 5 words.';
+  const testMessage = process.argv[2] || 'Say "Hello from assistants!" in exactly 5 words.';
   console.log(`4. Sending test message: "${testMessage}"`);
   console.log('   Response:');
   console.log('   ---');
