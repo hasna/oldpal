@@ -4,6 +4,10 @@ import type { ToolExecutor } from './registry';
 /**
  * Bash tool - execute shell commands (restricted to safe, read-only operations)
  */
+function killProcess(proc: { kill: () => void }): void {
+  proc.kill();
+}
+
 export class BashTool {
   static readonly tool: Tool = {
     name: 'bash',
@@ -68,9 +72,14 @@ export class BashTool {
     // Git writes
     /\bgit\s+(push|commit|checkout|reset|rebase|merge|pull|stash|cherry-pick|revert)\b/,
     /\bgit\s+add\b/,
+    /\bgit\s+remote\s+(add|set-url|remove|rm|rename)\b/,
+    /\bgit\s+tag\s+(-d|--delete|-f)\b/,
+    /\bgit\s+branch\s+(-d|-D|-m|--delete|--move)\b/,
     // Dangerous pipes
     /\|\s*(bash|sh|zsh|fish)\b/,
     /curl.*\|\s*(bash|sh)/, /wget.*\|\s*(bash|sh)/,
+    // Shell chaining/operators (enforce single command)
+    /[;&]/, /[|]/, /[\r\n]/,
     // File writing via redirection
     />\s*[^|]/, />>/,
     // Process control
@@ -101,9 +110,13 @@ export class BashTool {
 
     // Check if command starts with an allowed prefix
     const commandTrimmed = command.trim().toLowerCase();
-    const isAllowed = this.ALLOWED_COMMANDS.some(allowed =>
-      commandTrimmed.startsWith(allowed.toLowerCase())
-    );
+    let isAllowed = false;
+    for (const allowed of this.ALLOWED_COMMANDS) {
+      if (commandTrimmed.startsWith(allowed.toLowerCase())) {
+        isAllowed = true;
+        break;
+      }
+    }
 
     if (!isAllowed) {
       return `Error: Command not in allowed list. Permitted commands: cat, head, tail, ls, find, grep, wc, file, stat, pwd, which, echo, git status/log/diff/branch/show, connect-*`;
@@ -117,9 +130,7 @@ export class BashTool {
       });
 
       // Set up timeout
-      const timeoutId = setTimeout(() => {
-        proc.kill();
-      }, timeout);
+      const timeoutId = setTimeout(killProcess, timeout, proc);
 
       const [stdout, stderr] = await Promise.all([
         new Response(proc.stdout).text(),
@@ -140,3 +151,7 @@ export class BashTool {
     }
   };
 }
+
+export const __test__ = {
+  killProcess,
+};
