@@ -1,5 +1,6 @@
 import type { Tool, ToolCall, ToolResult } from '@oldpal/shared';
 import { sleep } from '@oldpal/shared';
+import { AssistantError, ErrorAggregator, ErrorCodes, ToolExecutionError } from '../errors';
 
 /**
  * Tool executor function type
@@ -19,12 +20,20 @@ interface RegisteredTool {
  */
 export class ToolRegistry {
   private tools: Map<string, RegisteredTool> = new Map();
+  private errorAggregator?: ErrorAggregator;
 
   /**
    * Register a tool
    */
   register(tool: Tool, executor: ToolExecutor): void {
     this.tools.set(tool.name, { tool, executor });
+  }
+
+  /**
+   * Attach an error aggregator for tool execution errors
+   */
+  setErrorAggregator(aggregator?: ErrorAggregator): void {
+    this.errorAggregator = aggregator;
   }
 
   /**
@@ -66,9 +75,18 @@ export class ToolRegistry {
     const registered = this.tools.get(toolCall.name);
 
     if (!registered) {
+      const error = new ToolExecutionError(`Tool "${toolCall.name}" not found`, {
+        toolName: toolCall.name,
+        toolInput: toolCall.input,
+        code: ErrorCodes.TOOL_NOT_FOUND,
+        recoverable: false,
+        retryable: false,
+        suggestion: 'Check the tool name or list available tools with /tools.',
+      });
+      this.errorAggregator?.record(error);
       return {
         toolCallId: toolCall.id,
-        content: `Error: Tool "${toolCall.name}" not found`,
+        content: formatToolError(error),
         isError: true,
         toolName: toolCall.name,
       };
@@ -83,7 +101,14 @@ export class ToolRegistry {
       const result = await Promise.race([
         registered.executor(toolCall.input),
         sleep(timeoutMs).then(() => {
-          throw new Error(`Tool timeout after ${Math.round(timeoutMs / 1000)}s`);
+          throw new ToolExecutionError(`Tool timeout after ${Math.round(timeoutMs / 1000)}s`, {
+            toolName: toolCall.name,
+            toolInput: toolCall.input,
+            code: ErrorCodes.TOOL_TIMEOUT,
+            recoverable: true,
+            retryable: true,
+            suggestion: 'Try again or increase the timeout.',
+          });
         }),
       ]);
       const isError = isErrorResult(result);
@@ -94,9 +119,13 @@ export class ToolRegistry {
         toolName: toolCall.name,
       };
     } catch (error) {
+      const toolError = normalizeToolError(error, toolCall);
+      if (toolError instanceof AssistantError) {
+        this.errorAggregator?.record(toolError);
+      }
       return {
         toolCallId: toolCall.id,
-        content: `Error executing ${toolCall.name}: ${error instanceof Error ? error.message : String(error)}`,
+        content: formatToolError(toolError),
         isError: true,
         toolName: toolCall.name,
       };
@@ -113,6 +142,26 @@ export class ToolRegistry {
     }
     return Promise.all(tasks);
   }
+}
+
+function normalizeToolError(error: unknown, toolCall: ToolCall): AssistantError {
+  if (error instanceof AssistantError) return error;
+
+  const message = error instanceof Error ? error.message : String(error);
+  return new ToolExecutionError(`Error executing ${toolCall.name}: ${message}`, {
+    toolName: toolCall.name,
+    toolInput: toolCall.input,
+    code: ErrorCodes.TOOL_EXECUTION_FAILED,
+    recoverable: true,
+    retryable: false,
+  });
+}
+
+function formatToolError(error: AssistantError): string {
+  if (error.suggestion) {
+    return `${error.code}: ${error.message}\nSuggestion: ${error.suggestion}`;
+  }
+  return `${error.code}: ${error.message}`;
 }
 
 function isErrorResult(result: string): boolean {

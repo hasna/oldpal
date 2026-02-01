@@ -1,6 +1,7 @@
 import type { Tool } from '@oldpal/shared';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import type { ToolExecutor } from './registry';
+import { ErrorCodes, ToolExecutionError } from '../errors';
 
 function abortController(controller: AbortController): void {
   controller.abort();
@@ -49,13 +50,26 @@ export class WebFetchTool {
         // Validate URL
         const parsedUrl = new URL(currentUrl);
         if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-          return 'Error: Only http/https URLs are supported';
+          throw new ToolExecutionError('Only http/https URLs are supported', {
+            toolName: 'web_fetch',
+            toolInput: input,
+            code: ErrorCodes.TOOL_EXECUTION_FAILED,
+            recoverable: false,
+            retryable: false,
+            suggestion: 'Use a valid http or https URL.',
+          });
         }
 
         // Block local/private IPs for security
       const hostname = parsedUrl.hostname;
       if (await isPrivateHostOrResolved(hostname)) {
-        return 'Error: Cannot fetch from local/private network addresses for security reasons';
+        throw new ToolExecutionError('Cannot fetch from local/private network addresses for security reasons', {
+          toolName: 'web_fetch',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+        });
       }
 
         const controller = new AbortController();
@@ -75,11 +89,23 @@ export class WebFetchTool {
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           const location = response.headers.get('location');
           if (!location) {
-            return 'Error: Redirect response missing Location header';
+            throw new ToolExecutionError('Redirect response missing Location header', {
+              toolName: 'web_fetch',
+              toolInput: input,
+              code: ErrorCodes.TOOL_EXECUTION_FAILED,
+              recoverable: true,
+              retryable: false,
+            });
           }
           redirects += 1;
           if (redirects > 5) {
-            return 'Error: Too many redirects';
+            throw new ToolExecutionError('Too many redirects', {
+              toolName: 'web_fetch',
+              toolInput: input,
+              code: ErrorCodes.TOOL_EXECUTION_FAILED,
+              recoverable: true,
+              retryable: false,
+            });
           }
           currentUrl = new URL(location, currentUrl).toString();
           continue;
@@ -89,7 +115,13 @@ export class WebFetchTool {
       }
 
       if (!response || !response.ok) {
-        return `Error: HTTP ${response.status} ${response.statusText}`;
+        throw new ToolExecutionError(`HTTP ${response.status} ${response.statusText}`, {
+          toolName: 'web_fetch',
+          toolInput: input,
+          code: ErrorCodes.TOOL_EXECUTION_FAILED,
+          recoverable: true,
+          retryable: false,
+        });
       }
 
       const contentType = response.headers.get('content-type') || '';
@@ -99,7 +131,13 @@ export class WebFetchTool {
           const json = await response.json();
           return JSON.stringify(json, null, 2);
         } catch {
-          return 'Error: Response is not valid JSON';
+          throw new ToolExecutionError('Response is not valid JSON', {
+            toolName: 'web_fetch',
+            toolInput: input,
+            code: ErrorCodes.TOOL_EXECUTION_FAILED,
+            recoverable: false,
+            retryable: false,
+          });
         }
       }
 
@@ -125,13 +163,33 @@ export class WebFetchTool {
 
       return text || 'No readable content found on page';
     } catch (error) {
+      if (error instanceof ToolExecutionError) throw error;
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          return `Error: Request timed out after ${timeout}ms`;
+          throw new ToolExecutionError(`Request timed out after ${timeout}ms`, {
+            toolName: 'web_fetch',
+            toolInput: input,
+            code: ErrorCodes.TOOL_TIMEOUT,
+            recoverable: true,
+            retryable: true,
+            suggestion: 'Try again or increase the timeout.',
+          });
         }
-        return `Error: ${error.message}`;
+        throw new ToolExecutionError(error.message, {
+          toolName: 'web_fetch',
+          toolInput: input,
+          code: ErrorCodes.TOOL_EXECUTION_FAILED,
+          recoverable: true,
+          retryable: false,
+        });
       }
-      return `Error: ${String(error)}`;
+      throw new ToolExecutionError(String(error), {
+        toolName: 'web_fetch',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
     }
   };
 }
@@ -175,7 +233,13 @@ export class WebSearchTool {
       });
 
       if (!response.ok) {
-        return `Error: Search request failed with HTTP ${response.status}`;
+        throw new ToolExecutionError(`Search request failed with HTTP ${response.status}`, {
+          toolName: 'web_search',
+          toolInput: input,
+          code: ErrorCodes.TOOL_EXECUTION_FAILED,
+          recoverable: true,
+          retryable: false,
+        });
       }
 
       const html = await response.text();
@@ -201,7 +265,14 @@ export class WebSearchTool {
 
       return output.trim();
     } catch (error) {
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      if (error instanceof ToolExecutionError) throw error;
+      throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
+        toolName: 'web_search',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
     }
   };
 }
@@ -325,13 +396,25 @@ export class CurlTool {
       while (true) {
         const parsedUrl = new URL(currentUrl);
         if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-          return 'Error: Only http/https URLs are supported';
+          throw new ToolExecutionError('Only http/https URLs are supported', {
+            toolName: 'curl',
+            toolInput: input,
+            code: ErrorCodes.TOOL_EXECUTION_FAILED,
+            recoverable: false,
+            retryable: false,
+          });
         }
 
         // Block local/private IPs
       const hostname = parsedUrl.hostname;
       if (await isPrivateHostOrResolved(hostname)) {
-        return 'Error: Cannot fetch from local/private network addresses for security reasons';
+        throw new ToolExecutionError('Cannot fetch from local/private network addresses for security reasons', {
+          toolName: 'curl',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+        });
       }
 
         const controller = new AbortController();
@@ -352,15 +435,33 @@ export class CurlTool {
 
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           if (!['GET', 'HEAD'].includes(method)) {
-            return `Error: Redirects are only supported for GET/HEAD requests`;
+            throw new ToolExecutionError('Redirects are only supported for GET/HEAD requests', {
+              toolName: 'curl',
+              toolInput: input,
+              code: ErrorCodes.TOOL_EXECUTION_FAILED,
+              recoverable: false,
+              retryable: false,
+            });
           }
           const location = response.headers.get('location');
           if (!location) {
-            return 'Error: Redirect response missing Location header';
+            throw new ToolExecutionError('Redirect response missing Location header', {
+              toolName: 'curl',
+              toolInput: input,
+              code: ErrorCodes.TOOL_EXECUTION_FAILED,
+              recoverable: true,
+              retryable: false,
+            });
           }
           redirects += 1;
           if (redirects > 5) {
-            return 'Error: Too many redirects';
+            throw new ToolExecutionError('Too many redirects', {
+              toolName: 'curl',
+              toolInput: input,
+              code: ErrorCodes.TOOL_EXECUTION_FAILED,
+              recoverable: true,
+              retryable: false,
+            });
           }
           currentUrl = new URL(location, currentUrl).toString();
           continue;
@@ -396,13 +497,33 @@ export class CurlTool {
       const statusLine = `HTTP ${response.status} ${response.statusText}`;
       return `${statusLine}\n\n${responseBody || '(empty response)'}`;
     } catch (error) {
+      if (error instanceof ToolExecutionError) throw error;
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          return `Error: Request timed out after ${timeout}ms`;
+          throw new ToolExecutionError(`Request timed out after ${timeout}ms`, {
+            toolName: 'curl',
+            toolInput: input,
+            code: ErrorCodes.TOOL_TIMEOUT,
+            recoverable: true,
+            retryable: true,
+            suggestion: 'Try again or increase the timeout.',
+          });
         }
-        return `Error: ${error.message}`;
+        throw new ToolExecutionError(error.message, {
+          toolName: 'curl',
+          toolInput: input,
+          code: ErrorCodes.TOOL_EXECUTION_FAILED,
+          recoverable: true,
+          retryable: false,
+        });
       }
-      return `Error: ${String(error)}`;
+      throw new ToolExecutionError(String(error), {
+        toolName: 'curl',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
     }
   };
 }

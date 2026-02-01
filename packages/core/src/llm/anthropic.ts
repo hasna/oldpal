@@ -5,6 +5,8 @@ import { join } from 'path';
 import type { LLMClient } from './client';
 import type { Message, Tool, StreamChunk, LLMConfig, ToolCall } from '@oldpal/shared';
 import { generateId } from '@oldpal/shared';
+import { ErrorCodes, LLMError } from '../errors';
+import { LLMRetryConfig, withRetry } from '../utils/retry';
 
 /**
  * Load API key from ~/.secrets file if not in environment
@@ -72,13 +74,25 @@ export class AnthropicClient implements LLMClient {
           ? `${this.getDefaultSystemPrompt()}\n\n---\n\n${systemPrompt}`
           : this.getDefaultSystemPrompt();
 
-      const stream = this.client.messages.stream({
-        model: this.model,
-        max_tokens: this.maxTokens,
-        system: combinedSystem,
-        messages: anthropicMessages,
-        tools: anthropicTools,
-      });
+      const stream = await withRetry(
+        async () => {
+          try {
+            return this.client.messages.stream({
+              model: this.model,
+              max_tokens: this.maxTokens,
+              system: combinedSystem,
+              messages: anthropicMessages,
+              tools: anthropicTools,
+            });
+          } catch (error) {
+            throw toLLMError(error);
+          }
+        },
+        {
+          ...LLMRetryConfig,
+          retryOn: (error) => error instanceof LLMError && error.retryable,
+        }
+      );
 
       let currentToolCall: Partial<ToolCall> | null = null;
       let toolInputJson = '';
@@ -134,9 +148,10 @@ export class AnthropicClient implements LLMClient {
         };
       }
     } catch (error) {
+      const llmError = toLLMError(error);
       yield {
         type: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        error: formatLLMError(llmError),
       };
     }
   }
@@ -234,4 +249,48 @@ Guidelines:
 
 Current date: ${new Date().toISOString().split('T')[0]}`;
   }
+}
+
+function toLLMError(error: unknown): LLMError {
+  if (error instanceof LLMError) return error;
+
+  const message = error instanceof Error ? error.message : String(error);
+  const statusRaw = (error as { status?: unknown; statusCode?: unknown } | null)?.status ??
+    (error as { statusCode?: unknown } | null)?.statusCode;
+  const statusCode = typeof statusRaw === 'number' ? statusRaw : undefined;
+
+  const rateLimited = statusCode === 429 || /rate limit/i.test(message);
+  const contextTooLong = /context|max tokens|too long/i.test(message);
+
+  if (rateLimited) {
+    return new LLMError(message, {
+      code: ErrorCodes.LLM_RATE_LIMITED,
+      statusCode,
+      rateLimited: true,
+      retryable: true,
+      suggestion: 'Wait a moment and retry the request.',
+    });
+  }
+
+  if (contextTooLong) {
+    return new LLMError(message, {
+      code: ErrorCodes.LLM_CONTEXT_TOO_LONG,
+      statusCode,
+      retryable: false,
+      suggestion: 'Try shortening the conversation or use /compact.',
+    });
+  }
+
+  return new LLMError(message, {
+    code: ErrorCodes.LLM_API_ERROR,
+    statusCode,
+    retryable: false,
+  });
+}
+
+function formatLLMError(error: LLMError): string {
+  if (error.suggestion) {
+    return `${error.code}: ${error.message}\nSuggestion: ${error.suggestion}`;
+  }
+  return `${error.code}: ${error.message}`;
 }

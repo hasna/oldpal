@@ -11,6 +11,8 @@ import { ProcessingIndicator } from './ProcessingIndicator';
 import { WelcomeBanner } from './WelcomeBanner';
 import { SessionSelector } from './SessionSelector';
 
+const SHOW_ERROR_CODES = process.env.OLDPAL_DEBUG === '1';
+
 // Format tool name for compact display
 function formatToolName(toolCall: ToolCall): string {
   const { name, input } = toolCall;
@@ -35,6 +37,24 @@ function formatToolName(toolCall: ToolCall): string {
     default:
       return name;
   }
+}
+
+function parseErrorMessage(error: string): { code?: string; message: string; suggestion?: string } {
+  const lines = error.split('\n');
+  const suggestionLine = lines.find((line) => line.toLowerCase().startsWith('suggestion:'));
+  const suggestion = suggestionLine ? suggestionLine.replace(/^suggestion:\s*/i, '').trim() : undefined;
+  const mainLines = suggestionLine ? lines.filter((line) => line !== suggestionLine) : lines;
+  let message = mainLines.join('\n').trim();
+  let code: string | undefined;
+  const index = message.indexOf(':');
+  if (index > 0) {
+    const candidate = message.slice(0, index).trim();
+    if (/^[A-Z0-9_]+$/.test(candidate)) {
+      code = candidate;
+      message = message.slice(index + 1).trim();
+    }
+  }
+  return { code, message, suggestion };
 }
 
 interface AppProps {
@@ -910,11 +930,19 @@ export function App({ cwd }: AppProps) {
       )}
 
       {/* Error */}
-      {error && (
-        <Box marginY={1}>
-          <Text color="red">Error: {error}</Text>
-        </Box>
-      )}
+      {error && (() => {
+        const parsed = parseErrorMessage(error);
+        const severity = parsed.code && /TIMEOUT|RATE_LIMITED/.test(parsed.code) ? 'yellow' : 'red';
+        const prefix = SHOW_ERROR_CODES && parsed.code ? `${parsed.code}: ` : '';
+        return (
+          <Box marginY={1} flexDirection="column">
+            <Text color={severity}>{prefix}{parsed.message}</Text>
+            {parsed.suggestion && (
+              <Text color={severity}>Suggestion: {parsed.suggestion}</Text>
+            )}
+          </Box>
+        );
+      })()}
 
       {/* Processing indicator */}
       <ProcessingIndicator

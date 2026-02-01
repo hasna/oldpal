@@ -373,6 +373,16 @@ export class BuiltinCommands {
         const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
         message += `\n  [${bar}] ${usedPercent}%\n`;
 
+        const errorStats = context.getErrorStats?.() ?? [];
+        if (errorStats.length > 0) {
+          message += '\n**Recent Errors:**\n';
+          message += '| Code | Count | Last Occurrence |\n';
+          message += '| --- | --- | --- |\n';
+          for (const stat of errorStats.slice(0, 5)) {
+            message += `| ${stat.code} | ${stat.count} | ${stat.lastOccurrence} |\n`;
+          }
+        }
+
         context.emit('text', message);
         context.emit('done');
         return { handled: true };

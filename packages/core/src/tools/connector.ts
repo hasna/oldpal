@@ -3,6 +3,7 @@ import type { ToolExecutor, ToolRegistry } from './registry';
 import { homedir } from 'os';
 import { join, delimiter } from 'path';
 import { readdirSync, statSync } from 'fs';
+import { ConnectorError, ErrorCodes } from '../errors';
 
 type TimeoutResolve = (value: { exitCode: number }) => void;
 
@@ -413,18 +414,41 @@ export class ConnectorBridge {
         clearTimeout(timer);
 
         if (timedOut) {
-          return `Error: command timed out after ${Math.round((Number.isFinite(timeoutMs) ? timeoutMs : 15000) / 1000)}s.`;
+          throw new ConnectorError(
+            `Command timed out after ${Math.round((Number.isFinite(timeoutMs) ? timeoutMs : 15000) / 1000)}s.`,
+            {
+              connectorName: connector.name,
+              command,
+              code: ErrorCodes.CONNECTOR_EXECUTION_FAILED,
+              recoverable: true,
+              retryable: true,
+              suggestion: 'Try again or increase the timeout.',
+            }
+          );
         }
 
         if (exitCode !== 0) {
           const stderrText = stderr.toString().trim();
           const stdoutText = stdout.toString().trim();
-          return `Error (exit ${exitCode}): ${stderrText || stdoutText || 'Command failed'}`;
+          throw new ConnectorError(`Exit ${exitCode}: ${stderrText || stdoutText || 'Command failed'}`, {
+            connectorName: connector.name,
+            command,
+            code: ErrorCodes.CONNECTOR_EXECUTION_FAILED,
+            recoverable: true,
+            retryable: false,
+          });
         }
 
         return stdout.toString().trim() || 'Command completed successfully';
       } catch (error) {
-        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+        if (error instanceof ConnectorError) throw error;
+        throw new ConnectorError(error instanceof Error ? error.message : String(error), {
+          connectorName: connector.name,
+          command,
+          code: ErrorCodes.CONNECTOR_EXECUTION_FAILED,
+          recoverable: true,
+          retryable: false,
+        });
       }
     };
   }

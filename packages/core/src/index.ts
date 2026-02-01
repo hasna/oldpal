@@ -51,5 +51,14 @@ export type { SessionInfo, PersistedSession } from './sessions/registry';
 export { Logger, SessionStorage, initOldpalDir } from './logger';
 export type { SessionData, SavedSessionInfo } from './logger';
 
+// Errors
+export * from './errors';
+
+// Utils
+export * from './utils/retry';
+
+// Errors
+export * from './errors';
+
 // Re-export shared types
 export * from '@oldpal/shared';

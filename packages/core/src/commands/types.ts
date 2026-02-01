@@ -1,4 +1,5 @@
 import type { Tool, TokenUsage } from '@oldpal/shared';
+import type { ErrorStats } from '../errors';
 
 // Re-export TokenUsage from shared
 export type { TokenUsage } from '@oldpal/shared';
@@ -58,6 +59,7 @@ export interface CommandContext {
   tools: Tool[];
   skills: Array<{ name: string; description: string; argumentHint?: string }>;
   connectors: ConnectorInfo[];
+  getErrorStats?: () => ErrorStats[];
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;
   emit: (type: 'text' | 'done' | 'error', content?: string) => void;
@@ -82,4 +84,3 @@ export interface CommandResult {
   /** Session number to switch to (1-based) */
   sessionNumber?: number;
 }
-

@@ -17,6 +17,7 @@ import { HookExecutor } from '../hooks/executor';
 import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext } from '../commands';
 import { createLLMClient, type LLMClient } from '../llm/client';
 import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir } from '../config';
+import { AssistantError, ErrorAggregator, ErrorCodes, type ErrorCode } from '../errors';
 import {
   acquireScheduleLock,
   DEFAULT_LOCK_TTL_MS,
@@ -68,6 +69,7 @@ export class AgentLoop {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private scheduledQueue: ScheduledCommand[] = [];
   private drainingScheduled = false;
+  private errorAggregator = new ErrorAggregator();
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -80,6 +82,7 @@ export class AgentLoop {
     this.sessionId = options.sessionId || generateId();
     this.context = new AgentContext();
     this.toolRegistry = new ToolRegistry();
+    this.toolRegistry.setErrorAggregator(this.errorAggregator);
     this.connectorBridge = new ConnectorBridge();
     this.skillLoader = new SkillLoader();
     this.skillExecutor = new SkillExecutor();
@@ -304,6 +307,7 @@ export class AgentLoop {
             // Update token usage
             this.updateTokenUsage(chunk.usage);
           } else if (chunk.type === 'error') {
+            this.recordLLMError(chunk.error);
             streamError = new Error(chunk.error || 'LLM stream error');
             break;
           }
@@ -514,9 +518,11 @@ export class AgentLoop {
         } else if (type === 'done') {
           this.emit({ type: 'done' });
         } else if (type === 'error' && content) {
+          this.recordLLMError(content);
           this.emit({ type: 'error', error: content });
         }
       },
+      getErrorStats: () => this.errorAggregator.getStats(),
     };
 
     const result = await this.commandExecutor.execute(message, context);
@@ -526,6 +532,26 @@ export class AgentLoop {
     }
 
     return result;
+  }
+
+  private recordLLMError(message?: string): void {
+    const text = message || 'LLM error';
+    const parsed = parseErrorCode(text);
+    if (parsed) {
+      this.errorAggregator.record(new AssistantError(parsed.message, {
+        code: parsed.code,
+        recoverable: true,
+        retryable: false,
+        userFacing: true,
+      }));
+      return;
+    }
+    this.errorAggregator.record(new AssistantError(text, {
+      code: ErrorCodes.LLM_API_ERROR,
+      recoverable: true,
+      retryable: false,
+      userFacing: true,
+    }));
   }
 
   /**
@@ -828,4 +854,14 @@ export class AgentLoop {
     if (!allowed) return true;
     return allowed.has(name.toLowerCase());
   }
+}
+
+function parseErrorCode(message: string): { code: ErrorCode; message: string } | null {
+  const index = message.indexOf(':');
+  if (index === -1) return null;
+  const codeCandidate = message.slice(0, index).trim() as ErrorCode;
+  const rest = message.slice(index + 1).trim();
+  const codes = Object.values(ErrorCodes) as ErrorCode[];
+  if (!codes.includes(codeCandidate)) return null;
+  return { code: codeCandidate, message: rest || message };
 }

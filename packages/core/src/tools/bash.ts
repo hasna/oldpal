@@ -1,5 +1,6 @@
 import type { Tool } from '@oldpal/shared';
 import type { ToolExecutor } from './registry';
+import { ErrorCodes, ToolExecutionError } from '../errors';
 
 /**
  * Bash tool - execute shell commands (restricted to safe, read-only operations)
@@ -106,7 +107,17 @@ export class BashTool {
     // Check against blocked patterns
     for (const pattern of this.BLOCKED_PATTERNS) {
       if (pattern.test(commandForChecks)) {
-        return `Error: This command is not allowed. Only read-only commands are permitted (ls, cat, grep, find, git status/log/diff, etc.)`;
+        throw new ToolExecutionError(
+          'This command is not allowed. Only read-only commands are permitted (ls, cat, grep, find, git status/log/diff, etc.)',
+          {
+            toolName: 'bash',
+            toolInput: input,
+            code: ErrorCodes.TOOL_PERMISSION_DENIED,
+            recoverable: false,
+            retryable: false,
+            suggestion: 'Use a read-only command from the allowed list.',
+          }
+        );
       }
     }
 
@@ -121,7 +132,17 @@ export class BashTool {
     }
 
     if (!isAllowed) {
-      return `Error: Command not in allowed list. Permitted commands: cat, head, tail, ls, find, grep, wc, file, stat, pwd, which, echo, git status/log/diff/branch/show, connect-*`;
+      throw new ToolExecutionError(
+        'Command not in allowed list. Permitted commands: cat, head, tail, ls, find, grep, wc, file, stat, pwd, which, echo, git status/log/diff/branch/show, connect-*',
+        {
+          toolName: 'bash',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Use a permitted read-only command.',
+        }
+      );
     }
 
     try {
@@ -144,12 +165,25 @@ export class BashTool {
       const exitCode = await proc.exited;
 
       if (exitCode !== 0) {
-        return `Exit code ${exitCode}\n${stderr || stdout}`.trim();
+        throw new ToolExecutionError(`Exit code ${exitCode}\n${stderr || stdout}`.trim(), {
+          toolName: 'bash',
+          toolInput: input,
+          code: ErrorCodes.TOOL_EXECUTION_FAILED,
+          recoverable: true,
+          retryable: false,
+        });
       }
 
       return stdout.trim() || 'Command completed successfully (no output)';
     } catch (error) {
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      if (error instanceof ToolExecutionError) throw error;
+      throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
+        toolName: 'bash',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
     }
   };
 }

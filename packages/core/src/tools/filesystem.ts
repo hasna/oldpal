@@ -3,6 +3,7 @@ import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname, sep } from 'path';
 import { getProjectConfigDir } from '../config';
 import { Glob } from 'bun';
+import { ErrorCodes, ToolExecutionError } from '../errors';
 
 // Session ID for temp folder (set during registration)
 let currentSessionId: string = 'default';
@@ -89,7 +90,14 @@ export class FilesystemTools {
     try {
       const file = Bun.file(path);
       if (!(await file.exists())) {
-        return `Error: File not found: ${path}`;
+        throw new ToolExecutionError(`File not found: ${path}`, {
+          toolName: 'read',
+          toolInput: input,
+          code: ErrorCodes.TOOL_EXECUTION_FAILED,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Check the file path and try again.',
+        });
       }
 
       const content = await file.text();
@@ -108,7 +116,14 @@ export class FilesystemTools {
 
       return formatted || '(empty file)';
     } catch (error) {
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      if (error instanceof ToolExecutionError) throw error;
+      throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
+        toolName: 'read',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
     }
   };
 
@@ -148,7 +163,14 @@ export class FilesystemTools {
     const scriptsFolder = getScriptsFolder(baseCwd);
 
     if (!filename || !filename.trim()) {
-      return 'Error: filename is required';
+      throw new ToolExecutionError('Filename is required', {
+        toolName: 'write',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: false,
+        retryable: false,
+        suggestion: 'Provide a filename and try again.',
+      });
     }
 
     // Sanitize filename - remove any path traversal attempts
@@ -160,7 +182,14 @@ export class FilesystemTools {
 
     // Double check we're in scripts folder
     if (!isInScriptsFolder(path, baseCwd)) {
-      return `Error: Cannot write outside scripts folder. Files are saved to ${scriptsFolder}`;
+      throw new ToolExecutionError(`Cannot write outside scripts folder. Files are saved to ${scriptsFolder}`, {
+        toolName: 'write',
+        toolInput: input,
+        code: ErrorCodes.TOOL_PERMISSION_DENIED,
+        recoverable: false,
+        retryable: false,
+        suggestion: 'Write only within the .oldpal/scripts/ folder.',
+      });
     }
 
     try {
@@ -171,7 +200,14 @@ export class FilesystemTools {
       await Bun.write(path, content);
       return `Successfully wrote ${content.length} characters to ${path}`;
     } catch (error) {
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      if (error instanceof ToolExecutionError) throw error;
+      throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
+        toolName: 'write',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
     }
   };
 
@@ -222,7 +258,14 @@ export class FilesystemTools {
 
       return matches.join('\n');
     } catch (error) {
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      if (error instanceof ToolExecutionError) throw error;
+      throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
+        toolName: 'glob',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
     }
   };
 
@@ -302,7 +345,14 @@ export class FilesystemTools {
 
       return results.join('\n');
     } catch (error) {
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      if (error instanceof ToolExecutionError) throw error;
+      throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
+        toolName: 'grep',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
     }
   };
 }
