@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import { SessionRegistry, type SessionInfo } from '@oldpal/core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage } from '@oldpal/shared';
@@ -59,8 +59,60 @@ interface SessionUIState {
   tokenUsage: TokenUsage | undefined;
   processingStartTime: number | undefined;
   currentTurnTokens: number;
-  messageQueue: string[];
   error: string | null;
+}
+
+interface QueuedMessage {
+  id: string;
+  sessionId: string;
+  content: string;
+  queuedAt: number;
+}
+
+const MESSAGE_CHUNK_LINES = 12;
+const MESSAGE_WRAP_CHARS = 120;
+
+function buildDisplayMessages(messages: Message[], chunkLines: number): Message[] {
+  const display: Message[] = [];
+
+  for (const msg of messages) {
+    const content = msg.content ?? '';
+    const shouldChunk = msg.role === 'assistant' && content.trim() !== '';
+    if (!shouldChunk) {
+      display.push(msg);
+      continue;
+    }
+
+    const rawLines = content.split('\n');
+    const lines: string[] = [];
+    for (const line of rawLines) {
+      if (line.length <= MESSAGE_WRAP_CHARS) {
+        lines.push(line);
+        continue;
+      }
+      for (let i = 0; i < line.length; i += MESSAGE_WRAP_CHARS) {
+        lines.push(line.slice(i, i + MESSAGE_WRAP_CHARS));
+      }
+    }
+    if (lines.length <= chunkLines) {
+      display.push(msg);
+      continue;
+    }
+
+    const totalChunks = Math.ceil(lines.length / chunkLines);
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkContent = lines.slice(i * chunkLines, (i + 1) * chunkLines).join('\n');
+      display.push({
+        ...msg,
+        id: `${msg.id}::chunk-${i}`,
+        content: chunkContent,
+        toolCalls: i === totalChunks - 1 ? msg.toolCalls : undefined,
+        toolResults: i === totalChunks - 1 ? msg.toolResults : undefined,
+      });
+    }
+  }
+
+  return display;
 }
 
 export function App({ cwd }: AppProps) {
@@ -84,7 +136,7 @@ export function App({ cwd }: AppProps) {
   const [currentToolCall, setCurrentToolCall] = useState<ToolCall | undefined>();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [messageQueue, setMessageQueue] = useState<string[]>([]);
+  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | undefined>();
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
@@ -101,6 +153,11 @@ export function App({ cwd }: AppProps) {
   const toolResultsRef = useRef<ToolResult[]>([]);
   const activityLogRef = useRef<ActivityEntry[]>([]);
   const skipNextDoneRef = useRef(false);
+  const isProcessingRef = useRef(isProcessing);
+
+  useEffect(() => {
+    isProcessingRef.current = isProcessing;
+  }, [isProcessing]);
 
   const buildFullResponse = useCallback(() => {
     const parts = activityLogRef.current
@@ -194,11 +251,10 @@ export function App({ cwd }: AppProps) {
         tokenUsage,
         processingStartTime,
         currentTurnTokens,
-        messageQueue,
         error,
       });
     }
-  }, [activeSessionId, messages, tokenUsage, processingStartTime, currentTurnTokens, messageQueue, error]);
+  }, [activeSessionId, messages, tokenUsage, processingStartTime, currentTurnTokens, error]);
 
   // Load session UI state
   const loadSessionState = useCallback((sessionId: string) => {
@@ -212,7 +268,6 @@ export function App({ cwd }: AppProps) {
       setTokenUsage(state.tokenUsage);
       setProcessingStartTime(state.processingStartTime);
       setCurrentTurnTokens(state.currentTurnTokens);
-      setMessageQueue(state.messageQueue);
       setError(state.error);
     } else {
       // New session - reset state
@@ -224,7 +279,6 @@ export function App({ cwd }: AppProps) {
       setTokenUsage(undefined);
       setProcessingStartTime(undefined);
       setCurrentTurnTokens(0);
-      setMessageQueue([]);
       setError(null);
     }
     setScrollOffset(0);
@@ -263,6 +317,23 @@ export function App({ cwd }: AppProps) {
       setActivityLog(activityLogRef.current);
       setCurrentToolCall(chunk.toolCall);
     } else if (chunk.type === 'tool_result' && chunk.toolResult) {
+      if (!isProcessingRef.current) {
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last.role !== 'assistant') return prev;
+          const existing = last.toolResults || [];
+          if (existing.some((r) => r.toolCallId === chunk.toolResult!.toolCallId)) {
+            return prev;
+          }
+          const updated: Message = {
+            ...last,
+            toolResults: [...existing, chunk.toolResult!],
+          };
+          return [...prev.slice(0, -1), updated];
+        });
+        return;
+      }
       // Track tool result
       toolResultsRef.current.push(chunk.toolResult);
       const resultEntry = {
@@ -282,6 +353,7 @@ export function App({ cwd }: AppProps) {
       resetTurnState();
       setError(chunk.error);
       setIsProcessing(false);
+      isProcessingRef.current = false;
     } else if (chunk.type === 'exit') {
       // Exit command was issued
       registry.closeAll();
@@ -297,6 +369,7 @@ export function App({ cwd }: AppProps) {
         finalizeResponse();
       }
       setIsProcessing(false);
+      isProcessingRef.current = false;
       // Defer clearing streaming state to avoid flicker where output disappears
       queueMicrotask(() => {
         resetTurnState();
@@ -324,6 +397,7 @@ export function App({ cwd }: AppProps) {
           resetTurnState();
           setError(err.message);
           setIsProcessing(false);
+          isProcessingRef.current = false;
         });
 
         // Create first session
@@ -356,19 +430,33 @@ export function App({ cwd }: AppProps) {
   // Process queued messages
   const processQueue = useCallback(async () => {
     const activeSession = registryRef.current.getActiveSession();
-    if (!activeSession || messageQueue.length === 0) return;
+    if (!activeSession || !activeSessionId) return;
 
-    const nextMessage = messageQueue[0];
-    setMessageQueue((prev) => prev.slice(1));
+    let nextMessage: QueuedMessage | undefined;
+    setMessageQueue((prev) => {
+      const idx = prev.findIndex((msg) => msg.sessionId === activeSessionId);
+      if (idx === -1) {
+        return prev;
+      }
+      nextMessage = prev[idx];
+      return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+    });
 
-    // Add user message
+    if (!nextMessage) return;
+
+    // Add user message if not already shown (queued messages are pre-rendered)
     const userMessage: Message = {
-      id: generateId(),
+      id: nextMessage.id,
       role: 'user',
-      content: nextMessage,
-      timestamp: now(),
+      content: nextMessage.content,
+      timestamp: nextMessage.queuedAt,
     };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => {
+      if (prev.some((msg) => msg.id === userMessage.id)) {
+        return prev;
+      }
+      return [...prev, userMessage];
+    });
 
     // Reset state
     skipNextDoneRef.current = false;
@@ -383,24 +471,35 @@ export function App({ cwd }: AppProps) {
     setProcessingStartTime(Date.now());
     setCurrentTurnTokens(0);
     setIsProcessing(true);
+    isProcessingRef.current = true;
 
     registryRef.current.setProcessing(activeSession.id, true);
-    await activeSession.client.send(nextMessage);
-  }, [messageQueue]);
+    await activeSession.client.send(nextMessage.content);
+  }, [activeSessionId]);
+
+  const activeQueue = activeSessionId
+    ? messageQueue.filter((msg) => msg.sessionId === activeSessionId)
+    : [];
+  const queuedMessageIds = useMemo(
+    () => new Set(activeQueue.map((msg) => msg.id)),
+    [activeQueue]
+  );
+
+  const displayMessages = useMemo(() => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES), [messages]);
 
   // Process queue when not processing
   useEffect(() => {
-    if (!isProcessing && messageQueue.length > 0) {
+    if (!isProcessing && activeQueue.length > 0) {
       processQueue();
     }
-  }, [isProcessing, messageQueue.length, processQueue]);
+  }, [isProcessing, activeQueue.length, processQueue]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (autoScroll) {
       setScrollOffset(0);
     }
-  }, [messages.length, autoScroll]);
+  }, [displayMessages.length, autoScroll]);
 
   // Max visible messages - reduce when processing to prevent overflow
   const baseMaxVisible = 10;
@@ -433,6 +532,7 @@ export function App({ cwd }: AppProps) {
     const session = registry.getSession(sessionId);
     if (session) {
       setIsProcessing(session.isProcessing);
+      isProcessingRef.current = session.isProcessing;
     }
 
     // Now switch session in registry (may replay buffered chunks to the reset state)
@@ -452,13 +552,14 @@ export function App({ cwd }: AppProps) {
       // Create new session
       const newSession = await registry.createSession(cwd);
 
-      // Initialize empty state BEFORE switching (ensures clean slate)
-      loadSessionState(newSession.id);
-      setIsProcessing(false);
-
       // Now switch to new session
       await registry.switchSession(newSession.id);
       setActiveSessionId(newSession.id);
+
+      // Initialize empty state AFTER switching (prevents old-session chunks from repopulating UI)
+      loadSessionState(newSession.id);
+      setIsProcessing(false);
+      isProcessingRef.current = false;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
     }
@@ -485,6 +586,7 @@ export function App({ cwd }: AppProps) {
         resetTurnState();
         registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
+        isProcessingRef.current = false;
       } else {
         registry.closeAll();
         exit();
@@ -501,13 +603,14 @@ export function App({ cwd }: AppProps) {
         resetTurnState();
         registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
+        isProcessingRef.current = false;
       }
     }
 
     // Page Up: scroll up through messages
     if (key.pageUp || (key.shift && key.upArrow)) {
       setScrollOffset((prev) => {
-        const maxOffset = Math.max(0, messages.length - maxVisibleMessages);
+        const maxOffset = Math.max(0, displayMessages.length - maxVisibleMessages);
         const newOffset = Math.min(prev + 3, maxOffset);
         if (newOffset > 0) setAutoScroll(false);
         return newOffset;
@@ -525,7 +628,7 @@ export function App({ cwd }: AppProps) {
 
     // Home: scroll to top
     if (key.ctrl && input === 'u') {
-      const maxOffset = Math.max(0, messages.length - maxVisibleMessages);
+      const maxOffset = Math.max(0, displayMessages.length - maxVisibleMessages);
       setScrollOffset(maxOffset);
       setAutoScroll(false);
     }
@@ -573,7 +676,21 @@ export function App({ cwd }: AppProps) {
 
       // Queue mode: add to queue for later
       if (mode === 'queue' || (isProcessing && mode === 'normal')) {
-        setMessageQueue((prev) => [...prev, trimmedInput]);
+        if (!activeSessionId) return;
+        const queuedId = generateId();
+        setMessageQueue((prev) => [
+          ...prev,
+          { id: queuedId, sessionId: activeSessionId, content: trimmedInput, queuedAt: now() },
+        ]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: queuedId,
+            role: 'user',
+            content: trimmedInput,
+            timestamp: now(),
+          },
+        ]);
         return;
       }
 
@@ -587,6 +704,7 @@ export function App({ cwd }: AppProps) {
         }
         resetTurnState();
         setIsProcessing(false);
+        isProcessingRef.current = false;
         // Small delay to ensure stop is processed
         await new Promise((r) => setTimeout(r, 100));
       }
@@ -598,7 +716,12 @@ export function App({ cwd }: AppProps) {
         content: trimmedInput,
         timestamp: now(),
       };
-      setMessages((prev) => [...prev, userMessage]);
+      setMessages((prev) => {
+        if (prev.some((msg) => msg.id === userMessage.id)) {
+          return prev;
+        }
+        return [...prev, userMessage];
+      });
 
       // Reset state
       skipNextDoneRef.current = false;
@@ -613,6 +736,7 @@ export function App({ cwd }: AppProps) {
       setProcessingStartTime(Date.now());
       setCurrentTurnTokens(0);
       setIsProcessing(true);
+      isProcessingRef.current = true;
 
       // Mark session as processing
       registry.setProcessing(activeSession.id, true);
@@ -629,6 +753,7 @@ export function App({ cwd }: AppProps) {
       handleSessionSwitch,
       finalizeResponse,
       resetTurnState,
+      activeSessionId,
     ]
   );
 
@@ -668,6 +793,12 @@ export function App({ cwd }: AppProps) {
   // Check if currently thinking (no response and no tool calls yet)
   const isThinking = isProcessing && !currentResponse && !currentToolCall && toolCallEntries.length === 0;
 
+  const MAX_QUEUED_PREVIEW = 3;
+  const truncateQueued = (text: string, maxLen: number = 80) => {
+    if (text.length <= maxLen) return text;
+    return text.slice(0, maxLen - 3) + '...';
+  };
+
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
 
@@ -701,11 +832,12 @@ export function App({ cwd }: AppProps) {
       {/* Messages - key forces remount on session switch for clean state */}
       <Messages
         key={activeSessionId || 'default'}
-        messages={messages}
+        messages={displayMessages}
         currentResponse={isProcessing ? currentResponse : undefined}
         currentToolCall={undefined}
         lastToolResult={undefined}
         activityLog={isProcessing ? activityLog : []}
+        queuedMessageIds={queuedMessageIds}
         scrollOffset={scrollOffset}
         maxVisible={maxVisibleMessages}
       />
@@ -728,11 +860,19 @@ export function App({ cwd }: AppProps) {
       )}
 
       {/* Queue indicator */}
-      {messageQueue.length > 0 && (
-        <Box marginY={1}>
+      {activeQueue.length > 0 && (
+        <Box marginY={1} flexDirection="column">
           <Text dimColor>
-            {messageQueue.length} message{messageQueue.length > 1 ? 's' : ''} queued
+            {activeQueue.length} message{activeQueue.length > 1 ? 's' : ''} queued
           </Text>
+          {activeQueue.slice(0, MAX_QUEUED_PREVIEW).map((queued) => (
+            <Box key={queued.id} marginLeft={2}>
+              <Text dimColor>❯ {truncateQueued(queued.content)}</Text>
+            </Box>
+          ))}
+          {activeQueue.length > MAX_QUEUED_PREVIEW && (
+            <Text dimColor>  ... and {activeQueue.length - MAX_QUEUED_PREVIEW} more</Text>
+          )}
         </Box>
       )}
 
@@ -755,7 +895,7 @@ export function App({ cwd }: AppProps) {
       <Input
         onSubmit={handleSubmit}
         isProcessing={isProcessing}
-        queueLength={messageQueue.length}
+        queueLength={activeQueue.length}
         skills={skills}
       />
 
@@ -763,11 +903,13 @@ export function App({ cwd }: AppProps) {
       <Status
         isProcessing={isProcessing}
         cwd={activeSession?.cwd || cwd}
-        queueLength={messageQueue.length}
+        queueLength={activeQueue.length}
         tokenUsage={tokenUsage}
         sessionIndex={sessionIndex}
         sessionCount={sessionCount}
         backgroundProcessingCount={backgroundProcessingCount}
+        sessionId={activeSessionId}
+        processingStartTime={processingStartTime}
       />
     </Box>
   );

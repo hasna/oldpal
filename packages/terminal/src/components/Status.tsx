@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 
 interface TokenUsage {
@@ -16,6 +16,8 @@ interface StatusProps {
   sessionIndex?: number;
   sessionCount?: number;
   backgroundProcessingCount?: number;
+  sessionId?: string | null;
+  processingStartTime?: number;
 }
 
 export function Status({
@@ -26,7 +28,32 @@ export function Status({
   sessionIndex,
   sessionCount,
   backgroundProcessingCount = 0,
+  sessionId,
+  processingStartTime,
 }: StatusProps) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!isProcessing || !processingStartTime) {
+      setElapsed(0);
+      return;
+    }
+
+    const update = () => {
+      setElapsed(Math.max(0, Math.floor((Date.now() - processingStartTime) / 1000)));
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [isProcessing, processingStartTime]);
+
+  const formatDuration = (seconds: number): string => {
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  };
   // Format context usage
   let contextInfo = '';
   if (tokenUsage && tokenUsage.maxContextTokens > 0) {
@@ -56,6 +83,10 @@ export function Status({
           </Text>
         )}
         {contextInfo && <Text dimColor>{contextInfo}</Text>}
+        {sessionId && <Text dimColor>{(sessionInfo || contextInfo) ? ' · ' : ''}id {sessionId}</Text>}
+        {isProcessing && processingStartTime && (
+          <Text dimColor> · ✻ Worked for {formatDuration(elapsed)}</Text>
+        )}
       </Box>
     </Box>
   );

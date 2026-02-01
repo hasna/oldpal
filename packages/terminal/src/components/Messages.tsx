@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text, Static } from 'ink';
+import { Box, Text } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@oldpal/shared';
 import { Markdown } from './Markdown';
 
@@ -20,6 +20,7 @@ interface MessagesProps {
   activityLog?: ActivityEntry[];
   scrollOffset?: number;
   maxVisible?: number;
+  queuedMessageIds?: Set<string>;
 }
 
 export function Messages({
@@ -30,6 +31,7 @@ export function Messages({
   activityLog = [],
   scrollOffset = 0,
   maxVisible = 10,
+  queuedMessageIds,
 }: MessagesProps) {
   // Calculate visible messages based on scroll offset
   // scrollOffset 0 means showing the latest messages
@@ -51,15 +53,13 @@ export function Messages({
 
   return (
     <Box flexDirection="column">
-      {/* Historical messages - wrapped in Static to prevent eating */}
-      <Static items={historicalItems}>
-        {(item) => {
-          if (item.group.type === 'single') {
-            return <MessageBubble key={item.id} message={item.group.message} />;
-          }
-          return <CombinedToolMessage key={item.id} messages={item.group.messages} />;
-        }}
-      </Static>
+      {/* Historical messages */}
+      {historicalItems.map((item) => {
+        if (item.group.type === 'single') {
+          return <MessageBubble key={item.id} message={item.group.message} queuedMessageIds={queuedMessageIds} />;
+        }
+        return <CombinedToolMessage key={item.id} messages={item.group.messages} />;
+      })}
 
       {/* Show activity log - text, tool calls, and tool results */}
       {activityLog.map((entry) => {
@@ -160,29 +160,30 @@ function groupConsecutiveToolMessages(messages: Message[]): MessageGroup[] {
 function CombinedToolMessage({ messages }: { messages: Message[] }) {
   // Collect all tool calls from all messages
   const allToolCalls: ToolCall[] = [];
+  const allToolResults: ToolResult[] = [];
   for (const msg of messages) {
     if (msg.toolCalls) {
       allToolCalls.push(...msg.toolCalls);
     }
+    if (msg.toolResults) {
+      allToolResults.push(...msg.toolResults);
+    }
   }
 
-  const summary = getToolSummary(allToolCalls);
-
   return (
-    <Box marginY={1}>
-      <Text dimColor>● </Text>
-      <Text dimColor>{summary}</Text>
-    </Box>
+    <ToolCallPanel toolCalls={allToolCalls} toolResults={allToolResults} />
   );
 }
 
 interface MessageBubbleProps {
   message: Message;
+  queuedMessageIds?: Set<string>;
 }
 
-function MessageBubble({ message }: MessageBubbleProps) {
+function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
+  const isQueued = isUser && queuedMessageIds?.has(message.id);
 
   if (isSystem) {
     return null;
@@ -192,47 +193,87 @@ function MessageBubble({ message }: MessageBubbleProps) {
     return (
       <Box marginY={1}>
         <Text dimColor>❯ </Text>
-        <Text>{message.content}</Text>
+        {isQueued ? (
+          <Text dimColor>⏳ {message.content}</Text>
+        ) : (
+          <Text>{message.content}</Text>
+        )}
       </Box>
     );
   }
 
   // Assistant message
-  const toolSummary = message.toolCalls ? getToolSummary(message.toolCalls) : '';
+  const toolCalls = message.toolCalls || [];
+  const toolResults = message.toolResults || [];
   const hasContent = message.content && message.content.trim();
 
-  // If no content but has tools, show tool summary inline with bullet
-  if (!hasContent && toolSummary) {
-    return (
-      <Box marginY={1}>
-        <Text dimColor>● </Text>
-        <Text dimColor>{toolSummary}</Text>
-      </Box>
-    );
-  }
-
-  // Content with optional tool summary inline
   return (
     <Box marginY={1} flexDirection="column">
-      <Box>
-        <Text dimColor>● </Text>
-        <Box flexGrow={1}>
-          <Markdown content={message.content} />
-          {toolSummary && <Text dimColor> {toolSummary}</Text>}
-        </Box>
-      </Box>
-      {message.toolResults && message.toolResults.length > 0 && (
-        <Box flexDirection="column" marginLeft={2}>
-          {message.toolResults.slice(0, 3).map((r) => (
-            <Text dimColor key={r.toolCallId}>
-              ↳ {truncateToolResult(r, 5, 500)}
-            </Text>
-          ))}
-          {message.toolResults.length > 3 && (
-            <Text dimColor>  ... and {message.toolResults.length - 3} more results</Text>
-          )}
+      {hasContent && (
+        <Box>
+          <Text dimColor>● </Text>
+          <Box flexGrow={1}>
+            <Markdown content={message.content} />
+          </Box>
         </Box>
       )}
+      {toolCalls.length > 0 && (
+        <Box marginLeft={hasContent ? 2 : 0} marginTop={hasContent ? 1 : 0}>
+          <ToolCallPanel toolCalls={toolCalls} toolResults={toolResults} />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function ToolCallPanel({
+  toolCalls,
+  toolResults,
+}: {
+  toolCalls: ToolCall[];
+  toolResults?: ToolResult[];
+}) {
+  if (toolCalls.length === 0) return null;
+
+  const resultMap = new Map<string, ToolResult>();
+  for (const result of toolResults || []) {
+    resultMap.set(result.toolCallId, result);
+  }
+
+  const hasError = toolCalls.some((toolCall) => resultMap.get(toolCall.id)?.isError);
+  const allComplete = toolCalls.every((toolCall) => resultMap.has(toolCall.id));
+  const borderColor = hasError ? 'red' : allComplete ? 'green' : 'yellow';
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor={borderColor} paddingX={1}>
+      <Box justifyContent="space-between">
+        <Text color={borderColor} bold>Tool Calls</Text>
+        <Text dimColor>
+          {toolCalls.length} {allComplete ? 'done' : 'running'}
+        </Text>
+      </Box>
+      {toolCalls.map((toolCall) => {
+        const result = resultMap.get(toolCall.id);
+        const statusIcon = result ? (result.isError ? '✗' : '✓') : '◐';
+        const statusColor = result ? (result.isError ? 'red' : 'green') : 'yellow';
+        const displayName = getToolDisplayName(toolCall);
+        const context = getToolContext(toolCall);
+        return (
+          <Box key={toolCall.id} flexDirection="column" marginTop={1}>
+            <Box>
+              <Text color={statusColor}>{statusIcon} </Text>
+              <Text color={statusColor} bold>{displayName}</Text>
+              {context && <Text dimColor> · {context}</Text>}
+            </Box>
+            <Text dimColor>{formatToolCall(toolCall)}</Text>
+            {result && (
+              <Box marginLeft={2}>
+                <Text dimColor>↳ {truncateToolResult(result, 4, 400)}</Text>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
     </Box>
   );
 }
