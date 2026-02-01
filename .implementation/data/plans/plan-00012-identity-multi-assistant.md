@@ -1,7 +1,7 @@
 # Plan: Identity & Multi-Assistant System + Rename to "assistants"
 
 **Plan ID:** 00012
-**Status:** Draft (User Requirements Confirmed)
+**Status:** Completed
 **Priority:** Medium
 **Estimated Effort:** Large (7+ days)
 **Dependencies:** None
@@ -265,37 +265,37 @@ async function migrateFromOldpal(): Promise<MigrationResult> {
 ## Implementation Steps
 
 ### Step 1: Core Types & Managers
-- [ ] Create `packages/core/src/identity/types.ts`
-- [ ] Create `packages/core/src/identity/assistant-manager.ts`
-- [ ] Create `packages/core/src/identity/identity-manager.ts`
-- [ ] Create `packages/core/src/identity/index.ts`
-- [ ] Add types to `packages/shared/src/types.ts`
+- [x] Create `packages/core/src/identity/types.ts`
+- [x] Create `packages/core/src/identity/assistant-manager.ts`
+- [x] Create `packages/core/src/identity/identity-manager.ts`
+- [x] Create `packages/core/src/identity/index.ts`
+- [x] Add types to `packages/shared/src/types.ts`
 
 ### Step 2: Migration System
-- [ ] Create `packages/core/src/migration/index.ts`
-- [ ] Create `packages/core/src/migration/migrate-to-assistants.ts`
-- [ ] Create `packages/core/src/migration/validators.ts`
+- [x] Create `packages/core/src/migration/index.ts`
+- [x] Create `packages/core/src/migration/migrate-to-assistants.ts`
+- [x] Create `packages/core/src/migration/validators.ts`
 
 ### Step 3: Integration
-- [ ] Modify `packages/core/src/config.ts` - update paths
-- [ ] Modify `packages/core/src/agent/loop.ts` - inject identity
-- [ ] Modify `packages/core/src/client.ts` - use AssistantManager
-- [ ] Modify `packages/core/src/index.ts` - export modules
+- [x] Modify `packages/core/src/config.ts` - update paths
+- [x] Modify `packages/core/src/agent/loop.ts` - inject identity
+- [x] Modify `packages/core/src/client.ts` - use AssistantManager
+- [x] Modify `packages/core/src/index.ts` - export modules
 
 ### Step 4: Commands
-- [ ] Add /assistant command to `builtin.ts`
-- [ ] Add /identity command to `builtin.ts`
-- [ ] Add /whoami command to `builtin.ts`
+- [x] Add /assistant command to `builtin.ts`
+- [x] Add /identity command to `builtin.ts`
+- [x] Add /whoami command to `builtin.ts`
 
 ### Step 5: Package Rename
-- [ ] Update `package.json` - name: @hasna/assistants
-- [ ] Update all `packages/*/package.json`
-- [ ] Replace "oldpal" → "assistants" in all source files
-- [ ] Update `README.md`
+- [x] Update `package.json` - name: @hasna/assistants
+- [x] Update all `packages/*/package.json`
+- [x] Replace "oldpal" → "assistants" in all source files
+- [x] Update `README.md`
 
 ### Step 6: Terminal UI
-- [ ] Modify `Status.tsx` - show assistant/identity
-- [ ] Modify `index.tsx` - run migration on startup
+- [x] Modify `Status.tsx` - show assistant/identity
+- [x] Modify `index.tsx` - run migration on startup
 
 ---
 
@@ -352,4 +352,4 @@ You are operating as "Work Assistant" with the "Work" identity.
 - [x] User requirements confirmed
 - [x] Technical design approved
 - [x] Implementation steps clear
-- [ ] Ready to implement
+- [x] Ready to implement

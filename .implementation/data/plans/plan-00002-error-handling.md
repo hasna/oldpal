@@ -1,7 +1,7 @@
 # Plan: Error Handling & Recovery System
 
 **Plan ID:** 00002
-**Status:** Draft
+**Status:** Completed
 **Priority:** High
 **Estimated Effort:** Large (4-5 days)
 **Dependencies:** None
@@ -240,11 +240,11 @@ class ErrorAggregator {
 ## Implementation Steps
 
 ### Step 1: Create Error Types
-- [ ] Create `packages/core/src/errors/index.ts`
-- [ ] Define base `AssistantError` class
-- [ ] Define specific error classes
-- [ ] Define error codes enum
-- [ ] Export all from package
+- [x] Create `packages/core/src/errors/index.ts`
+- [x] Define base `AssistantError` class
+- [x] Define specific error classes
+- [x] Define error codes enum
+- [x] Export all from package
 
 **Files:**
 - `packages/core/src/errors/index.ts`
@@ -252,26 +252,26 @@ class ErrorAggregator {
 - `packages/core/src/errors/codes.ts`
 
 ### Step 2: Implement Retry Utility
-- [ ] Create retry wrapper function
-- [ ] Add exponential backoff logic
-- [ ] Add configurable retry conditions
-- [ ] Create preset configurations
+- [x] Create retry wrapper function
+- [x] Add exponential backoff logic
+- [x] Add configurable retry conditions
+- [x] Create preset configurations
 
 **Files:**
 - `packages/core/src/utils/retry.ts`
 
 ### Step 3: Update LLM Client
-- [ ] Replace generic errors with LLMError
-- [ ] Add retry logic for rate limits
-- [ ] Include suggestions in errors
+- [x] Replace generic errors with LLMError
+- [x] Add retry logic for rate limits
+- [x] Include suggestions in errors
 
 **Files:**
 - `packages/core/src/llm/anthropic.ts`
 
 ### Step 4: Update Tool Execution
-- [ ] Replace string errors with ToolExecutionError
-- [ ] Add timeout error handling
-- [ ] Include tool context in errors
+- [x] Replace string errors with ToolExecutionError
+- [x] Add timeout error handling
+- [x] Include tool context in errors
 
 **Files:**
 - `packages/core/src/tools/registry.ts`
@@ -281,17 +281,17 @@ class ErrorAggregator {
 - `packages/core/src/tools/connector.ts`
 
 ### Step 5: Update Connectors
-- [ ] Create ConnectorError type
-- [ ] Add auth refresh + retry
-- [ ] Include connector context
+- [x] Create ConnectorError type
+- [x] Add auth refresh + retry
+- [x] Include connector context
 
 **Files:**
 - `packages/core/src/tools/connector.ts`
 
 ### Step 6: Add Error Aggregation
-- [ ] Implement ErrorAggregator
-- [ ] Integrate with agent loop
-- [ ] Expose via /status command
+- [x] Implement ErrorAggregator
+- [x] Integrate with agent loop
+- [x] Expose via /status command
 
 **Files:**
 - `packages/core/src/errors/aggregator.ts`
@@ -299,18 +299,18 @@ class ErrorAggregator {
 - `packages/core/src/commands/builtin.ts`
 
 ### Step 7: Update UI Error Display
-- [ ] Format errors with suggestions
-- [ ] Show error codes in debug mode
-- [ ] Color-code by severity
+- [x] Format errors with suggestions
+- [x] Show error codes in debug mode
+- [x] Color-code by severity
 
 **Files:**
 - `packages/terminal/src/components/App.tsx`
 
 ### Step 8: Add Tests
-- [ ] Test error type hierarchy
-- [ ] Test retry logic
-- [ ] Test error aggregation
-- [ ] Test UI error display
+- [x] Test error type hierarchy
+- [x] Test retry logic
+- [x] Test error aggregation
+- [x] Test UI error display
 
 **Files:**
 - `packages/core/tests/errors.test.ts`
@@ -360,7 +360,7 @@ describe('ErrorAggregator', () => {
 
 ## Approval
 
-- [ ] Technical design approved
-- [ ] Implementation steps clear
-- [ ] Tests defined
-- [ ] Ready to implement
+- [x] Technical design approved
+- [x] Implementation steps clear
+- [x] Tests defined
+- [x] Ready to implement

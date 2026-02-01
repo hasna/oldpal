@@ -1,7 +1,7 @@
 # Plan: Voice Input/Output Features
 
 **Plan ID:** 00010
-**Status:** Complete
+**Status:** Completed
 **Priority:** Low
 **Estimated Effort:** Large (5+ days)
 **Dependencies:** None
