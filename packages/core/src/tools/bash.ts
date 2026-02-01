@@ -11,6 +11,40 @@ function killProcess(proc: { kill: () => void }): void {
   proc.kill();
 }
 
+function stripQuotedSegments(input: string): string {
+  let result = '';
+  let quote: '"' | '\'' | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+
+    if (quote) {
+      if (quote === '"' && !escaped && char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (!escaped && char === quote) {
+        quote = null;
+        result += char;
+        continue;
+      }
+      escaped = false;
+      continue;
+    }
+
+    if (char === '"' || char === '\'') {
+      quote = char;
+      result += char;
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+}
+
 export class BashTool {
   static readonly tool: Tool = {
     name: 'bash',
@@ -105,6 +139,7 @@ export class BashTool {
     const timeout = (input.timeout as number) || 30000; // Reduced default timeout
 
     const commandForChecks = command.replace(/\s*2>&1\s*/g, ' ');
+    const commandSansQuotes = stripQuotedSegments(commandForChecks);
 
     const securityCheck = validateBashCommand(commandForChecks);
     if (!securityCheck.valid) {
@@ -130,7 +165,7 @@ export class BashTool {
 
     // Check against blocked patterns
     for (const pattern of this.BLOCKED_PATTERNS) {
-      if (pattern.test(commandForChecks)) {
+      if (pattern.test(commandSansQuotes)) {
         getSecurityLogger().log({
           eventType: 'blocked_command',
           severity: 'high',

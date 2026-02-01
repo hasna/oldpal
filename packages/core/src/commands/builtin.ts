@@ -1612,7 +1612,7 @@ Keep it concise but comprehensive.`,
         };
         let localPath = '';
         try {
-          const saved = saveFeedbackEntry(localEntry);
+          const saved = saveFeedbackEntry(localEntry, context.cwd);
           localPath = saved.path;
         } catch {
           localPath = '';

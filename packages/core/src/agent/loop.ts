@@ -168,6 +168,7 @@ export class AgentLoop {
 
     // Fast discovery (PATH scan only) so connector tools are available immediately.
     this.connectorBridge.fastDiscover(connectorNames);
+    this.connectorBridge.registerAll(this.toolRegistry);
 
     // Start connector discovery in the background so chat can start immediately.
     this.connectorDiscovery = this.connectorBridge.discover(connectorNames)

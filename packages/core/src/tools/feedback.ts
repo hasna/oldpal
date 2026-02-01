@@ -2,7 +2,7 @@ import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor } from './registry';
 import { generateId } from '@hasna/assistants-shared';
 import { join } from 'path';
-import { mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
 
 export type FeedbackType = 'bug' | 'feature' | 'feedback';
@@ -33,8 +33,17 @@ function normalizeTags(value: unknown): string[] | undefined {
   return undefined;
 }
 
-export function saveFeedbackEntry(entry: FeedbackEntry): { path: string } {
-  const feedbackDir = join(getConfigDir(), 'feedback');
+function resolveFeedbackDir(cwd?: string): string {
+  const baseCwd = cwd && cwd.trim().length > 0 ? cwd : process.cwd();
+  const legacyDir = join(baseCwd, '.oldpal');
+  if (existsSync(legacyDir)) {
+    return join(legacyDir, 'feedback');
+  }
+  return join(getConfigDir(), 'feedback');
+}
+
+export function saveFeedbackEntry(entry: FeedbackEntry, cwd?: string): { path: string } {
+  const feedbackDir = resolveFeedbackDir(cwd);
   mkdirSync(feedbackDir, { recursive: true });
   const path = join(feedbackDir, `${entry.id}.json`);
   writeFileSync(path, JSON.stringify(entry, null, 2));
@@ -125,7 +134,7 @@ export class FeedbackTool {
   static readonly executor: ToolExecutor = async (input) => {
     try {
       const entry = buildEntry(input, { source: (input.source as string) || 'tool' });
-      const { path } = saveFeedbackEntry(entry);
+      const { path } = saveFeedbackEntry(entry, typeof input.cwd === 'string' ? input.cwd : undefined);
       return `Feedback saved locally.\nID: ${entry.id}\nPath: ${path}`;
     } catch (error) {
       return `Error: ${error instanceof Error ? error.message : String(error)}`;

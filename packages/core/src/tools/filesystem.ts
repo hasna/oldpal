@@ -1,6 +1,7 @@
 import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname, sep } from 'path';
+import { existsSync } from 'fs';
 import { getProjectConfigDir } from '../config';
 import { Glob } from 'bun';
 import { ErrorCodes, ToolExecutionError } from '../errors';
@@ -16,6 +17,10 @@ let currentSessionId: string = 'default';
  * Get the scripts folder path for the current session
  */
 function getScriptsFolder(cwd: string): string {
+  const legacyDir = join(cwd, '.oldpal');
+  if (existsSync(legacyDir)) {
+    return join(legacyDir, 'scripts', currentSessionId);
+  }
   return join(getProjectConfigDir(cwd), 'scripts', currentSessionId);
 }
 
@@ -31,7 +36,7 @@ function isInScriptsFolder(path: string, cwd: string): boolean {
 
 /**
  * Filesystem tools - read, write, glob, grep
- * Write operations are RESTRICTED to .assistants/scripts/{session-id}/
+ * Write operations are RESTRICTED to the project scripts folder (.oldpal/scripts/{session-id}/ or .assistants/scripts/{session-id}/)
  */
 export class FilesystemTools {
   /**
@@ -182,13 +187,13 @@ export class FilesystemTools {
 
   static readonly writeTool: Tool = {
     name: 'write',
-    description: 'Write content to a file. RESTRICTED: Can only write to .assistants/scripts/{session}/ in the current project. Provide a filename and it will be saved under the scripts folder.',
+    description: 'Write content to a file. RESTRICTED: Can only write to the project scripts folder (.oldpal/scripts/{session} or .assistants/scripts/{session}). Provide a filename and it will be saved under the scripts folder.',
     parameters: {
       type: 'object',
       properties: {
         filename: {
           type: 'string',
-          description: 'The filename to write to (will be saved in .assistants/scripts)',
+          description: 'The filename to write to (saved in the project scripts folder)',
         },
         content: {
           type: 'string',
@@ -237,7 +242,7 @@ export class FilesystemTools {
         code: ErrorCodes.TOOL_PERMISSION_DENIED,
         recoverable: false,
         retryable: false,
-        suggestion: 'Write only within the .assistants/scripts/ folder.',
+        suggestion: 'Write only within the project scripts folder.',
       });
     }
 
