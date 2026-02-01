@@ -85,19 +85,28 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
         );
       };
 
+      const switchSession = async (nextSessionId: string) => {
+        if (!nextSessionId || nextSessionId === sessionId) return;
+        sessionId = nextSessionId;
+        pendingMessageIds.length = 0;
+        currentMessageId = null;
+        await attachListener();
+      };
+
       attachListener().catch(() => {});
 
-      ws.on('message', (raw) => {
+      ws.on('message', async (raw) => {
         try {
           const message = JSON.parse(String(raw)) as ClientMessage;
           if (message.type === 'session' && message.sessionId) {
-            sessionId = message.sessionId;
-            pendingMessageIds.length = 0;
-            currentMessageId = null;
-            attachListener().catch(() => {});
+            await switchSession(message.sessionId);
+            return;
           }
 
           if (message.type === 'message') {
+            if (message.sessionId && message.sessionId !== sessionId) {
+              await switchSession(message.sessionId);
+            }
             if (message.messageId) {
               pendingMessageIds.push(message.messageId);
             }
