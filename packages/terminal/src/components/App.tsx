@@ -406,7 +406,13 @@ export function App({ cwd, version }: AppProps) {
 
   // Handle chunk from registry
   const handleChunk = useCallback((chunk: StreamChunk) => {
-    if (!isProcessingRef.current && (chunk.type === 'text' || chunk.type === 'tool_use' || chunk.type === 'tool_result')) {
+    if (!isProcessingRef.current && (
+      chunk.type === 'text'
+      || chunk.type === 'tool_use'
+      || chunk.type === 'tool_result'
+      || chunk.type === 'error'
+      || chunk.type === 'done'
+    )) {
       const active = registryRef.current.getActiveSession();
       if (active) {
         registryRef.current.setProcessing(active.id, true);
