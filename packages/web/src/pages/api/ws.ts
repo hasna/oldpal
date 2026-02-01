@@ -59,36 +59,50 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
       let unsubscribe: (() => void) | null = null;
       const pendingMessageIds: string[] = [];
       let currentMessageId: string | null = null;
+      let suppressNextDone = false;
 
       const attachListener = async () => {
         if (unsubscribe) unsubscribe();
         unsubscribe = await subscribeToSession(
           sessionId,
           (chunk) => {
-            if (!currentMessageId && pendingMessageIds.length > 0) {
+            if (suppressNextDone && chunk.type !== 'done' && chunk.type !== 'error') {
+              suppressNextDone = false;
+            }
+            const suppressMapping =
+              suppressNextDone && (chunk.type === 'done' || chunk.type === 'error');
+            if (!suppressMapping && !currentMessageId && pendingMessageIds.length > 0) {
               currentMessageId = pendingMessageIds[0];
             }
-            const message = chunkToServerMessage(chunk, currentMessageId);
+            const message = chunkToServerMessage(chunk, suppressMapping ? null : currentMessageId);
             if (message) {
               ws.send(JSON.stringify(message));
             }
             if (chunk.type === 'done' || chunk.type === 'error') {
-              if (pendingMessageIds.length > 0) {
+              if (!suppressMapping && pendingMessageIds.length > 0) {
                 pendingMessageIds.shift();
               }
               currentMessageId = null;
+              if (suppressMapping) {
+                suppressNextDone = false;
+              }
             }
           },
           (error) => {
+            const suppressMapping = suppressNextDone;
             const messageId = currentMessageId ?? undefined;
-            if (currentMessageId) {
-              const idx = pendingMessageIds.indexOf(currentMessageId);
-              if (idx >= 0) {
-                pendingMessageIds.splice(idx, 1);
+            if (!suppressMapping) {
+              if (currentMessageId) {
+                const idx = pendingMessageIds.indexOf(currentMessageId);
+                if (idx >= 0) {
+                  pendingMessageIds.splice(idx, 1);
+                }
+                currentMessageId = null;
+              } else if (pendingMessageIds.length > 0) {
+                pendingMessageIds.shift();
               }
-              currentMessageId = null;
-            } else if (pendingMessageIds.length > 0) {
-              pendingMessageIds.shift();
+            } else {
+              suppressNextDone = false;
             }
             ws.send(JSON.stringify({ type: 'error', message: error.message, messageId }));
           }
@@ -145,6 +159,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
                 pendingMessageIds.splice(idx, 1);
               }
               currentMessageId = null;
+              suppressNextDone = true;
             } else if (pendingMessageIds.length > 0) {
               pendingMessageIds.shift();
             }
