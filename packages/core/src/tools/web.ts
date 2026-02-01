@@ -73,18 +73,22 @@ export class WebFetchTool {
       }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(abortController, timeout, controller);
-
-        response = await fetch(currentUrl, {
-          signal: controller.signal,
-          redirect: 'manual',
-          headers: {
-            'User-Agent': 'assistants/1.0 (AI Assistant)',
-            'Accept': extractType === 'json' ? 'application/json' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          },
-        });
-
-        clearTimeout(timeoutId);
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        try {
+          timeoutId = setTimeout(abortController, timeout, controller);
+          response = await fetch(currentUrl, {
+            signal: controller.signal,
+            redirect: 'manual',
+            headers: {
+              'User-Agent': 'assistants/1.0 (AI Assistant)',
+              'Accept': extractType === 'json' ? 'application/json' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+          });
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
 
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           const location = response.headers.get('location');
@@ -418,20 +422,24 @@ export class CurlTool {
       }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(abortController, timeout, controller);
-
-        response = await fetch(currentUrl, {
-          method,
-          signal: controller.signal,
-          redirect: 'manual',
-          headers: {
-            'User-Agent': 'assistants/1.0 (AI Assistant)',
-            ...headers,
-          },
-          body: body && ['POST', 'PUT'].includes(method) ? body : undefined,
-        });
-
-        clearTimeout(timeoutId);
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        try {
+          timeoutId = setTimeout(abortController, timeout, controller);
+          response = await fetch(currentUrl, {
+            method,
+            signal: controller.signal,
+            redirect: 'manual',
+            headers: {
+              'User-Agent': 'assistants/1.0 (AI Assistant)',
+              ...headers,
+            },
+            body: body && ['POST', 'PUT'].includes(method) ? body : undefined,
+          });
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
 
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           if (!['GET', 'HEAD'].includes(method)) {
