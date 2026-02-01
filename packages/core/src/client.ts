@@ -19,6 +19,8 @@ export class EmbeddedClient implements AssistantClient {
   private startedAt: string;
   private initialMessages: Message[] | null = null;
   private assistantId: string | null = null;
+  private messageQueue: string[] = [];
+  private processingQueue = false;
 
   constructor(
     cwd?: string,
@@ -104,6 +106,21 @@ export class EmbeddedClient implements AssistantClient {
       await this.initialize();
     }
 
+    // If agent is already processing, queue the message
+    if (this.agent.isProcessing()) {
+      this.logger.info('Queuing message (agent busy)', { message, queueLength: this.messageQueue.length + 1 });
+      this.messageQueue.push(message);
+      return;
+    }
+
+    await this.processMessage(message);
+    await this.drainQueue();
+  }
+
+  /**
+   * Process a single message
+   */
+  private async processMessage(message: string): Promise<void> {
     this.logger.info('User message', { message });
 
     try {
@@ -131,6 +148,25 @@ export class EmbeddedClient implements AssistantClient {
       for (const callback of this.errorCallbacks) {
         callback(err);
       }
+    }
+  }
+
+  /**
+   * Process queued messages
+   */
+  private async drainQueue(): Promise<void> {
+    if (this.processingQueue) return;
+    this.processingQueue = true;
+
+    try {
+      while (this.messageQueue.length > 0 && !this.agent.isProcessing()) {
+        const nextMessage = this.messageQueue.shift();
+        if (nextMessage) {
+          await this.processMessage(nextMessage);
+        }
+      }
+    } finally {
+      this.processingQueue = false;
     }
   }
 
@@ -282,5 +318,20 @@ export class EmbeddedClient implements AssistantClient {
    */
   getMessages(): Message[] {
     return [...this.messages];
+  }
+
+  /**
+   * Get number of queued messages
+   */
+  getQueueLength(): number {
+    return this.messageQueue.length;
+  }
+
+  /**
+   * Clear the message queue
+   */
+  clearQueue(): void {
+    this.messageQueue = [];
+    this.logger.info('Message queue cleared');
   }
 }
