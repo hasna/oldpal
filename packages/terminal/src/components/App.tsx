@@ -77,7 +77,7 @@ function buildDisplayMessages(messages: Message[], chunkLines: number): Message[
 
   for (const msg of messages) {
     const content = msg.content ?? '';
-    const shouldChunk = msg.role === 'assistant' && content.trim() !== '';
+    const shouldChunk = content.trim() !== '';
     if (!shouldChunk) {
       display.push(msg);
       continue;

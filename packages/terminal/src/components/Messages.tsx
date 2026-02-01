@@ -184,6 +184,9 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isQueued = isUser && queuedMessageIds?.has(message.id);
+  const chunkMatch = message.id.match(/::chunk-(\d+)$/);
+  const chunkIndex = chunkMatch ? Number(chunkMatch[1]) : -1;
+  const isContinuation = chunkIndex > 0;
 
   if (isSystem) {
     return null;
@@ -191,9 +194,9 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
 
   if (isUser) {
     return (
-      <Box marginY={1}>
-        <Text dimColor>❯ </Text>
-        {isQueued ? (
+      <Box marginY={isContinuation ? 0 : 1}>
+        <Text dimColor>{isContinuation ? '  ' : '❯ '} </Text>
+        {isQueued && !isContinuation ? (
           <Text dimColor>⏳ {message.content}</Text>
         ) : (
           <Text>{message.content}</Text>
@@ -208,10 +211,10 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
   const hasContent = message.content && message.content.trim();
 
   return (
-    <Box marginY={1} flexDirection="column">
+    <Box marginY={isContinuation ? 0 : 1} flexDirection="column">
       {hasContent && (
         <Box>
-          <Text dimColor>● </Text>
+          <Text dimColor>{isContinuation ? '  ' : '● '} </Text>
           <Box flexGrow={1}>
             <Markdown content={message.content} />
           </Box>

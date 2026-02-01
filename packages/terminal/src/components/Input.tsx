@@ -19,6 +19,11 @@ const COMMANDS = [
   { name: '/compact', description: 'summarize to save context' },
   { name: '/memory', description: 'show what AI remembers' },
   { name: '/feedback', description: 'submit feedback on GitHub' },
+  { name: '/schedule', description: 'schedule a command' },
+  { name: '/schedules', description: 'list scheduled commands' },
+  { name: '/unschedule', description: 'delete a scheduled command' },
+  { name: '/pause', description: 'pause a scheduled command' },
+  { name: '/resume', description: 'resume a scheduled command' },
   { name: '/exit', description: 'exit oldpal' },
 ];
 
