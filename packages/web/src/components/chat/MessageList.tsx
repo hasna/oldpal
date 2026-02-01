@@ -10,7 +10,7 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages }: MessageListProps) {
-  const { isStreaming, currentToolCalls, currentToolMessageId } = useChatStore();
+  const { isStreaming, currentToolCalls, currentStreamMessageId } = useChatStore();
   const currentToolCallResults = (currentToolCalls as Array<ToolCall & { result?: ToolResult }>)
     .map((call) => call.result)
     .filter((result): result is ToolResult => Boolean(result));
@@ -22,7 +22,9 @@ export function MessageList({ messages }: MessageListProps) {
         const toolResults = message.toolResults ?? [];
         const toolCalls = message.toolCalls ?? [];
         const mergedToolCalls =
-          toolCalls.length > 0 || message.role !== 'assistant' || (currentToolMessageId && message.id !== currentToolMessageId)
+          toolCalls.length > 0 ||
+          message.role !== 'assistant' ||
+          (currentStreamMessageId && message.id !== currentStreamMessageId)
             ? toolCalls
             : currentToolCalls;
         const mergedToolResults =
@@ -35,7 +37,9 @@ export function MessageList({ messages }: MessageListProps) {
             key={message.id}
             message={{ ...message, toolCalls: mergedToolCalls }}
             toolResults={mergedToolResults}
-            isStreaming={isStreaming && message.role === 'assistant' && (!currentToolMessageId || message.id === currentToolMessageId)}
+            isStreaming={
+              isStreaming && message.role === 'assistant' && (!currentStreamMessageId || message.id === currentStreamMessageId)
+            }
           />
         );
       })}

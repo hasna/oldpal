@@ -5,10 +5,10 @@ interface ChatState {
   messages: Message[];
   isStreaming: boolean;
   currentToolCalls: ToolCall[];
-  currentToolMessageId: string | null;
+  currentStreamMessageId: string | null;
   sessionId: string | null;
   sessions: Array<{ id: string; label: string; createdAt: number }>;
-  sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCall[]; toolMessageId: string | null }>;
+  sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCall[]; streamMessageId: string | null }>;
 
   setSessionId: (sessionId: string) => void;
   createSession: (label?: string) => string;
@@ -27,7 +27,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isStreaming: false,
   currentToolCalls: [],
-  currentToolMessageId: null,
+  currentStreamMessageId: null,
   sessionId: null,
   sessions: [],
   sessionSnapshots: {},
@@ -44,10 +44,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isStreaming: false,
       messages: [],
       currentToolCalls: [],
-      currentToolMessageId: null,
+      currentStreamMessageId: null,
       sessionSnapshots: {
         ...state.sessionSnapshots,
-        [id]: { messages: [], toolCalls: [], toolMessageId: null },
+        [id]: { messages: [], toolCalls: [], streamMessageId: null },
       },
     }));
     return id;
@@ -60,16 +60,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         snapshots[state.sessionId] = {
           messages: state.messages,
           toolCalls: state.currentToolCalls,
-          toolMessageId: state.currentToolMessageId,
+          streamMessageId: state.currentStreamMessageId,
         };
       }
-      const snapshot = snapshots[sessionId] || { messages: [], toolCalls: [], toolMessageId: null };
+      const snapshot = snapshots[sessionId] || { messages: [], toolCalls: [], streamMessageId: null };
       return {
         sessionId,
         isStreaming: false,
         messages: snapshot.messages,
         currentToolCalls: snapshot.toolCalls,
-        currentToolMessageId: snapshot.toolMessageId ?? null,
+        currentStreamMessageId: snapshot.streamMessageId ?? null,
         sessionSnapshots: snapshots,
       };
     });
@@ -110,13 +110,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       return {
         messages,
+        currentStreamMessageId: id ?? state.currentStreamMessageId,
         sessionSnapshots: state.sessionId
           ? {
               ...state.sessionSnapshots,
               [state.sessionId]: {
                 messages,
                 toolCalls: state.currentToolCalls,
-                toolMessageId: state.currentToolMessageId,
+                streamMessageId: id ?? state.currentStreamMessageId,
               },
             }
           : state.sessionSnapshots,
@@ -127,19 +128,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   addToolCall: (call, messageId) =>
     set((state) => {
-      const targetMessageId = messageId ?? state.currentToolMessageId;
-      const shouldReset = targetMessageId && targetMessageId !== state.currentToolMessageId;
+      const targetMessageId = messageId ?? state.currentStreamMessageId;
+      const shouldReset = targetMessageId && targetMessageId !== state.currentStreamMessageId;
       const nextCalls = shouldReset ? [call] : [...state.currentToolCalls, call];
       return {
         currentToolCalls: nextCalls,
-        currentToolMessageId: targetMessageId ?? state.currentToolMessageId,
+        currentStreamMessageId: targetMessageId ?? state.currentStreamMessageId,
         sessionSnapshots: state.sessionId
           ? {
               ...state.sessionSnapshots,
               [state.sessionId]: {
                 messages: state.messages,
                 toolCalls: nextCalls,
-                toolMessageId: targetMessageId ?? state.currentToolMessageId,
+                streamMessageId: targetMessageId ?? state.currentStreamMessageId,
               },
             }
           : state.sessionSnapshots,
@@ -159,7 +160,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               toolCalls: state.currentToolCalls.map((call) =>
                 call.id === id ? { ...call, result } : call
               ),
-              toolMessageId: state.currentToolMessageId,
+              streamMessageId: state.currentStreamMessageId,
             },
           }
         : state.sessionSnapshots,
@@ -172,7 +173,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const messages = [...state.messages];
-      const targetMessageId = messageId ?? state.currentToolMessageId;
+      const targetMessageId = messageId ?? state.currentStreamMessageId;
       for (let i = messages.length - 1; i >= 0; i -= 1) {
         if (messages[i].role === 'assistant' && (!targetMessageId || messages[i].id === targetMessageId)) {
           const toolResults = (state.currentToolCalls as Array<ToolCall & { result?: ToolResult }>)
@@ -189,14 +190,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       return {
         messages,
-        currentToolMessageId: null,
+        currentStreamMessageId: null,
         sessionSnapshots: state.sessionId
           ? {
               ...state.sessionSnapshots,
               [state.sessionId]: {
                 messages,
                 toolCalls: state.currentToolCalls,
-                toolMessageId: null,
+                streamMessageId: null,
               },
             }
           : state.sessionSnapshots,
@@ -206,14 +207,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearToolCalls: () =>
     set((state) => ({
       currentToolCalls: [],
-      currentToolMessageId: null,
+      currentStreamMessageId: null,
       sessionSnapshots: state.sessionId
         ? {
             ...state.sessionSnapshots,
             [state.sessionId]: {
               messages: state.messages,
               toolCalls: [],
-              toolMessageId: null,
+              streamMessageId: null,
             },
           }
         : state.sessionSnapshots,
