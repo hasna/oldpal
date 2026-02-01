@@ -65,6 +65,7 @@ export interface ToolResult {
   toolCallId: string;
   content: string;
   isError?: boolean;
+  toolName?: string;
 }
 
 // ============================================

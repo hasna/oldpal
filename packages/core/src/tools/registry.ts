@@ -70,6 +70,7 @@ export class ToolRegistry {
         toolCallId: toolCall.id,
         content: `Error: Tool "${toolCall.name}" not found`,
         isError: true,
+        toolName: toolCall.name,
       };
     }
 
@@ -79,12 +80,14 @@ export class ToolRegistry {
         toolCallId: toolCall.id,
         content: result,
         isError: false,
+        toolName: toolCall.name,
       };
     } catch (error) {
       return {
         toolCallId: toolCall.id,
         content: `Error executing ${toolCall.name}: ${error instanceof Error ? error.message : String(error)}`,
         isError: true,
+        toolName: toolCall.name,
       };
     }
   }

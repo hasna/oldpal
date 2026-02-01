@@ -6,6 +6,7 @@ import { ConnectorBridge } from '../tools/connector';
 import { BashTool } from '../tools/bash';
 import { FilesystemTools } from '../tools/filesystem';
 import { WebTools } from '../tools/web';
+import { FeedbackTool } from '../tools/feedback';
 import { ImageTools } from '../tools/image';
 import { SkillLoader } from '../skills/loader';
 import { SkillExecutor } from '../skills/executor';
@@ -97,8 +98,12 @@ export class AgentLoop {
       createLLMClient(this.config.llm).then((client) => {
         this.llmClient = client;
       }),
-      // Discover connectors
-      this.connectorBridge.discover(this.config.connectors),
+      // Discover connectors (auto-discover when list is empty or contains '*')
+      this.connectorBridge.discover(
+        this.config.connectors && this.config.connectors.length > 0 && !this.config.connectors.includes('*')
+          ? this.config.connectors
+          : undefined
+      ),
       // Load skills
       this.skillLoader.loadAll(this.cwd),
       // Load hooks config
@@ -115,6 +120,7 @@ export class AgentLoop {
     FilesystemTools.registerAll(this.toolRegistry, this.sessionId);
     WebTools.registerAll(this.toolRegistry);
     ImageTools.registerAll(this.toolRegistry);
+    this.toolRegistry.register(FeedbackTool.tool, FeedbackTool.executor);
 
     // Register connector tools
     this.connectorBridge.registerAll(this.toolRegistry);
@@ -345,6 +351,7 @@ export class AgentLoop {
           toolCallId: toolCall.id,
           content: `Tool call denied: ${preHookResult.stopReason || 'Blocked by hook'}`,
           isError: true,
+          toolName: toolCall.name,
         };
         this.emit({ type: 'tool_result', toolResult: blockedResult });
         await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
@@ -364,6 +371,7 @@ export class AgentLoop {
           toolCallId: toolCall.id,
           content: `Tool call requires approval: ${preHookResult.stopReason || 'Approval required'}`,
           isError: true,
+          toolName: toolCall.name,
         };
         this.emit({ type: 'tool_result', toolResult: askResult });
         await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
