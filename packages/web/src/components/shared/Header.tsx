@@ -6,7 +6,7 @@ import { useChatStore } from '@/lib/store';
 import { chatWs } from '@/lib/ws';
 
 export function Header() {
-  const { createSession } = useChatStore();
+  const { createSession, sessionId, isStreaming } = useChatStore();
 
   return (
     <header className="glass flex items-center justify-between px-6 py-4">
@@ -24,8 +24,10 @@ export function Header() {
           variant="primary"
           size="sm"
           onClick={() => {
-            const id = createSession();
-            chatWs.send({ type: 'cancel', sessionId: id });
+            if (isStreaming && sessionId) {
+              chatWs.send({ type: 'cancel', sessionId });
+            }
+            createSession();
           }}
         >
           New Session

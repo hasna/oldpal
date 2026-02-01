@@ -74,8 +74,20 @@ export async function migrateFromOldpal(): Promise<MigrationResult> {
       result.migrated.push('config.json');
     }
 
+    if (await copyIfExists(join(oldPath, 'settings.local.json'), join(newPath, 'config.local.json'))) {
+      result.migrated.push('config.local.json');
+    }
+
     if (await copyIfExists(join(oldPath, 'hooks.json'), join(newPath, 'hooks.json'))) {
       result.migrated.push('hooks.json');
+    }
+
+    if (await copyIfExists(join(oldPath, 'commands'), join(newPath, 'commands'))) {
+      result.migrated.push('commands');
+    }
+
+    if (await copyIfExists(join(oldPath, 'OLDPAL.md'), join(newPath, 'ASSISTANTS.md'))) {
+      result.migrated.push('ASSISTANTS.md');
     }
 
     if (await copyIfExists(join(oldPath, 'skills'), join(newPath, 'shared', 'skills'))) {

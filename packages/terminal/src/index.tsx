@@ -5,7 +5,7 @@ import { migrateFromOldpal } from '@hasna/assistants-core';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 
-const VERSION = '0.6.14';
+const VERSION = '0.6.15';
 
 // Parse CLI arguments
 function parseArgs(argv: string[]) {
@@ -207,7 +207,7 @@ if (options.print !== null) {
   });
 } else {
   // Interactive mode
-  const { waitUntilExit } = render(<App cwd={options.cwd} />);
+  const { waitUntilExit } = render(<App cwd={options.cwd} version={VERSION} />);
 
   waitUntilExit().then(() => {
     process.exit(0);

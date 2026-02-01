@@ -59,6 +59,7 @@ function parseErrorMessage(error: string): { code?: string; message: string; sug
 
 interface AppProps {
   cwd: string;
+  version?: string;
 }
 
 // Activity entry for tracking tool calls and text during a turn
@@ -97,7 +98,7 @@ interface QueuedMessage {
 const MESSAGE_CHUNK_LINES = 12;
 const MESSAGE_WRAP_CHARS = 120;
 
-function buildDisplayMessages(messages: Message[], chunkLines: number): Message[] {
+function buildDisplayMessages(messages: Message[], chunkLines: number, wrapChars: number): Message[] {
   const display: Message[] = [];
 
   for (const msg of messages) {
@@ -111,12 +112,12 @@ function buildDisplayMessages(messages: Message[], chunkLines: number): Message[
     const rawLines = content.split('\n');
     const lines: string[] = [];
     for (const line of rawLines) {
-      if (line.length <= MESSAGE_WRAP_CHARS) {
+      if (line.length <= wrapChars) {
         lines.push(line);
         continue;
       }
-      for (let i = 0; i < line.length; i += MESSAGE_WRAP_CHARS) {
-        lines.push(line.slice(i, i + MESSAGE_WRAP_CHARS));
+      for (let i = 0; i < line.length; i += wrapChars) {
+        lines.push(line.slice(i, i + wrapChars));
       }
     }
     if (lines.length <= chunkLines) {
@@ -140,9 +141,9 @@ function buildDisplayMessages(messages: Message[], chunkLines: number): Message[
   return display;
 }
 
-export function App({ cwd }: AppProps) {
+export function App({ cwd, version }: AppProps) {
   const { exit } = useApp();
-  const { rows } = useStdout();
+  const { rows, columns } = useStdout();
 
   // Session registry
   const [registry] = useState(() => new SessionRegistry());
@@ -544,7 +545,11 @@ export function App({ cwd }: AppProps) {
     [activeQueue]
   );
 
-  const displayMessages = useMemo(() => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES), [messages]);
+  const wrapChars = columns ? Math.max(40, columns - 4) : MESSAGE_WRAP_CHARS;
+  const displayMessages = useMemo(
+    () => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES, wrapChars),
+    [messages, wrapChars]
+  );
 
   // Process queue when not processing
   useEffect(() => {
@@ -889,7 +894,7 @@ export function App({ cwd }: AppProps) {
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
-          version="0.6.12"
+          version={version ?? '0.6.13'}
           model="claude-sonnet-4"
           directory={activeSession?.cwd || cwd}
         />
