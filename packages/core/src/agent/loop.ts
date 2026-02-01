@@ -1,4 +1,4 @@
-import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig, ScheduledCommand } from '@oldpal/shared';
+import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig, ScheduledCommand, VoiceState } from '@oldpal/shared';
 import { generateId } from '@oldpal/shared';
 import { join } from 'path';
 import { AgentContext } from './context';
@@ -48,6 +48,7 @@ import {
   releaseScheduleLock,
   updateSchedule,
 } from '../scheduler/store';
+import { VoiceManager } from '../voice/manager';
 
 export interface AgentLoopOptions {
   config?: OldpalConfig;
@@ -102,6 +103,7 @@ export class AgentLoop {
   private scheduledQueue: ScheduledCommand[] = [];
   private drainingScheduled = false;
   private errorAggregator = new ErrorAggregator();
+  private voiceManager: VoiceManager | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -147,6 +149,9 @@ export class AgentLoop {
     this.toolRegistry.setValidationConfig(this.config.validation);
     this.contextConfig = this.buildContextConfig(this.config);
     this.context.setMaxMessages(this.contextConfig.maxMessages);
+    if (this.config.voice) {
+      this.voiceManager = new VoiceManager(this.config.voice);
+    }
 
     const connectorNames =
       this.config.connectors && this.config.connectors.length > 0 && !this.config.connectors.includes('*')
@@ -648,6 +653,37 @@ export class AgentLoop {
         return result;
       },
       getEnergyState: () => this.getEnergyState(),
+      getVoiceState: () => this.getVoiceState(),
+      enableVoice: () => {
+        if (!this.voiceManager) {
+          throw new Error('Voice support is not available.');
+        }
+        this.voiceManager.enable();
+      },
+      disableVoice: () => {
+        if (!this.voiceManager) {
+          throw new Error('Voice support is not available.');
+        }
+        this.voiceManager.disable();
+      },
+      speak: async (text: string) => {
+        if (!this.voiceManager) {
+          throw new Error('Voice support is not available.');
+        }
+        await this.voiceManager.speak(text);
+      },
+      listen: async (options) => {
+        if (!this.voiceManager) {
+          throw new Error('Voice support is not available.');
+        }
+        return this.voiceManager.listen(options);
+      },
+      stopSpeaking: () => {
+        this.voiceManager?.stopSpeaking();
+      },
+      stopListening: () => {
+        this.voiceManager?.stopListening();
+      },
       restEnergy: (amount?: number) => {
         if (this.energyManager) {
           this.energyManager.rest(amount);
@@ -756,6 +792,13 @@ export class AgentLoop {
    */
   getContext(): AgentContext {
     return this.context;
+  }
+
+  /**
+   * Get current voice state
+   */
+  getVoiceState(): VoiceState | null {
+    return this.voiceManager?.getState() ?? null;
   }
 
   /**

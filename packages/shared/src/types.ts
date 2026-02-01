@@ -243,23 +243,35 @@ export interface VoiceConfig {
   stt: STTConfig;
   tts: TTSConfig;
   wake?: WakeConfig;
+  autoListen?: boolean;
 }
 
 export interface STTConfig {
-  provider: 'whisper';
+  provider: 'whisper' | 'system';
   model?: string;
   language?: string;
 }
 
 export interface TTSConfig {
-  provider: 'elevenlabs';
-  voiceId: string;
+  provider: 'elevenlabs' | 'system';
+  voiceId?: string;
   model?: string;
+  stability?: number;
+  similarityBoost?: number;
+  speed?: number;
 }
 
 export interface WakeConfig {
   enabled: boolean;
   word: string;
+}
+
+export interface VoiceState {
+  enabled: boolean;
+  isSpeaking: boolean;
+  isListening: boolean;
+  sttProvider?: string;
+  ttsProvider?: string;
 }
 
 export interface SchedulerConfig {
@@ -357,6 +369,7 @@ export interface AssistantClient {
   getTools(): Promise<Tool[]>;
   getSkills(): Promise<Skill[]>;
   getEnergyState(): EnergyState | null;
+  getVoiceState(): VoiceState | null;
   stop(): void;
   disconnect(): void;
 }

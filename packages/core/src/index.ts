@@ -38,6 +38,14 @@ export * from './heartbeat';
 // Energy
 export * from './energy';
 
+// Voice
+export * from './voice/types';
+export { VoiceManager } from './voice/manager';
+export { AudioPlayer } from './voice/player';
+export { AudioRecorder } from './voice/recorder';
+export { WhisperSTT, SystemSTT } from './voice/stt';
+export { ElevenLabsTTS, SystemTTS } from './voice/tts';
+
 // LLM
 export type { LLMClient } from './llm/client';
 export { createLLMClient } from './llm/client';

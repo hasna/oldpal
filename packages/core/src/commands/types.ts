@@ -1,4 +1,5 @@
-import type { Tool, TokenUsage, EnergyState } from '@oldpal/shared';
+import type { Tool, TokenUsage, EnergyState, VoiceState } from '@oldpal/shared';
+import type { RecordOptions } from '../voice/recorder';
 import type { ErrorStats } from '../errors';
 import type { ContextInfo, ContextProcessResult } from '../context';
 
@@ -64,6 +65,13 @@ export interface CommandContext {
   getContextInfo?: () => ContextInfo | null;
   summarizeContext?: () => Promise<ContextProcessResult>;
   getEnergyState?: () => EnergyState | null;
+  getVoiceState?: () => VoiceState | null;
+  enableVoice?: () => void;
+  disableVoice?: () => void;
+  speak?: (text: string) => Promise<void>;
+  listen?: (options?: RecordOptions) => Promise<string>;
+  stopSpeaking?: () => void;
+  stopListening?: () => void;
   restEnergy?: (amount?: number) => void;
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;

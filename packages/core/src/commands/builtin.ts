@@ -88,6 +88,9 @@ export class BuiltinCommands {
     loader.register(this.contextCommand());
     loader.register(this.summarizeCommand());
     loader.register(this.restCommand());
+    loader.register(this.voiceCommand());
+    loader.register(this.sayCommand());
+    loader.register(this.listenCommand());
     loader.register(this.compactCommand());
     loader.register(this.configCommand());
     loader.register(this.initCommand());
@@ -104,6 +107,138 @@ export class BuiltinCommands {
     loader.register(this.connectorsCommand());
     loader.register(this.securityLogCommand());
     loader.register(this.exitCommand());
+  }
+
+  /**
+   * /voice - Toggle voice mode or show status
+   */
+  private voiceCommand(): Command {
+    return {
+      name: 'voice',
+      description: 'Control voice mode (on/off/status/stop)',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        if (!context.getVoiceState) {
+          context.emit('text', 'Voice support is not available in this build.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const trimmed = args.trim().toLowerCase();
+        if (trimmed === 'on') {
+          context.enableVoice?.();
+          context.emit('text', 'Voice mode enabled.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+        if (trimmed === 'off') {
+          context.disableVoice?.();
+          context.emit('text', 'Voice mode disabled.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+        if (trimmed === 'stop') {
+          context.stopSpeaking?.();
+          context.stopListening?.();
+          context.emit('text', 'Voice output/input stopped.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const state = context.getVoiceState();
+        if (!state) {
+          context.emit('text', 'Voice support is not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+        const status = state.enabled ? 'on' : 'off';
+        const activity = state.isSpeaking ? 'speaking' : state.isListening ? 'listening' : 'idle';
+        context.emit('text', `Voice mode: ${status} (${activity})\n`);
+        if (state.sttProvider || state.ttsProvider) {
+          context.emit('text', `STT: ${state.sttProvider || 'unknown'} · TTS: ${state.ttsProvider || 'unknown'}\n`);
+        }
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /say - Speak text aloud
+   */
+  private sayCommand(): Command {
+    return {
+      name: 'say',
+      description: 'Speak text aloud with TTS',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const text = args.trim();
+        if (!text) {
+          context.emit('text', 'Usage: /say <text>\n');
+          context.emit('done');
+          return { handled: true };
+        }
+        if (!context.speak) {
+          context.emit('text', 'Voice support is not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        try {
+          await context.speak(text);
+          context.emit('done');
+        } catch (error) {
+          context.emit('error', error instanceof Error ? error.message : String(error));
+        }
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /listen - Record audio and send transcription
+   */
+  private listenCommand(): Command {
+    return {
+      name: 'listen',
+      description: 'Record audio and send transcription',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        if (!context.listen) {
+          context.emit('text', 'Voice support is not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        let durationSeconds: number | undefined;
+        const trimmed = args.trim();
+        if (trimmed) {
+          const parsed = Number(trimmed);
+          if (!Number.isNaN(parsed) && parsed > 0) {
+            durationSeconds = parsed;
+          }
+        }
+
+        try {
+          const transcript = await context.listen({ durationSeconds });
+          if (!transcript.trim()) {
+            context.emit('text', '(No speech detected)\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          return { handled: false, prompt: transcript };
+        } catch (error) {
+          context.emit('error', error instanceof Error ? error.message : String(error));
+          return { handled: true };
+        }
+      },
+    };
   }
 
   /**

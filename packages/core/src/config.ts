@@ -19,7 +19,11 @@ const DEFAULT_CONFIG: OldpalConfig = {
       provider: 'elevenlabs',
       voiceId: '',
       model: 'eleven_turbo_v2_5',
+      stability: 0.5,
+      similarityBoost: 0.75,
+      speed: 1.0,
     },
+    autoListen: false,
   },
   connectors: [],
   scheduler: {
@@ -83,6 +87,7 @@ function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): Oldp
           provider: override.voice?.tts?.provider ?? base.voice?.tts?.provider ?? 'elevenlabs',
           voiceId: override.voice?.tts?.voiceId ?? base.voice?.tts?.voiceId ?? '',
         },
+        autoListen: override.voice?.autoListen ?? base.voice?.autoListen ?? false,
         wake: {
           ...(base.voice?.wake || {}),
           ...(override.voice?.wake || {}),
