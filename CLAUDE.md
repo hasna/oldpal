@@ -35,6 +35,7 @@ packages/
 ## Collaboration & Safety
 
 - Always inspect unexpected changes before proceeding.
+- Never revert changes; inspect and adapt accordingly.
 
 ### Connector Bridge
 
