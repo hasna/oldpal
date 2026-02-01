@@ -80,7 +80,17 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
             }
           },
           (error) => {
-            ws.send(JSON.stringify({ type: 'error', message: error.message, messageId: currentMessageId ?? undefined }));
+            const messageId = currentMessageId ?? undefined;
+            if (currentMessageId) {
+              const idx = pendingMessageIds.indexOf(currentMessageId);
+              if (idx >= 0) {
+                pendingMessageIds.splice(idx, 1);
+              }
+              currentMessageId = null;
+            } else if (pendingMessageIds.length > 0) {
+              pendingMessageIds.shift();
+            }
+            ws.send(JSON.stringify({ type: 'error', message: error.message, messageId }));
           }
         );
       };
