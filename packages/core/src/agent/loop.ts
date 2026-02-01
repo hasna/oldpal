@@ -435,6 +435,11 @@ export class AgentLoop {
     this.context.addToolResults(results);
 
     this.emit({ type: 'done' });
+    const failed = results.some((result) => result.isError);
+    if (failed) {
+      const error = results.find((result) => result.isError)?.content;
+      return { ok: false, error: error ? String(error) : 'Tool execution failed' };
+    }
     return { ok: true, summary: `Executed ${toolName}` };
   }
 
