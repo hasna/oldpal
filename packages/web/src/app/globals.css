@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+.shadow-glow {
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2), 0 10px 30px rgba(14, 116, 144, 0.35);
+}
+
+.glass {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.markdown :is(pre, code) {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}

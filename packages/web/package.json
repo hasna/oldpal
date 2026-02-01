@@ -4,18 +4,37 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "echo 'Web UI coming in Phase 4'",
-    "build": "echo 'Web UI coming in Phase 4'",
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf .next dist"
   },
   "dependencies": {
-    "@oldpal/shared": "workspace:*"
+    "@oldpal/core": "workspace:*",
+    "@oldpal/shared": "workspace:*",
+    "clsx": "^2.1.1",
+    "highlight.js": "^11.11.1",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.3",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^2.6.0",
+    "ws": "^8.18.0",
+    "zustand": "^4.5.5"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/react": "^18.3.0",
+    "@types/ws": "^8.5.10",
+    "autoprefixer": "^10.4.20",
+    "@tailwindcss/typography": "^0.5.16",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
     "typescript": "^5"
   }
 }
