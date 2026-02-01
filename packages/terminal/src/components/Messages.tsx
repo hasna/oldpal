@@ -472,7 +472,7 @@ function getToolDisplayName(toolCall: ToolCall): string {
       return 'image';
     case 'schedule':
       return 'schedule';
-    case 'feedback':
+    case 'submit_feedback':
       return 'feedback';
     case 'notion':
     case 'gmail':
@@ -508,7 +508,7 @@ function formatToolCall(toolCall: ToolCall): string {
       return `Searching: ${truncate(String(input.pattern || ''), 60)}`;
     case 'schedule':
       return formatScheduleCall(input);
-    case 'feedback':
+    case 'submit_feedback':
       return formatFeedbackCall(input);
     case 'notion':
       return `Notion: ${truncate(String(input.command || input.action || ''), 60)}`;
@@ -631,7 +631,7 @@ function formatToolResultNicely(toolName: string, content: string, isError?: boo
   switch (toolName) {
     case 'schedule':
       return formatScheduleResult(content);
-    case 'feedback':
+    case 'submit_feedback':
       return formatFeedbackResult(content);
     case 'read':
       return formatReadResult(content);
