@@ -296,8 +296,11 @@ export function App({ cwd }: AppProps) {
       if (!shouldSkip) {
         finalizeResponse();
       }
-      resetTurnState();
       setIsProcessing(false);
+      // Defer clearing streaming state to avoid flicker where output disappears
+      queueMicrotask(() => {
+        resetTurnState();
+      });
 
       // Update token usage from client
       const activeSession = registry.getActiveSession();
