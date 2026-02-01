@@ -32,6 +32,9 @@ export { SessionManager } from './memory/sessions';
 // Context
 export * from './context';
 
+// Heartbeat
+export * from './heartbeat';
+
 // LLM
 export type { LLMClient } from './llm/client';
 export { createLLMClient } from './llm/client';

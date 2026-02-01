@@ -225,6 +225,7 @@ export interface OldpalConfig {
   skills?: string[];
   hooks?: HookConfig;
   scheduler?: SchedulerConfig;
+  heartbeat?: HeartbeatConfig;
   context?: ContextConfig;
   validation?: ValidationConfig;
 }
@@ -263,6 +264,13 @@ export interface WakeConfig {
 export interface SchedulerConfig {
   enabled?: boolean;
   heartbeatIntervalMs?: number;
+}
+
+export interface HeartbeatConfig {
+  enabled?: boolean;
+  intervalMs?: number;
+  staleThresholdMs?: number;
+  persistPath?: string;
 }
 
 export interface ContextConfig {

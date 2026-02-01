@@ -1,5 +1,6 @@
 import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig, ScheduledCommand } from '@oldpal/shared';
 import { generateId } from '@oldpal/shared';
+import { join } from 'path';
 import { AgentContext } from './context';
 import {
   ContextManager,
@@ -24,7 +25,15 @@ import { HookLoader } from '../hooks/loader';
 import { HookExecutor } from '../hooks/executor';
 import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext } from '../commands';
 import { createLLMClient, type LLMClient } from '../llm/client';
-import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir } from '../config';
+import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir, getConfigDir } from '../config';
+import {
+  HeartbeatManager,
+  StatePersistence,
+  RecoveryManager,
+  type AgentState,
+  type Heartbeat,
+  type HeartbeatConfig as HeartbeatRuntimeConfig,
+} from '../heartbeat';
 import { AssistantError, ErrorAggregator, ErrorCodes, type ErrorCode } from '../errors';
 import { configureLimits, enforceMessageLimit, getLimits } from '../validation/limits';
 import { validateToolCalls } from '../validation/llm-response';
@@ -58,6 +67,12 @@ export class AgentLoop {
   private context: AgentContext;
   private contextManager: ContextManager | null = null;
   private contextConfig: ContextConfig | null = null;
+  private heartbeatManager: HeartbeatManager | null = null;
+  private heartbeatPersistence: StatePersistence | null = null;
+  private heartbeatRecovery: RecoveryManager | null = null;
+  private lastUserMessage: string | null = null;
+  private lastToolName: string | null = null;
+  private pendingToolCalls: string[] = [];
   private toolRegistry: ToolRegistry;
   private connectorBridge: ConnectorBridge;
   private skillLoader: SkillLoader;
@@ -213,6 +228,7 @@ export class AgentLoop {
     });
 
     this.startHeartbeat();
+    this.startAgentHeartbeat();
   }
 
   /**
@@ -234,8 +250,11 @@ export class AgentLoop {
     }
 
     this.isRunning = true;
+    this.setHeartbeatState('processing');
     this.shouldStop = false;
     const beforeCount = this.context.getMessages().length;
+    this.lastUserMessage = userMessage;
+    this.recordHeartbeatActivity('message');
 
     try {
       if (source === 'user') {
@@ -304,6 +323,7 @@ export class AgentLoop {
     } finally {
       this.currentAllowedTools = null;
       this.isRunning = false;
+      this.setHeartbeatState('idle');
       this.drainScheduledQueue();
     }
   }
@@ -516,6 +536,9 @@ export class AgentLoop {
       }
 
       // Emit tool start
+      this.recordHeartbeatActivity('tool');
+      this.lastToolName = toolCall.name;
+      this.pendingToolCalls.push(toolCall.name);
       this.onToolStart?.(toolCall);
 
       // Execute the tool
@@ -529,6 +552,9 @@ export class AgentLoop {
 
       // Run PostToolUse or PostToolUseFailure hooks based on result
       const hookEvent = result.isError ? 'PostToolUseFailure' : 'PostToolUse';
+      if (result.isError) {
+        this.recordHeartbeatActivity('error');
+      }
       await this.hookExecutor.execute(this.hookLoader.getHooks(hookEvent), {
         session_id: this.sessionId,
         hook_event_name: hookEvent,
@@ -539,6 +565,8 @@ export class AgentLoop {
       });
 
       results.push(result);
+
+      this.pendingToolCalls = this.pendingToolCalls.filter((name) => name !== toolCall.name);
     }
 
     return results;
@@ -624,6 +652,8 @@ export class AgentLoop {
 
   private recordLLMError(message?: string): void {
     const text = message || 'LLM error';
+    this.recordHeartbeatActivity('error');
+    this.setHeartbeatState('error');
     const parsed = parseErrorCode(text);
     if (parsed) {
       this.errorAggregator.record(new AssistantError(parsed.message, {
@@ -686,6 +716,7 @@ export class AgentLoop {
    */
   stop(): void {
     this.shouldStop = true;
+    this.setHeartbeatState('stopped');
   }
 
   /**
@@ -769,6 +800,69 @@ export class AgentLoop {
    */
   clearConversation(): void {
     this.resetContext();
+  }
+
+  private startAgentHeartbeat(): void {
+    if (!this.config) return;
+    if (this.config.heartbeat?.enabled === false) return;
+
+    const heartbeatConfig = this.buildHeartbeatConfig(this.config);
+    if (!heartbeatConfig) return;
+
+    const statePath = join(getConfigDir(), 'state', `${this.sessionId}.json`);
+
+    this.heartbeatManager = new HeartbeatManager(heartbeatConfig);
+    this.heartbeatPersistence = new StatePersistence(statePath);
+    this.heartbeatRecovery = new RecoveryManager(
+      this.heartbeatPersistence,
+      heartbeatConfig.persistPath,
+      heartbeatConfig.staleThresholdMs,
+      {
+        autoResume: false,
+        maxAgeMs: 24 * 60 * 60 * 1000,
+      }
+    );
+
+    this.heartbeatManager.onHeartbeat((heartbeat) => {
+      void this.persistHeartbeat(heartbeat);
+    });
+
+    this.heartbeatManager.start(this.sessionId);
+    this.heartbeatManager.setState('idle');
+    void this.checkRecovery();
+  }
+
+  private async persistHeartbeat(heartbeat: Heartbeat): Promise<void> {
+    if (!this.heartbeatPersistence) return;
+
+    await this.heartbeatPersistence.save({
+      sessionId: this.sessionId,
+      heartbeat,
+      context: {
+        cwd: this.cwd,
+        lastMessage: this.lastUserMessage || undefined,
+        lastTool: this.lastToolName || undefined,
+        pendingToolCalls: this.pendingToolCalls.length > 0 ? [...this.pendingToolCalls] : undefined,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private async checkRecovery(): Promise<void> {
+    if (!this.heartbeatRecovery) return;
+    const recovery = await this.heartbeatRecovery.checkForRecovery();
+    if (!recovery.available || !recovery.state) return;
+
+    const message = `\n[Recovery available from ${recovery.state.timestamp} - last state ${recovery.state.heartbeat.state}]\n`;
+    this.emit({ type: 'text', content: message });
+  }
+
+  private setHeartbeatState(state: AgentState): void {
+    this.heartbeatManager?.setState(state);
+  }
+
+  private recordHeartbeatActivity(type: 'message' | 'tool' | 'error'): void {
+    this.heartbeatManager?.recordActivity(type);
   }
 
   private startHeartbeat(): void {
@@ -924,6 +1018,21 @@ export class AgentLoop {
       summaryModel: config.context?.summaryModel,
       summaryMaxTokens: config.context?.summaryMaxTokens ?? 2000,
       maxMessages,
+    };
+  }
+
+  private buildHeartbeatConfig(config: OldpalConfig): HeartbeatRuntimeConfig | null {
+    if (config.heartbeat?.enabled === false) return null;
+    const intervalMs = Math.max(1000, config.heartbeat?.intervalMs ?? 15000);
+    const staleThresholdMs = Math.max(intervalMs * 2, config.heartbeat?.staleThresholdMs ?? 120000);
+    const persistPath =
+      config.heartbeat?.persistPath ??
+      join(getConfigDir(), 'heartbeats', `${this.sessionId}.json`);
+
+    return {
+      intervalMs,
+      staleThresholdMs,
+      persistPath,
     };
   }
 

@@ -26,6 +26,11 @@ const DEFAULT_CONFIG: OldpalConfig = {
     enabled: true,
     heartbeatIntervalMs: 30000,
   },
+  heartbeat: {
+    enabled: true,
+    intervalMs: 15000,
+    staleThresholdMs: 120000,
+  },
   context: {
     enabled: true,
     maxContextTokens: 180000,
@@ -88,6 +93,10 @@ function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): Oldp
     scheduler: {
       ...(base.scheduler || {}),
       ...(override.scheduler || {}),
+    },
+    heartbeat: {
+      ...(base.heartbeat || {}),
+      ...(override.heartbeat || {}),
     },
     context: {
       ...(base.context || {}),
@@ -219,6 +228,8 @@ export async function ensureConfigDir(sessionId?: string): Promise<void> {
     mkdir(join(configDir, 'sessions'), { recursive: true }),
     mkdir(join(configDir, 'skills'), { recursive: true }),
     mkdir(join(configDir, 'temp'), { recursive: true }),
+    mkdir(join(configDir, 'heartbeats'), { recursive: true }),
+    mkdir(join(configDir, 'state'), { recursive: true }),
   ];
 
   // Create session-specific temp folder if provided
