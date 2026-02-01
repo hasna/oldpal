@@ -30,6 +30,8 @@ import {
   type ProjectRecord,
 } from '../projects/store';
 import { buildProjectContext } from '../projects/context';
+import { VerificationSessionStore } from '../sessions/verification';
+import { nativeHookRegistry } from '../hooks';
 
 // Version lookup - prefer explicit env to avoid stale hardcoded values
 const VERSION =
@@ -129,6 +131,7 @@ export class BuiltinCommands {
     loader.register(this.resumeScheduleCommand());
     loader.register(this.connectorsCommand());
     loader.register(this.securityLogCommand());
+    loader.register(this.verificationCommand());
     loader.register(this.exitCommand());
   }
 
@@ -642,6 +645,119 @@ export class BuiltinCommands {
         context.emit('text', 'Starting new conversation.\n');
         context.emit('done');
         return { handled: true, clearConversation: true };
+      },
+    };
+  }
+
+  /**
+   * /verification - Manage scope verification feature
+   */
+  private verificationCommand(): Command {
+    return {
+      name: 'verification',
+      description: 'Manage scope verification (list/view/enable/disable)',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const arg = args.trim().toLowerCase();
+        const store = new VerificationSessionStore(getConfigDir());
+
+        if (arg === 'disable' || arg === 'off') {
+          nativeHookRegistry.setConfig({
+            ...nativeHookRegistry.getConfig(),
+            scopeVerification: {
+              ...nativeHookRegistry.getConfig().scopeVerification,
+              enabled: false,
+            },
+          });
+          context.emit('text', 'Scope verification disabled.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (arg === 'enable' || arg === 'on') {
+          nativeHookRegistry.setConfig({
+            ...nativeHookRegistry.getConfig(),
+            scopeVerification: {
+              ...nativeHookRegistry.getConfig().scopeVerification,
+              enabled: true,
+            },
+          });
+          context.emit('text', 'Scope verification enabled.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (arg === 'status') {
+          const config = nativeHookRegistry.getConfig();
+          const enabled = config.scopeVerification?.enabled !== false;
+          const maxRetries = config.scopeVerification?.maxRetries ?? 2;
+          context.emit('text', `Scope verification: ${enabled ? 'enabled' : 'disabled'}\n`);
+          context.emit('text', `Max retries: ${maxRetries}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (arg === '' || arg === 'list') {
+          const sessions = store.listRecent(10);
+          if (sessions.length === 0) {
+            context.emit('text', 'No verification sessions found.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          context.emit('text', 'Recent verification sessions:\n\n');
+          for (const session of sessions) {
+            const date = new Date(session.createdAt).toLocaleString();
+            const status = session.result === 'pass' ? '✓' : session.result === 'force-continue' ? '→' : '✗';
+            context.emit('text', `${status} ${session.id.slice(0, 8)} - ${date} - ${session.result}\n`);
+            context.emit('text', `  Goals: ${session.goals.slice(0, 2).join(', ')}${session.goals.length > 2 ? '...' : ''}\n`);
+          }
+          context.emit('text', '\nUse /verification <id> to view details.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Try to find a session by ID (partial match)
+        const sessions = store.listRecent(100);
+        const match = sessions.find((s) => s.id.startsWith(arg) || s.id === arg);
+
+        if (!match) {
+          context.emit('text', `No verification session found matching "${arg}".\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Display session details
+        context.emit('text', `\n=== Verification Session ${match.id} ===\n\n`);
+        context.emit('text', `Created: ${new Date(match.createdAt).toLocaleString()}\n`);
+        context.emit('text', `Parent Session: ${match.parentSessionId}\n`);
+        context.emit('text', `Result: ${match.result}\n\n`);
+
+        context.emit('text', `Goals:\n`);
+        for (const goal of match.goals) {
+          context.emit('text', `  • ${goal}\n`);
+        }
+
+        context.emit('text', `\nAnalysis:\n`);
+        for (const analysis of match.verificationResult.goalsAnalysis) {
+          const icon = analysis.met ? '✓' : '✗';
+          context.emit('text', `  ${icon} ${analysis.goal}\n`);
+          context.emit('text', `    ${analysis.evidence}\n`);
+        }
+
+        context.emit('text', `\nReason: ${match.reason}\n`);
+
+        if (match.suggestions && match.suggestions.length > 0) {
+          context.emit('text', `\nSuggestions:\n`);
+          for (const suggestion of match.suggestions) {
+            context.emit('text', `  • ${suggestion}\n`);
+          }
+        }
+
+        context.emit('done');
+        return { handled: true };
       },
     };
   }

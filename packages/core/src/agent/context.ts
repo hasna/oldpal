@@ -1,4 +1,4 @@
-import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
+import type { Message, ToolCall, ToolResult, ScopeContext } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 
 /**
@@ -7,6 +7,7 @@ import { generateId, now } from '@hasna/assistants-shared';
 export class AgentContext {
   private messages: Message[] = [];
   private maxMessages: number;
+  private scopeContext: ScopeContext | null = null;
 
   constructor(maxMessages: number = 100) {
     this.maxMessages = maxMessages;
@@ -162,5 +163,26 @@ export class AgentContext {
    */
   import(messages: Message[]): void {
     this.messages = messages;
+  }
+
+  /**
+   * Set scope context for goal tracking
+   */
+  setScopeContext(scope: ScopeContext | null): void {
+    this.scopeContext = scope;
+  }
+
+  /**
+   * Get current scope context
+   */
+  getScopeContext(): ScopeContext | null {
+    return this.scopeContext;
+  }
+
+  /**
+   * Clear scope context
+   */
+  clearScopeContext(): void {
+    this.scopeContext = null;
   }
 }

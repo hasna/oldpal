@@ -191,6 +191,110 @@ export interface HookOutput {
 }
 
 // ============================================
+// Native Hook Types
+// ============================================
+
+/**
+ * Native hook handler function type
+ */
+export type NativeHookHandler = (
+  input: HookInput,
+  context: NativeHookContext
+) => Promise<HookOutput | null>;
+
+/**
+ * Native hook definition - system hooks that cannot be deleted
+ */
+export interface NativeHook {
+  id: string;
+  event: HookEvent;
+  priority: number; // Lower = runs first
+  handler: NativeHookHandler;
+  enabled?: boolean;
+}
+
+/**
+ * Context passed to native hooks
+ */
+export interface NativeHookContext {
+  sessionId: string;
+  cwd: string;
+  messages: Message[];
+  scopeContext?: ScopeContext;
+  llmClient?: unknown; // LLMClient type from core
+  config?: NativeHookConfig;
+}
+
+/**
+ * Configuration for native hooks
+ */
+export interface NativeHookConfig {
+  scopeVerification?: ScopeVerificationConfig;
+}
+
+/**
+ * Configuration for scope verification feature
+ */
+export interface ScopeVerificationConfig {
+  enabled?: boolean;
+  maxRetries?: number;
+  excludePatterns?: string[];
+}
+
+// ============================================
+// Scope Context Types
+// ============================================
+
+/**
+ * Tracks user's intent/goals for the current session
+ */
+export interface ScopeContext {
+  originalMessage: string;
+  extractedGoals: string[];
+  timestamp: number;
+  verificationAttempts: number;
+  maxAttempts: number;
+}
+
+// ============================================
+// Verification Session Types
+// ============================================
+
+/**
+ * Goal analysis result from verification
+ */
+export interface GoalAnalysis {
+  goal: string;
+  met: boolean;
+  evidence: string;
+}
+
+/**
+ * Result of scope verification
+ */
+export interface VerificationResult {
+  goalsMet: boolean;
+  goalsAnalysis: GoalAnalysis[];
+  reason: string;
+  suggestions?: string[];
+}
+
+/**
+ * Stored verification session for user visibility
+ */
+export interface VerificationSession {
+  id: string;
+  parentSessionId: string;
+  type: 'scope-verification';
+  result: 'pass' | 'fail' | 'force-continue';
+  goals: string[];
+  reason: string;
+  suggestions?: string[];
+  verificationResult: VerificationResult;
+  createdAt: string;
+}
+
+// ============================================
 // Session Types
 // ============================================
 

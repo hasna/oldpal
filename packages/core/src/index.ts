@@ -24,6 +24,12 @@ export { SkillExecutor } from './skills/executor';
 // Hooks
 export { HookLoader } from './hooks/loader';
 export { HookExecutor } from './hooks/executor';
+export { NativeHookRegistry, nativeHookRegistry } from './hooks/native';
+export { ScopeContextManager } from './hooks/scope-context';
+export { createScopeVerificationHook, scopeVerificationHandler } from './hooks/scope-verification';
+
+// Verification Sessions
+export { VerificationSessionStore } from './sessions/verification';
 
 // Memory
 export { MemoryStore } from './memory/store';

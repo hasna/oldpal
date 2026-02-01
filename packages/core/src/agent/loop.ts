@@ -21,8 +21,13 @@ import { ImageTools } from '../tools/image';
 import { runHookAgent } from './subagent';
 import { SkillLoader } from '../skills/loader';
 import { SkillExecutor } from '../skills/executor';
-import { HookLoader } from '../hooks/loader';
-import { HookExecutor } from '../hooks/executor';
+import {
+  HookLoader,
+  HookExecutor,
+  nativeHookRegistry,
+  ScopeContextManager,
+  createScopeVerificationHook,
+} from '../hooks';
 import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext } from '../commands';
 import { createLLMClient, type LLMClient } from '../llm/client';
 import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir, getConfigDir } from '../config';
@@ -87,6 +92,7 @@ export class AgentLoop {
   private skillExecutor: SkillExecutor;
   private hookLoader: HookLoader;
   private hookExecutor: HookExecutor;
+  private scopeContextManager: ScopeContextManager;
   private commandLoader: CommandLoader;
   private commandExecutor: CommandExecutor;
   private builtinCommands: BuiltinCommands;
@@ -131,6 +137,7 @@ export class AgentLoop {
     this.skillExecutor = new SkillExecutor();
     this.hookLoader = new HookLoader();
     this.hookExecutor = new HookExecutor();
+    this.scopeContextManager = new ScopeContextManager();
     this.commandLoader = new CommandLoader(this.cwd);
     this.commandExecutor = new CommandExecutor(this.commandLoader);
     this.builtinCommands = new BuiltinCommands();
@@ -235,6 +242,18 @@ export class AgentLoop {
     // Load hooks
     this.hookLoader.load(hooksConfig);
 
+    // Register native hooks
+    nativeHookRegistry.register(createScopeVerificationHook());
+
+    // Configure scope verification from hooks config
+    const nativeConfig = (hooksConfig as any)?.native;
+    if (nativeConfig) {
+      nativeHookRegistry.setConfig(nativeConfig);
+      if (nativeConfig.scopeVerification) {
+        this.scopeContextManager.setConfig(nativeConfig.scopeVerification);
+      }
+    }
+
     this.hookExecutor.setAgentRunner((hook, input, timeout) =>
       runHookAgent({ hook, input, timeout, cwd: this.cwd })
     );
@@ -302,6 +321,15 @@ export class AgentLoop {
         if (promptHookResult?.continue === false) {
           this.emit({ type: 'error', error: promptHookResult.stopReason || 'Blocked by hook' });
           return { ok: false, error: promptHookResult.stopReason || 'Blocked by hook' };
+        }
+
+        // Track scope context for goal verification
+        const scopeContext = await this.scopeContextManager.createContext(
+          userMessage,
+          this.llmClient
+        );
+        if (scopeContext) {
+          this.context.setScopeContext(scopeContext);
         }
       }
 
@@ -490,12 +518,34 @@ export class AgentLoop {
         this.context.addToolResults(results);
       }
     } finally {
-      // Run Stop hooks
+      // Run user-defined Stop hooks
       await this.hookExecutor.execute(this.hookLoader.getHooks('Stop'), {
         session_id: this.sessionId,
         hook_event_name: 'Stop',
         cwd: this.cwd,
       });
+
+      // Run native scope verification if enabled
+      const verificationResult = await this.runScopeVerification();
+      if (verificationResult && verificationResult.continue === false) {
+        // Verification failed - force continuation
+        if (verificationResult.systemMessage) {
+          this.context.addSystemMessage(verificationResult.systemMessage);
+        }
+        // Increment attempts and re-run the loop
+        this.scopeContextManager.incrementAttempts();
+        const scope = this.scopeContextManager.getContext();
+        if (scope) {
+          this.context.setScopeContext(scope);
+        }
+        // Don't emit 'done' - re-enter the loop
+        await this.runLoop();
+        return;
+      }
+
+      // Clear scope context on successful completion
+      this.scopeContextManager.clear();
+      this.context.clearScopeContext();
 
       this.emit({ type: 'done' });
     }
@@ -524,6 +574,52 @@ export class AgentLoop {
       }));
       this.emit({ type: 'text', content: `\n[Context summarization failed: ${message}]\n` });
     }
+  }
+
+  /**
+   * Run scope verification to check if goals were met
+   */
+  private async runScopeVerification(): Promise<{ continue: boolean; systemMessage?: string } | null> {
+    // Skip if verification is disabled
+    if (!this.scopeContextManager.isEnabled()) {
+      return null;
+    }
+
+    // Skip if max attempts reached
+    if (this.scopeContextManager.hasReachedMaxAttempts()) {
+      return null;
+    }
+
+    const scopeContext = this.context.getScopeContext();
+    if (!scopeContext) {
+      return null;
+    }
+
+    // Run native verification hooks
+    const result = await nativeHookRegistry.execute(
+      'Stop',
+      {
+        session_id: this.sessionId,
+        hook_event_name: 'Stop',
+        cwd: this.cwd,
+      },
+      {
+        sessionId: this.sessionId,
+        cwd: this.cwd,
+        messages: this.context.getMessages(),
+        scopeContext,
+        llmClient: this.llmClient,
+      }
+    );
+
+    if (!result) {
+      return null;
+    }
+
+    return {
+      continue: result.continue !== false,
+      systemMessage: result.systemMessage,
+    };
   }
 
   /**
