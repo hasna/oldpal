@@ -1,6 +1,7 @@
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { HookLoader } from '../src/hooks/loader';
 import { HookExecutor } from '../src/hooks/executor';
+import type { LLMClient } from '../src/llm/client';
 import type { HookConfig, HookMatcher, HookInput, HookEvent } from '@oldpal/shared';
 
 describe('HookLoader', () => {
@@ -297,6 +298,101 @@ describe('HookExecutor', () => {
 
       const result = await executor.execute(matchers, createInput({ tool_name: 'bash' }));
       expect(result).toBeNull();
+    });
+  });
+
+  describe('prompt hook execution with LLM', () => {
+    class MockLLM implements LLMClient {
+      private response: string;
+
+      constructor(response: string) {
+        this.response = response;
+      }
+
+      async *chat(_messages: any, _tools?: any, _system?: any): AsyncGenerator<any> {
+        yield { type: 'text', content: this.response };
+        yield { type: 'done' };
+      }
+
+      getModel(): string {
+        return 'mock';
+      }
+    }
+
+    class DelayedLLM implements LLMClient {
+      async *chat(): AsyncGenerator<any> {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        yield { type: 'text', content: '{"allow":true}' };
+        yield { type: 'done' };
+      }
+
+      getModel(): string {
+        return 'mock';
+      }
+    }
+
+    test('should allow when LLM returns allow=true', async () => {
+      executor.setLLMClient(new MockLLM('{"allow":true,"reason":"ok"}'));
+      const result = await (executor as any).executePromptHook(
+        { type: 'prompt', prompt: 'Is this safe?' },
+        createInput(),
+        1000
+      );
+      expect(result?.continue).toBe(true);
+    });
+
+    test('should deny when LLM returns allow=false', async () => {
+      executor.setLLMClient(new MockLLM('{"allow":false,"reason":"no"}'));
+      const result = await (executor as any).executePromptHook(
+        { type: 'prompt', prompt: 'Is this safe?' },
+        createInput(),
+        1000
+      );
+      expect(result?.continue).toBe(false);
+      expect(result?.stopReason).toBe('no');
+    });
+
+    test('should return null on invalid JSON', async () => {
+      executor.setLLMClient(new MockLLM('not-json'));
+      const result = await (executor as any).executePromptHook(
+        { type: 'prompt', prompt: 'Is this safe?' },
+        createInput(),
+        1000
+      );
+      expect(result).toBeNull();
+    });
+
+    test('should return null on timeout', async () => {
+      executor.setLLMClient(new DelayedLLM());
+      const result = await (executor as any).executePromptHook(
+        { type: 'prompt', prompt: 'Is this safe?' },
+        createInput(),
+        1
+      );
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('agent hook execution with runner', () => {
+    test('should parse ALLOW response', async () => {
+      executor.setAgentRunner(async () => 'ALLOW ok');
+      const result = await (executor as any).executeAgentHook(
+        { type: 'agent', prompt: 'Review' },
+        createInput(),
+        1000
+      );
+      expect(result?.continue).toBe(true);
+    });
+
+    test('should parse DENY response', async () => {
+      executor.setAgentRunner(async () => 'DENY blocked');
+      const result = await (executor as any).executeAgentHook(
+        { type: 'agent', prompt: 'Review' },
+        createInput(),
+        1000
+      );
+      expect(result?.continue).toBe(false);
+      expect(result?.stopReason).toBe('blocked');
     });
   });
 

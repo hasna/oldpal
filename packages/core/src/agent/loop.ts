@@ -9,6 +9,7 @@ import { WebTools } from '../tools/web';
 import { FeedbackTool } from '../tools/feedback';
 import { SchedulerTool } from '../tools/scheduler';
 import { ImageTools } from '../tools/image';
+import { runHookAgent } from './subagent';
 import { SkillLoader } from '../skills/loader';
 import { SkillExecutor } from '../skills/executor';
 import { HookLoader } from '../hooks/loader';
@@ -124,6 +125,7 @@ export class AgentLoop {
       // Initialize LLM client
       createLLMClient(this.config.llm).then((client) => {
         this.llmClient = client;
+        this.hookExecutor.setLLMClient(client);
       }),
       // Load skills
       this.skillLoader.loadAll(this.cwd),
@@ -152,6 +154,10 @@ export class AgentLoop {
 
     // Load hooks
     this.hookLoader.load(hooksConfig);
+
+    this.hookExecutor.setAgentRunner((hook, input, timeout) =>
+      runHookAgent({ hook, input, timeout, cwd: this.cwd })
+    );
 
     // Set system prompt (store for re-use on clear)
     this.systemPrompt = systemPrompt || null;
@@ -268,64 +274,74 @@ export class AgentLoop {
   private async runLoop(): Promise<void> {
     const maxTurns = 50;
     let turn = 0;
+    let streamError: Error | null = null;
 
-    while (turn < maxTurns && !this.shouldStop) {
-      turn++;
+    try {
+      while (turn < maxTurns && !this.shouldStop) {
+        turn++;
 
-      const messages = this.context.getMessages();
-      const tools = this.filterAllowedTools(this.toolRegistry.getTools());
-      const systemPrompt = this.buildSystemPrompt(messages);
+        const messages = this.context.getMessages();
+        const tools = this.filterAllowedTools(this.toolRegistry.getTools());
+        const systemPrompt = this.buildSystemPrompt(messages);
 
-      let responseText = '';
-      const toolCalls: ToolCall[] = [];
+        let responseText = '';
+        const toolCalls: ToolCall[] = [];
 
-      // Stream response from LLM
-      for await (const chunk of this.llmClient!.chat(messages, tools, systemPrompt)) {
-        if (this.shouldStop) break;
+        // Stream response from LLM
+        for await (const chunk of this.llmClient!.chat(messages, tools, systemPrompt)) {
+          if (this.shouldStop) break;
 
-        this.emit(chunk);
+          this.emit(chunk);
 
-        if (chunk.type === 'text' && chunk.content) {
-          responseText += chunk.content;
-        } else if (chunk.type === 'tool_use' && chunk.toolCall) {
-          toolCalls.push(chunk.toolCall);
-        } else if (chunk.type === 'usage' && chunk.usage) {
-          // Update token usage
-          this.updateTokenUsage(chunk.usage);
-        } else if (chunk.type === 'error') {
-          return;
+          if (chunk.type === 'text' && chunk.content) {
+            responseText += chunk.content;
+          } else if (chunk.type === 'tool_use' && chunk.toolCall) {
+            toolCalls.push(chunk.toolCall);
+          } else if (chunk.type === 'usage' && chunk.usage) {
+            // Update token usage
+            this.updateTokenUsage(chunk.usage);
+          } else if (chunk.type === 'error') {
+            streamError = new Error(chunk.error || 'LLM stream error');
+            break;
+          }
         }
+
+        // Add assistant message if any content/tool calls
+        const shouldStopNow = this.shouldStop || streamError !== null;
+        if (responseText.trim() || toolCalls.length > 0) {
+          this.context.addAssistantMessage(responseText, toolCalls.length > 0 ? toolCalls : undefined);
+        }
+
+        // If stopped or error mid-stream, don't execute tool calls
+        if (shouldStopNow) {
+          break;
+        }
+
+        // If no tool calls, we're done
+        if (toolCalls.length === 0) {
+          break;
+        }
+
+        // Execute tool calls
+        const results = await this.executeToolCalls(toolCalls);
+
+        // Add tool results to context
+        this.context.addToolResults(results);
       }
+    } finally {
+      // Run Stop hooks
+      await this.hookExecutor.execute(this.hookLoader.getHooks('Stop'), {
+        session_id: this.sessionId,
+        hook_event_name: 'Stop',
+        cwd: this.cwd,
+      });
 
-      // Add assistant message
-      const shouldStopNow = this.shouldStop;
-      this.context.addAssistantMessage(responseText, toolCalls.length > 0 ? toolCalls : undefined);
-
-      // If stopped mid-stream, don't execute tool calls
-      if (shouldStopNow) {
-        break;
-      }
-
-      // If no tool calls, we're done
-      if (toolCalls.length === 0) {
-        break;
-      }
-
-      // Execute tool calls
-      const results = await this.executeToolCalls(toolCalls);
-
-      // Add tool results to context
-      this.context.addToolResults(results);
+      this.emit({ type: 'done' });
     }
 
-    // Run Stop hooks
-    await this.hookExecutor.execute(this.hookLoader.getHooks('Stop'), {
-      session_id: this.sessionId,
-      hook_event_name: 'Stop',
-      cwd: this.cwd,
-    });
-
-    this.emit({ type: 'done' });
+    if (streamError) {
+      throw streamError;
+    }
   }
 
   /**

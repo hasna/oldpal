@@ -1,7 +1,7 @@
 # Plan: Implement Prompt & Agent Hooks
 
 **Plan ID:** 00001
-**Status:** Draft
+**Status:** Completed
 **Priority:** High
 **Estimated Effort:** Medium (2-3 days)
 **Dependencies:** None
@@ -131,39 +131,39 @@ After analysis, respond with: ALLOW or DENY followed by reason.`,
 ## Implementation Steps
 
 ### Step 1: Add LLM Client to HookExecutor
-- [ ] Add `llmClient` property to HookExecutor
-- [ ] Add `setLLMClient()` method
-- [ ] Update AgentLoop to pass LLM client after initialization
+- [x] Add `llmClient` property to HookExecutor
+- [x] Add `setLLMClient()` method
+- [x] Update AgentLoop to pass LLM client after initialization
 
 **Files:**
 - `packages/core/src/hooks/executor.ts`
 - `packages/core/src/agent/loop.ts`
 
 ### Step 2: Implement executePromptHook
-- [ ] Build prompt template with input injection
-- [ ] Call LLM with timeout
-- [ ] Parse JSON response
-- [ ] Return HookOutput
+- [x] Build prompt template with input injection
+- [x] Call LLM with timeout
+- [x] Parse JSON response
+- [x] Return HookOutput
 
 **Files:**
 - `packages/core/src/hooks/executor.ts`
 
 ### Step 3: Implement executeAgentHook
-- [ ] Create subagent factory function
-- [ ] Initialize subagent with restricted tools
-- [ ] Run subagent with timeout
-- [ ] Parse response for ALLOW/DENY
-- [ ] Cleanup subagent resources
+- [x] Create subagent factory function
+- [x] Initialize subagent with restricted tools
+- [x] Run subagent with timeout
+- [x] Parse response for ALLOW/DENY
+- [x] Cleanup subagent resources
 
 **Files:**
 - `packages/core/src/hooks/executor.ts`
 - `packages/core/src/agent/subagent.ts` (new)
 
 ### Step 4: Add Tests
-- [ ] Test prompt hook with mock LLM
-- [ ] Test agent hook with mock subagent
-- [ ] Test timeout behavior
-- [ ] Test error handling
+- [x] Test prompt hook with mock LLM
+- [x] Test agent hook with mock subagent
+- [x] Test timeout behavior
+- [x] Test error handling
 
 **Files:**
 - `packages/core/tests/hooks-execution.test.ts`

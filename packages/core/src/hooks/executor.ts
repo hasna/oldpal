@@ -1,13 +1,28 @@
-import type { HookMatcher, HookHandler, HookInput, HookOutput } from '@oldpal/shared';
+import type { HookMatcher, HookHandler, HookInput, HookOutput, Message } from '@oldpal/shared';
+import type { LLMClient } from '../llm/client';
+import { generateId, sleep } from '@oldpal/shared';
 
 function killSpawnedProcess(proc: { kill: () => void }): void {
   proc.kill();
 }
 
+type AgentRunner = (hook: HookHandler, input: HookInput, timeout: number) => Promise<string | null>;
+
 /**
  * Hook executor - runs hooks and collects results
  */
 export class HookExecutor {
+  private llmClient?: LLMClient;
+  private agentRunner?: AgentRunner;
+
+  setLLMClient(client: LLMClient): void {
+    this.llmClient = client;
+  }
+
+  setAgentRunner(runner: AgentRunner): void {
+    this.agentRunner = runner;
+  }
+
   /**
    * Execute hooks for an event
    */
@@ -175,12 +190,28 @@ export class HookExecutor {
     input: HookInput,
     timeout: number
   ): Promise<HookOutput | null> {
-    if (!hook.prompt) return null;
+    if (!hook.prompt || !this.llmClient) return null;
 
-    // TODO: Implement prompt hook with LLM call
-    // For now, return null (no blocking)
-    console.log(`Prompt hook: ${hook.prompt}`);
-    return null;
+    const fullPrompt = `${hook.prompt}
+
+Context:
+${JSON.stringify(input, null, 2)}
+
+Respond with JSON only: {"allow": boolean, "reason": string}`;
+
+    try {
+      const response = await this.completeWithTimeout(fullPrompt, timeout);
+      const decision = this.parseDecision(response);
+      if (!decision) return null;
+
+      return {
+        continue: decision.allow,
+        stopReason: decision.allow ? undefined : decision.reason,
+      };
+    } catch (error) {
+      console.error('Prompt hook error:', error);
+      return null;
+    }
   }
 
   /**
@@ -191,12 +222,93 @@ export class HookExecutor {
     input: HookInput,
     timeout: number
   ): Promise<HookOutput | null> {
-    if (!hook.prompt) return null;
+    if (!hook.prompt || !this.agentRunner) return null;
 
-    // TODO: Implement agent hook with subagent
-    // For now, return null (no blocking)
-    console.log(`Agent hook: ${hook.prompt}`);
-    return null;
+    try {
+      const response = await this.agentRunner(hook, input, timeout);
+      if (!response) return null;
+      const decision = this.parseAllowDeny(response);
+      if (!decision) return null;
+      return {
+        continue: decision.allow,
+        stopReason: decision.allow ? undefined : decision.reason,
+      };
+    } catch (error) {
+      console.error('Agent hook error:', error);
+      return null;
+    }
+  }
+
+  private parseDecision(raw: string): { allow: boolean; reason?: string } | null {
+    const json = this.extractJson(raw);
+    if (!json) return null;
+    try {
+      const parsed = JSON.parse(json) as { allow?: boolean; continue?: boolean; reason?: string };
+      const allow = typeof parsed.allow === 'boolean' ? parsed.allow : parsed.continue;
+      if (typeof allow !== 'boolean') return null;
+      return { allow, reason: parsed.reason };
+    } catch {
+      return null;
+    }
+  }
+
+  private parseAllowDeny(raw: string): { allow: boolean; reason?: string } | null {
+    const tokenMatch = raw.match(/\b(ALLOW|DENY)\b/i);
+    if (!tokenMatch) return null;
+    const allow = tokenMatch[1].toUpperCase() === 'ALLOW';
+    const reason = raw.replace(/\b(ALLOW|DENY)\b/i, '').trim() || undefined;
+    return { allow, reason };
+  }
+
+  private extractJson(raw: string): string | null {
+    const match = raw.match(/\{[\s\S]*\}/);
+    return match ? match[0] : null;
+  }
+
+  private async completeWithTimeout(prompt: string, timeout: number): Promise<string> {
+    const messages: Message[] = [
+      { id: generateId(), role: 'user', content: prompt, timestamp: Date.now() },
+    ];
+
+    const deadline = Date.now() + timeout;
+    let response = '';
+    const iterator = this.llmClient!.chat(messages)[Symbol.asyncIterator]();
+
+    while (true) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        throw new Error('timeout');
+      }
+
+      const next = await this.nextWithTimeout(iterator, remaining);
+      if (next.done) break;
+
+      const chunk = next.value;
+      if (chunk.type === 'text' && chunk.content) {
+        response += chunk.content;
+      } else if (chunk.type === 'error') {
+        throw new Error(chunk.error || 'llm error');
+      }
+    }
+
+    await sleep(0);
+    return response.trim();
+  }
+
+  private async nextWithTimeout<T>(
+    iterator: AsyncIterator<T>,
+    timeout: number
+  ): Promise<IteratorResult<T>> {
+    const result = await Promise.race([
+      iterator.next(),
+      sleep(timeout).then(() => ({ timeout: true } as const)),
+    ]);
+
+    if ('timeout' in result) {
+      throw new Error('timeout');
+    }
+
+    return result as IteratorResult<T>;
   }
 }
 
