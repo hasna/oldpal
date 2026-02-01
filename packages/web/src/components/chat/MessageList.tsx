@@ -3,6 +3,7 @@
 import type { Message } from '@hasna/assistants-shared';
 import { MessageBubble } from './MessageBubble';
 import { useChatStore } from '@/lib/store';
+import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
 
 interface MessageListProps {
   messages: Message[];
@@ -10,6 +11,9 @@ interface MessageListProps {
 
 export function MessageList({ messages }: MessageListProps) {
   const { isStreaming, currentToolCalls } = useChatStore();
+  const currentToolCallResults = (currentToolCalls as Array<ToolCall & { result?: ToolResult }>)
+    .map((call) => call.result)
+    .filter((result): result is ToolResult => Boolean(result));
 
   return (
     <div className="flex flex-col gap-6">
@@ -21,12 +25,16 @@ export function MessageList({ messages }: MessageListProps) {
           toolCalls.length > 0 || !isLast || message.role !== 'assistant'
             ? toolCalls
             : currentToolCalls;
+        const mergedToolResults =
+          mergedToolCalls === currentToolCalls && currentToolCallResults.length > 0
+            ? currentToolCallResults
+            : toolResults;
 
         return (
           <MessageBubble
             key={message.id}
             message={{ ...message, toolCalls: mergedToolCalls }}
-            toolResults={toolResults}
+            toolResults={mergedToolResults}
             isStreaming={isStreaming && isLast && message.role === 'assistant'}
           />
         );

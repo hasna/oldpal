@@ -17,7 +17,7 @@ import {
 } from '../scheduler/store';
 
 // Version constant - should match package.json
-const VERSION = '0.6.13';
+const VERSION = '0.6.14';
 
 type ConnectorAuthTimeoutResolve = (value: {
   exitCode: number;
