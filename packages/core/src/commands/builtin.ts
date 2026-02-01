@@ -799,7 +799,19 @@ Keep it concise but comprehensive.`,
 
           // Check auth status
           try {
-            const result = await Bun.$`${connector.cli} auth status --format json`.quiet().nothrow();
+            let timeoutId: ReturnType<typeof setTimeout> | null = null;
+            const timeoutPromise = new Promise<{ exitCode: number; stdout: { toString: () => string } }>((resolve) => {
+              timeoutId = setTimeout(resolveAuthTimeout, 1000, resolve);
+            });
+
+            const result = await Promise.race([
+              Bun.$`${connector.cli} auth status --format json`.quiet().nothrow(),
+              timeoutPromise,
+            ]);
+
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+            }
             if (result.exitCode === 0) {
               const status = JSON.parse(result.stdout.toString());
               message += `**Auth Status:** ${status.authenticated ? '✓ Authenticated' : '○ Not authenticated'}\n`;
@@ -912,13 +924,16 @@ Keep it concise but comprehensive.`,
         const rawArgs = args.trim();
         const [maybeType, ...rest] = rawArgs.split(/\s+/);
         const normalizedType = maybeType?.toLowerCase();
-        const feedbackType: FeedbackType =
-          normalizedType === 'bug' || normalizedType === 'feature' || normalizedType === 'feedback'
-            ? normalizedType
-            : 'feedback';
-        const summary = (normalizedType && feedbackType !== 'feedback')
-          ? rest.join(' ').trim()
-          : rawArgs;
+        const typeMap: Record<string, FeedbackType> = {
+          bug: 'bug',
+          issue: 'bug',
+          feature: 'feature',
+          request: 'feature',
+          feedback: 'feedback',
+        };
+        const typeToken = normalizedType && typeMap[normalizedType] ? normalizedType : null;
+        const feedbackType: FeedbackType = typeToken ? typeMap[typeToken] : 'feedback';
+        const summary = typeToken ? rest.join(' ').trim() : rawArgs;
 
         // Collect system info
         const systemInfo = {
@@ -991,7 +1006,13 @@ Keep it concise but comprehensive.`,
             cwd: context.cwd,
           },
         };
-        const { path: localPath } = saveFeedbackEntry(localEntry);
+        let localPath = '';
+        try {
+          const saved = saveFeedbackEntry(localEntry);
+          localPath = saved.path;
+        } catch {
+          localPath = '';
+        }
 
         // Build GitHub new issue URL
         const issueUrl = new URL(`${repoUrl}/issues/new`);
@@ -1034,14 +1055,18 @@ Keep it concise but comprehensive.`,
           let message = '\n**Opening GitHub to submit feedback...**\n\n';
           message += 'A browser window should open with a pre-filled issue template.\n';
           message += 'Please fill in the details and submit.\n\n';
-          message += `Saved locally: ${localPath}\n\n`;
+          if (localPath) {
+            message += `Saved locally: ${localPath}\n\n`;
+          }
           message += `If the browser doesn't open, visit:\n${repoUrl}/issues/new\n`;
 
           context.emit('text', message);
         } catch {
           let message = '\n**Submit Feedback**\n\n';
           message += `Please visit: ${repoUrl}/issues/new\n\n`;
-          message += `Saved locally: ${localPath}\n\n`;
+          if (localPath) {
+            message += `Saved locally: ${localPath}\n\n`;
+          }
           message += '**System Information:**\n';
           message += `- oldpal version: ${systemInfo.version}\n`;
           message += `- Platform: ${systemInfo.platform} ${systemInfo.release}\n`;

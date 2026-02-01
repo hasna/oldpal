@@ -355,12 +355,15 @@ export class ConnectorBridge {
       const command = input.command as string;
       const args = (input.args as string[]) || [];
       const options = (input.options as Record<string, unknown>) || {};
+      const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd();
+      const timeoutMs = Number(options.timeoutMs || options.timeout || 15000);
 
       // Build the command
       const cmdParts = [connector.cli, ...command.split(' '), ...args];
 
       // Add options
       for (const [key, value] of Object.entries(options)) {
+        if (key === 'timeoutMs' || key === 'timeout') continue;
         if (value === true) {
           cmdParts.push(`--${key}`);
         } else if (value !== false && value !== undefined) {
@@ -368,20 +371,58 @@ export class ConnectorBridge {
         }
       }
 
-      // Always output as JSON for easier parsing
-      if (!cmdParts.includes('--format') && !cmdParts.includes('-f')) {
-        cmdParts.push('--format', 'json');
+      const lowerCommand = command.toLowerCase();
+      const lowerArgs = args.map((arg) => arg.toLowerCase());
+      const isAuthLogin =
+        (lowerCommand.includes('auth') && (lowerCommand.includes('login') || lowerCommand.includes('authorize'))) ||
+        (lowerCommand.includes('auth') && (lowerArgs.includes('login') || lowerArgs.includes('authorize'))) ||
+        (lowerArgs.includes('auth') && (lowerArgs.includes('login') || lowerArgs.includes('authorize')));
+
+      if (isAuthLogin) {
+        try {
+          Bun.spawn(cmdParts, {
+            cwd,
+            stdin: 'ignore',
+            stdout: 'ignore',
+            stderr: 'pipe',
+          });
+        } catch {
+          // ignore spawn errors; fall through to error message below
+        }
+        return 'Auth login started in the background. Complete it in your browser, then run auth status to confirm.';
       }
 
       try {
-        const result = await Bun.$`${cmdParts}`.quiet();
+        const proc = Bun.spawn(cmdParts, {
+          cwd,
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'pipe',
+        });
+        let timedOut = false;
+        const timer = setTimeout(() => {
+          timedOut = true;
+          proc.kill();
+        }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 15000);
 
-        if (result.exitCode !== 0) {
-          const stderr = result.stderr.toString().trim();
-          return `Error (exit ${result.exitCode}): ${stderr || 'Command failed'}`;
+        const [stdout, stderr] = await Promise.all([
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+        ]);
+        const exitCode = await proc.exited;
+        clearTimeout(timer);
+
+        if (timedOut) {
+          return `Error: command timed out after ${Math.round((Number.isFinite(timeoutMs) ? timeoutMs : 15000) / 1000)}s.`;
         }
 
-        return result.stdout.toString().trim() || 'Command completed successfully';
+        if (exitCode !== 0) {
+          const stderrText = stderr.toString().trim();
+          const stdoutText = stdout.toString().trim();
+          return `Error (exit ${exitCode}): ${stderrText || stdoutText || 'Command failed'}`;
+        }
+
+        return stdout.toString().trim() || 'Command completed successfully';
       } catch (error) {
         return `Error: ${error instanceof Error ? error.message : String(error)}`;
       }

@@ -1,5 +1,5 @@
 import type { Tool, ToolCall, ToolResult } from '@oldpal/shared';
-import { generateId } from '@oldpal/shared';
+import { sleep } from '@oldpal/shared';
 
 /**
  * Tool executor function type
@@ -75,11 +75,22 @@ export class ToolRegistry {
     }
 
     try {
-      const result = await registered.executor(toolCall.input);
+      const input = toolCall.input as Record<string, unknown>;
+      const timeoutMsRaw = input?.timeoutMs ?? input?.timeout;
+      const timeoutMsParsed = typeof timeoutMsRaw === 'string' ? Number(timeoutMsRaw) : timeoutMsRaw;
+      const timeoutMs = typeof timeoutMsParsed === 'number' && timeoutMsParsed > 0 ? timeoutMsParsed : 60000;
+
+      const result = await Promise.race([
+        registered.executor(toolCall.input),
+        sleep(timeoutMs).then(() => {
+          throw new Error(`Tool timeout after ${Math.round(timeoutMs / 1000)}s`);
+        }),
+      ]);
+      const isError = isErrorResult(result);
       return {
         toolCallId: toolCall.id,
         content: result,
-        isError: false,
+        isError,
         toolName: toolCall.name,
       };
     } catch (error) {
@@ -102,4 +113,14 @@ export class ToolRegistry {
     }
     return Promise.all(tasks);
   }
+}
+
+function isErrorResult(result: string): boolean {
+  const trimmed = result.trim().toLowerCase();
+  return (
+    trimmed.startsWith('error') ||
+    trimmed.startsWith('exit code') ||
+    trimmed.startsWith('tool timeout') ||
+    trimmed.startsWith('timed out')
+  );
 }

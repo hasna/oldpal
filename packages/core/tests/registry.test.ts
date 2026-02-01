@@ -131,6 +131,23 @@ describe('ToolRegistry', () => {
       expect(result.isError).toBe(true);
       expect(result.content).toContain('Tool execution failed');
     });
+
+    test('should mark error when executor returns error string', async () => {
+      const errorExecutor = async (): Promise<string> => {
+        return 'Error: something went wrong';
+      };
+
+      registry.register(mockTool, errorExecutor);
+
+      const toolCall: ToolCall = {
+        id: 'tc-1',
+        name: 'test_tool',
+        input: {},
+      };
+
+      const result = await registry.execute(toolCall);
+      expect(result.isError).toBe(true);
+    });
   });
 
   describe('executeAll', () => {

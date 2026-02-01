@@ -101,15 +101,17 @@ export class BashTool {
     const cwd = (input.cwd as string) || process.cwd();
     const timeout = (input.timeout as number) || 30000; // Reduced default timeout
 
+    const commandForChecks = command.replace(/\s*2>&1\s*/g, ' ');
+
     // Check against blocked patterns
     for (const pattern of this.BLOCKED_PATTERNS) {
-      if (pattern.test(command)) {
+      if (pattern.test(commandForChecks)) {
         return `Error: This command is not allowed. Only read-only commands are permitted (ls, cat, grep, find, git status/log/diff, etc.)`;
       }
     }
 
     // Check if command starts with an allowed prefix
-    const commandTrimmed = command.trim().toLowerCase();
+    const commandTrimmed = commandForChecks.trim().toLowerCase();
     let isAllowed = false;
     for (const allowed of this.ALLOWED_COMMANDS) {
       if (commandTrimmed.startsWith(allowed.toLowerCase())) {

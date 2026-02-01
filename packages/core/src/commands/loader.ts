@@ -104,7 +104,7 @@ export class CommandLoader {
    * Parse YAML frontmatter from markdown content
    */
   private parseFrontmatter(content: string): { frontmatter: CommandFrontmatter; body: string } {
-    const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
+    const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
     const match = content.match(frontmatterRegex);
 
     if (!match) {
@@ -114,30 +114,57 @@ export class CommandLoader {
     const [, yamlContent, body] = match;
     const frontmatter: CommandFrontmatter = {};
 
-    // Simple YAML parsing (key: value pairs)
     const lines = yamlContent.split('\n');
-    for (const line of lines) {
-      const colonIndex = line.indexOf(':');
-      if (colonIndex === -1) continue;
+    let currentListKey: string | null = null;
+    for (const rawLine of lines) {
+      const line = rawLine.trimEnd();
+      if (!line.trim() || line.trim().startsWith('#')) continue;
 
-      const key = line.slice(0, colonIndex).trim();
-      let value = line.slice(colonIndex + 1).trim();
-
-      // Handle arrays like [tag1, tag2]
-      if (value.startsWith('[') && value.endsWith(']')) {
-        const arrayContent = value.slice(1, -1);
-        frontmatter[key] = arrayContent.split(',').map(v => v.trim());
-      } else {
-        // Remove quotes if present
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
-          value = value.slice(1, -1);
-        }
-        frontmatter[key] = value;
+      const listMatch = line.match(/^\s*-\s+(.+)$/);
+      if (listMatch && currentListKey) {
+        const list = (frontmatter[currentListKey] as unknown[] | undefined) ?? [];
+        list.push(this.parseYamlValue(listMatch[1]));
+        frontmatter[currentListKey] = list as any;
+        continue;
       }
+
+      const keyMatch = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+      if (!keyMatch) continue;
+
+      const key = keyMatch[1];
+      const valueRaw = keyMatch[2] ?? '';
+      if (valueRaw.trim() === '') {
+        currentListKey = key;
+        if (!frontmatter[key]) {
+          frontmatter[key] = [];
+        }
+        continue;
+      }
+
+      currentListKey = null;
+      frontmatter[key] = this.parseYamlValue(valueRaw);
     }
 
     return { frontmatter, body: body.trim() };
+  }
+
+  private parseYamlValue(value: string): unknown {
+    const trimmed = value.trim();
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+    if (!Number.isNaN(Number(trimmed)) && trimmed !== '') return Number(trimmed);
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      const inner = trimmed.slice(1, -1).trim();
+      if (!inner) return [];
+      return inner.split(',').map((item) => this.parseYamlValue(item));
+    }
+    if (
+      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+      return trimmed.slice(1, -1);
+    }
+    return trimmed;
   }
 
   /**

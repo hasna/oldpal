@@ -127,11 +127,22 @@ export class CommandExecutor {
    */
   private async executeShell(command: string, cwd: string): Promise<string> {
     try {
-      const proc = Bun.spawn(['bash', '-c', command], {
+      const timeoutMs = 5000;
+      const isWindows = process.platform === 'win32';
+      const shellBinary = isWindows ? 'cmd' : (Bun.which('bash') || 'sh');
+      const shellArgs = isWindows ? ['/c', command] : ['-lc', command];
+      const proc = Bun.spawn([shellBinary, ...shellArgs], {
         cwd,
+        stdin: 'ignore',
         stdout: 'pipe',
         stderr: 'pipe',
       });
+
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        proc.kill();
+      }, timeoutMs);
 
       const [stdout, stderr] = await Promise.all([
         new Response(proc.stdout).text(),
@@ -139,6 +150,11 @@ export class CommandExecutor {
       ]);
 
       const exitCode = await proc.exited;
+      clearTimeout(timer);
+
+      if (timedOut) {
+        return `Error: command timed out after ${Math.round(timeoutMs / 1000)}s.`;
+      }
 
       if (exitCode !== 0 && stderr) {
         return `Error (exit ${exitCode}):\n${stderr}`;
