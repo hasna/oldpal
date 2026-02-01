@@ -127,6 +127,38 @@ describe('AgentLoop process', () => {
     expect(chunks.some((c) => c.type === 'done')).toBe(true);
   });
 
+  test('executes explicit bash tool command without LLM', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-bash-'));
+    const chunks: StreamChunk[] = [];
+    const agent = new AgentLoop({
+      cwd,
+      onChunk: (chunk) => chunks.push(chunk),
+    });
+
+    let chatCalls = 0;
+    (agent as any).llmClient = {
+      getModel: () => 'mock',
+      chat: async function* (): AsyncGenerator<StreamChunk> {
+        chatCalls += 1;
+        yield { type: 'text', content: 'should-not-run' };
+        yield { type: 'done' };
+      },
+    };
+    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+
+    (agent as any).toolRegistry.register(
+      { name: 'bash', description: 'Run commands', parameters: { type: 'object', properties: {} } },
+      async () => 'ok'
+    );
+
+    await agent.process('![bash] echo hi');
+
+    expect(chatCalls).toBe(0);
+    expect(chunks.some((c) => c.type === 'tool_use')).toBe(true);
+    expect(chunks.some((c) => c.type === 'tool_result')).toBe(true);
+    expect(chunks.some((c) => c.type === 'done')).toBe(true);
+  });
+
   test('stop halts streaming after first chunk', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-stop-'));
     const chunks: StreamChunk[] = [];

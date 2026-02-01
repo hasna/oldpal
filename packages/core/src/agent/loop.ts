@@ -305,6 +305,11 @@ export class AgentLoop {
         }
       }
 
+      const explicitToolResult = await this.handleExplicitToolCommand(userMessage);
+      if (explicitToolResult) {
+        return explicitToolResult;
+      }
+
       if (userMessage.startsWith('/')) {
         const parsed = this.commandExecutor.parseCommand(userMessage);
         const command = parsed ? this.commandLoader.getCommand(parsed.name) : undefined;
@@ -357,6 +362,49 @@ export class AgentLoop {
       this.setHeartbeatState('idle');
       this.drainScheduledQueue();
     }
+  }
+
+  private async handleExplicitToolCommand(
+    userMessage: string
+  ): Promise<{ ok: boolean; summary?: string; error?: string } | null> {
+    const match = userMessage.match(/^!\[(\w+)\]\s*([\s\S]*)$/);
+    if (!match) return null;
+
+    const toolName = match[1].toLowerCase();
+    const command = match[2].trim();
+
+    if (!command) {
+      this.emit({ type: 'text', content: `Usage: ![${toolName}] <command>\n` });
+      this.emit({ type: 'done' });
+      return { ok: false, error: 'Missing command' };
+    }
+
+    if (toolName !== 'bash') {
+      this.emit({ type: 'text', content: `Unsupported tool: ${toolName}\n` });
+      this.emit({ type: 'done' });
+      return { ok: false, error: 'Unsupported tool' };
+    }
+
+    const toolCall: ToolCall = {
+      id: generateId(),
+      name: 'bash',
+      type: 'tool',
+      input: {
+        command,
+        cwd: this.cwd,
+        sessionId: this.sessionId,
+      },
+    };
+
+    this.context.addUserMessage(userMessage);
+    this.context.addAssistantMessage('', [toolCall]);
+
+    this.emit({ type: 'tool_use', toolCall });
+    const results = await this.executeToolCalls([toolCall]);
+    this.context.addToolResults(results);
+
+    this.emit({ type: 'done' });
+    return { ok: true, summary: `Executed ${toolName}` };
   }
 
   /**
