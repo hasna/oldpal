@@ -905,6 +905,22 @@ describe('BuiltinCommands', () => {
         expect(result.handled).toBe(true);
       }
     });
+
+    test('should show available schedule ids when resume missing id', async () => {
+      const scheduleCmd = loader.getCommand('schedule');
+      const resumeCmd = loader.getCommand('resume');
+      expect(scheduleCmd).toBeDefined();
+      expect(resumeCmd).toBeDefined();
+
+      if (scheduleCmd?.handler && resumeCmd?.handler) {
+        const future = new Date(Date.now() + 60_000).toISOString();
+        await scheduleCmd.handler(`${future} /status`, mockContext);
+        const result = await resumeCmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        const output = emittedContent.join('\n');
+        expect(output).toContain('Available schedules');
+      }
+    });
   });
 
   describe('/projects and /plans commands', () => {

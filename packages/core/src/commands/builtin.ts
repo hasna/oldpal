@@ -1887,7 +1887,15 @@ Keep it concise but comprehensive.`,
       handler: async (args, context) => {
         const id = args.trim();
         if (!id) {
-          context.emit('text', 'Usage: /pause <id>\n');
+          const schedules = await listSchedules(context.cwd);
+          if (schedules.length === 0) {
+            context.emit('text', 'No schedules found.\n');
+          } else {
+            const lines = schedules
+              .sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))
+              .map((schedule) => `- ${schedule.id} [${schedule.status}] ${schedule.command}`);
+            context.emit('text', `Usage: /pause <id>\n\nAvailable schedules:\n${lines.join('\n')}\n`);
+          }
           context.emit('done');
           return { handled: true };
         }
@@ -1916,7 +1924,15 @@ Keep it concise but comprehensive.`,
       handler: async (args, context) => {
         const id = args.trim();
         if (!id) {
-          context.emit('text', 'Usage: /resume <id>\n');
+          const schedules = await listSchedules(context.cwd);
+          if (schedules.length === 0) {
+            context.emit('text', 'No schedules found.\n');
+          } else {
+            const lines = schedules
+              .sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))
+              .map((schedule) => `- ${schedule.id} [${schedule.status}] ${schedule.command}`);
+            context.emit('text', `Usage: /resume <id>\n\nAvailable schedules:\n${lines.join('\n')}\n`);
+          }
           context.emit('done');
           return { handled: true };
         }
