@@ -8,6 +8,7 @@ import {
   deleteSchedule,
   updateSchedule,
   computeNextRun,
+  isValidTimeZone,
 } from '../scheduler/store';
 
 export class SchedulerTool {
@@ -78,6 +79,10 @@ export class SchedulerTool {
       const at = input.at as string | undefined;
       const cron = input.cron as string | undefined;
       if (!at && !cron) return 'Error: provide either at (ISO time) or cron.';
+      const timezone = input.timezone as string | undefined;
+      if (timezone && !isValidTimeZone(timezone)) {
+        return `Error: invalid timezone "${timezone}".`;
+      }
 
       const schedule: ScheduledCommand = {
         id: generateId(),
@@ -91,7 +96,7 @@ export class SchedulerTool {
           kind: cron ? 'cron' : 'once',
           at,
           cron,
-          timezone: input.timezone as string | undefined,
+          timezone,
         },
       };
       schedule.nextRunAt = computeNextRun(schedule, now);

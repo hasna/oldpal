@@ -19,9 +19,12 @@ import { createLLMClient, type LLMClient } from '../llm/client';
 import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir } from '../config';
 import {
   acquireScheduleLock,
-  releaseScheduleLock,
+  DEFAULT_LOCK_TTL_MS,
   getDueSchedules,
   computeNextRun,
+  readSchedule,
+  refreshScheduleLock,
+  releaseScheduleLock,
   updateSchedule,
 } from '../scheduler/store';
 
@@ -654,11 +657,16 @@ export class AgentLoop {
       for (const schedule of due) {
         const locked = await acquireScheduleLock(this.cwd, schedule.id, this.sessionId);
         if (!locked) continue;
+        const alreadyQueued = this.scheduledQueue.some((item) => item.id === schedule.id);
+        if (alreadyQueued) {
+          await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
+          continue;
+        }
         this.scheduledQueue.push(schedule);
       }
       this.drainScheduledQueue();
-    } catch {
-      // ignore heartbeat errors
+    } catch (error) {
+      console.error('Scheduler heartbeat error:', error);
     }
   }
 
@@ -673,30 +681,48 @@ export class AgentLoop {
         const schedule = this.scheduledQueue.shift();
         if (!schedule) break;
 
-        const result = await this.runMessage(schedule.command, 'schedule');
-        const now = Date.now();
-        await updateSchedule(this.cwd, schedule.id, (current) => {
-          const updated: ScheduledCommand = {
-            ...current,
-            updatedAt: now,
-            lastRunAt: now,
-            lastResult: {
-              ok: result.ok,
-              summary: result.summary,
-              error: result.error,
-            },
-          };
+        const current = await readSchedule(this.cwd, schedule.id);
+        if (!current || current.status !== 'active' || !current.nextRunAt || current.nextRunAt > Date.now()) {
+          await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
+          continue;
+        }
 
-          if (current.schedule.kind === 'once') {
-            updated.status = result.ok ? 'completed' : 'error';
-            updated.nextRunAt = undefined;
-          } else {
-            updated.status = current.status === 'paused' ? 'paused' : 'active';
-            updated.nextRunAt = computeNextRun(updated, now);
-          }
-          return updated;
-        });
-        await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
+        const leaseInterval = Math.max(10000, Math.floor(DEFAULT_LOCK_TTL_MS / 2));
+        const leaseTimer = setInterval(() => {
+          refreshScheduleLock(this.cwd, schedule.id, this.sessionId);
+        }, leaseInterval);
+        if (typeof (leaseTimer as any).unref === 'function') {
+          (leaseTimer as any).unref();
+        }
+
+        try {
+          const result = await this.runMessage(current.command, 'schedule');
+          const now = Date.now();
+          await updateSchedule(this.cwd, schedule.id, (live) => {
+            const updated: ScheduledCommand = {
+              ...live,
+              updatedAt: now,
+              lastRunAt: now,
+              lastResult: {
+                ok: result.ok,
+                summary: result.summary,
+                error: result.error,
+              },
+            };
+
+            if (live.schedule.kind === 'once') {
+              updated.status = result.ok ? 'completed' : 'error';
+              updated.nextRunAt = undefined;
+            } else {
+              updated.status = live.status === 'paused' ? 'paused' : 'active';
+              updated.nextRunAt = computeNextRun(updated, now);
+            }
+            return updated;
+          });
+        } finally {
+          clearInterval(leaseTimer);
+          await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
+        }
       }
     } finally {
       this.drainingScheduled = false;
