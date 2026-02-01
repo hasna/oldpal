@@ -7,7 +7,7 @@ import { useChatStore } from '@/lib/store';
 import { chatWs } from '@/lib/ws';
 
 export function ChatContainer() {
-  const { messages } = useChatStore();
+  const { messages, sessionId } = useChatStore();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -18,6 +18,12 @@ export function ChatContainer() {
       chatWs.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (sessionId) {
+      chatWs.send({ type: 'session', sessionId });
+    }
+  }, [sessionId]);
 
   return (
     <div className="flex h-full flex-col">

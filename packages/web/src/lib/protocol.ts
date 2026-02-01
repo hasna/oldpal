@@ -1,6 +1,7 @@
 export type ClientMessage =
   | { type: 'message'; content: string; sessionId?: string }
-  | { type: 'cancel'; sessionId?: string };
+  | { type: 'cancel'; sessionId?: string }
+  | { type: 'session'; sessionId: string };
 
 export type ServerMessage =
   | { type: 'text_delta'; content: string }
