@@ -1,7 +1,7 @@
 # Plan: Heartbeat & Agent State System
 
 **Plan ID:** 00007
-**Status:** Draft
+**Status:** Completed
 **Priority:** Medium
 **Estimated Effort:** Small (2 days)
 **Dependencies:** None
@@ -283,56 +283,56 @@ class RecoveryManager {
 ## Implementation Steps
 
 ### Step 1: Create Heartbeat Types
-- [ ] Define AgentState type
-- [ ] Define Heartbeat interface
-- [ ] Define HeartbeatConfig
-- [ ] Define HeartbeatStats
+- [x] Define AgentState type
+- [x] Define Heartbeat interface
+- [x] Define HeartbeatConfig
+- [x] Define HeartbeatStats
 
 **Files:**
 - `packages/core/src/heartbeat/types.ts`
 
 ### Step 2: Implement HeartbeatManager
-- [ ] Create HeartbeatManager class
-- [ ] Add interval management
-- [ ] Add state tracking
-- [ ] Add activity recording
-- [ ] Add listeners
+- [x] Create HeartbeatManager class
+- [x] Add interval management
+- [x] Add state tracking
+- [x] Add activity recording
+- [x] Add listeners
 
 **Files:**
 - `packages/core/src/heartbeat/manager.ts`
 
 ### Step 3: Implement Persistence
-- [ ] Create StatePersistence class
-- [ ] Add save/load methods
-- [ ] Add recovery check
+- [x] Create StatePersistence class
+- [x] Add save/load methods
+- [x] Add recovery check
 
 **Files:**
 - `packages/core/src/heartbeat/persistence.ts`
 
 ### Step 4: Implement Recovery
-- [ ] Create RecoveryManager class
-- [ ] Detect crashed sessions
-- [ ] Implement recovery flow
-- [ ] Add user prompts
+- [x] Create RecoveryManager class
+- [x] Detect crashed sessions
+- [x] Implement recovery flow
+- [x] Add user prompts
 
 **Files:**
 - `packages/core/src/heartbeat/recovery.ts`
 
 ### Step 5: Integrate with Agent
-- [ ] Add HeartbeatManager to AgentLoop
-- [ ] Update state on activity
-- [ ] Record stats
-- [ ] Check for recovery on start
+- [x] Add HeartbeatManager to AgentLoop
+- [x] Update state on activity
+- [x] Record stats
+- [x] Check for recovery on start
 
 **Files:**
 - `packages/core/src/agent/loop.ts`
 - `packages/core/src/client.ts`
 
 ### Step 6: Add Tests
-- [ ] Test heartbeat emission
-- [ ] Test state tracking
-- [ ] Test persistence
-- [ ] Test recovery
+- [x] Test heartbeat emission
+- [x] Test state tracking
+- [x] Test persistence
+- [x] Test recovery
 
 **Files:**
 - `packages/core/tests/heartbeat.test.ts`
@@ -376,7 +376,7 @@ describe('RecoveryManager', () => {
 
 ## Approval
 
-- [ ] Technical design approved
-- [ ] Implementation steps clear
-- [ ] Tests defined
-- [ ] Ready to implement
+- [x] Technical design approved
+- [x] Implementation steps clear
+- [x] Tests defined
+- [x] Ready to implement
