@@ -1,14 +1,16 @@
 import { create } from 'zustand';
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 
+type ToolCallWithMeta = ToolCall & { result?: ToolResult; startedAt?: number };
+
 interface ChatState {
   messages: Message[];
   isStreaming: boolean;
-  currentToolCalls: ToolCall[];
+  currentToolCalls: ToolCallWithMeta[];
   currentStreamMessageId: string | null;
   sessionId: string | null;
   sessions: Array<{ id: string; label: string; createdAt: number }>;
-  sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCall[]; streamMessageId: string | null }>;
+  sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCallWithMeta[]; streamMessageId: string | null }>;
 
   setSessionId: (sessionId: string) => void;
   createSession: (label?: string) => string;
@@ -133,7 +135,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       const targetMessageId = messageId ?? state.currentStreamMessageId;
       const shouldReset = targetMessageId && targetMessageId !== state.currentStreamMessageId;
-      const nextCalls = shouldReset ? [call] : [...state.currentToolCalls, call];
+      const callWithMeta: ToolCallWithMeta = { ...call, startedAt: Date.now() };
+      const nextCalls = shouldReset ? [callWithMeta] : [...state.currentToolCalls, callWithMeta];
       return {
         currentToolCalls: nextCalls,
         currentStreamMessageId: targetMessageId ?? state.currentStreamMessageId,

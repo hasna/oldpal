@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -14,6 +14,7 @@ interface ToolCallCardProps {
 
 export function ToolCallCard({ call, result }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const isError = result?.isError;
   const accentClass = isError
     ? 'border-rose-500/50 shadow-[0_0_30px_-18px_rgba(244,63,94,0.6)]'
@@ -21,6 +22,24 @@ export function ToolCallCard({ call, result }: ToolCallCardProps) {
   const filePath = call.name === 'read'
     ? String((call.input as Record<string, unknown>)?.path || (call.input as Record<string, unknown>)?.file_path || '')
     : '';
+
+  useEffect(() => {
+    if (result || !('startedAt' in call)) {
+      setElapsed(0);
+      return;
+    }
+    const startedAt = Number((call as { startedAt?: number }).startedAt);
+    if (!Number.isFinite(startedAt)) {
+      setElapsed(0);
+      return;
+    }
+    const tick = () => {
+      setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [call, result]);
 
   return (
     <Card className={cn('mt-3 overflow-hidden border-l-4', accentClass)}>
@@ -33,6 +52,11 @@ export function ToolCallCard({ call, result }: ToolCallCardProps) {
             {call.name}
           </span>
           {isError && <Badge variant="error">Error</Badge>}
+          {!result && elapsed > 0 && (
+            <span className="text-[11px] uppercase tracking-wide text-slate-400">
+              {elapsed}s
+            </span>
+          )}
         </div>
         <span className="text-xs text-slate-400">{expanded ? 'Hide' : 'Show'}</span>
       </CardHeader>
