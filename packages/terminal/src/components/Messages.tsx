@@ -426,7 +426,7 @@ function getToolContext(toolCall: ToolCall): string {
       return truncate(String(input.pattern || ''), 20);
     case 'schedule':
       return String(input.action || '');
-    case 'feedback':
+    case 'submit_feedback':
       return String(input.type || 'feedback');
     case 'web_search':
       return truncate(String(input.query || ''), 20);

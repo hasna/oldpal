@@ -98,7 +98,7 @@ function formatToolCall(toolCall: ToolCall): string {
       return `Searching: ${truncate(String(input.pattern || ''), 50)}`;
     case 'schedule':
       return formatScheduleAction(input);
-    case 'feedback':
+    case 'submit_feedback':
       return `Submitting ${input.type || 'feedback'}`;
     case 'notion':
       return `Notion: ${truncate(String(input.command || input.action || ''), 50)}`;
