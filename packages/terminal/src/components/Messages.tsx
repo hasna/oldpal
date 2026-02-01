@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Markdown } from './Markdown';
+import { estimateMessageLines, type DisplayMessage } from './messageLines';
 
 interface ActivityEntry {
   id: string;
@@ -12,8 +13,6 @@ interface ActivityEntry {
   timestamp: number;
 }
 
-type DisplayMessage = Message & { __rendered?: boolean };
-
 interface MessagesProps {
   messages: DisplayMessage[];
   currentResponse?: string;
@@ -21,8 +20,8 @@ interface MessagesProps {
   currentToolCall?: ToolCall;
   lastToolResult?: ToolResult;
   activityLog?: ActivityEntry[];
-  scrollOffset?: number;
-  maxVisible?: number;
+  scrollOffsetLines?: number;
+  maxVisibleLines?: number;
   queuedMessageIds?: Set<string>;
 }
 
@@ -33,8 +32,8 @@ export function Messages({
   currentToolCall,
   lastToolResult,
   activityLog = [],
-  scrollOffset = 0,
-  maxVisible = 10,
+  scrollOffsetLines = 0,
+  maxVisibleLines = 10,
   queuedMessageIds,
 }: MessagesProps) {
   const [now, setNow] = useState(Date.now());
@@ -44,15 +43,29 @@ export function Messages({
     [messages, streamingMessages]
   );
 
-  // Calculate visible messages based on scroll offset
-  // scrollOffset 0 means showing the latest messages
-  const endIndex = combinedMessages.length - scrollOffset;
-  const startIndex = Math.max(0, endIndex - maxVisible);
-  const visibleCombined = combinedMessages.slice(startIndex, endIndex);
+  // Calculate visible messages based on line offsets
+  const lineSpans = useMemo(() => {
+    let cursor = 0;
+    return combinedMessages.map((message, index) => {
+      const lines = estimateMessageLines(message);
+      const start = cursor;
+      cursor += lines;
+      return { message, index, start, end: cursor, lines };
+    });
+  }, [combinedMessages]);
+
+  const totalLines = lineSpans.length > 0 ? lineSpans[lineSpans.length - 1].end : 0;
+  const endLine = Math.max(0, totalLines - scrollOffsetLines);
+  const startLine = Math.max(0, endLine - maxVisibleLines);
+  const visibleSpans = lineSpans.filter((span) => span.end > startLine && span.start < endLine);
+
   const historicalCount = messages.length;
-  const splitIndex = Math.max(0, Math.min(visibleCombined.length, historicalCount - startIndex));
-  const visibleMessages = visibleCombined.slice(0, splitIndex);
-  const visibleStreaming = visibleCombined.slice(splitIndex);
+  const visibleMessages = visibleSpans
+    .filter((span) => span.index < historicalCount)
+    .map((span) => span.message);
+  const visibleStreaming = visibleSpans
+    .filter((span) => span.index >= historicalCount)
+    .map((span) => span.message);
 
   // Group consecutive tool-only assistant messages
   const groupedMessages = groupConsecutiveToolMessages(visibleMessages);

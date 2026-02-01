@@ -11,6 +11,7 @@ import { Spinner } from './Spinner';
 import { ProcessingIndicator } from './ProcessingIndicator';
 import { WelcomeBanner } from './WelcomeBanner';
 import { SessionSelector } from './SessionSelector';
+import { estimateMessageLines, type DisplayMessage } from './messageLines';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1' || process.env.OLDPAL_DEBUG === '1';
 
@@ -73,8 +74,6 @@ interface QueuedMessage {
 
 const MESSAGE_CHUNK_LINES = 12;
 const MESSAGE_WRAP_CHARS = 120;
-
-type DisplayMessage = Message & { __rendered?: boolean };
 
 function wrapTextLines(text: string, wrapChars: number): string[] {
   const rawLines = text.split('\n');
@@ -229,7 +228,7 @@ export function App({ cwd, version }: AppProps) {
   const toolCallsRef = useRef<ToolCall[]>([]);
   const toolResultsRef = useRef<ToolResult[]>([]);
   const activityLogRef = useRef<ActivityEntry[]>([]);
-  const prevDisplayCountRef = useRef(0);
+  const prevDisplayLineCountRef = useRef(0);
   const skipNextDoneRef = useRef(false);
   const isProcessingRef = useRef(isProcessing);
 
@@ -620,7 +619,10 @@ export function App({ cwd, version }: AppProps) {
     };
     return buildDisplayMessages([streamingMessage], MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth });
   }, [currentResponse, isProcessing, wrapChars, renderWidth]);
-  const displayCount = displayMessages.length + streamingMessages.length;
+  const displayLineCount = useMemo(() => {
+    const combined = [...displayMessages, ...streamingMessages];
+    return combined.reduce((sum, msg) => sum + estimateMessageLines(msg), 0);
+  }, [displayMessages, streamingMessages]);
 
   // Process queue when not processing
   useEffect(() => {
@@ -634,29 +636,27 @@ export function App({ cwd, version }: AppProps) {
     if (autoScroll) {
       setScrollOffset(0);
     }
-  }, [displayCount, autoScroll]);
+  }, [displayLineCount, autoScroll]);
 
   // Keep viewport stable when not auto-scrolling
   useEffect(() => {
-    const prevCount = prevDisplayCountRef.current;
-    if (!autoScroll && displayCount > prevCount) {
-      const delta = displayCount - prevCount;
+    const prevCount = prevDisplayLineCountRef.current;
+    if (!autoScroll && displayLineCount > prevCount) {
+      const delta = displayLineCount - prevCount;
       setScrollOffset((prev) => prev + delta);
     }
-    prevDisplayCountRef.current = displayCount;
-  }, [displayCount, autoScroll]);
+    prevDisplayLineCountRef.current = displayLineCount;
+  }, [displayLineCount, autoScroll]);
 
   // Max visible messages - size to terminal height when available
   const reservedLines = 8;
-  const baseMaxVisible = rows ? Math.max(3, rows - reservedLines) : 10;
-  const toolCallsHeight = isProcessing ? Math.min(toolCallsRef.current.length, 5) : 0;
-  const maxVisibleMessages = Math.max(3, baseMaxVisible - toolCallsHeight);
+  const maxVisibleLines = rows ? Math.max(6, rows - reservedLines) : 20;
 
   // Clamp scroll offset to available range
   useEffect(() => {
-    const maxOffset = Math.max(0, displayCount - maxVisibleMessages);
+    const maxOffset = Math.max(0, displayLineCount - maxVisibleLines);
     setScrollOffset((prev) => Math.min(prev, maxOffset));
-  }, [displayCount, maxVisibleMessages]);
+  }, [displayLineCount, maxVisibleLines]);
 
   // Get session info
   const sessions = registry.listSessions();
@@ -768,8 +768,9 @@ export function App({ cwd, version }: AppProps) {
     // Page Up: scroll up through messages
     if (key.pageUp || (key.shift && key.upArrow)) {
       setScrollOffset((prev) => {
-        const maxOffset = Math.max(0, displayCount - maxVisibleMessages);
-        const newOffset = Math.min(prev + 3, maxOffset);
+        const maxOffset = Math.max(0, displayLineCount - maxVisibleLines);
+        const step = Math.max(3, Math.floor(maxVisibleLines / 2));
+        const newOffset = Math.min(prev + step, maxOffset);
         if (newOffset > 0) setAutoScroll(false);
         return newOffset;
       });
@@ -778,7 +779,8 @@ export function App({ cwd, version }: AppProps) {
     // Page Down: scroll down through messages
     if (key.pageDown || (key.shift && key.downArrow)) {
       setScrollOffset((prev) => {
-        const newOffset = Math.max(0, prev - 3);
+        const step = Math.max(3, Math.floor(maxVisibleLines / 2));
+        const newOffset = Math.max(0, prev - step);
         if (newOffset === 0) setAutoScroll(true);
         return newOffset;
       });
@@ -786,7 +788,7 @@ export function App({ cwd, version }: AppProps) {
 
     // Home: scroll to top
     if (key.ctrl && input === 'u') {
-      const maxOffset = Math.max(0, displayCount - maxVisibleMessages);
+      const maxOffset = Math.max(0, displayLineCount - maxVisibleLines);
       setScrollOffset(maxOffset);
       setAutoScroll(false);
     }
@@ -992,7 +994,7 @@ export function App({ cwd, version }: AppProps) {
       {/* Scroll indicator */}
       {scrollOffset > 0 && (
         <Box>
-          <Text dimColor>↑ {scrollOffset} more messages above (Shift+↓ or Page Down to scroll down)</Text>
+          <Text dimColor>↑ {scrollOffset} more lines above (Shift+↓ or Page Down to scroll down)</Text>
         </Box>
       )}
 
@@ -1006,8 +1008,8 @@ export function App({ cwd, version }: AppProps) {
         lastToolResult={undefined}
         activityLog={isProcessing ? activityLog : []}
         queuedMessageIds={queuedMessageIds}
-        scrollOffset={scrollOffset}
-        maxVisible={maxVisibleMessages}
+        scrollOffsetLines={scrollOffset}
+        maxVisibleLines={maxVisibleLines}
       />
 
       {/* Queue indicator */}
