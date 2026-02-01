@@ -322,15 +322,6 @@ export class AgentLoop {
           this.emit({ type: 'error', error: promptHookResult.stopReason || 'Blocked by hook' });
           return { ok: false, error: promptHookResult.stopReason || 'Blocked by hook' };
         }
-
-        // Track scope context for goal verification
-        const scopeContext = await this.scopeContextManager.createContext(
-          userMessage,
-          this.llmClient
-        );
-        if (scopeContext) {
-          this.context.setScopeContext(scopeContext);
-        }
       }
 
       const explicitToolResult = await this.handleExplicitToolCommand(userMessage);
@@ -373,6 +364,18 @@ export class AgentLoop {
 
       const limits = getLimits();
       userMessage = enforceMessageLimit(userMessage, limits.maxUserMessageLength);
+
+      // Track scope context for goal verification (only for non-command messages)
+      if (source === 'user') {
+        const scopeContext = await this.scopeContextManager.createContext(
+          userMessage,
+          this.llmClient
+        );
+        if (scopeContext) {
+          this.context.setScopeContext(scopeContext);
+        }
+      }
+
       this.context.addUserMessage(userMessage);
       await this.runLoop();
       this.contextManager?.refreshState(this.context.getMessages());
