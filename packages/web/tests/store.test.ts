@@ -51,4 +51,31 @@ describe('chat store', () => {
     useChatStore.getState().switchSession(id);
     expect(useChatStore.getState().messages.find((m) => m.id === 'm1')).toBeTruthy();
   });
+
+  test('addToolCall falls back to the last assistant message', () => {
+    useChatStore.getState().createSession('One');
+    useChatStore.getState().addMessage({ id: 'm1', role: 'assistant', content: '', timestamp: Date.now() });
+
+    useChatStore.getState().addToolCall({ id: 't1', name: 'bash', input: {}, type: 'tool' });
+    const state = useChatStore.getState();
+
+    expect(state.currentToolCalls.length).toBe(1);
+    expect(state.currentStreamMessageId).toBe('m1');
+  });
+
+  test('finalizeToolCalls clears stream id when no tool calls', () => {
+    useChatStore.getState().createSession('One');
+    useChatStore.setState({ currentStreamMessageId: 'm1' });
+
+    useChatStore.getState().finalizeToolCalls();
+    expect(useChatStore.getState().currentStreamMessageId).toBeNull();
+  });
+
+  test('clearMessages resets stream id', () => {
+    useChatStore.getState().createSession('One');
+    useChatStore.setState({ currentStreamMessageId: 'm1' });
+
+    useChatStore.getState().clearMessages();
+    expect(useChatStore.getState().currentStreamMessageId).toBeNull();
+  });
 });

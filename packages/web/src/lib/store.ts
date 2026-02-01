@@ -153,7 +153,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   addToolCall: (call, messageId) =>
     set((state) => {
-      const targetMessageId = messageId ?? state.currentStreamMessageId;
+      let targetMessageId = messageId ?? state.currentStreamMessageId;
+      if (!targetMessageId) {
+        for (let i = state.messages.length - 1; i >= 0; i -= 1) {
+          const message = state.messages[i];
+          if (message.role === 'assistant') {
+            targetMessageId = message.id;
+            break;
+          }
+        }
+      }
       const shouldReset = targetMessageId && targetMessageId !== state.currentStreamMessageId;
       const callWithMeta: ToolCallWithMeta = { ...call, startedAt: Date.now() };
       const nextCalls = shouldReset ? [callWithMeta] : [...state.currentToolCalls, callWithMeta];
@@ -195,7 +204,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   finalizeToolCalls: (messageId) =>
     set((state) => {
       if (state.currentToolCalls.length === 0) {
-        return state;
+        return {
+          ...state,
+          currentStreamMessageId: null,
+          sessionSnapshots: state.sessionId
+            ? {
+                ...state.sessionSnapshots,
+                [state.sessionId]: {
+                  messages: state.messages,
+                  toolCalls: state.currentToolCalls,
+                  streamMessageId: null,
+                },
+              }
+            : state.sessionSnapshots,
+        };
       }
 
       const messages = [...state.messages];
@@ -251,6 +273,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isStreaming: false,
       messages: [],
       currentToolCalls: [],
+      currentStreamMessageId: null,
       sessionSnapshots: state.sessionId
         ? {
             ...state.sessionSnapshots,
