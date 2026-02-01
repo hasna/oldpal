@@ -1452,7 +1452,7 @@ export class BuiltinCommands {
   private statusCommand(): Command {
     return {
       name: 'status',
-      description: 'Show current session status and token usage',
+      description: 'Show current session status, energy, identity, and token usage',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -1461,8 +1461,40 @@ export class BuiltinCommands {
         const usedPercent = Math.round((usage.totalTokens / usage.maxContextTokens) * 100);
 
         let message = '\n**Session Status**\n\n';
-        message += `**Working Directory:** ${context.cwd}\n`;
         message += `**Session ID:** ${context.sessionId}\n`;
+        message += `**Working Directory:** ${context.cwd}\n`;
+
+        // Identity info
+        const assistant = context.getAssistantManager?.()?.getActive();
+        const identity = context.getIdentityManager?.()?.getActive();
+        if (assistant) {
+          message += `**Assistant:** ${assistant.name}`;
+          if (identity) {
+            message += ` · ${identity.name}`;
+          }
+          message += '\n';
+        }
+
+        // Energy state
+        const energyState = context.getEnergyState?.();
+        if (energyState) {
+          const energyPercent = Math.round((energyState.current / Math.max(1, energyState.max)) * 100);
+          const energyBar = '█'.repeat(Math.round(energyPercent / 10)) + '░'.repeat(10 - Math.round(energyPercent / 10));
+          const energyEmoji = energyPercent > 70 ? '⚡' : energyPercent > 30 ? '🔋' : '🪫';
+          message += `**Energy:** ${energyEmoji} [${energyBar}] ${energyPercent}% (${energyState.current}/${energyState.max})\n`;
+        }
+
+        // Voice state
+        const voiceState = context.getVoiceState?.();
+        if (voiceState?.enabled) {
+          const voiceActivity = voiceState.isSpeaking ? 'speaking' : voiceState.isListening ? 'listening' : 'idle';
+          message += `**Voice:** ${voiceActivity}`;
+          if (voiceState.sttProvider || voiceState.ttsProvider) {
+            message += ` (STT: ${voiceState.sttProvider || 'n/a'}, TTS: ${voiceState.ttsProvider || 'n/a'})`;
+          }
+          message += '\n';
+        }
+
         if (context.getActiveProjectId) {
           const projectId = context.getActiveProjectId();
           if (projectId) {

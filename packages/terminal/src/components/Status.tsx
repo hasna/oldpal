@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import type { EnergyState, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
-import { EnergyBar } from './EnergyBar';
 
 interface TokenUsage {
   inputTokens: number;
@@ -62,52 +61,39 @@ export function Status({
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
   };
+
   // Format context usage
   let contextInfo = '';
   if (tokenUsage && tokenUsage.maxContextTokens > 0) {
     const percent = Math.round((tokenUsage.totalTokens / tokenUsage.maxContextTokens) * 100);
-    contextInfo = `${percent}% context`;
+    contextInfo = `${percent}%`;
   }
 
-  // Session info
-  const sessionInfo = sessionIndex && sessionCount
-    ? `Session ${sessionIndex}/${sessionCount}`
+  // Session indicator (only show if multiple sessions)
+  const sessionInfo = sessionIndex && sessionCount && sessionCount > 1
+    ? `${sessionIndex}/${sessionCount}`
     : '';
 
   // Background processing indicator
   const bgIndicator = backgroundProcessingCount > 0
-    ? ` (${backgroundProcessingCount} processing)`
+    ? ` +${backgroundProcessingCount}`
     : '';
 
-  const voiceInfo = voiceState?.enabled
-    ? `voice ${voiceState.isListening ? 'listening' : voiceState.isSpeaking ? 'speaking' : 'on'}`
-    : '';
-  const identityLabel = identityInfo?.assistant && identityInfo?.identity
-    ? `${identityInfo.assistant.name} · ${identityInfo.identity.name}`
+  // Voice indicator (compact)
+  const voiceIcon = voiceState?.enabled
+    ? voiceState.isListening ? '🎤' : voiceState.isSpeaking ? '🔊' : '🎙'
     : '';
 
   return (
     <Box marginTop={1} justifyContent="space-between">
-      <Text dimColor>/help for commands{sessionCount && sessionCount > 1 ? ' | Ctrl+S sessions' : ''}</Text>
+      <Text dimColor>/help{sessionCount && sessionCount > 1 ? ' · Ctrl+S' : ''}</Text>
       <Box>
-        {energyState && (
-          <Box marginRight={2}>
-            <EnergyBar current={energyState.current} max={energyState.max} />
-          </Box>
-        )}
-        {identityLabel && <Text dimColor>{identityLabel} · </Text>}
-        {voiceInfo && <Text dimColor>{voiceInfo} · </Text>}
-        {isProcessing && <Text dimColor>esc to stop · </Text>}
-        {sessionInfo && (
-          <Text dimColor>
-            {sessionInfo}{bgIndicator}
-            {contextInfo ? ' · ' : ''}
-          </Text>
-        )}
+        {voiceIcon && <Text dimColor>{voiceIcon} </Text>}
+        {isProcessing && <Text dimColor>esc · </Text>}
+        {sessionInfo && <Text dimColor>{sessionInfo}{bgIndicator} · </Text>}
         {contextInfo && <Text dimColor>{contextInfo}</Text>}
-        {sessionId && <Text dimColor>{(sessionInfo || contextInfo) ? ' · ' : ''}id {sessionId}</Text>}
         {isProcessing && processingStartTime && (
-          <Text dimColor> · ✻ Worked for {formatDuration(elapsed)}</Text>
+          <Text dimColor> · {formatDuration(elapsed)}</Text>
         )}
       </Box>
     </Box>
