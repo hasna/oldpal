@@ -33,6 +33,14 @@ function parseErrorMessage(error: string): { code?: string; message: string; sug
   return { code, message, suggestion };
 }
 
+function formatElapsedDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}m ${secs}s`;
+}
+
 interface AppProps {
   cwd: string;
   version?: string;
@@ -297,6 +305,11 @@ export function App({ cwd, version }: AppProps) {
       content = content ? `${content}\n\n[error]` : '[error]';
     }
 
+    if (processingStartTime) {
+      const workedFor = formatElapsedDuration(Date.now() - processingStartTime);
+      content = content ? `${content}\n\n✻ Worked for ${workedFor}` : `✻ Worked for ${workedFor}`;
+    }
+
     setMessages((prev) => [
       ...prev,
       {
@@ -310,7 +323,7 @@ export function App({ cwd, version }: AppProps) {
     ]);
 
     return true;
-  }, [buildFullResponse]);
+  }, [buildFullResponse, processingStartTime]);
 
   const resetTurnState = useCallback(() => {
     setCurrentResponse('');
