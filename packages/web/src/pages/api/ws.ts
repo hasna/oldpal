@@ -80,7 +80,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
             }
           },
           (error) => {
-            ws.send(JSON.stringify({ type: 'error', message: error.message }));
+            ws.send(JSON.stringify({ type: 'error', message: error.message, messageId: currentMessageId ?? undefined }));
           }
         );
       };

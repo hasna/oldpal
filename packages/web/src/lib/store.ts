@@ -93,11 +93,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       const messages = [...state.messages];
       let updated = false;
+      let streamId: string | null = null;
       if (id) {
         for (let i = messages.length - 1; i >= 0; i -= 1) {
           if (messages[i].id === id && messages[i].role === 'assistant') {
             messages[i] = { ...messages[i], content: messages[i].content + content };
             updated = true;
+            streamId = id;
             break;
           }
         }
@@ -106,18 +108,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const lastMessage = messages[messages.length - 1];
         if (lastMessage && lastMessage.role === 'assistant') {
           lastMessage.content += content;
+          streamId = lastMessage.id;
         }
       }
       return {
         messages,
-        currentStreamMessageId: id ?? state.currentStreamMessageId,
+        currentStreamMessageId: streamId ?? state.currentStreamMessageId,
         sessionSnapshots: state.sessionId
           ? {
               ...state.sessionSnapshots,
               [state.sessionId]: {
                 messages,
                 toolCalls: state.currentToolCalls,
-                streamMessageId: id ?? state.currentStreamMessageId,
+                streamMessageId: streamId ?? state.currentStreamMessageId,
               },
             }
           : state.sessionSnapshots,

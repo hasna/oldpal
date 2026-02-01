@@ -45,6 +45,44 @@ function stripQuotedSegments(input: string): string {
   return result;
 }
 
+function normalizeNewlinesOutsideQuotes(input: string): string {
+  let result = '';
+  let quote: '"' | '\'' | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+
+    if (quote) {
+      result += char;
+      if (quote === '"' && !escaped && char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (!escaped && char === quote) {
+        quote = null;
+      }
+      escaped = false;
+      continue;
+    }
+
+    if (char === '"' || char === '\'') {
+      quote = char;
+      result += char;
+      continue;
+    }
+
+    if (char === '\r' || char === '\n') {
+      result += ' ';
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+}
+
 export class BashTool {
   static readonly tool: Tool = {
     name: 'bash',
@@ -141,9 +179,10 @@ export class BashTool {
     const baseCommand = command.replace(/\s*2>&1\s*/g, ' ').trim();
     const baseTrimmed = baseCommand.toLowerCase();
     const allowConnectorNewlines = baseTrimmed.startsWith('connect-');
-    const commandForChecks = allowConnectorNewlines
-      ? baseCommand.replace(/[\r\n]+/g, ' ').trim()
+    const commandForExec = allowConnectorNewlines
+      ? normalizeNewlinesOutsideQuotes(baseCommand).trim()
       : baseCommand;
+    const commandForChecks = commandForExec;
     const commandSansQuotes = stripQuotedSegments(commandForChecks);
 
     const securityCheck = validateBashCommand(commandForChecks);
@@ -230,7 +269,7 @@ export class BashTool {
     }
 
     try {
-      const proc = Bun.spawn(['bash', '-c', commandForChecks], {
+      const proc = Bun.spawn(['bash', '-c', commandForExec], {
         cwd,
         stdout: 'pipe',
         stderr: 'pipe',
