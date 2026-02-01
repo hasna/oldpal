@@ -751,8 +751,6 @@ export function App({ cwd, version }: AppProps) {
 
     lines += 2; // Status marginTop + line
 
-    lines += activityLogLineCount;
-
     return lines;
   }, [
     activeQueue.length,
@@ -762,7 +760,6 @@ export function App({ cwd, version }: AppProps) {
     error,
     isProcessing,
     showWelcome,
-    activityLogLineCount,
   ]);
 
   const displayMessages = useMemo(
@@ -783,6 +780,7 @@ export function App({ cwd, version }: AppProps) {
     const combined = [...displayMessages, ...streamingMessages];
     return combined.reduce((sum, msg) => sum + estimateMessageLines(msg, renderWidth), 0);
   }, [displayMessages, streamingMessages, renderWidth]);
+  const totalLineCount = displayLineCount + activityLogLineCount;
 
   // Process queue when not processing
   useEffect(() => {
@@ -796,26 +794,26 @@ export function App({ cwd, version }: AppProps) {
     if (autoScroll) {
       setScrollOffset(0);
     }
-  }, [displayLineCount, autoScroll]);
+  }, [totalLineCount, autoScroll]);
 
   // Keep viewport stable when not auto-scrolling
   useEffect(() => {
     const prevCount = prevDisplayLineCountRef.current;
-    if (!autoScroll && displayLineCount > prevCount) {
-      const delta = displayLineCount - prevCount;
+    if (!autoScroll && totalLineCount > prevCount) {
+      const delta = totalLineCount - prevCount;
       setScrollOffset((prev) => prev + delta);
     }
-    prevDisplayLineCountRef.current = displayLineCount;
-  }, [displayLineCount, autoScroll]);
+    prevDisplayLineCountRef.current = totalLineCount;
+  }, [totalLineCount, autoScroll]);
 
   // Max visible messages - size to terminal height when available
   const maxVisibleLines = rows ? Math.max(4, rows - reservedLines) : 20;
 
   // Clamp scroll offset to available range
   useEffect(() => {
-    const maxOffset = Math.max(0, displayLineCount - maxVisibleLines);
+    const maxOffset = Math.max(0, totalLineCount - maxVisibleLines);
     setScrollOffset((prev) => Math.min(prev, maxOffset));
-  }, [displayLineCount, maxVisibleLines]);
+  }, [totalLineCount, maxVisibleLines]);
 
   // Handle session switch
   const handleSessionSwitch = useCallback(async (sessionId: string) => {
@@ -920,7 +918,7 @@ export function App({ cwd, version }: AppProps) {
     // Page Up: scroll up through messages
     if (key.pageUp || (key.shift && key.upArrow)) {
       setScrollOffset((prev) => {
-        const maxOffset = Math.max(0, displayLineCount - maxVisibleLines);
+        const maxOffset = Math.max(0, totalLineCount - maxVisibleLines);
         const step = Math.max(3, Math.floor(maxVisibleLines / 2));
         const newOffset = Math.min(prev + step, maxOffset);
         if (newOffset > 0) setAutoScroll(false);
@@ -940,7 +938,7 @@ export function App({ cwd, version }: AppProps) {
 
     // Home: scroll to top
     if (key.ctrl && input === 'u') {
-      const maxOffset = Math.max(0, displayLineCount - maxVisibleLines);
+      const maxOffset = Math.max(0, totalLineCount - maxVisibleLines);
       setScrollOffset(maxOffset);
       setAutoScroll(false);
     }
