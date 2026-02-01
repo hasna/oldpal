@@ -197,6 +197,20 @@ describe('SessionRegistry', () => {
       expect(sessions[0].id).toBe(session2.id);
       expect(sessions[0].id).not.toBe(session1.id);
     });
+
+    test('should mark background session as processing when chunks arrive', async () => {
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+
+      // Emit a chunk for the background session (session2)
+      createdMockClients[1]._emitChunk({ type: 'text', content: 'background' });
+
+      const sessions = registry.getBackgroundProcessingSessions();
+      expect(sessions.length).toBe(1);
+      expect(sessions[0].id).toBe(session2.id);
+      expect(sessions[0].id).not.toBe(session1.id);
+      expect(registry.getSession(session2.id)?.isProcessing).toBe(true);
+    });
   });
 
   describe('closeAll', () => {

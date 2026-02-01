@@ -89,6 +89,9 @@ export class SessionRegistry {
       session.updatedAt = Date.now();
 
       // Track processing state
+      if (chunk.type === 'text' || chunk.type === 'tool_use' || chunk.type === 'tool_result') {
+        session.isProcessing = true;
+      }
       if (chunk.type === 'done' || chunk.type === 'error' || chunk.type === 'exit') {
         session.isProcessing = false;
       }
