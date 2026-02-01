@@ -6,6 +6,7 @@ import type { CommandContext, CommandResult } from '../src/commands/types';
 import { mkdirSync, writeFileSync, rmSync, existsSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { listSchedules } from '../src/scheduler/store';
 
 describe('CommandLoader', () => {
   let loader: CommandLoader;
@@ -865,6 +866,32 @@ describe('BuiltinCommands', () => {
       } finally {
         globalThis.setTimeout = originalSetTimeout;
         (Bun as any).$ = originalDollar;
+      }
+    });
+  });
+
+  describe('/schedule commands', () => {
+    test('should create a schedule', async () => {
+      const cmd = loader.getCommand('schedule');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const future = new Date(Date.now() + 60_000).toISOString();
+        const result = await cmd.handler(`${future} /status`, mockContext);
+        expect(result.handled).toBe(true);
+        const schedules = await listSchedules(tempDir);
+        expect(schedules.length).toBe(1);
+        expect(schedules[0].command).toBe('/status');
+      }
+    });
+
+    test('should list schedules', async () => {
+      const cmd = loader.getCommand('schedules');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
       }
     });
   });

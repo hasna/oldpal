@@ -675,6 +675,440 @@ Implement a stamina/energy system to prevent agent burnout and encourage sustain
 
 ---
 
+---
+
+## MAJOR INITIATIVES
+
+### 12. Identity & Multi-Assistant System
+
+**Priority:** High
+**Status:** Planning
+**Complexity:** Large (Architectural)
+
+A comprehensive identity system that allows multiple assistants, each with multiple identities (emails, phones, addresses, preferences).
+
+#### Problem Statement
+
+Currently:
+- Single agent with no persistent identity
+- No way to store assistant preferences, contact info, or personal details
+- No support for multiple assistants with different purposes
+
+Need:
+- Assistants should "know" their identity (name, email, phone, etc.)
+- Support multiple identities per assistant (work email, personal email)
+- Support multiple assistants (work assistant, personal assistant, project-specific)
+- Identities should be accessible to the LLM for personalized responses
+
+#### Architecture Design
+
+```
+~/.assistants/                          # Global config directory (renamed from .oldpal)
+├── config.json                         # Global settings
+├── assistants/                         # Multi-assistant support
+│   ├── default/                        # Default assistant
+│   │   ├── assistant.json              # Assistant metadata
+│   │   ├── identity/                   # Identity data
+│   │   │   ├── profile.json            # Name, bio, preferences
+│   │   │   ├── contacts.json           # Emails, phones, addresses
+│   │   │   ├── accounts.json           # Connected accounts
+│   │   │   └── preferences.json        # Behavioral preferences
+│   │   ├── sessions/                   # Session history
+│   │   ├── memory/                     # Long-term memory
+│   │   └── skills/                     # Assistant-specific skills
+│   ├── work/                           # Work assistant
+│   │   ├── assistant.json
+│   │   ├── identity/
+│   │   └── ...
+│   └── personal/                       # Personal assistant
+│       └── ...
+└── shared/                             # Shared across assistants
+    ├── connectors/                     # Connector configs
+    ├── tools/                          # Custom tools
+    └── hooks/                          # Global hooks
+```
+
+#### Data Models
+
+**Assistant:**
+```typescript
+interface Assistant {
+  id: string;                           // UUID
+  name: string;                         // "Work Assistant"
+  slug: string;                         // "work" (directory name)
+  description?: string;
+  createdAt: string;
+  defaultIdentityId?: string;           // Primary identity
+  settings: AssistantSettings;
+}
+
+interface AssistantSettings {
+  model: string;                        // "claude-sonnet-4"
+  systemPrompt?: string;
+  allowedTools?: string[];
+  allowedConnectors?: string[];
+  maxTokensPerTurn?: number;
+}
+```
+
+**Identity:**
+```typescript
+interface Identity {
+  id: string;
+  label: string;                        // "Work", "Personal"
+  isDefault: boolean;
+  profile: IdentityProfile;
+  contacts: IdentityContacts;
+  accounts: IdentityAccounts;
+  preferences: IdentityPreferences;
+}
+
+interface IdentityProfile {
+  name: string;                         // "John Doe"
+  nickname?: string;                    // "John"
+  title?: string;                       // "Software Engineer"
+  company?: string;                     // "Acme Corp"
+  bio?: string;
+  avatar?: string;                      // Path to image
+  timezone?: string;                    // "America/New_York"
+  locale?: string;                      // "en-US"
+}
+
+interface IdentityContacts {
+  emails: ContactEmail[];
+  phones: ContactPhone[];
+  addresses: ContactAddress[];
+}
+
+interface ContactEmail {
+  address: string;
+  label: string;                        // "work", "personal"
+  isPrimary: boolean;
+  connectorId?: string;                 // Link to gmail/outlook connector
+}
+
+interface ContactPhone {
+  number: string;
+  label: string;
+  isPrimary: boolean;
+}
+
+interface ContactAddress {
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  label: string;
+}
+
+interface IdentityAccounts {
+  github?: { username: string; token?: string };
+  linear?: { workspace: string };
+  notion?: { workspace: string };
+  slack?: { workspace: string; userId: string };
+  // ... extensible
+}
+
+interface IdentityPreferences {
+  communication: {
+    formalityLevel: 'casual' | 'professional' | 'formal';
+    responseLength: 'brief' | 'detailed' | 'adaptive';
+    useEmoji: boolean;
+  };
+  workHours?: {
+    start: string;                      // "09:00"
+    end: string;                        // "17:00"
+    timezone: string;
+    workDays: number[];                 // [1,2,3,4,5] = Mon-Fri
+  };
+  notifications?: {
+    doNotDisturb: boolean;
+    quietHours?: { start: string; end: string };
+  };
+}
+```
+
+#### Commands
+
+```
+/assistant list                         # List all assistants
+/assistant create <name>                # Create new assistant
+/assistant switch <name>                # Switch active assistant
+/assistant delete <name>                # Delete assistant
+/assistant current                      # Show current assistant
+
+/identity list                          # List identities for current assistant
+/identity create <label>                # Create new identity
+/identity switch <label>                # Switch active identity
+/identity edit                          # Open identity editor
+/identity show                          # Show current identity details
+
+/identity set name "John Doe"           # Quick set profile fields
+/identity set email work "john@work.com"
+/identity set phone personal "+1234567890"
+/identity set preference formality professional
+```
+
+#### System Prompt Integration
+
+Identity is automatically injected into system prompt:
+```
+You are an AI assistant with the following identity:
+
+Name: John Doe
+Role: Software Engineer at Acme Corp
+Primary Email: john@work.com
+Timezone: America/New_York
+Communication Style: Professional, detailed responses
+
+When composing emails, signing documents, or representing the user,
+use this identity information appropriately.
+```
+
+#### Implementation Steps
+
+1. **Phase 1: Data Layer**
+   - [ ] Create identity data models
+   - [ ] Create assistant data models
+   - [ ] Implement file-based storage
+   - [ ] Migration from current .oldpal structure
+
+2. **Phase 2: Core Integration**
+   - [ ] Identity loader in agent loop
+   - [ ] System prompt injection
+   - [ ] Identity context for tools
+   - [ ] Assistant switching in registry
+
+3. **Phase 3: Commands**
+   - [ ] /assistant commands
+   - [ ] /identity commands
+   - [ ] Interactive identity editor
+
+4. **Phase 4: UI**
+   - [ ] Identity display in status bar
+   - [ ] Assistant selector
+   - [ ] Identity quick-switch
+
+#### Files to Create
+```
+packages/core/src/identity/
+├── index.ts
+├── types.ts
+├── loader.ts
+├── storage.ts
+└── prompt.ts
+
+packages/core/src/assistant/
+├── index.ts
+├── types.ts
+├── registry.ts
+└── storage.ts
+```
+
+---
+
+### 13. Rename: oldpal → assistants
+
+**Priority:** High
+**Status:** Planning
+**Complexity:** Medium (Refactoring)
+
+Rebrand the entire application from "oldpal" to "assistants".
+
+#### Rationale
+
+- "assistants" better describes multi-assistant functionality
+- More professional/generic name
+- Aligns with identity system architecture
+- npm package: `@hasna/assistants`
+
+#### Scope of Changes
+
+**Package Names:**
+```
+@hasna/oldpal        → @hasna/assistants
+@oldpal/core         → @assistants/core
+@oldpal/terminal     → @assistants/terminal
+@oldpal/shared       → @assistants/shared
+@oldpal/web          → @assistants/web
+```
+
+**Directory Names:**
+```
+~/.oldpal/           → ~/.assistants/
+.oldpal/             → .assistants/       (project-level)
+```
+
+**Binary/CLI:**
+```
+oldpal               → assistants
+```
+
+**Code References:**
+- All imports from `@oldpal/*`
+- All references to `.oldpal` paths
+- All "oldpal" strings in UI
+- README, docs, comments
+
+#### Migration Strategy
+
+1. **Deprecation Period**
+   - Keep `oldpal` binary as alias
+   - Symlink `~/.oldpal` → `~/.assistants`
+   - Show deprecation warning
+
+2. **Migration Script**
+   ```bash
+   assistants migrate    # Migrate from oldpal
+   ```
+   - Move `~/.oldpal/*` to `~/.assistants/*`
+   - Update config paths
+   - Preserve all data
+
+3. **Full Cutover**
+   - Remove old package from npm
+   - Remove symlinks
+   - Update all documentation
+
+#### Implementation Checklist
+
+**Phase 1: Package Rename**
+- [ ] Rename workspace packages in package.json
+- [ ] Update all internal imports
+- [ ] Update tsconfig paths
+- [ ] Update turbo.json
+
+**Phase 2: Directory Rename**
+- [ ] Update getConfigDir() → `~/.assistants`
+- [ ] Update project config path → `.assistants/`
+- [ ] Add migration utility
+- [ ] Add backwards-compat symlink
+
+**Phase 3: Binary Rename**
+- [ ] Update bin entry in package.json
+- [ ] Add `oldpal` as deprecated alias
+- [ ] Update shebang/entry point
+
+**Phase 4: Content Updates**
+- [ ] Update README.md
+- [ ] Update CLAUDE.md / ASSISTANTS.md
+- [ ] Update all comments/docs
+- [ ] Update error messages
+- [ ] Update UI strings (WelcomeBanner, etc.)
+
+**Phase 5: Publishing**
+- [ ] Publish @hasna/assistants to npm
+- [ ] Deprecate @hasna/oldpal
+- [ ] Update GitHub repo name (optional)
+- [ ] Update all external references
+
+#### Files to Modify (Partial List)
+```
+package.json                            # name, bin
+packages/*/package.json                 # names
+packages/core/src/config.ts             # .oldpal → .assistants
+packages/core/src/logger.ts             # paths
+packages/terminal/src/index.tsx         # branding
+packages/terminal/src/components/*.tsx  # UI strings
+README.md
+CLAUDE.md → ASSISTANTS.md
+```
+
+#### Timeline Consideration
+
+The rename should happen:
+1. **After** identity system is designed (to include new paths)
+2. **Before** major public release
+3. **With** proper migration tooling
+
+---
+
+## Updated Status Tracking
+
+### New Items Added
+
+| # | Item | Priority | Progress | Status |
+|---|------|----------|----------|--------|
+| 12 | Identity & Multi-Assistant | 🔴 High | ⬜ 0% | Planning |
+| 13 | Rename to "assistants" | 🔴 High | ⬜ 0% | Planning |
+
+### Updated Progress Overview
+
+```
+HIGH PRIORITY     [████████░░░░░░░░░░░░] 35% (6/17 subtasks)
+MEDIUM PRIORITY   [██░░░░░░░░░░░░░░░░░░] 10% (2/20 subtasks)
+LOW PRIORITY      [░░░░░░░░░░░░░░░░░░░░]  0% (0/15 subtasks)
+MAJOR INITIATIVES [░░░░░░░░░░░░░░░░░░░░]  0% (0/25 subtasks)
+─────────────────────────────────────────────────────────
+OVERALL           [██░░░░░░░░░░░░░░░░░░]  8% (8/77 subtasks)
+```
+
+### Subtask Breakdown (New Items)
+
+#### 12. Identity & Multi-Assistant (0/12)
+- [ ] Design identity data models
+- [ ] Design assistant data models
+- [ ] Implement file-based storage
+- [ ] Create identity loader
+- [ ] System prompt injection
+- [ ] Identity context for tools
+- [ ] /assistant commands
+- [ ] /identity commands
+- [ ] Interactive editor
+- [ ] UI: identity in status bar
+- [ ] UI: assistant selector
+- [ ] Migration from current structure
+
+#### 13. Rename to "assistants" (0/13)
+- [ ] Rename workspace packages
+- [ ] Update internal imports
+- [ ] Update tsconfig paths
+- [ ] Update turbo.json
+- [ ] Update getConfigDir()
+- [ ] Update project config path
+- [ ] Add migration utility
+- [ ] Add backwards-compat symlink
+- [ ] Update bin entry
+- [ ] Update README.md
+- [ ] Update all UI strings
+- [ ] Publish @hasna/assistants
+- [ ] Deprecate @hasna/oldpal
+
+---
+
+## Updated Implementation Order
+
+1. **Phase 1**: Security & Stability
+   - Input validation
+   - Error handling
+   - Bash/connector security audit
+
+2. **Phase 2**: Core Infrastructure
+   - Heartbeat system
+   - Prompt/agent hooks
+   - **Identity system (data layer)**
+
+3. **Phase 3**: Major Refactoring
+   - **Rename to "assistants"**
+   - **Multi-assistant support**
+   - Context summarization
+
+4. **Phase 4**: Features
+   - Scheduled commands
+   - Identity commands & UI
+
+5. **Phase 5**: Quality
+   - Test coverage expansion
+   - Documentation
+
+6. **Phase 6**: Advanced
+   - Stamina/energy system
+   - Voice features
+   - Web UI
+
+---
+
 ## Future Considerations
 
 - **Memory consolidation during sleep**: Agent reviews and summarizes learnings
@@ -682,7 +1116,10 @@ Implement a stamina/energy system to prevent agent burnout and encourage sustain
 - **Mood system**: Agent personality shifts based on stamina/energy
 - **Health metrics dashboard**: `/health` command showing stamina, energy, heartbeat, scheduled tasks
 - **Plugin system**: Allow third-party tools and skills
-- **Multi-agent collaboration**: Multiple oldpal instances working together
+- **Multi-agent collaboration**: Multiple assistants working together
+- **Identity sharing**: Share identities across assistants
+- **Identity templates**: Pre-built identity profiles for common use cases
+- **Team identities**: Shared identities for team/organization use
 
 ---
 
@@ -693,3 +1130,5 @@ Implement a stamina/energy system to prevent agent burnout and encourage sustain
 - Focus on sustainable AI assistance, not constant availability
 - Consider user preferences for agent activity patterns
 - Security is paramount - never compromise on safety
+- Identity data should be encrypted at rest (future)
+- Migration must be seamless and reversible
