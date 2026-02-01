@@ -12,11 +12,9 @@ import { tmpdir } from 'os';
 
 let tempDir: string;
 let originalAssistantsDir: string | undefined;
-let originalOldpalDir: string | undefined;
 
 beforeEach(async () => {
   originalAssistantsDir = process.env.ASSISTANTS_DIR;
-  originalOldpalDir = process.env.OLDPAL_DIR;
   tempDir = await mkdtemp(join(tmpdir(), 'assistants-tools-'));
   process.env.ASSISTANTS_DIR = tempDir;
   FilesystemTools.setSessionId('test');
@@ -24,7 +22,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   process.env.ASSISTANTS_DIR = originalAssistantsDir;
-  process.env.OLDPAL_DIR = originalOldpalDir;
   await rm(tempDir, { recursive: true, force: true });
 });
 

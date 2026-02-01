@@ -45,7 +45,7 @@ describe('Function coverage helpers', () => {
   test('filesystem helpers compute scripts folder and containment', () => {
     const cwd = process.cwd();
     const scriptsFolder = fsTest.getScriptsFolder(cwd, 'session-1');
-    expect(scriptsFolder).toMatch(/\.oldpal|\.assistants/);
+    expect(scriptsFolder).toMatch(/\.assistants/);
     expect(scriptsFolder).toContain('scripts');
     expect(fsTest.isInScriptsFolder(scriptsFolder, cwd, 'session-1')).toBe(true);
     expect(fsTest.isInScriptsFolder(scriptsFolder + '/file.txt', cwd, 'session-1')).toBe(true);

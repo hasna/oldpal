@@ -41,7 +41,7 @@ export interface ProjectRecord {
 }
 
 function projectsDir(cwd: string): string {
-  return join(cwd, '.oldpal', 'projects');
+  return join(cwd, '.assistants', 'projects');
 }
 
 function projectPath(cwd: string, id: string): string {

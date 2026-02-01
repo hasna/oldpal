@@ -382,7 +382,6 @@ describe('BuiltinCommands', () => {
   let messagesCleared: boolean;
   let tempDir: string;
   let originalAssistantsDir: string | undefined;
-  let originalOldpalDir: string | undefined;
   let activeProjectId: string | null;
   let projectContextContent: string | null;
 
@@ -395,7 +394,6 @@ describe('BuiltinCommands', () => {
     projectContextContent = null;
     tempDir = mkdtempSync(join(tmpdir(), 'assistants-cmd-'));
     originalAssistantsDir = process.env.ASSISTANTS_DIR;
-    originalOldpalDir = process.env.OLDPAL_DIR;
     process.env.ASSISTANTS_DIR = tempDir;
 
     mockContext = {
@@ -430,7 +428,6 @@ describe('BuiltinCommands', () => {
 
   afterEach(() => {
     process.env.ASSISTANTS_DIR = originalAssistantsDir;
-    process.env.OLDPAL_DIR = originalOldpalDir;
     rmSync(tempDir, { recursive: true, force: true });
   });
 

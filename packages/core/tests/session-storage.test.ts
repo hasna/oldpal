@@ -8,12 +8,10 @@ import { writeFileSync, mkdirSync } from 'fs';
 let tempDir: string;
 let originalHome: string | undefined;
 let originalAssistantsDir: string | undefined;
-let originalOldpalDir: string | undefined;
 
 beforeEach(async () => {
   originalHome = process.env.HOME;
   originalAssistantsDir = process.env.ASSISTANTS_DIR;
-  originalOldpalDir = process.env.OLDPAL_DIR;
   tempDir = await mkdtemp(join(tmpdir(), 'assistants-sessions-'));
   process.env.ASSISTANTS_DIR = tempDir;
 });
@@ -21,7 +19,6 @@ beforeEach(async () => {
 afterEach(async () => {
   process.env.HOME = originalHome;
   process.env.ASSISTANTS_DIR = originalAssistantsDir;
-  process.env.OLDPAL_DIR = originalOldpalDir;
   await rm(tempDir, { recursive: true, force: true });
 });
 

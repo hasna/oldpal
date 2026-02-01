@@ -35,7 +35,6 @@ import { buildProjectContext } from '../projects/context';
 const VERSION =
   process.env.ASSISTANTS_VERSION ||
   process.env.npm_package_version ||
-  process.env.OLDPAL_VERSION ||
   'unknown';
 
 type ConnectorAuthTimeoutResolve = (value: {

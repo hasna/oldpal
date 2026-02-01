@@ -1,11 +1,11 @@
 import { join } from 'path';
 import { homedir } from 'os';
-import type { OldpalConfig, HookConfig } from '@hasna/assistants-shared';
+import type { AssistantsConfig, HookConfig } from '@hasna/assistants-shared';
 
 /**
  * Default system prompt - used when no ASSISTANTS.md files are found
  */
-const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant running in the terminal.
+const DEFAULT_SYSTEM_PROMPT = `You are Hasna Assistant, a helpful AI assistant running in the terminal.
 
 ## Runtime Environment
 - Use **Bun** as the default runtime for JavaScript/TypeScript scripts
@@ -25,7 +25,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant running in the ter
 - Explain your reasoning when making architectural decisions
 `;
 
-const DEFAULT_CONFIG: OldpalConfig = {
+const DEFAULT_CONFIG: AssistantsConfig = {
   llm: {
     provider: 'anthropic',
     model: 'claude-sonnet-4-20250514',
@@ -91,7 +91,7 @@ const DEFAULT_CONFIG: OldpalConfig = {
   },
 };
 
-function mergeConfig(base: OldpalConfig, override?: Partial<OldpalConfig>): OldpalConfig {
+function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig>): AssistantsConfig {
   if (!override) return base;
 
   const mergedVoice = base.voice || override.voice
@@ -166,10 +166,6 @@ export function getConfigDir(): string {
   if (assistantsOverride && assistantsOverride.trim()) {
     return assistantsOverride;
   }
-  const legacyOverride = process.env.OLDPAL_DIR;
-  if (legacyOverride && legacyOverride.trim()) {
-    return legacyOverride;
-  }
   const envHome = process.env.HOME || process.env.USERPROFILE;
   const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
   return join(homeDir, '.assistants');
@@ -193,28 +189,24 @@ export function getProjectConfigDir(cwd: string = process.cwd()): string {
  * Load configuration from multiple sources (merged)
  * Priority: project local > project > user > default
  */
-export async function loadConfig(cwd: string = process.cwd()): Promise<OldpalConfig> {
-  let config: OldpalConfig = { ...DEFAULT_CONFIG };
+export async function loadConfig(cwd: string = process.cwd()): Promise<AssistantsConfig> {
+  let config: AssistantsConfig = { ...DEFAULT_CONFIG };
 
   // Load user config
   const userConfigPath = getConfigPath('config.json');
   const legacyUserConfigPath = getConfigPath('settings.json');
-  const userConfig = (await loadJsonFile<Partial<OldpalConfig>>(userConfigPath))
-    || (await loadJsonFile<Partial<OldpalConfig>>(legacyUserConfigPath));
+  const userConfig = (await loadJsonFile<Partial<AssistantsConfig>>(userConfigPath))
+    || (await loadJsonFile<Partial<AssistantsConfig>>(legacyUserConfigPath));
   config = mergeConfig(config, userConfig || undefined);
 
   // Load project config
   const projectConfigPath = join(getProjectConfigDir(cwd), 'config.json');
-  const legacyProjectConfigPath = join(cwd, '.oldpal', 'settings.json');
-  const projectConfig = (await loadJsonFile<Partial<OldpalConfig>>(projectConfigPath))
-    || (await loadJsonFile<Partial<OldpalConfig>>(legacyProjectConfigPath));
+  const projectConfig = await loadJsonFile<Partial<AssistantsConfig>>(projectConfigPath);
   config = mergeConfig(config, projectConfig || undefined);
 
   // Load project local config (git-ignored)
   const localConfigPath = join(getProjectConfigDir(cwd), 'config.local.json');
-  const legacyLocalConfigPath = join(cwd, '.oldpal', 'settings.local.json');
-  const localConfig = (await loadJsonFile<Partial<OldpalConfig>>(localConfigPath))
-    || (await loadJsonFile<Partial<OldpalConfig>>(legacyLocalConfigPath));
+  const localConfig = await loadJsonFile<Partial<AssistantsConfig>>(localConfigPath);
   config = mergeConfig(config, localConfig || undefined);
 
   return config;
@@ -315,14 +307,12 @@ export async function loadSystemPrompt(cwd: string = process.cwd()): Promise<str
 
   // Load global system prompt
   const globalPromptPath = getConfigPath('ASSISTANTS.md');
-  const legacyGlobalPromptPath = getConfigPath('OLDPAL.md');
-  const globalPrompt = (await loadTextFile(globalPromptPath)) ?? (await loadTextFile(legacyGlobalPromptPath));
+  const globalPrompt = await loadTextFile(globalPromptPath);
   if (globalPrompt) prompts.push(globalPrompt);
 
   // Load project system prompt
   const projectPromptPath = join(getProjectConfigDir(cwd), 'ASSISTANTS.md');
-  const legacyProjectPromptPath = join(cwd, '.oldpal', 'OLDPAL.md');
-  const projectPrompt = (await loadTextFile(projectPromptPath)) ?? (await loadTextFile(legacyProjectPromptPath));
+  const projectPrompt = await loadTextFile(projectPromptPath);
   if (projectPrompt) prompts.push(projectPrompt);
 
   if (prompts.length === 0) {

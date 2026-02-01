@@ -38,12 +38,6 @@ export class CommandLoader {
     // Load project commands (higher priority, will override global)
     const projectDir = join(this.cwd, '.assistants', 'commands');
     await this.loadFromDirectory(projectDir, 'project');
-
-    // Legacy fallback
-    const legacyGlobalDir = join(homeDir, '.oldpal', 'commands');
-    const legacyProjectDir = join(this.cwd, '.oldpal', 'commands');
-    await this.loadFromDirectory(legacyGlobalDir, 'global');
-    await this.loadFromDirectory(legacyProjectDir, 'project');
   }
 
   /**

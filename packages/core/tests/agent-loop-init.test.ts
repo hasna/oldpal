@@ -6,11 +6,9 @@ import { AgentLoop } from '../src/agent/loop';
 
 let tempDir: string;
 let originalAssistantsDir: string | undefined;
-let originalOldpalDir: string | undefined;
 
 beforeEach(() => {
   originalAssistantsDir = process.env.ASSISTANTS_DIR;
-  originalOldpalDir = process.env.OLDPAL_DIR;
   tempDir = mkdtempSync(join(tmpdir(), 'assistants-init-'));
   process.env.ASSISTANTS_DIR = tempDir;
 
@@ -30,7 +28,6 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env.ASSISTANTS_DIR = originalAssistantsDir;
-  process.env.OLDPAL_DIR = originalOldpalDir;
   rmSync(tempDir, { recursive: true, force: true });
 });
 

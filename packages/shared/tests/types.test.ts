@@ -22,7 +22,7 @@ import type {
   HookInput,
   HookOutput,
   Session,
-  OldpalConfig,
+  AssistantsConfig,
   LLMConfig,
   VoiceConfig,
   AssistantClient,
@@ -238,8 +238,8 @@ describe('Hook types', () => {
 });
 
 describe('Config types', () => {
-  test('OldpalConfig structure', () => {
-    const config: OldpalConfig = {
+  test('AssistantsConfig structure', () => {
+    const config: AssistantsConfig = {
       llm: {
         provider: 'anthropic',
         model: 'claude-3-opus',

@@ -26,7 +26,7 @@ Assistants enforces layered security controls to reduce risk when running tools 
 
 ## Configuration
 
-You can configure validation limits in `.assistants/config.json` (legacy: `.oldpal/settings.json`):
+You can configure validation limits in `.assistants/config.json`:
 
 ```json
 {

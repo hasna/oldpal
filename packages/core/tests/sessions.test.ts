@@ -113,7 +113,6 @@ describe('SessionRegistry', () => {
   describe('default client factory', () => {
     test('creates a session using EmbeddedClient when no factory provided', async () => {
       const originalAssistantsDir = process.env.ASSISTANTS_DIR;
-      const originalOldpalDir = process.env.OLDPAL_DIR;
       const tempDir = mkdtempSync(join(tmpdir(), 'assistants-registry-'));
       process.env.ASSISTANTS_DIR = tempDir;
 
@@ -137,7 +136,6 @@ describe('SessionRegistry', () => {
         defaultRegistry.closeAll();
       } finally {
         process.env.ASSISTANTS_DIR = originalAssistantsDir;
-        process.env.OLDPAL_DIR = originalOldpalDir;
         rmSync(tempDir, { recursive: true, force: true });
       }
     });

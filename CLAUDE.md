@@ -111,6 +111,6 @@ bun run packages/terminal/src/index.tsx
 
 ## Adding a New Hook
 
-1. Edit `config/hooks.json` or `.assistants/hooks.json` (legacy: `.oldpal/hooks.json`)
+1. Edit `config/hooks.json` or `.assistants/hooks.json`
 2. Add hook configuration under the appropriate event
 3. Hooks are loaded on startup and merged from multiple sources

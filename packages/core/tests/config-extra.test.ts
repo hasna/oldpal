@@ -6,18 +6,15 @@ import { ensureConfigDir, loadHooksConfig, loadSystemPrompt, loadConfig, getTemp
 
 let tempDir: string;
 let originalAssistantsDir: string | undefined;
-let originalOldpalDir: string | undefined;
 
 beforeEach(() => {
   originalAssistantsDir = process.env.ASSISTANTS_DIR;
-  originalOldpalDir = process.env.OLDPAL_DIR;
   tempDir = mkdtempSync(join(tmpdir(), 'assistants-config-'));
   process.env.ASSISTANTS_DIR = tempDir;
 });
 
 afterEach(() => {
   process.env.ASSISTANTS_DIR = originalAssistantsDir;
-  process.env.OLDPAL_DIR = originalOldpalDir;
   rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -78,7 +75,7 @@ describe('config helpers', () => {
 
   test('loadSystemPrompt returns default prompt when no prompt files exist', async () => {
     const prompt = await loadSystemPrompt(tempDir);
-    expect(prompt).toContain('You are a helpful AI assistant');
+    expect(prompt).toContain('You are Hasna Assistant');
   });
 
   test('loadSystemPrompt tolerates read errors', async () => {
@@ -88,7 +85,7 @@ describe('config helpers', () => {
         throw new Error('boom');
       };
       const prompt = await loadSystemPrompt(tempDir);
-      expect(prompt).toContain('You are a helpful AI assistant');
+      expect(prompt).toContain('You are Hasna Assistant');
     } finally {
       (Bun as any).file = originalFile;
     }
@@ -108,36 +105,18 @@ describe('config helpers', () => {
 
   test('getConfigDir uses HOME when ASSISTANTS_DIR is unset', () => {
     const originalAssistantsDir = process.env.ASSISTANTS_DIR;
-    const originalOldpalDir = process.env.OLDPAL_DIR;
     const originalHome = process.env.HOME;
     const homeDir = join(tempDir, 'home');
     mkdirSync(homeDir, { recursive: true });
 
     delete process.env.ASSISTANTS_DIR;
-    delete process.env.OLDPAL_DIR;
     process.env.HOME = homeDir;
 
     try {
       expect(getConfigDir()).toBe(join(homeDir, '.assistants'));
     } finally {
       process.env.ASSISTANTS_DIR = originalAssistantsDir;
-      process.env.OLDPAL_DIR = originalOldpalDir;
       process.env.HOME = originalHome;
-    }
-  });
-
-  test('getConfigDir falls back to OLDPAL_DIR when provided', () => {
-    const originalAssistantsDir = process.env.ASSISTANTS_DIR;
-    const originalOldpalDir = process.env.OLDPAL_DIR;
-
-    delete process.env.ASSISTANTS_DIR;
-    process.env.OLDPAL_DIR = tempDir;
-
-    try {
-      expect(getConfigDir()).toBe(tempDir);
-    } finally {
-      process.env.ASSISTANTS_DIR = originalAssistantsDir;
-      process.env.OLDPAL_DIR = originalOldpalDir;
     }
   });
 });

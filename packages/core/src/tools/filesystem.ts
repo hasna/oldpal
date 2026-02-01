@@ -1,7 +1,6 @@
 import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname, sep } from 'path';
-import { existsSync } from 'fs';
 import { getProjectConfigDir } from '../config';
 import { Glob } from 'bun';
 import { ErrorCodes, ToolExecutionError } from '../errors';
@@ -18,10 +17,6 @@ let currentSessionId: string = 'default';
  */
 function getScriptsFolder(cwd: string, sessionId?: string): string {
   const resolvedSessionId = sessionId || currentSessionId;
-  const legacyDir = join(cwd, '.oldpal');
-  if (existsSync(legacyDir)) {
-    return join(legacyDir, 'scripts', resolvedSessionId);
-  }
   return join(getProjectConfigDir(cwd), 'scripts', resolvedSessionId);
 }
 
@@ -37,7 +32,7 @@ function isInScriptsFolder(path: string, cwd: string, sessionId?: string): boole
 
 /**
  * Filesystem tools - read, write, glob, grep
- * Write operations are RESTRICTED to the project scripts folder (.oldpal/scripts/{session-id}/ or .assistants/scripts/{session-id}/)
+ * Write operations are RESTRICTED to the project scripts folder (.assistants/scripts/{session-id}/)
  */
 export class FilesystemTools {
   /**
@@ -188,7 +183,7 @@ export class FilesystemTools {
 
   static readonly writeTool: Tool = {
     name: 'write',
-    description: 'Write content to a file. RESTRICTED: Can only write to the project scripts folder (.oldpal/scripts/{session} or .assistants/scripts/{session}). Provide a filename and it will be saved under the scripts folder.',
+    description: 'Write content to a file. RESTRICTED: Can only write to the project scripts folder (.assistants/scripts/{session}). Provide a filename and it will be saved under the scripts folder.',
     parameters: {
       type: 'object',
       properties: {

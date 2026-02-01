@@ -7,7 +7,7 @@ import { EmbeddedClient } from '@hasna/assistants-core';
 import type { StreamChunk } from '@hasna/assistants-shared';
 
 async function main() {
-  console.log('=== Oldpal Agent Test ===\n');
+  console.log('=== Hasna Assistant Agent Test ===\n');
 
   const client = new EmbeddedClient(process.cwd());
 

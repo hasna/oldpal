@@ -6,18 +6,15 @@ import { Logger, SessionStorage, initAssistantsDir } from '../src/logger';
 
 let tempDir: string;
 let originalAssistantsDir: string | undefined;
-let originalOldpalDir: string | undefined;
 
 beforeEach(() => {
   originalAssistantsDir = process.env.ASSISTANTS_DIR;
-  originalOldpalDir = process.env.OLDPAL_DIR;
   tempDir = mkdtempSync(join(tmpdir(), 'assistants-logger-'));
   process.env.ASSISTANTS_DIR = tempDir;
 });
 
 afterEach(() => {
   process.env.ASSISTANTS_DIR = originalAssistantsDir;
-  process.env.OLDPAL_DIR = originalOldpalDir;
   rmSync(tempDir, { recursive: true, force: true });
 });
 

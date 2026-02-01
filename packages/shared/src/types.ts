@@ -218,7 +218,7 @@ export interface SessionInfo {
 // Config Types
 // ============================================
 
-export interface OldpalConfig {
+export interface AssistantsConfig {
   llm: LLMConfig;
   voice?: VoiceConfig;
   connectors?: string[];

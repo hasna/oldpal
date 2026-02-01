@@ -24,12 +24,6 @@ export class SkillLoader {
     const projectSkillsDir = join(projectDir, '.assistants', 'skills');
     await this.loadFromDirectory(projectSkillsDir);
 
-    // Legacy fallback
-    const legacyUserSkillsDir = join(userHome, '.oldpal', 'skills');
-    const legacyProjectSkillsDir = join(projectDir, '.oldpal', 'skills');
-    await this.loadFromDirectory(legacyUserSkillsDir);
-    await this.loadFromDirectory(legacyProjectSkillsDir);
-
     // Also check nested .assistants/skills in monorepo
     const nestedGlob = new Glob('**/.assistants/skills/*/SKILL.md');
     for await (const file of nestedGlob.scan({ cwd: projectDir, dot: true })) {

@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import React from 'react';
 import { render } from 'ink';
-import { migrateFromOldpal } from '@hasna/assistants-core';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 
@@ -175,9 +174,6 @@ Interactive Mode:
 `);
   process.exit(0);
 }
-
-// Migration runs in background - don't block startup
-migrateFromOldpal().catch(() => {});
 
 // Headless mode
 if (options.print !== null) {

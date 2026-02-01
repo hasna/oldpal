@@ -1,4 +1,4 @@
-import type { Message, Tool, StreamChunk, ToolCall, ToolResult, OldpalConfig, ScheduledCommand, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
+import type { Message, Tool, StreamChunk, ToolCall, ToolResult, AssistantsConfig, ScheduledCommand, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
 import { generateId } from '@hasna/assistants-shared';
 import { join } from 'path';
 import { AgentContext } from './context';
@@ -52,7 +52,7 @@ import { VoiceManager } from '../voice/manager';
 import { AssistantManager, IdentityManager } from '../identity';
 
 export interface AgentLoopOptions {
-  config?: OldpalConfig;
+  config?: AssistantsConfig;
   cwd?: string;
   sessionId?: string;
   assistantId?: string;
@@ -91,7 +91,7 @@ export class AgentLoop {
   private commandExecutor: CommandExecutor;
   private builtinCommands: BuiltinCommands;
   private llmClient: LLMClient | null = null;
-  private config: OldpalConfig | null = null;
+  private config: AssistantsConfig | null = null;
   private allowedTools: Set<string> | null = null;
   private currentAllowedTools: Set<string> | null = null;
   private extraSystemPrompt: string | null = null;
@@ -1302,7 +1302,7 @@ export class AgentLoop {
     }
   }
 
-  private buildContextConfig(config: OldpalConfig): ContextConfig {
+  private buildContextConfig(config: AssistantsConfig): ContextConfig {
     const limits = getLimits();
     const configuredMax = config.context?.maxContextTokens ?? limits.maxTotalContextTokens;
     const maxContextTokens = Math.max(1000, Math.min(configuredMax, limits.maxTotalContextTokens));
@@ -1328,7 +1328,7 @@ export class AgentLoop {
     };
   }
 
-  private buildHeartbeatConfig(config: OldpalConfig): HeartbeatRuntimeConfig | null {
+  private buildHeartbeatConfig(config: AssistantsConfig): HeartbeatRuntimeConfig | null {
     if (config.heartbeat?.enabled === false) return null;
     const intervalMs = Math.max(1000, config.heartbeat?.intervalMs ?? 15000);
     const staleThresholdMs = Math.max(intervalMs * 2, config.heartbeat?.staleThresholdMs ?? 120000);

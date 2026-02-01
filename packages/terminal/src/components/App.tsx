@@ -13,7 +13,7 @@ import { WelcomeBanner } from './WelcomeBanner';
 import { SessionSelector } from './SessionSelector';
 import { estimateMessageLines, type DisplayMessage } from './messageLines';
 
-const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1' || process.env.OLDPAL_DEBUG === '1';
+const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
 
 function parseErrorMessage(error: string): { code?: string; message: string; suggestion?: string } {
   const lines = error.split('\n');

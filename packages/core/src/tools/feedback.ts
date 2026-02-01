@@ -35,9 +35,9 @@ function normalizeTags(value: unknown): string[] | undefined {
 
 function resolveFeedbackDir(cwd?: string): string {
   const baseCwd = cwd && cwd.trim().length > 0 ? cwd : process.cwd();
-  const legacyDir = join(baseCwd, '.oldpal');
-  if (existsSync(legacyDir)) {
-    return join(legacyDir, 'feedback');
+  const projectConfigDir = join(baseCwd, '.assistants');
+  if (existsSync(projectConfigDir)) {
+    return join(projectConfigDir, 'feedback');
   }
   return join(getConfigDir(), 'feedback');
 }
