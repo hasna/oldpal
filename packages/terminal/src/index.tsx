@@ -5,7 +5,7 @@ import { migrateFromOldpal } from '@hasna/assistants-core';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 
-const VERSION = '0.6.17';
+const VERSION = '0.6.18';
 
 // Parse CLI arguments
 function parseArgs(argv: string[]) {

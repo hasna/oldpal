@@ -404,7 +404,24 @@ function getToolContext(toolCall: ToolCall): string {
       return truncate(String(input.pattern || ''), 20);
     case 'grep':
       return truncate(String(input.pattern || ''), 20);
+    case 'schedule':
+      return String(input.action || '');
+    case 'feedback':
+      return String(input.type || 'feedback');
+    case 'web_search':
+      return truncate(String(input.query || ''), 20);
+    case 'web_fetch':
+    case 'curl':
+      const url = String(input.url || '');
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return truncate(url, 20);
+      }
     default:
+      // Try common field names for context
+      const action = input.action || input.command || input.operation;
+      if (action) return truncate(String(action), 20);
       return '';
   }
 }
@@ -433,6 +450,10 @@ function getToolDisplayName(toolCall: ToolCall): string {
       return 'grep';
     case 'display_image':
       return 'image';
+    case 'schedule':
+      return 'schedule';
+    case 'feedback':
+      return 'feedback';
     case 'notion':
     case 'gmail':
     case 'googledrive':
@@ -465,6 +486,10 @@ function formatToolCall(toolCall: ToolCall): string {
       return `Finding: ${truncate(String(input.pattern || ''), 60)}`;
     case 'grep':
       return `Searching: ${truncate(String(input.pattern || ''), 60)}`;
+    case 'schedule':
+      return formatScheduleCall(input);
+    case 'feedback':
+      return formatFeedbackCall(input);
     case 'notion':
       return `Notion: ${truncate(String(input.command || input.action || ''), 60)}`;
     case 'gmail':
@@ -478,8 +503,51 @@ function formatToolCall(toolCall: ToolCall): string {
     case 'slack':
       return `Slack: ${truncate(String(input.command || input.action || ''), 60)}`;
     default:
-      return `${name}: ${truncate(JSON.stringify(input), 50)}`;
+      // For connector tools (connect-*), try to format nicely
+      if (name.startsWith('connect_') || name.includes('_')) {
+        const action = String(input.command || input.action || input.operation || '');
+        if (action) {
+          return `${formatToolDisplayName(name)}: ${truncate(action, 50)}`;
+        }
+      }
+      return `${formatToolDisplayName(name)}: ${truncate(JSON.stringify(input), 50)}`;
   }
+}
+
+function formatToolDisplayName(name: string): string {
+  // Convert snake_case to Title Case
+  return name
+    .replace(/^connect_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatScheduleCall(input: Record<string, unknown>): string {
+  const action = String(input.action || '');
+  switch (action) {
+    case 'list':
+      return 'Listing scheduled tasks';
+    case 'create':
+      const cmd = truncate(String(input.command || ''), 30);
+      const schedule = String(input.schedule || '');
+      return `Creating schedule: "${cmd}" (${schedule})`;
+    case 'update':
+      return `Updating schedule: ${input.id || 'unknown'}`;
+    case 'delete':
+      return `Deleting schedule: ${input.id || 'unknown'}`;
+    case 'pause':
+      return `Pausing schedule: ${input.id || 'unknown'}`;
+    case 'resume':
+      return `Resuming schedule: ${input.id || 'unknown'}`;
+    default:
+      return `Schedule: ${action || 'unknown action'}`;
+  }
+}
+
+function formatFeedbackCall(input: Record<string, unknown>): string {
+  const type = String(input.type || 'feedback');
+  const title = truncate(String(input.title || ''), 40);
+  return `Submitting ${type}: ${title}`;
 }
 
 function truncate(text: string, maxLength: number): string {
@@ -492,9 +560,15 @@ function truncate(text: string, maxLength: number): string {
  */
 function truncateToolResult(toolResult: ToolResult, maxLines = 15, maxChars = 3000): string {
   const toolName = toolResult.toolName || 'tool';
-  const prefix = toolResult.isError ? `Error from ${toolName}: ` : `${toolName}: `;
-
   let content = String(toolResult.content || '');
+
+  // Try to format the result more nicely based on the tool
+  const formatted = formatToolResultNicely(toolName, content, toolResult.isError);
+  if (formatted) {
+    return formatted;
+  }
+
+  const prefix = toolResult.isError ? `Error: ` : '';
 
   // Strip ANSI codes
   content = content.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
@@ -514,4 +588,138 @@ function truncateToolResult(toolResult: ToolResult, maxLines = 15, maxChars = 30
   }
 
   return prefix + content.trim();
+}
+
+/**
+ * Format tool results in a more user-friendly way
+ */
+function formatToolResultNicely(toolName: string, content: string, isError?: boolean): string | null {
+  if (isError) {
+    // Simplify common error messages
+    if (content.includes('ENOENT') || content.includes('no such file')) {
+      return '⚠ File not found';
+    }
+    if (content.includes('EACCES') || content.includes('permission denied')) {
+      return '⚠ Permission denied';
+    }
+    if (content.includes('ETIMEDOUT') || content.includes('timeout')) {
+      return '⚠ Request timed out';
+    }
+    return null; // Use default formatting
+  }
+
+  switch (toolName) {
+    case 'schedule':
+      return formatScheduleResult(content);
+    case 'feedback':
+      return formatFeedbackResult(content);
+    case 'read':
+      return formatReadResult(content);
+    case 'write':
+      return formatWriteResult(content);
+    case 'glob':
+      return formatGlobResult(content);
+    case 'grep':
+      return formatGrepResult(content);
+    case 'bash':
+      return formatBashResult(content);
+    case 'web_search':
+      return formatSearchResult(content);
+    default:
+      return null; // Use default formatting
+  }
+}
+
+function formatScheduleResult(content: string): string {
+  const trimmed = content.trim().toLowerCase();
+  if (trimmed === 'no schedules found.' || trimmed.includes('no schedules')) {
+    return '📅 No scheduled tasks';
+  }
+  if (trimmed.includes('created') || trimmed.includes('scheduled')) {
+    return '✓ Schedule created';
+  }
+  if (trimmed.includes('deleted') || trimmed.includes('removed')) {
+    return '✓ Schedule deleted';
+  }
+  if (trimmed.includes('paused')) {
+    return '⏸ Schedule paused';
+  }
+  if (trimmed.includes('resumed')) {
+    return '▶ Schedule resumed';
+  }
+  // Check if it's a list of schedules
+  if (content.includes('id:') || content.includes('command:')) {
+    const lines = content.split('\n').filter(l => l.trim());
+    return `📅 ${lines.length} scheduled task${lines.length !== 1 ? 's' : ''}`;
+  }
+  return null;
+}
+
+function formatFeedbackResult(content: string): string {
+  if (content.includes('submitted') || content.includes('created')) {
+    return '✓ Feedback submitted';
+  }
+  return null;
+}
+
+function formatReadResult(content: string): string {
+  const lines = content.split('\n').length;
+  if (lines > 20) {
+    return `📄 Read ${lines} lines`;
+  }
+  return null; // Show actual content for small files
+}
+
+function formatWriteResult(content: string): string {
+  if (content.includes('written') || content.includes('saved') || content.includes('created')) {
+    return '✓ File saved';
+  }
+  return null;
+}
+
+function formatGlobResult(content: string): string {
+  const lines = content.split('\n').filter(l => l.trim());
+  if (lines.length === 0) {
+    return '🔍 No files found';
+  }
+  if (lines.length > 10) {
+    return `🔍 Found ${lines.length} files`;
+  }
+  return null; // Show actual files for small results
+}
+
+function formatGrepResult(content: string): string {
+  const lines = content.split('\n').filter(l => l.trim());
+  if (lines.length === 0) {
+    return '🔍 No matches found';
+  }
+  if (lines.length > 10) {
+    return `🔍 Found ${lines.length} matches`;
+  }
+  return null; // Show actual matches for small results
+}
+
+function formatBashResult(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return '✓ Command completed';
+  }
+  // For very short output, let it show
+  if (trimmed.length < 100 && !trimmed.includes('\n')) {
+    return null;
+  }
+  const lines = trimmed.split('\n').length;
+  if (lines > 20) {
+    return `✓ Output: ${lines} lines`;
+  }
+  return null;
+}
+
+function formatSearchResult(content: string): string {
+  // Try to count results
+  const resultCount = (content.match(/https?:\/\//g) || []).length;
+  if (resultCount > 0) {
+    return `🔍 Found ${resultCount} result${resultCount !== 1 ? 's' : ''}`;
+  }
+  return null;
 }

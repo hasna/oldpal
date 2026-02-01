@@ -82,34 +82,70 @@ function formatToolCall(toolCall: ToolCall): string {
 
   switch (name) {
     case 'bash':
-      return `bash: ${truncate(String(input.command || ''), 50)}`;
+      return `Running: ${truncate(String(input.command || ''), 50)}`;
     case 'curl':
     case 'web_fetch':
-      return `fetch: ${truncate(String(input.url || ''), 50)}`;
+      return `Fetching: ${truncate(String(input.url || ''), 50)}`;
     case 'web_search':
-      return `search: ${truncate(String(input.query || ''), 50)}`;
+      return `Searching: ${truncate(String(input.query || ''), 50)}`;
     case 'read':
-      return `read: ${truncate(String(input.path || input.file_path || ''), 50)}`;
+      return `Reading: ${truncate(String(input.path || input.file_path || ''), 50)}`;
     case 'write':
-      return `write: ${truncate(String(input.filename || input.path || input.file_path || ''), 50)}`;
+      return `Writing: ${truncate(String(input.filename || input.path || input.file_path || ''), 50)}`;
     case 'glob':
-      return `glob: ${truncate(String(input.pattern || ''), 50)}`;
+      return `Finding: ${truncate(String(input.pattern || ''), 50)}`;
     case 'grep':
-      return `grep: ${truncate(String(input.pattern || ''), 50)}`;
+      return `Searching: ${truncate(String(input.pattern || ''), 50)}`;
+    case 'schedule':
+      return formatScheduleAction(input);
+    case 'feedback':
+      return `Submitting ${input.type || 'feedback'}`;
     case 'notion':
-      return `notion: ${truncate(String(input.command || input.action || ''), 50)}`;
+      return `Notion: ${truncate(String(input.command || input.action || ''), 50)}`;
     case 'gmail':
-      return `gmail: ${truncate(String(input.command || input.action || ''), 50)}`;
+      return `Gmail: ${truncate(String(input.command || input.action || ''), 50)}`;
     case 'googledrive':
-      return `drive: ${truncate(String(input.command || input.action || ''), 50)}`;
+      return `Drive: ${truncate(String(input.command || input.action || ''), 50)}`;
     case 'googlecalendar':
-      return `calendar: ${truncate(String(input.command || input.action || ''), 50)}`;
+      return `Calendar: ${truncate(String(input.command || input.action || ''), 50)}`;
     case 'linear':
-      return `linear: ${truncate(String(input.command || input.action || ''), 50)}`;
+      return `Linear: ${truncate(String(input.command || input.action || ''), 50)}`;
     case 'slack':
-      return `slack: ${truncate(String(input.command || input.action || ''), 50)}`;
+      return `Slack: ${truncate(String(input.command || input.action || ''), 50)}`;
     default:
-      return `${name}: ${truncate(JSON.stringify(input), 40)}`;
+      // For any tool, try to find a meaningful action
+      const action = input.action || input.command || input.operation;
+      if (action) {
+        return `${formatName(name)}: ${truncate(String(action), 40)}`;
+      }
+      return `${formatName(name)}`;
+  }
+}
+
+function formatName(name: string): string {
+  return name
+    .replace(/^connect_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatScheduleAction(input: Record<string, unknown>): string {
+  const action = String(input.action || '');
+  switch (action) {
+    case 'list':
+      return 'Listing scheduled tasks';
+    case 'create':
+      return `Creating schedule`;
+    case 'update':
+      return `Updating schedule`;
+    case 'delete':
+      return `Deleting schedule`;
+    case 'pause':
+      return `Pausing schedule`;
+    case 'resume':
+      return `Resuming schedule`;
+    default:
+      return `Schedule: ${action || 'unknown'}`;
   }
 }
 
