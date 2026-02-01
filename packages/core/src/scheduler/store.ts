@@ -106,7 +106,8 @@ export async function acquireScheduleLock(
   cwd: string,
   id: string,
   ownerId: string,
-  ttlMs: number = DEFAULT_LOCK_TTL_MS
+  ttlMs: number = DEFAULT_LOCK_TTL_MS,
+  allowRetry: boolean = true
 ): Promise<boolean> {
   await ensureDirs(cwd);
   const path = lockPath(cwd, id);
@@ -125,10 +126,17 @@ export async function acquireScheduleLock(
       const ttl = lock?.ttlMs ?? ttlMs;
       if (now - updatedAt > ttl) {
         await unlink(path);
-        return acquireScheduleLock(cwd, id, ownerId, ttlMs);
+        return acquireScheduleLock(cwd, id, ownerId, ttlMs, false);
       }
     } catch {
-      // Ignore errors reading lock file
+      if (allowRetry) {
+        try {
+          await unlink(path);
+          return acquireScheduleLock(cwd, id, ownerId, ttlMs, false);
+        } catch {
+          return false;
+        }
+      }
     }
   }
 

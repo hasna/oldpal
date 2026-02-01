@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, rm, mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
-import { computeNextRun, listSchedules, saveSchedule } from '../src/scheduler/store';
+import { acquireScheduleLock, computeNextRun, listSchedules, saveSchedule } from '../src/scheduler/store';
 import { getNextCronRun } from '../src/scheduler/cron';
 
 describe('Scheduler', () => {
@@ -35,6 +35,20 @@ describe('Scheduler', () => {
       const list = await listSchedules(tempDir);
       expect(list.length).toBe(1);
       expect(list[0].command).toBe('/status');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test('recovers from corrupted lock file', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'assistants-sched-lock-'));
+    try {
+      const locksDir = join(tempDir, '.assistants', 'schedules', 'locks');
+      await mkdir(locksDir, { recursive: true });
+      await writeFile(join(locksDir, 'sched-1.lock.json'), '{ not json');
+
+      const acquired = await acquireScheduleLock(tempDir, 'sched-1', 'owner-1');
+      expect(acquired).toBe(true);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
