@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import { SessionRegistry, type SessionInfo } from '@oldpal/core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage } from '@oldpal/shared';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState } from '@oldpal/shared';
 import { generateId, now } from '@oldpal/shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
@@ -79,6 +79,7 @@ interface SessionUIState {
   toolCalls: ToolCall[];
   toolResults: ToolResult[];
   tokenUsage: TokenUsage | undefined;
+  energyState: EnergyState | undefined;
   processingStartTime: number | undefined;
   currentTurnTokens: number;
   error: string | null;
@@ -161,6 +162,7 @@ export function App({ cwd }: AppProps) {
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | undefined>();
+  const [energyState, setEnergyState] = useState<EnergyState | undefined>();
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -280,12 +282,13 @@ export function App({ cwd }: AppProps) {
         toolCalls: toolCallsRef.current,
         toolResults: toolResultsRef.current,
         tokenUsage,
+        energyState,
         processingStartTime,
         currentTurnTokens,
         error,
       });
     }
-  }, [activeSessionId, messages, tokenUsage, processingStartTime, currentTurnTokens, error]);
+  }, [activeSessionId, messages, tokenUsage, energyState, processingStartTime, currentTurnTokens, error]);
 
   // Load session UI state
   const loadSessionState = useCallback((sessionId: string) => {
@@ -300,6 +303,7 @@ export function App({ cwd }: AppProps) {
       toolResultsRef.current = state.toolResults;
       setCurrentToolCall(undefined);
       setTokenUsage(state.tokenUsage);
+      setEnergyState(state.energyState);
       setProcessingStartTime(state.processingStartTime);
       setCurrentTurnTokens(state.currentTurnTokens);
       setError(state.error);
@@ -314,6 +318,7 @@ export function App({ cwd }: AppProps) {
       toolResultsRef.current = [];
       setCurrentToolCall(undefined);
       setTokenUsage(undefined);
+      setEnergyState(undefined);
       setProcessingStartTime(undefined);
       setCurrentTurnTokens(0);
       setError(null);
@@ -416,6 +421,7 @@ export function App({ cwd }: AppProps) {
       const activeSession = registry.getActiveSession();
       if (activeSession) {
         setTokenUsage(activeSession.client.getTokenUsage());
+        setEnergyState(activeSession.client.getEnergyState() ?? undefined);
       }
     }
   }, [registry, exit, finalizeResponse, resetTurnState]);
@@ -448,6 +454,7 @@ export function App({ cwd }: AppProps) {
           description: s.description || '',
           argumentHint: s.argumentHint,
         })));
+        setEnergyState(session.client.getEnergyState() ?? undefined);
 
         setIsInitializing(false);
       } catch (err) {
@@ -586,6 +593,7 @@ export function App({ cwd }: AppProps) {
     if (session) {
       setIsProcessing(session.isProcessing);
       isProcessingRef.current = session.isProcessing;
+      setEnergyState(session.client.getEnergyState() ?? undefined);
     }
 
     // Now switch session in registry (may replay buffered chunks to the reset state)
@@ -613,6 +621,7 @@ export function App({ cwd }: AppProps) {
       loadSessionState(newSession.id);
       setIsProcessing(false);
       isProcessingRef.current = false;
+      setEnergyState(newSession.client.getEnergyState() ?? undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
     }
@@ -966,6 +975,7 @@ export function App({ cwd }: AppProps) {
         cwd={activeSession?.cwd || cwd}
         queueLength={activeQueue.length}
         tokenUsage={tokenUsage}
+        energyState={energyState}
         sessionIndex={sessionIndex}
         sessionCount={sessionCount}
         backgroundProcessingCount={backgroundProcessingCount}

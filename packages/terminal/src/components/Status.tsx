@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
+import type { EnergyState } from '@oldpal/shared';
+import { EnergyBar } from './EnergyBar';
 
 interface TokenUsage {
   inputTokens: number;
@@ -13,6 +15,7 @@ interface StatusProps {
   cwd: string;
   queueLength?: number;
   tokenUsage?: TokenUsage;
+  energyState?: EnergyState;
   sessionIndex?: number;
   sessionCount?: number;
   backgroundProcessingCount?: number;
@@ -25,6 +28,7 @@ export function Status({
   cwd,
   queueLength = 0,
   tokenUsage,
+  energyState,
   sessionIndex,
   sessionCount,
   backgroundProcessingCount = 0,
@@ -75,6 +79,11 @@ export function Status({
     <Box marginTop={1} justifyContent="space-between">
       <Text dimColor>/help for commands{sessionCount && sessionCount > 1 ? ' | Ctrl+S sessions' : ''}</Text>
       <Box>
+        {energyState && (
+          <Box marginRight={2}>
+            <EnergyBar current={energyState.current} max={energyState.max} />
+          </Box>
+        )}
         {isProcessing && <Text dimColor>esc to stop · </Text>}
         {sessionInfo && (
           <Text dimColor>
