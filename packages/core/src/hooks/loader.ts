@@ -6,6 +6,10 @@ import type { HookConfig, HookMatcher, HookEvent } from '@oldpal/shared';
 export class HookLoader {
   private hooks: HookConfig = {};
 
+  constructor() {
+    this.hooks = {};
+  }
+
   /**
    * Load hooks from configuration
    */

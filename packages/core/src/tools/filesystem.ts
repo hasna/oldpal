@@ -100,9 +100,11 @@ export class FilesystemTools {
       const selectedLines = lines.slice(startLine, endLine);
 
       // Format with line numbers
-      const formatted = selectedLines
-        .map((line, i) => `${String(startLine + i + 1).padStart(6)}  ${line}`)
-        .join('\n');
+      const formattedLines: string[] = [];
+      for (let i = 0; i < selectedLines.length; i++) {
+        formattedLines.push(`${String(startLine + i + 1).padStart(6)}  ${selectedLines[i]}`);
+      }
+      const formatted = formattedLines.join('\n');
 
       return formatted || '(empty file)';
     } catch (error) {
@@ -299,3 +301,8 @@ export class FilesystemTools {
     }
   };
 }
+
+export const __test__ = {
+  getTempFolder,
+  isInTempFolder,
+};

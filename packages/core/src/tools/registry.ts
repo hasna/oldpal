@@ -38,7 +38,11 @@ export class ToolRegistry {
    * Get all registered tools
    */
   getTools(): Tool[] {
-    return Array.from(this.tools.values()).map((t) => t.tool);
+    const tools: Tool[] = [];
+    for (const entry of this.tools.values()) {
+      tools.push(entry.tool);
+    }
+    return tools;
   }
 
   /**
@@ -89,6 +93,10 @@ export class ToolRegistry {
    * Execute multiple tool calls in parallel
    */
   async executeAll(toolCalls: ToolCall[]): Promise<ToolResult[]> {
-    return Promise.all(toolCalls.map((tc) => this.execute(tc)));
+    const tasks: Promise<ToolResult>[] = [];
+    for (const call of toolCalls) {
+      tasks.push(this.execute(call));
+    }
+    return Promise.all(tasks);
   }
 }

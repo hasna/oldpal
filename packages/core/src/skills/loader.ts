@@ -1,4 +1,4 @@
-import { join } from 'path';
+import { join, basename, dirname } from 'path';
 import { homedir } from 'os';
 import { Glob } from 'bun';
 import type { Skill, SkillFrontmatter } from '@oldpal/shared';
@@ -59,14 +59,18 @@ export class SkillLoader {
       const regularGlob = new Glob('*/SKILL.md');
       for await (const file of regularGlob.scan({ cwd: dir })) {
         // Skip if already loaded via skill- prefix
-        const dirName = file.split('/')[0];
+        const dirName = file.split(/[\\/]/)[0];
         if (!dirName.startsWith('skill-')) {
           filesToLoad.push(join(dir, file));
         }
       }
 
       // Load all skill files in parallel
-      await Promise.all(filesToLoad.map((file) => this.loadSkillFile(file)));
+      const loadTasks: Array<Promise<Skill | null>> = [];
+      for (const file of filesToLoad) {
+        loadTasks.push(this.loadSkillFile(file));
+      }
+      await Promise.all(loadTasks);
     } catch {
       // Directory doesn't exist or error reading, skip
     }
@@ -81,7 +85,7 @@ export class SkillLoader {
       const { frontmatter, content: markdownContent } = parseFrontmatter<SkillFrontmatter>(content);
 
       // Get skill name from frontmatter or directory name
-      const dirName = filePath.split('/').slice(-2)[0];
+      const dirName = basename(dirname(filePath));
       const name = frontmatter.name || dirName;
 
       // Get description from frontmatter or first paragraph
@@ -92,11 +96,26 @@ export class SkillLoader {
       }
 
       const allowedToolsRaw = frontmatter['allowed-tools'];
-      const allowedTools = Array.isArray(allowedToolsRaw)
-        ? allowedToolsRaw.map((t) => String(t).trim()).filter(Boolean)
-        : typeof allowedToolsRaw === 'string'
-          ? allowedToolsRaw.split(',').map((t) => t.trim()).filter(Boolean)
-          : undefined;
+      let allowedTools: string[] | undefined;
+      if (Array.isArray(allowedToolsRaw)) {
+        const parsed: string[] = [];
+        for (const entry of allowedToolsRaw) {
+          const value = String(entry).trim();
+          if (value) parsed.push(value);
+        }
+        if (parsed.length > 0) {
+          allowedTools = parsed;
+        }
+      } else if (typeof allowedToolsRaw === 'string') {
+        const parsed: string[] = [];
+        for (const entry of allowedToolsRaw.split(',')) {
+          const value = entry.trim();
+          if (value) parsed.push(value);
+        }
+        if (parsed.length > 0) {
+          allowedTools = parsed;
+        }
+      }
 
       const argumentHintRaw = frontmatter['argument-hint'];
       const argumentHint = Array.isArray(argumentHintRaw)
@@ -146,7 +165,14 @@ export class SkillLoader {
    * Get user-invocable skills (for slash command menu)
    */
   getUserInvocableSkills(): Skill[] {
-    return this.getSkills().filter((s) => s.userInvocable !== false);
+    const skills = this.getSkills();
+    const userSkills: Skill[] = [];
+    for (const skill of skills) {
+      if (skill.userInvocable !== false) {
+        userSkills.push(skill);
+      }
+    }
+    return userSkills;
   }
 
   /**

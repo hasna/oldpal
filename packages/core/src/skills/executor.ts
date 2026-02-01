@@ -6,6 +6,8 @@ import { substituteVariables } from '@oldpal/shared';
  * Skill executor - prepares and executes skills
  */
 export class SkillExecutor {
+  constructor() {}
+
   /**
    * Prepare skill content with argument substitution
    */
