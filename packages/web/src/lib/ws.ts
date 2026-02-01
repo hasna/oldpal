@@ -115,6 +115,9 @@ class ChatWebSocket {
         store.clearToolCalls();
         break;
       case 'error':
+        if (message.message) {
+          store.appendMessageContent(message.messageId, `\n[Error: ${message.message}]`);
+        }
         store.finalizeToolCalls(message.messageId);
         store.setStreaming(false);
         store.clearToolCalls();

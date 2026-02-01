@@ -117,4 +117,25 @@ describe('ChatWebSocket', () => {
     expect(last?.toolCalls?.length).toBe(1);
     expect(last?.toolResults?.[0]?.content).toBe('ok');
   });
+
+  test('surfaces error messages in the assistant stream', () => {
+    chatWs.connect('ws://test');
+    const ws = MockWebSocket.instances[0];
+    ws.onopen?.();
+
+    useChatStore.getState().addMessage({
+      id: 'assistant-1',
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+    });
+
+    ws.onmessage?.({
+      data: JSON.stringify({ type: 'error', message: 'boom', messageId: 'assistant-1' }),
+    });
+
+    const state = useChatStore.getState();
+    expect(state.messages.at(-1)?.content).toContain('[Error: boom]');
+    expect(state.isStreaming).toBe(false);
+  });
 });
