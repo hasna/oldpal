@@ -32,6 +32,10 @@ packages/
 
 ## Key Patterns
 
+## Collaboration & Safety
+
+- Always inspect unexpected changes before proceeding.
+
 ### Connector Bridge
 
 Connectors are your existing `connect-*` CLIs wrapped as tools:
