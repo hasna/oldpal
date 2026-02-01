@@ -54,6 +54,7 @@ export interface AgentLoopOptions {
   sessionId?: string;
   allowedTools?: string[];
   extraSystemPrompt?: string;
+  llmClient?: LLMClient;
   onChunk?: (chunk: StreamChunk) => void;
   onToolStart?: (toolCall: ToolCall) => void;
   onToolEnd?: (toolCall: ToolCall, result: ToolResult) => void;
@@ -120,6 +121,7 @@ export class AgentLoop {
     this.builtinCommands = new BuiltinCommands();
     this.allowedTools = this.normalizeAllowedTools(options.allowedTools);
     this.extraSystemPrompt = options.extraSystemPrompt || null;
+    this.llmClient = options.llmClient ?? null;
 
     this.onChunk = options.onChunk;
     this.onToolStart = options.onToolStart;
@@ -158,12 +160,19 @@ export class AgentLoop {
       .catch(() => {});
 
     // Phase 2: All independent async operations in parallel (excluding connectors)
+    const llmClientPromise = this.llmClient
+      ? Promise.resolve(this.llmClient).then((client) => {
+          this.hookExecutor.setLLMClient(client);
+          return client;
+        })
+      : createLLMClient(this.config.llm).then((client) => {
+          this.llmClient = client;
+          this.hookExecutor.setLLMClient(client);
+          return client;
+        });
+
     const [, , hooksConfig, systemPrompt] = await Promise.all([
-      // Initialize LLM client
-      createLLMClient(this.config.llm).then((client) => {
-        this.llmClient = client;
-        this.hookExecutor.setLLMClient(client);
-      }),
+      llmClientPromise,
       // Load skills
       this.skillLoader.loadAll(this.cwd),
       // Load hooks config
