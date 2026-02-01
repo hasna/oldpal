@@ -102,6 +102,22 @@ function stripAnsi(text: string): string {
   return text.replace(/\x1B\[[0-9;]*m/g, '');
 }
 
+function truncateActivityContent(content: string, maxLines = 15, maxChars = 3000): string {
+  let output = content.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+  output = output.replace(/\t/g, '  ');
+
+  const lines = output.split('\n');
+  if (lines.length > maxLines) {
+    output = lines.slice(0, maxLines).join('\n') + `\n... (${lines.length - maxLines} more lines)`;
+  }
+
+  if (output.length > maxChars) {
+    output = output.slice(0, maxChars) + '...';
+  }
+
+  return output;
+}
+
 function chunkRenderedLines(lines: string[], chunkLines: number): string[][] {
   const chunks: string[][] = [];
   let current: string[] = [];
@@ -667,6 +683,32 @@ export function App({ cwd, version }: AppProps) {
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
 
+  const wrapChars = columns ? Math.max(40, columns - 4) : MESSAGE_WRAP_CHARS;
+  const renderWidth = columns ? Math.max(20, columns - 2) : undefined;
+  const activityLogLineCount = useMemo(() => {
+    if (activityLog.length === 0) return 0;
+    let lines = 0;
+    for (const entry of activityLog) {
+      if (entry.type === 'text' && entry.content) {
+        const rendered = renderMarkdown(entry.content, { maxWidth: renderWidth });
+        const entryLines = wrapTextLines(stripAnsi(rendered), wrapChars).length;
+        lines += entryLines + 2; // marginY=1
+        continue;
+      }
+      if (entry.type === 'tool_call' && entry.toolCall) {
+        lines += 4; // 2 lines + margin
+        continue;
+      }
+      if (entry.type === 'tool_result' && entry.toolResult) {
+        const truncated = truncateActivityContent(String(entry.toolResult.content ?? ''));
+        const entryLines = wrapTextLines(truncated, wrapChars).length;
+        lines += entryLines + 2; // marginY=1
+        continue;
+      }
+    }
+    return lines;
+  }, [activityLog, renderWidth, wrapChars]);
+
   const reservedLines = useMemo(() => {
     let lines = 0;
 
@@ -709,6 +751,8 @@ export function App({ cwd, version }: AppProps) {
 
     lines += 2; // Status marginTop + line
 
+    lines += activityLogLineCount;
+
     return lines;
   }, [
     activeQueue.length,
@@ -718,10 +762,9 @@ export function App({ cwd, version }: AppProps) {
     error,
     isProcessing,
     showWelcome,
+    activityLogLineCount,
   ]);
 
-  const wrapChars = columns ? Math.max(40, columns - 4) : MESSAGE_WRAP_CHARS;
-  const renderWidth = columns ? Math.max(20, columns - 2) : undefined;
   const displayMessages = useMemo(
     () => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth }),
     [messages, wrapChars, renderWidth]

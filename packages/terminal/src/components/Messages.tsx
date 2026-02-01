@@ -68,6 +68,7 @@ export function Messages({
   const visibleStreaming = visibleSpans
     .filter((span) => span.index >= historicalCount)
     .map((span) => span.message);
+  const showCurrentResponse = Boolean(currentResponse) && streamingMessages.length === 0;
 
   // Group consecutive tool-only assistant messages
   const groupedMessages = groupConsecutiveToolMessages(visibleMessages);
@@ -167,7 +168,7 @@ export function Messages({
       ))}
 
       {/* Show current streaming response (text being typed now) */}
-      {currentResponse && (
+      {showCurrentResponse && (
         <Box marginY={1}>
           <Text dimColor>● </Text>
           <Box flexGrow={1}>
