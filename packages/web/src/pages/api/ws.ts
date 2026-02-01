@@ -90,7 +90,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
       ws.on('message', (raw) => {
         try {
           const message = JSON.parse(String(raw)) as ClientMessage;
-          if (message.sessionId) {
+          if (message.type === 'session' && message.sessionId) {
             sessionId = message.sessionId;
             pendingMessageIds.length = 0;
             currentMessageId = null;
