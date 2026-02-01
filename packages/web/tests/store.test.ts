@@ -39,4 +39,16 @@ describe('chat store', () => {
     useChatStore.getState().switchSession(id2);
     expect(useChatStore.getState().messages.find((m) => m.id === 'm2')).toBeTruthy();
   });
+
+  test('createSession snapshots the previous session', () => {
+    const id = useChatStore.getState().createSession('First');
+    useChatStore.getState().addMessage({ id: 'm1', role: 'user', content: 'hi', timestamp: Date.now() });
+
+    const id2 = useChatStore.getState().createSession('Second');
+    expect(useChatStore.getState().sessionId).toBe(id2);
+    expect(useChatStore.getState().messages.length).toBe(0);
+
+    useChatStore.getState().switchSession(id);
+    expect(useChatStore.getState().messages.find((m) => m.id === 'm1')).toBeTruthy();
+  });
 });

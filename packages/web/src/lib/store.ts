@@ -50,6 +50,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentStreamMessageId: null,
       sessionSnapshots: {
         ...state.sessionSnapshots,
+        ...(state.sessionId
+          ? {
+              [state.sessionId]: {
+                messages: state.messages,
+                toolCalls: state.currentToolCalls,
+                streamMessageId: state.currentStreamMessageId,
+              },
+            }
+          : {}),
         [id]: { messages: [], toolCalls: [], streamMessageId: null },
       },
     }));
