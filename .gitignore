@@ -28,6 +28,13 @@ Thumbs.db
 # Local config (user-specific)
 .assistants/settings.local.json
 
+# Local assistants data (project-level)
+.assistants/feedback/
+.assistants/scripts/
+.assistants/jobs/
+.assistants/inbox/
+.assistants/projects/
+
 # Logs
 *.log
 npm-debug.log*

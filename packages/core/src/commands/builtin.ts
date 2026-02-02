@@ -696,6 +696,7 @@ export class BuiltinCommands {
         message += '  - Create custom commands in .assistants/commands/*.md\n';
         message += '  - Global commands go in ~/.assistants/commands/*.md\n';
         message += '  - Use /init to create a starter command\n';
+        message += '  - The agent can use the wait/sleep tool to pause between actions\n';
 
         context.emit('text', message);
         context.emit('done');

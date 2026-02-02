@@ -32,6 +32,7 @@ export ANTHROPIC_API_KEY="your-key"
 - **Connector-powered**: Uses `connect-*` CLIs (Notion, Google Drive, Gmail, etc.)
 - **Skills**: Reusable instructions with `SKILL.md` files
 - **Hooks**: Event-driven automation
+- **Wait/Sleep tool**: Let the agent pause between actions with exact or ranged delays
 
 ## Configuration
 

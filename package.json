@@ -24,7 +24,7 @@
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
-    "@hasna/assistants": "^0.6.42"
+    "@hasna/assistants": "^0.6.43"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
