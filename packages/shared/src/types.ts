@@ -596,7 +596,11 @@ export interface ValidationConfig {
   maxToolOutputLength?: number;
   maxTotalContextTokens?: number;
   maxFileReadSize?: number;
-  perTool?: Record<string, { mode?: 'strict' | 'lenient'; maxOutputLength?: number }>;
+  perTool?: Record<string, {
+    mode?: 'strict' | 'lenient';
+    maxOutputLength?: number;
+    allowEnv?: boolean;
+  }>;
 }
 
 // ============================================
@@ -680,6 +684,8 @@ export interface InboxConfig {
     region?: string;
     /** SES receipt rule set name */
     ruleSetName?: string;
+    /** AWS credentials profile for SES (if different from storage) */
+    credentialsProfile?: string;
   };
 
   /** Resend specific configuration */
