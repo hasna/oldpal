@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
-import TextInput from 'ink-text-input';
+import { buildLayout, moveCursorVertical, type InputLayout } from './inputLayout';
 
 // Available commands with descriptions
 const COMMANDS = [
@@ -57,7 +57,13 @@ export function Input({
   askPlaceholder,
 }: InputProps) {
   const [value, setValue] = useState('');
+  const [cursor, setCursor] = useState(0);
+  const [preferredColumn, setPreferredColumn] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const { stdout } = useStdout();
+  const screenWidth = stdout?.columns ?? 80;
+  const terminalWidth = Math.max(10, screenWidth - 2);
+  const textWidth = Math.max(10, screenWidth - 4);
 
   // Merge built-in commands with passed commands
   const allCommands = useMemo(() => {
@@ -110,64 +116,14 @@ export function Input({
     setSelectedIndex((prev) => Math.min(prev, autocompleteItems.length - 1));
   }, [autocompleteItems.length]);
 
-  // Handle keyboard input for autocomplete
-  useInput((input, key) => {
-    if (isAskingUser) {
-      return;
-    }
-    // Tab: autocomplete selected item
-    if (key.tab) {
-      if (autocompleteItems.length > 0) {
-        const selected = autocompleteItems[selectedIndex] || autocompleteItems[0];
-        if (autocompleteMode === 'skill') {
-          setValue('$' + selected.name + ' ');
-        } else {
-          setValue(selected.name + ' ');
-        }
-        setSelectedIndex(0);
-        return;
-      }
-      if (isProcessing && value.trim()) {
-        onSubmit(value, 'queue');
-        setValue('');
-        setSelectedIndex(0);
-        return;
-      }
-    }
-
-    // Arrow keys for autocomplete navigation
-    if (autocompleteItems.length > 0) {
-      if (key.downArrow) {
-        setSelectedIndex(prev => Math.min(prev + 1, autocompleteItems.length - 1));
-        return;
-      }
-      if (key.upArrow) {
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
-        return;
-      }
-    }
-
-    // Submit modes
-    if (!value.trim()) return;
-
-    // Shift+Enter or Ctrl+Enter: interrupt and send immediately
-    if ((key.shift || key.ctrl) && key.return) {
-      onSubmit(value, 'interrupt');
-      setValue('');
-      setSelectedIndex(0);
-    }
-    // Meta+Enter: queue message
-    else if (key.meta && key.return) {
-      onSubmit(value, 'queue');
-      setValue('');
-      setSelectedIndex(0);
-    }
-  });
-
-  const handleChange = (newValue: string) => {
-    setValue(newValue);
-    setSelectedIndex(0); // Reset selection when typing
+  const setValueAndCursor = (nextValue: string, nextCursor: number = nextValue.length) => {
+    setValue(nextValue);
+    const clamped = Math.max(0, Math.min(nextCursor, nextValue.length));
+    setCursor(clamped);
+    setPreferredColumn(null);
+    setSelectedIndex(0);
   };
+
 
   const handleSubmit = (submittedValue: string) => {
     if (!submittedValue.trim()) return;
@@ -180,8 +136,7 @@ export function Input({
       const selected = filteredCommands[selectedIndex] || filteredCommands[0];
       if (selected) {
         onSubmit(selected.name, isProcessing ? 'inline' : 'normal');
-        setValue('');
-        setSelectedIndex(0);
+        setValueAndCursor('');
         return;
       }
     }
@@ -191,9 +146,153 @@ export function Input({
     } else {
       onSubmit(submittedValue, 'normal');
     }
-    setValue('');
+    setValueAndCursor('');
+  };
+
+  const moveCursorTo = (next: number, resetPreferred: boolean = true) => {
+    const clamped = Math.max(0, Math.min(next, value.length));
+    setCursor(clamped);
+    if (resetPreferred) {
+      setPreferredColumn(null);
+    }
+  };
+
+  const moveCursorBy = (delta: number) => {
+    moveCursorTo(cursor + delta);
+  };
+
+  const applyVerticalMove = (currentLayout: InputLayout, direction: -1 | 1) => {
+    const result = moveCursorVertical(currentLayout, preferredColumn, direction);
+    if (!result) return;
+    setCursor(result.cursor);
+    setPreferredColumn(result.preferredColumn);
+  };
+
+  const insertText = (text: string) => {
+    if (!text) return;
+    const next = value.slice(0, cursor) + text + value.slice(cursor);
+    setValue(next);
+    setCursor(cursor + text.length);
+    setPreferredColumn(null);
     setSelectedIndex(0);
   };
+
+  const deleteBackward = () => {
+    if (cursor === 0) return;
+    const next = value.slice(0, cursor - 1) + value.slice(cursor);
+    setValue(next);
+    setCursor(cursor - 1);
+    setPreferredColumn(null);
+    setSelectedIndex(0);
+  };
+
+  const deleteForward = () => {
+    if (cursor >= value.length) return;
+    const next = value.slice(0, cursor) + value.slice(cursor + 1);
+    setValue(next);
+    setPreferredColumn(null);
+    setSelectedIndex(0);
+  };
+
+  // Handle keyboard input for autocomplete and editing
+  useInput((input, key) => {
+    if (key.ctrl && input === 'c') {
+      if (value.length > 0) {
+        setValueAndCursor('');
+      }
+      return;
+    }
+
+    if (!isAskingUser) {
+      // Tab: autocomplete selected item
+      if (key.tab) {
+        if (autocompleteItems.length > 0) {
+          const selected = autocompleteItems[selectedIndex] || autocompleteItems[0];
+          const nextValue = autocompleteMode === 'skill'
+            ? `$${selected.name} `
+            : `${selected.name} `;
+          setValueAndCursor(nextValue);
+          return;
+        }
+        if (isProcessing && value.trim()) {
+          onSubmit(value, 'queue');
+          setValueAndCursor('');
+          return;
+        }
+      }
+
+      // Arrow keys for autocomplete navigation
+      if (autocompleteItems.length > 0) {
+        if (key.downArrow) {
+          setSelectedIndex((prev) => Math.min(prev + 1, autocompleteItems.length - 1));
+          return;
+        }
+        if (key.upArrow) {
+          setSelectedIndex((prev) => Math.max(prev - 1, 0));
+          return;
+        }
+      }
+    }
+
+    const activeLayout = buildLayout(value, cursor, textWidth);
+
+    if (key.leftArrow) {
+      moveCursorBy(-1);
+      return;
+    }
+    if (key.rightArrow) {
+      moveCursorBy(1);
+      return;
+    }
+    if (key.upArrow) {
+      applyVerticalMove(activeLayout, -1);
+      return;
+    }
+    if (key.downArrow) {
+      applyVerticalMove(activeLayout, 1);
+      return;
+    }
+    if (key.home) {
+      const line = activeLayout.displayLines[activeLayout.cursorRow];
+      moveCursorTo(line.start, false);
+      return;
+    }
+    if (key.end) {
+      const line = activeLayout.displayLines[activeLayout.cursorRow];
+      moveCursorTo(line.start + line.text.length, false);
+      return;
+    }
+    if (key.backspace) {
+      deleteBackward();
+      return;
+    }
+    if (key.delete) {
+      deleteForward();
+      return;
+    }
+
+    if (key.return) {
+      // Shift+Enter or Ctrl+Enter: interrupt and send immediately
+      if ((key.shift || key.ctrl) && value.trim()) {
+        onSubmit(value, 'interrupt');
+        setValueAndCursor('');
+        return;
+      }
+      // Meta+Enter: queue message
+      if (key.meta && value.trim()) {
+        onSubmit(value, 'queue');
+        setValueAndCursor('');
+        return;
+      }
+      handleSubmit(value);
+      setValueAndCursor('');
+      return;
+    }
+
+    if (input) {
+      insertText(input);
+    }
+  });
 
   // Show different prompts based on state
   let placeholder = 'Type a message...';
@@ -234,13 +333,9 @@ export function Input({
   const visibleSkills = getVisibleItems(filteredSkills);
   const visibleCommands = getVisibleItems(filteredCommands);
 
-  // Get terminal width for full-width borders
-  const { stdout } = useStdout();
-  const terminalWidth = Math.max(10, (stdout?.columns ?? 80) - 2);
-
-  // Calculate the number of lines for display
-  const lines = value.split('\n');
-  const lineCount = lines.length;
+  const layout = buildLayout(value, cursor, textWidth);
+  const lines = layout.displayLines;
+  const lineCount = value.split('\n').length;
 
   return (
     <Box flexDirection="column" marginTop={1}>
@@ -250,16 +345,44 @@ export function Input({
       </Box>
 
       {/* Input area */}
-      <Box paddingY={0}>
-        <Text color={isProcessing ? 'gray' : 'cyan'}>&gt; </Text>
-        <Box flexGrow={1}>
-          <TextInput
-            value={value}
-            onChange={handleChange}
-            onSubmit={handleSubmit}
-            placeholder={placeholder}
-          />
-        </Box>
+      <Box paddingY={0} flexDirection="column">
+        {value.length === 0 ? (
+          <Box>
+            <Text color={isProcessing ? 'gray' : 'cyan'}>&gt; </Text>
+            <Box flexGrow={1}>
+              <Text inverse> </Text>
+              <Text dimColor>{placeholder}</Text>
+            </Box>
+          </Box>
+        ) : (
+          lines.map((line, index) => {
+            const isCursorLine = index === layout.cursorRow;
+            if (!isCursorLine) {
+              return (
+                <Box key={`line-${index}`}>
+                  <Text color={isProcessing ? 'gray' : 'cyan'}>{index === 0 ? '> ' : '  '}</Text>
+                  <Box flexGrow={1}>
+                    <Text>{line.text || ' '}</Text>
+                  </Box>
+                </Box>
+              );
+            }
+            const column = Math.min(layout.cursorCol, line.text.length);
+            const before = line.text.slice(0, column);
+            const cursorChar = column < line.text.length ? line.text[column] : ' ';
+            const after = column < line.text.length ? line.text.slice(column + 1) : '';
+            return (
+              <Box key={`line-${index}`}>
+                <Text color={isProcessing ? 'gray' : 'cyan'}>{index === 0 ? '> ' : '  '}</Text>
+                <Box flexGrow={1}>
+                  <Text>{before}</Text>
+                  <Text inverse>{cursorChar}</Text>
+                  <Text>{after}</Text>
+                </Box>
+              </Box>
+            );
+          })
+        )}
       </Box>
 
       {/* Show line count if multiline */}

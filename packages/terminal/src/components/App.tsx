@@ -731,7 +731,7 @@ export function App({ cwd, version }: AppProps) {
       return;
     }
 
-    // Ctrl+C: stop or exit
+    // Ctrl+C: stop processing (input handles clearing when idle)
     if (key.ctrl && input === 'c') {
       if (askUserStateRef.current) {
         cancelAskUser('Cancelled by user');
@@ -746,10 +746,8 @@ export function App({ cwd, version }: AppProps) {
         registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
         isProcessingRef.current = false;
-      } else {
-        registry.closeAll();
-        exit();
       }
+      return;
     }
     // Ctrl+O: toggle full tool output
     if (key.ctrl && input === 'o') {
