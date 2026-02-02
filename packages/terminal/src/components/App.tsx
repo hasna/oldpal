@@ -710,6 +710,9 @@ export function App({ cwd, version }: AppProps) {
   const reservedLines = useMemo(() => {
     let lines = 0;
 
+    // Root padding (Box padding={1}) adds top + bottom lines
+    lines += 2;
+
     if (showWelcome) {
       lines += 4; // WelcomeBanner lines + margin
     }
@@ -742,9 +745,9 @@ export function App({ cwd, version }: AppProps) {
     }
 
     lines += 1; // Input marginTop
-    lines += 1; // Input line
+    lines += 3; // Input border + input line + border
     if (isProcessing) {
-      lines += 2; // esc hint margin + line
+      lines += 1; // esc hint line
     }
 
     lines += 2; // Status marginTop + line

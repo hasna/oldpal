@@ -379,7 +379,12 @@ function renderBlockSection(section: BlockSection, maxWidth?: number): string {
   if (section.kind === 'grid') {
     const adjustedWidth = maxWidth ? Math.max(20, maxWidth - section.indent.length) : undefined;
     if (section.cards.length === 0) {
-      return renderCard({ type: 'note', title: 'Grid', body: section.body }, adjustedWidth, section.indent).join('\n');
+      return renderCard(
+        { type: 'note', title: 'Grid', body: section.body },
+        adjustedWidth,
+        section.indent,
+        Boolean(adjustedWidth)
+      ).join('\n');
     }
     return renderCardGrid(section.cards, section.columns, adjustedWidth, section.indent);
   }

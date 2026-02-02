@@ -396,7 +396,7 @@ function ToolCallPanel({
         const statusColor = result ? (result.isError ? 'red' : 'green') : 'yellow';
         const displayName = getToolDisplayName(toolCall);
         const context = getToolContext(toolCall);
-        const maxLine = Math.max(16, innerWidth - 2);
+        const maxLine = Math.max(1, innerWidth - 2);
         const summaryLine = truncate(formatToolCall(toolCall), maxLine);
         const resultText = result ? indentMultiline(truncateToolResult(result, 4, 400), '  ') : '';
         return (
@@ -599,8 +599,9 @@ function formatScheduleCall(input: Record<string, unknown>): string {
       return 'Listing scheduled tasks';
     case 'create':
       const cmd = truncate(String(input.command || ''), 30);
-      const schedule = String(input.schedule || '');
-      return `Creating schedule: "${cmd}" (${schedule})`;
+      const when = input.cron ? `cron ${input.cron}` : String(input.at || '');
+      const schedule = when ? ` (${truncate(String(when), 40)})` : '';
+      return `Creating schedule: "${cmd}"${schedule}`;
     case 'update':
       return `Updating schedule: ${input.id || 'unknown'}`;
     case 'delete':
