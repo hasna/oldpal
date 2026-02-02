@@ -4,6 +4,10 @@ import { truncateToolResult } from './toolDisplay';
 
 export type DisplayMessage = Message & { __rendered?: boolean; __lineCount?: number };
 
+export type MessageGroup =
+  | { type: 'single'; message: DisplayMessage }
+  | { type: 'grouped'; messages: DisplayMessage[] };
+
 export interface ActivityEntryLike {
   type: 'text' | 'tool_call' | 'tool_result';
   content?: string;
@@ -13,15 +17,19 @@ export interface ActivityEntryLike {
 function estimateToolPanelLines(
   toolCalls: ToolCall[],
   toolResults?: ToolResult[],
-  hasContent?: boolean
+  hasContent?: boolean,
+  maxWidth?: number
 ): number {
   if (!toolCalls || toolCalls.length === 0) {
     return 0;
   }
 
+  const innerWidth = maxWidth ? Math.max(1, maxWidth - 4) : undefined;
+  const resultWidth = innerWidth ? Math.max(1, innerWidth - 4) : undefined; // margin + prefix
+
   const resultLines = new Map<string, number>();
   for (const result of toolResults || []) {
-    resultLines.set(result.toolCallId, estimateToolResultLines(result));
+    resultLines.set(result.toolCallId, estimateToolResultLines(result, resultWidth));
   }
 
   // Ink borders add top + bottom lines, plus a header line.
@@ -43,11 +51,12 @@ function estimateToolPanelLines(
   return lines;
 }
 
-function estimateToolResultLines(result: ToolResult, maxLines = 4): number {
+function estimateToolResultLines(result: ToolResult, maxWidth?: number, maxLines = 4): number {
   const content = truncateToolResult(result, maxLines, 400);
   if (!content) return 1;
   const lines = stripAnsi(content).split('\n');
-  return Math.max(1, lines.length);
+  const wrapped = countWrappedLines(lines, maxWidth);
+  return Math.max(1, wrapped);
 }
 
 export function estimateMessageLines(message: DisplayMessage, maxWidth?: number): number {
@@ -69,7 +78,7 @@ export function estimateMessageLines(message: DisplayMessage, maxWidth?: number)
   let lines = hasContent ? Math.max(1, wrappedLines) : 0;
 
   if (message.role === 'assistant' && message.toolCalls?.length) {
-    lines += estimateToolPanelLines(message.toolCalls, message.toolResults, hasContent);
+    lines += estimateToolPanelLines(message.toolCalls, message.toolResults, hasContent, maxWidth);
   }
 
   if (message.role === 'user' || message.role === 'assistant') {
@@ -80,6 +89,25 @@ export function estimateMessageLines(message: DisplayMessage, maxWidth?: number)
   }
 
   return lines;
+}
+
+export function estimateGroupedToolMessagesLines(messages: DisplayMessage[], maxWidth?: number): number {
+  const toolCalls: ToolCall[] = [];
+  const toolResults: ToolResult[] = [];
+  for (const msg of messages) {
+    if (msg.toolCalls) toolCalls.push(...msg.toolCalls);
+    if (msg.toolResults) toolResults.push(...msg.toolResults);
+  }
+  if (toolCalls.length === 0) return 0;
+  const synthetic: DisplayMessage = {
+    id: 'grouped-tool-call',
+    role: 'assistant',
+    content: '',
+    timestamp: 0,
+    toolCalls,
+    toolResults: toolResults.length > 0 ? toolResults : undefined,
+  };
+  return estimateMessageLines(synthetic, maxWidth);
 }
 
 function countWrappedLines(lines: string[], maxWidth?: number): number {
@@ -142,6 +170,43 @@ function isContinuationChunk(id: string): boolean {
   if (!match) return false;
   const idx = Number(match[1]);
   return Number.isFinite(idx) && idx > 0;
+}
+
+export function groupConsecutiveToolMessages(messages: DisplayMessage[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  let currentToolGroup: DisplayMessage[] = [];
+
+  for (const msg of messages) {
+    const isToolOnlyAssistant =
+      msg.role === 'assistant' &&
+      (!msg.content || !msg.content.trim()) &&
+      msg.toolCalls &&
+      msg.toolCalls.length > 0;
+
+    if (isToolOnlyAssistant) {
+      currentToolGroup.push(msg);
+    } else {
+      if (currentToolGroup.length > 0) {
+        if (currentToolGroup.length === 1) {
+          groups.push({ type: 'single', message: currentToolGroup[0] });
+        } else {
+          groups.push({ type: 'grouped', messages: currentToolGroup });
+        }
+        currentToolGroup = [];
+      }
+      groups.push({ type: 'single', message: msg });
+    }
+  }
+
+  if (currentToolGroup.length > 0) {
+    if (currentToolGroup.length === 1) {
+      groups.push({ type: 'single', message: currentToolGroup[0] });
+    } else {
+      groups.push({ type: 'grouped', messages: currentToolGroup });
+    }
+  }
+
+  return groups;
 }
 
 export const __test__ = {

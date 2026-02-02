@@ -11,7 +11,13 @@ import { Spinner } from './Spinner';
 import { ProcessingIndicator } from './ProcessingIndicator';
 import { WelcomeBanner } from './WelcomeBanner';
 import { SessionSelector } from './SessionSelector';
-import { estimateActivityLogLines, estimateMessageLines, type DisplayMessage } from './messageLines';
+import {
+  estimateActivityLogLines,
+  estimateGroupedToolMessagesLines,
+  estimateMessageLines,
+  groupConsecutiveToolMessages,
+  type DisplayMessage,
+} from './messageLines';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
 
@@ -721,6 +727,7 @@ export function App({ cwd, version }: AppProps) {
 
   const reservedLines = useMemo(() => {
     let lines = 0;
+    const wrapWidth = Math.max(1, (columns ?? 80) - 2);
 
     // Root padding (Box padding={1}) adds top + bottom lines
     lines += 2;
@@ -740,14 +747,21 @@ export function App({ cwd, version }: AppProps) {
       const hasMore = activeQueue.length + inlineCount > MAX_QUEUED_PREVIEW;
       lines += 2; // marginY
       lines += 1; // summary line
-      lines += previewCount;
+      const previewWidth = Math.max(1, wrapWidth - 2);
+      const previewItems = [...activeInline, ...activeQueue].slice(0, MAX_QUEUED_PREVIEW);
+      const previewLines = previewItems.reduce((sum, queued) => {
+        const label = queued.mode === 'inline' ? '↳' : '⏳';
+        const text = `${label} ${truncateQueued(queued.content)}`;
+        return sum + countWrappedLines([text], previewWidth);
+      }, 0);
+      lines += Math.max(previewCount, previewLines);
       if (hasMore) lines += 1;
     }
 
     if (error) {
       const parsed = parseErrorMessage(error);
-      const messageLines = parsed.message ? parsed.message.split('\n').length : 1;
-      const suggestionLines = parsed.suggestion ? parsed.suggestion.split('\n').length : 0;
+      const messageLines = parsed.message ? countWrappedLines(parsed.message.split('\n'), wrapWidth) : 1;
+      const suggestionLines = parsed.suggestion ? countWrappedLines(parsed.suggestion.split('\n'), wrapWidth) : 0;
       lines += 2; // marginY
       lines += Math.max(1, messageLines) + suggestionLines;
     }
@@ -773,6 +787,7 @@ export function App({ cwd, version }: AppProps) {
     error,
     isProcessing,
     showWelcome,
+    columns,
   ]);
 
   const displayMessages = useMemo(
@@ -790,8 +805,15 @@ export function App({ cwd, version }: AppProps) {
     return buildDisplayMessages([streamingMessage], MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth });
   }, [currentResponse, isProcessing, wrapChars, renderWidth]);
   const displayLineCount = useMemo(() => {
-    const combined = [...displayMessages, ...streamingMessages];
-    return combined.reduce((sum, msg) => sum + estimateMessageLines(msg, renderWidth), 0);
+    const grouped = groupConsecutiveToolMessages(displayMessages);
+    const groupedLines = grouped.reduce((sum, group) => {
+      if (group.type === 'single') {
+        return sum + estimateMessageLines(group.message, renderWidth);
+      }
+      return sum + estimateGroupedToolMessagesLines(group.messages, renderWidth);
+    }, 0);
+    const streamingLines = streamingMessages.reduce((sum, msg) => sum + estimateMessageLines(msg, renderWidth), 0);
+    return groupedLines + streamingLines;
   }, [displayMessages, streamingMessages, renderWidth]);
   const totalLineCount = displayLineCount + activityLogLineCount;
 

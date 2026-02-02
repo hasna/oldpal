@@ -2,7 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Markdown } from './Markdown';
-import { estimateActivityEntryLines, estimateMessageLines, type DisplayMessage } from './messageLines';
+import {
+  estimateActivityEntryLines,
+  estimateGroupedToolMessagesLines,
+  estimateMessageLines,
+  groupConsecutiveToolMessages,
+  type DisplayMessage,
+} from './messageLines';
 import { truncateToolResult } from './toolDisplay';
 
 interface ActivityEntry {
@@ -77,7 +83,7 @@ export function Messages({
         item.kind === 'activity'
           ? estimateActivityEntryLines(item.entry, wrapWidth, messageWidth)
           : item.kind === 'grouped'
-            ? estimateGroupedToolLines(item.messages, messageWidth)
+            ? estimateGroupedToolMessagesLines(item.messages, messageWidth)
             : estimateMessageLines(item.message, messageWidth);
       const start = cursor;
       cursor += lines;
@@ -215,52 +221,6 @@ function formatDuration(ms: number): string {
   return `${mins}m ${secs}s`;
 }
 
-type MessageGroup =
-  | { type: 'single'; message: DisplayMessage }
-  | { type: 'grouped'; messages: DisplayMessage[] };
-
-/**
- * Group consecutive assistant messages that only have tool calls (no text content)
- */
-function groupConsecutiveToolMessages(messages: DisplayMessage[]): MessageGroup[] {
-  const groups: MessageGroup[] = [];
-  let currentToolGroup: DisplayMessage[] = [];
-
-  for (const msg of messages) {
-    const isToolOnlyAssistant =
-      msg.role === 'assistant' &&
-      (!msg.content || !msg.content.trim()) &&
-      msg.toolCalls &&
-      msg.toolCalls.length > 0;
-
-    if (isToolOnlyAssistant) {
-      currentToolGroup.push(msg);
-    } else {
-      // Flush any accumulated tool messages
-      if (currentToolGroup.length > 0) {
-        if (currentToolGroup.length === 1) {
-          groups.push({ type: 'single', message: currentToolGroup[0] });
-        } else {
-          groups.push({ type: 'grouped', messages: currentToolGroup });
-        }
-        currentToolGroup = [];
-      }
-      groups.push({ type: 'single', message: msg });
-    }
-  }
-
-  // Flush remaining tool messages
-  if (currentToolGroup.length > 0) {
-    if (currentToolGroup.length === 1) {
-      groups.push({ type: 'single', message: currentToolGroup[0] });
-    } else {
-      groups.push({ type: 'grouped', messages: currentToolGroup });
-    }
-  }
-
-  return groups;
-}
-
 /**
  * Render multiple tool-only messages as a single combined row
  */
@@ -284,24 +244,6 @@ function CombinedToolMessage({ messages }: { messages: DisplayMessage[] }) {
   );
 }
 
-function estimateGroupedToolLines(messages: DisplayMessage[], messageWidth: number): number {
-  const toolCalls: ToolCall[] = [];
-  const toolResults: ToolResult[] = [];
-  for (const msg of messages) {
-    if (msg.toolCalls) toolCalls.push(...msg.toolCalls);
-    if (msg.toolResults) toolResults.push(...msg.toolResults);
-  }
-  if (toolCalls.length === 0) return 0;
-  const synthetic: DisplayMessage = {
-    id: 'grouped-tool-call',
-    role: 'assistant',
-    content: '',
-    timestamp: 0,
-    toolCalls,
-    toolResults: toolResults.length > 0 ? toolResults : undefined,
-  };
-  return estimateMessageLines(synthetic, messageWidth);
-}
 
 interface MessageBubbleProps {
   message: DisplayMessage;
