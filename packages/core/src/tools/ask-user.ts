@@ -27,10 +27,11 @@ export function createAskUserTool(getHandler: () => AskUserHandler | null): {
           description: 'Questions to ask the user.',
           items: {
             type: 'object',
+            description: 'A question object.',
             properties: {
               id: { type: 'string', description: 'Stable id for this question.' },
               question: { type: 'string', description: 'The question text.' },
-              options: { type: 'array', items: { type: 'string', description: 'Option label' } },
+              options: { type: 'array', description: 'Answer options to choose from.', items: { type: 'string', description: 'Option label' } },
               placeholder: { type: 'string', description: 'Placeholder text for input.' },
               multiline: { type: 'boolean', description: 'Whether the answer can be multi-line.' },
               required: { type: 'boolean', description: 'Whether the answer is required.' },

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Markdown } from './Markdown';
 import {
@@ -41,14 +41,16 @@ export function Messages({
 }: MessagesProps) {
   const [now, setNow] = useState(Date.now());
 
-  type Item =
+  type MessageItem =
     | { kind: 'message'; message: DisplayMessage }
-    | { kind: 'grouped'; messages: DisplayMessage[] }
+    | { kind: 'grouped'; messages: DisplayMessage[] };
+
+  type Item = MessageItem
     | { kind: 'activity'; entry: ActivityEntry }
     | { kind: 'streaming'; message: DisplayMessage };
 
   const messageGroups = useMemo(() => groupConsecutiveToolMessages(messages), [messages]);
-  const messageItems = useMemo<Item[]>(() => {
+  const messageItems = useMemo<MessageItem[]>(() => {
     return messageGroups.map((group) => (
       group.type === 'single'
         ? { kind: 'message', message: group.message }

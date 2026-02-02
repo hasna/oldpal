@@ -69,6 +69,10 @@ export interface ToolProperty {
   enum?: string[];
   items?: ToolProperty;
   default?: unknown;
+  /** For object types: nested properties */
+  properties?: Record<string, ToolProperty>;
+  /** For object types: required property names */
+  required?: string[];
 }
 
 export interface ToolCall {
