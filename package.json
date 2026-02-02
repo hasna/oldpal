@@ -1,6 +1,6 @@
 {
   "name": "@hasna/assistants",
-  "version": "0.6.40",
+  "version": "0.6.41",
   "description": "Multi-assistant orchestration platform - terminal first, voice enabled, connector powered",
   "type": "module",
   "bin": {
@@ -23,7 +23,9 @@
     "clean": "turbo run clean && rm -rf node_modules dist",
     "prepublishOnly": "bun run build"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@hasna/assistants": "^0.6.40"
+  },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
     "@types/bun": "latest",
