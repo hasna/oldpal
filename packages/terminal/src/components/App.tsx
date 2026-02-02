@@ -213,7 +213,9 @@ function buildDisplayMessages(
 
 export function App({ cwd, version }: AppProps) {
   const { exit } = useApp();
-  const { rows, columns } = useStdout();
+  const { stdout } = useStdout();
+  const rows = stdout?.rows ?? 24;
+  const columns = stdout?.columns ?? 80;
 
   // Session registry
   const [registry] = useState(() => new SessionRegistry());

@@ -172,14 +172,12 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
   };
 
   // Show different prompts based on state
-  let prompt = '❯';
   let placeholder = 'Type a message...';
 
   if (isProcessing) {
-    prompt = '⋯';
     placeholder = queueLength > 0
-      ? 'Type to send (Enter) or queue (Tab) · Shift+Enter to interrupt...'
-      : 'Type to send (Enter) or queue (Tab) · Shift+Enter to interrupt...';
+      ? 'Type to queue (Tab) or interrupt (Shift+Enter)...'
+      : 'Type to interrupt (Shift+Enter)...';
   }
 
   // Truncate description to fit in terminal
@@ -210,20 +208,44 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
   const visibleSkills = getVisibleItems(filteredSkills);
   const visibleCommands = getVisibleItems(filteredCommands);
 
+  // Calculate the number of lines for display
+  const lines = value.split('\n');
+  const lineCount = lines.length;
+
   return (
     <Box flexDirection="column" marginTop={1}>
-      {/* Input line */}
+      {/* Top border */}
       <Box>
-        <Text dimColor={isProcessing}>{prompt} </Text>
-        <TextInput
-          value={value}
-          onChange={handleChange}
-          onSubmit={handleSubmit}
-          placeholder={placeholder}
-        />
+        <Text dimColor>{'─'.repeat(80)}</Text>
       </Box>
+
+      {/* Input area */}
+      <Box paddingY={0}>
+        <Text dimColor={isProcessing} color={isProcessing ? undefined : 'cyan'}>&gt; </Text>
+        <Box flexGrow={1}>
+          <TextInput
+            value={value}
+            onChange={handleChange}
+            onSubmit={handleSubmit}
+            placeholder={placeholder}
+          />
+        </Box>
+      </Box>
+
+      {/* Show line count if multiline */}
+      {lineCount > 1 && (
+        <Box marginLeft={2}>
+          <Text dimColor>({lineCount} lines)</Text>
+        </Box>
+      )}
+
+      {/* Bottom border */}
+      <Box>
+        <Text dimColor>{'─'.repeat(80)}</Text>
+      </Box>
+
       {isProcessing && (
-        <Box marginTop={1} marginLeft={2}>
+        <Box marginLeft={2}>
           <Text dimColor>[esc] stop</Text>
         </Box>
       )}

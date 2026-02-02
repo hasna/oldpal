@@ -37,8 +37,9 @@ export function Messages({
   queuedMessageIds,
 }: MessagesProps) {
   const [now, setNow] = useState(Date.now());
-  const { columns } = useStdout();
-  const messageWidth = columns ? Math.max(10, columns - 2) : undefined;
+  const { stdout } = useStdout();
+  const columns = stdout?.columns ?? 80;
+  const messageWidth = Math.max(10, columns - 2);
 
   const combinedMessages = useMemo(
     () => [...messages, ...streamingMessages],
@@ -172,7 +173,7 @@ export function Messages({
         <Box marginY={1}>
           <Text dimColor>● </Text>
           <Box flexGrow={1}>
-            <Markdown content={currentResponse} />
+            <Markdown content={currentResponse ?? ''} />
           </Box>
         </Box>
       )}
@@ -333,8 +334,9 @@ function ToolCallPanel({
 }) {
   if (toolCalls.length === 0) return null;
 
-  const { columns } = useStdout();
-  const panelWidth = columns ? Math.max(24, columns - 4) : undefined;
+  const { stdout } = useStdout();
+  const columns = stdout?.columns ?? 80;
+  const panelWidth = Math.max(24, columns - 4);
 
   const resultMap = new Map<string, ToolResult>();
   for (const result of toolResults || []) {
@@ -668,7 +670,7 @@ function formatToolResultNicely(toolName: string, content: string, isError?: boo
   }
 }
 
-function formatScheduleResult(content: string): string {
+function formatScheduleResult(content: string): string | null {
   const trimmed = content.trim().toLowerCase();
   if (trimmed === 'no schedules found.' || trimmed.includes('no schedules')) {
     return '📅 No scheduled tasks';
@@ -693,14 +695,14 @@ function formatScheduleResult(content: string): string {
   return null;
 }
 
-function formatFeedbackResult(content: string): string {
+function formatFeedbackResult(content: string): string | null {
   if (content.includes('submitted') || content.includes('created')) {
     return '✓ Feedback submitted';
   }
   return null;
 }
 
-function formatReadResult(content: string): string {
+function formatReadResult(content: string): string | null {
   const lines = content.split('\n').length;
   if (lines > 20) {
     return `📄 Read ${lines} lines`;
@@ -708,14 +710,14 @@ function formatReadResult(content: string): string {
   return null; // Show actual content for small files
 }
 
-function formatWriteResult(content: string): string {
+function formatWriteResult(content: string): string | null {
   if (content.includes('written') || content.includes('saved') || content.includes('created')) {
     return '✓ File saved';
   }
   return null;
 }
 
-function formatGlobResult(content: string): string {
+function formatGlobResult(content: string): string | null {
   const lines = content.split('\n').filter(l => l.trim());
   if (lines.length === 0) {
     return '🔍 No files found';
@@ -726,7 +728,7 @@ function formatGlobResult(content: string): string {
   return null; // Show actual files for small results
 }
 
-function formatGrepResult(content: string): string {
+function formatGrepResult(content: string): string | null {
   const lines = content.split('\n').filter(l => l.trim());
   if (lines.length === 0) {
     return '🔍 No matches found';
@@ -737,7 +739,7 @@ function formatGrepResult(content: string): string {
   return null; // Show actual matches for small results
 }
 
-function formatBashResult(content: string): string {
+function formatBashResult(content: string): string | null {
   const trimmed = content.trim();
   if (!trimmed) {
     return '✓ Command completed';
@@ -753,7 +755,7 @@ function formatBashResult(content: string): string {
   return null;
 }
 
-function formatSearchResult(content: string): string {
+function formatSearchResult(content: string): string | null {
   // Try to count results
   const resultCount = (content.match(/https?:\/\//g) || []).length;
   if (resultCount > 0) {

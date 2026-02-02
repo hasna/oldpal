@@ -17,8 +17,9 @@ export function Markdown({ content, preRendered = false }: MarkdownProps) {
   if (preRendered) {
     return <Text>{content}</Text>;
   }
-  const { columns } = useStdout();
-  const maxWidth = columns ? Math.max(20, columns - 2) : undefined;
+  const { stdout } = useStdout();
+  const columns = stdout?.columns ?? 80;
+  const maxWidth = Math.max(20, columns - 2);
   const rendered = parseMarkdown(content, { maxWidth });
   return <Text>{rendered}</Text>;
 }
@@ -334,7 +335,7 @@ function renderBlockSection(section: BlockSection, maxWidth?: number): string {
   if (section.kind === 'grid') {
     const adjustedWidth = maxWidth ? Math.max(20, maxWidth - section.indent.length) : undefined;
     if (section.cards.length === 0) {
-      return renderCard({ type: 'note', title: 'Grid', body: section.body }, adjustedWidth, section.indent);
+      return renderCard({ type: 'note', title: 'Grid', body: section.body }, adjustedWidth, section.indent).join('\n');
     }
     return renderCardGrid(section.cards, section.columns, adjustedWidth, section.indent);
   }
