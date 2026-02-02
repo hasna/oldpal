@@ -115,6 +115,10 @@ export class EmbeddedClient implements AssistantClient {
       await this.initialize();
     }
 
+    if (!message.trim()) {
+      return;
+    }
+
     this.messageQueue.push(message);
     if (this.agent.isProcessing() || this.processingQueue) {
       this.logger.info('Queuing message (agent busy)', { message, queueLength: this.messageQueue.length });
@@ -297,6 +301,16 @@ export class EmbeddedClient implements AssistantClient {
   getIdentityInfo(): ActiveIdentityInfo | null {
     if (typeof (this.agent as any).getIdentityInfo === 'function') {
       return (this.agent as any).getIdentityInfo();
+    }
+    return null;
+  }
+
+  /**
+   * Get current model
+   */
+  getModel(): string | null {
+    if (typeof (this.agent as any).getModel === 'function') {
+      return (this.agent as any).getModel();
     }
     return null;
   }

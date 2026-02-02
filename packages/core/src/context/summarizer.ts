@@ -82,7 +82,7 @@ export class LLMSummarizer implements SummaryStrategy {
 
         if (msg.toolResults && msg.toolResults.length > 0) {
           const results = msg.toolResults
-            .map((result) => this.truncate(result.content || '', MAX_TOOL_CHARS))
+            .map((result) => this.truncate(result.rawContent ?? result.content ?? '', MAX_TOOL_CHARS))
             .join('\n');
           content += `\n[Tool results]\n${results}`;
         }

@@ -61,17 +61,23 @@ export class AgentContext {
     const processedResults: ToolResult[] = [];
 
     for (const result of results) {
+      const rawContent = result.rawContent ?? result.content;
       // Check if this is a PDF attachment
-      const pdfAttachment = this.extractPdfAttachment(result.content);
+      const pdfAttachment = this.extractPdfAttachment(rawContent);
       if (pdfAttachment) {
         documents.push(pdfAttachment);
         // Replace the tool result content with a friendly message
         processedResults.push({
           ...result,
           content: `PDF loaded: ${pdfAttachment.name || 'document.pdf'} (${this.formatBytes(pdfAttachment.source.type === 'base64' ? pdfAttachment.source.data.length * 0.75 : 0)})`,
+          rawContent: `PDF loaded: ${pdfAttachment.name || 'document.pdf'} (${this.formatBytes(pdfAttachment.source.type === 'base64' ? pdfAttachment.source.data.length * 0.75 : 0)})`,
+          truncated: false,
         });
       } else {
-        processedResults.push(result);
+        processedResults.push({
+          ...result,
+          rawContent,
+        });
       }
     }
 

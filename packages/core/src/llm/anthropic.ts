@@ -212,7 +212,7 @@ export class AnthropicClient implements LLMClient {
             content.push({
               type: 'tool_result',
               tool_use_id: toolResult.toolCallId,
-              content: toolResult.content,
+              content: toolResult.rawContent ?? toolResult.content,
               is_error: toolResult.isError,
             });
             pendingToolUseIds.delete(toolResult.toolCallId);
