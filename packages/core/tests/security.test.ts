@@ -49,6 +49,11 @@ describe('Path Security', () => {
     expect(result.safe).toBe(false);
   });
 
+  test('should block secrets file in home directory', async () => {
+    const result = await isPathSafe('~/.secrets', 'read');
+    expect(result.safe).toBe(false);
+  });
+
   test('should not block paths that only share a prefix', async () => {
     const result = await isPathSafe('/etc/passwd2', 'read');
     expect(result.safe).toBe(true);

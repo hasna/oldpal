@@ -22,6 +22,7 @@ Assistants enforces layered security controls to reduce risk when running tools 
 - Bash commands are restricted to read-only operations and blocked if dangerous patterns are detected.
 - File writes are limited to `.assistants/scripts/{session}` and validated against symlink escapes.
 - Protected paths cannot be modified (e.g., `~/.ssh`, `/etc/sudoers`).
+- Secrets files are protected from reads/writes (e.g., `~/.secrets`).
 - Security violations are logged with severity and reason.
 
 ## Configuration
@@ -36,7 +37,7 @@ You can configure validation limits in `.assistants/config.json`:
     "maxToolOutputLength": 50000,
     "maxFileReadSize": 10485760,
     "perTool": {
-      "bash": { "mode": "strict" }
+      "bash": { "mode": "strict", "allowEnv": true }
     }
   }
 }

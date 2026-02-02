@@ -6,6 +6,7 @@ const PROTECTED_PATHS = [
   '/etc/passwd',
   '/etc/shadow',
   '/etc/sudoers',
+  '~/.secrets',
   '~/.ssh',
   '~/.gnupg',
   '~/.aws/credentials',
