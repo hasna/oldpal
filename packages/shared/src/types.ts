@@ -376,6 +376,7 @@ export interface AssistantsConfig {
   validation?: ValidationConfig;
   inbox?: InboxConfig;
   wallet?: WalletConfig;
+  secrets?: SecretsConfig;
   jobs?: JobsConfig;
 }
 
@@ -732,6 +733,37 @@ export interface WalletConfig {
   /** Security settings */
   security?: {
     /** Maximum card reads per hour (default: 10) */
+    maxReadsPerHour?: number;
+  };
+}
+
+// ============================================
+// Secrets Types
+// ============================================
+
+/**
+ * Configuration for agent secrets management (API keys, tokens, passwords)
+ *
+ * SECURITY NOTE: Secrets are NEVER stored locally. All secret data is stored
+ * exclusively in AWS Secrets Manager and fetched on-demand with rate limiting.
+ */
+export interface SecretsConfig {
+  /** Whether secrets management is enabled (default: false) */
+  enabled?: boolean;
+
+  /** AWS Secrets Manager configuration */
+  storage?: {
+    /** AWS region for Secrets Manager */
+    region: string;
+    /** Secret name prefix (default: "assistants/secrets/") */
+    prefix?: string;
+    /** AWS credentials profile for cross-account access */
+    credentialsProfile?: string;
+  };
+
+  /** Security settings */
+  security?: {
+    /** Maximum secret reads per hour (default: 100) */
     maxReadsPerHour?: number;
   };
 }
