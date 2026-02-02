@@ -10,7 +10,7 @@ interface AssistantsIndex {
 }
 
 const DEFAULT_SETTINGS: AssistantSettings = {
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-opus-4-5',
 };
 
 export class AssistantManager {
