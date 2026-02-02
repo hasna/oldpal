@@ -533,6 +533,14 @@ export class AgentLoop {
         cwd: this.cwd,
       });
 
+      const shouldSkipVerification = this.shouldStop || streamError !== null;
+      if (shouldSkipVerification) {
+        this.scopeContextManager.clear();
+        this.context.clearScopeContext();
+        this.emit({ type: 'done' });
+        return;
+      }
+
       // Run native scope verification if enabled
       const verificationResult = await this.runScopeVerification();
       if (verificationResult && verificationResult.continue === false) {
