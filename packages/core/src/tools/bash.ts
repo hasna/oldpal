@@ -122,6 +122,8 @@ export class BashTool {
     'pwd', 'whoami', 'date', 'which', 'where', 'type', 'env', 'printenv',
     // Echo for simple output
     'echo',
+    // HTTP requests
+    'curl',
     // Git read-only
     'git status', 'git log', 'git diff', 'git branch', 'git show', 'git remote', 'git tag',
     // Connectors
@@ -295,7 +297,7 @@ export class BashTool {
         sessionId: (input.sessionId as string) || 'unknown',
       });
       throw new ToolExecutionError(
-        'Command not in allowed list. Permitted commands: cat, head, tail, ls, find, grep, wc, file, stat, pwd, which, echo, git status/log/diff/branch/show, connect-*',
+        'Command not in allowed list. Permitted commands: cat, head, tail, ls, find, grep, wc, file, stat, pwd, which, echo, curl, git status/log/diff/branch/show, connect-*',
         {
           toolName: 'bash',
           toolInput: input,
