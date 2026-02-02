@@ -163,29 +163,41 @@ function buildDisplayMessages(
       continue;
     }
 
-    const lines = wrapTextLines(content, wrapChars);
-    if (lines.length <= chunkLines) {
-      if (msg.role === 'assistant') {
-        const rendered = renderMarkdown(lines.join('\n'), { maxWidth: options?.maxWidth });
+    if (msg.role === 'assistant') {
+      const rendered = renderMarkdown(content, { maxWidth: options?.maxWidth });
+      const renderedLines = rendered.split('\n');
+      if (renderedLines.length <= chunkLines) {
         display.push({ ...msg, content: rendered, __rendered: true });
-      } else {
-        display.push(msg);
+        continue;
+      }
+      const chunks = chunkRenderedLines(renderedLines, chunkLines);
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkContent = chunks[i].join('\n');
+        display.push({
+          ...msg,
+          id: `${msg.id}::chunk-${i}`,
+          content: chunkContent,
+          __rendered: true,
+          toolCalls: i === chunks.length - 1 ? msg.toolCalls : undefined,
+          toolResults: i === chunks.length - 1 ? msg.toolResults : undefined,
+        });
       }
       continue;
     }
 
-    const baseContent = lines.join('\n');
-    const renderAssistant = msg.role === 'assistant';
-    const rendered = renderAssistant ? renderMarkdown(baseContent, { maxWidth: options?.maxWidth }) : baseContent;
-    const renderedLines = rendered.split('\n');
-    const chunks = chunkRenderedLines(renderedLines, chunkLines);
+    const lines = wrapTextLines(content, wrapChars);
+    if (lines.length <= chunkLines) {
+      display.push(msg);
+      continue;
+    }
+
+    const chunks = chunkRenderedLines(lines, chunkLines);
     for (let i = 0; i < chunks.length; i++) {
       const chunkContent = chunks[i].join('\n');
       display.push({
         ...msg,
         id: `${msg.id}::chunk-${i}`,
         content: chunkContent,
-        __rendered: renderAssistant,
         toolCalls: i === chunks.length - 1 ? msg.toolCalls : undefined,
         toolResults: i === chunks.length - 1 ? msg.toolResults : undefined,
       });

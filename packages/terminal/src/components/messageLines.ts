@@ -58,7 +58,9 @@ export function estimateMessageLines(message: DisplayMessage, maxWidth?: number)
   const content = message.content ?? '';
   const contentLines = content.length > 0 ? content.split('\n') : [];
   const hasContent = contentLines.length > 0;
-  const wrappedLines = contentLines.length > 0 ? countWrappedLines(contentLines, maxWidth) : 0;
+  const prefixWidth = message.role === 'user' || message.role === 'assistant' ? 2 : 0;
+  const effectiveWidth = maxWidth ? Math.max(1, maxWidth - prefixWidth) : maxWidth;
+  const wrappedLines = contentLines.length > 0 ? countWrappedLines(contentLines, effectiveWidth) : 0;
   let lines = hasContent ? Math.max(1, wrappedLines) : 0;
 
   if (message.role === 'assistant' && message.toolCalls?.length) {
@@ -97,12 +99,13 @@ export function estimateActivityEntryLines(
   wrapWidth: number,
   renderWidth?: number
 ): number {
+  const effectiveWidth = Math.max(1, wrapWidth - 2);
   if (entry.type === 'text') {
     const content = entry.content ?? '';
     if (!content.trim()) return 0;
     const rendered = renderMarkdown(content, { maxWidth: renderWidth });
     const lines = stripAnsi(rendered).split('\n');
-    const wrapped = countWrappedLines(lines, wrapWidth);
+    const wrapped = countWrappedLines(lines, effectiveWidth);
     return Math.max(1, wrapped) + 2; // marginY=1
   }
 
@@ -114,7 +117,7 @@ export function estimateActivityEntryLines(
   if (entry.type === 'tool_result') {
     const content = entry.toolResult ? truncateToolResult(entry.toolResult) : '';
     const lines = content.split('\n');
-    const wrapped = countWrappedLines(lines, wrapWidth);
+    const wrapped = countWrappedLines(lines, effectiveWidth);
     return Math.max(1, wrapped) + 2; // marginY=1
   }
 

@@ -10,7 +10,7 @@ describe('message line estimation', () => {
       content: '1234567890',
       timestamp: 0,
     };
-    expect(__test__.estimateMessageLines(msg, 5)).toBe(4);
+    expect(__test__.estimateMessageLines(msg, 5)).toBe(6);
   });
 
   test('ignores ANSI codes when wrapping', () => {
@@ -20,7 +20,7 @@ describe('message line estimation', () => {
       content: '\u001b[31m123456\u001b[0m',
       timestamp: 0,
     };
-    expect(__test__.estimateMessageLines(msg, 3)).toBe(4);
+    expect(__test__.estimateMessageLines(msg, 3)).toBe(8);
   });
 
   test('counts multi-line tool results', () => {
