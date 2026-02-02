@@ -32,7 +32,7 @@ export function truncateToolResult(toolResult: ToolResult, maxLines = 15, maxCha
     content = content.slice(0, maxChars) + '...';
   }
 
-  return prefix + content.trim();
+  return prefix + content.trimEnd();
 }
 
 /**

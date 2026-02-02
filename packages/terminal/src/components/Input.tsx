@@ -219,7 +219,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
 
   // Get terminal width for full-width borders
   const { stdout } = useStdout();
-  const terminalWidth = stdout?.columns ?? 80;
+  const terminalWidth = Math.max(10, (stdout?.columns ?? 80) - 2);
 
   // Calculate the number of lines for display
   const lines = value.split('\n');
