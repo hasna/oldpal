@@ -21,14 +21,14 @@ export function MessageList({ messages }: MessageListProps) {
         const isLast = index === messages.length - 1;
         const toolResults = message.toolResults ?? [];
         const toolCalls = message.toolCalls ?? [];
-        const mergedToolCalls =
-          toolCalls.length > 0 ||
-          message.role !== 'assistant' ||
-          (currentStreamMessageId && message.id !== currentStreamMessageId)
-            ? toolCalls
-            : currentToolCalls;
+        const isStreamingMessage =
+          isStreaming &&
+          message.role === 'assistant' &&
+          (currentStreamMessageId ? message.id === currentStreamMessageId : isLast);
+        const shouldUseStreamingCalls = isStreamingMessage && toolCalls.length === 0;
+        const mergedToolCalls = shouldUseStreamingCalls ? currentToolCalls : toolCalls;
         const mergedToolResults =
-          mergedToolCalls === currentToolCalls && currentToolCallResults.length > 0
+          shouldUseStreamingCalls && currentToolCallResults.length > 0
             ? currentToolCallResults
             : toolResults;
 
@@ -37,9 +37,7 @@ export function MessageList({ messages }: MessageListProps) {
             key={message.id}
             message={{ ...message, toolCalls: mergedToolCalls }}
             toolResults={mergedToolResults}
-            isStreaming={
-              isStreaming && message.role === 'assistant' && (!currentStreamMessageId || message.id === currentStreamMessageId)
-            }
+            isStreaming={isStreamingMessage}
           />
         );
       })}
