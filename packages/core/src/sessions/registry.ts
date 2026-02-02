@@ -35,6 +35,7 @@ export class SessionRegistry {
   private chunkCallbacks: ((chunk: StreamChunk) => void)[] = [];
   private errorCallbacks: ((error: Error) => void)[] = [];
   private clientFactory: (cwd: string) => EmbeddedClient;
+  private maxBufferedChunks = 2000;
 
   constructor(clientFactory?: (cwd: string) => EmbeddedClient) {
     this.clientFactory = clientFactory ?? ((cwd) => new EmbeddedClient(cwd));
@@ -66,7 +67,9 @@ export class SessionRegistry {
         for (const callback of this.errorCallbacks) {
           callback(error);
         }
+        return;
       }
+      this.handleChunk(sessionInfo.id, { type: 'error', error: error.message });
     });
 
     this.sessions.set(sessionInfo.id, sessionInfo);
@@ -107,6 +110,9 @@ export class SessionRegistry {
       const buffer = this.chunkBuffers.get(sessionId);
       if (buffer) {
         buffer.push(chunk);
+        if (buffer.length > this.maxBufferedChunks) {
+          buffer.splice(0, buffer.length - this.maxBufferedChunks);
+        }
       }
     }
   }
@@ -198,6 +204,17 @@ export class SessionRegistry {
       if (this.activeSessionId === id) {
         const remaining = this.listSessions();
         this.activeSessionId = remaining.length > 0 ? remaining[0].id : null;
+        if (this.activeSessionId) {
+          const buffer = this.chunkBuffers.get(this.activeSessionId);
+          if (buffer && buffer.length > 0) {
+            for (const chunk of buffer) {
+              for (const callback of this.chunkCallbacks) {
+                callback(chunk);
+              }
+            }
+            this.chunkBuffers.set(this.activeSessionId, []);
+          }
+        }
       }
     }
   }
