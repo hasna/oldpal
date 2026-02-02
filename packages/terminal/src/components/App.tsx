@@ -937,7 +937,7 @@ export function App({ cwd, version }: AppProps) {
 
   if (isInitializing) {
     return (
-      <Box flexDirection="column" padding={1} height={rows}>
+      <Box flexDirection="column" padding={1}>
         <Spinner label="Initializing..." />
       </Box>
     );
@@ -946,7 +946,7 @@ export function App({ cwd, version }: AppProps) {
   // Show session selector modal
   if (showSessionSelector) {
     return (
-      <Box flexDirection="column" padding={1} height={rows}>
+      <Box flexDirection="column" padding={1}>
         <SessionSelector
           sessions={sessions}
           activeSessionId={activeSessionId}

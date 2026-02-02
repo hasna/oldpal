@@ -198,7 +198,11 @@ if (options.print !== null) {
   });
 } else {
   // Interactive mode
-  const { waitUntilExit } = render(<App cwd={options.cwd} version={VERSION} />);
+  // Use incremental rendering to update only changed lines and preserve scrollback
+  const { waitUntilExit } = render(<App cwd={options.cwd} version={VERSION} />, {
+    // Update only changed lines instead of full redraws - better for native scrollback
+    incrementalRendering: true,
+  });
 
   waitUntilExit().then(() => {
     process.exit(0);
