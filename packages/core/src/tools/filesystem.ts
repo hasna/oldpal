@@ -412,9 +412,23 @@ export class FilesystemTools {
       const glob = new Glob(pattern);
       const matches: string[] = [];
 
-      for await (const file of glob.scan({ cwd: validated.resolved })) {
-        matches.push(file);
-        if (matches.length >= 1000) break; // Limit results
+      try {
+        for await (const file of glob.scan({ cwd: validated.resolved })) {
+          // Skip system directories
+          if (file.includes('.Trash') || file.includes('.Spotlight-V100') || file.includes('.fseventsd')) {
+            continue;
+          }
+          matches.push(file);
+          if (matches.length >= 1000) break; // Limit results
+        }
+      } catch (scanError) {
+        // Handle permission errors gracefully
+        const errMsg = scanError instanceof Error ? scanError.message : String(scanError);
+        if (errMsg.includes('operation not permitted') || errMsg.includes('EPERM') || errMsg.includes('EACCES')) {
+          // Continue with whatever matches we have
+        } else {
+          throw scanError;
+        }
       }
 
       if (matches.length === 0) {
@@ -529,24 +543,38 @@ export class FilesystemTools {
 
       const glob = new Glob(globPattern);
 
-      for await (const file of glob.scan({ cwd: validated.resolved })) {
-        const filePath = join(validated.resolved, file);
-
-        try {
-          const content = await Bun.file(filePath).text();
-          const lines = content.split('\n');
-
-          for (let i = 0; i < lines.length; i++) {
-            if (regex.test(lines[i])) {
-              results.push(`${file}:${i + 1}: ${lines[i].trim()}`);
-              if (results.length >= 500) break; // Limit results
-            }
+      try {
+        for await (const file of glob.scan({ cwd: validated.resolved })) {
+          // Skip system directories
+          if (file.includes('.Trash') || file.includes('.Spotlight-V100') || file.includes('.fseventsd')) {
+            continue;
           }
-        } catch {
-          // Skip files that can't be read
-        }
+          const filePath = join(validated.resolved, file);
 
-        if (results.length >= 500) break;
+          try {
+            const content = await Bun.file(filePath).text();
+            const lines = content.split('\n');
+
+            for (let i = 0; i < lines.length; i++) {
+              if (regex.test(lines[i])) {
+                results.push(`${file}:${i + 1}: ${lines[i].trim()}`);
+                if (results.length >= 500) break; // Limit results
+              }
+            }
+          } catch {
+            // Skip files that can't be read
+          }
+
+          if (results.length >= 500) break;
+        }
+      } catch (scanError) {
+        // Handle permission errors gracefully
+        const errMsg = scanError instanceof Error ? scanError.message : String(scanError);
+        if (errMsg.includes('operation not permitted') || errMsg.includes('EPERM') || errMsg.includes('EACCES')) {
+          // Continue with whatever results we have
+        } else {
+          throw scanError;
+        }
       }
 
       if (results.length === 0) {
