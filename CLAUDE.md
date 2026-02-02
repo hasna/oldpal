@@ -35,6 +35,7 @@ packages/
 ## Collaboration & Safety
 
 - Always inspect unexpected changes before proceeding (no exceptions).
+- If any file has unexpected changes, inspect them first and adapt; never ignore them.
 - Never revert changes; inspect and adapt accordingly.
 
 ### Connector Bridge
