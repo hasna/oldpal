@@ -66,6 +66,9 @@ export { AnthropicClient } from './llm/anthropic';
 // Config
 export { loadConfig, getConfigPath } from './config';
 
+// Inbox
+export * from './inbox';
+
 // Scheduler
 export * from './scheduler';
 

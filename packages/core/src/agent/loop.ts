@@ -55,6 +55,7 @@ import {
 } from '../scheduler/store';
 import { VoiceManager } from '../voice/manager';
 import { AssistantManager, IdentityManager } from '../identity';
+import { createInboxManager, registerInboxTools, type InboxManager } from '../inbox';
 
 export interface AgentLoopOptions {
   config?: AssistantsConfig;
@@ -114,6 +115,7 @@ export class AgentLoop {
   private voiceManager: VoiceManager | null = null;
   private assistantManager: AssistantManager | null = null;
   private identityManager: IdentityManager | null = null;
+  private inboxManager: InboxManager | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
   private activeProjectId: string | null = null;
@@ -165,6 +167,7 @@ export class AgentLoop {
     this.toolRegistry.setValidationConfig(this.config.validation);
     this.contextConfig = this.buildContextConfig(this.config);
     this.context.setMaxMessages(this.contextConfig.maxMessages);
+    this.builtinCommands.updateTokenUsage({ maxContextTokens: this.contextConfig.maxContextTokens });
     if (this.config.voice) {
       this.voiceManager = new VoiceManager(this.config.voice);
     }
@@ -232,6 +235,20 @@ export class AgentLoop {
     ImageTools.registerAll(this.toolRegistry);
     this.toolRegistry.register(FeedbackTool.tool, FeedbackTool.executor);
     this.toolRegistry.register(SchedulerTool.tool, SchedulerTool.executor);
+
+    // Initialize inbox if enabled
+    if (this.config?.inbox?.enabled) {
+      const assistant = this.assistantManager?.getActive();
+      const agentId = assistant?.id || this.sessionId;
+      const agentName = assistant?.name || 'assistant';
+      this.inboxManager = createInboxManager(
+        agentId,
+        agentName,
+        this.config.inbox,
+        getConfigDir()
+      );
+      registerInboxTools(this.toolRegistry, () => this.inboxManager);
+    }
 
     // Register connector tools
     this.connectorBridge.registerAll(this.toolRegistry);
@@ -810,6 +827,7 @@ export class AgentLoop {
         })),
       })),
       getContextInfo: () => this.getContextInfo(),
+      getModel: () => this.llmClient?.getModel(),
       summarizeContext: async () => {
         if (!this.contextManager) {
           return {
@@ -830,6 +848,7 @@ export class AgentLoop {
       getEnergyState: () => this.getEnergyState(),
       getAssistantManager: () => this.assistantManager,
       getIdentityManager: () => this.identityManager,
+      getInboxManager: () => this.inboxManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
           this.identityContext = await this.identityManager.buildSystemPromptContext();
@@ -1068,6 +1087,13 @@ export class AgentLoop {
    */
   getTokenUsage(): TokenUsage {
     return this.builtinCommands.getTokenUsage();
+  }
+
+  /**
+   * Get current LLM model
+   */
+  getModel(): string | null {
+    return this.llmClient?.getModel() ?? this.config?.llm?.model ?? null;
   }
 
   /**
@@ -1405,7 +1431,7 @@ export class AgentLoop {
     if (this.assistantManager.listAssistants().length === 0) {
       const created = await this.assistantManager.createAssistant({
         name: 'Default Assistant',
-        settings: { model: this.config?.llm?.model || 'claude-sonnet-4-20250514' },
+        settings: { model: this.config?.llm?.model || 'claude-opus-4-5' },
       });
       this.assistantId = created.id;
     }

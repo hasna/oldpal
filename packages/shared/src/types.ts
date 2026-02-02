@@ -80,6 +80,8 @@ export interface ToolCall {
 export interface ToolResult {
   toolCallId: string;
   content: string;
+  rawContent?: string;
+  truncated?: boolean;
   isError?: boolean;
   toolName?: string;
 }
@@ -349,6 +351,7 @@ export interface AssistantsConfig {
   context?: ContextConfig;
   energy?: EnergyConfig;
   validation?: ValidationConfig;
+  inbox?: InboxConfig;
 }
 
 export interface LLMConfig {
@@ -584,6 +587,144 @@ export interface AssistantClient {
   getEnergyState(): EnergyState | null;
   getVoiceState(): VoiceState | null;
   getIdentityInfo(): ActiveIdentityInfo | null;
+  getModel(): string | null;
   stop(): void;
   disconnect(): void;
+}
+
+// ============================================
+// Inbox Types
+// ============================================
+
+/**
+ * Configuration for agent inbox feature
+ */
+export interface InboxConfig {
+  /** Whether inbox is enabled (default: false) */
+  enabled?: boolean;
+  /** Email provider: 'ses' or 'resend' (default: 'ses') */
+  provider?: 'ses' | 'resend';
+  /** Email domain (e.g., "mail.hasna.com") */
+  domain?: string;
+  /** Email address format (default: "{agent-name}@{domain}") */
+  addressFormat?: string;
+
+  /** S3 storage configuration */
+  storage?: {
+    /** S3 bucket name */
+    bucket: string;
+    /** AWS region */
+    region: string;
+    /** S3 prefix (default: "inbox/") */
+    prefix?: string;
+    /** AWS credentials profile for cross-account access */
+    credentialsProfile?: string;
+  };
+
+  /** Amazon SES specific configuration */
+  ses?: {
+    /** SES region if different from storage region */
+    region?: string;
+    /** SES receipt rule set name */
+    ruleSetName?: string;
+  };
+
+  /** Resend specific configuration */
+  resend?: {
+    /** Environment variable name for API key (default: "RESEND_API_KEY") */
+    apiKeyEnvVar?: string;
+  };
+
+  /** Local cache configuration */
+  cache?: {
+    /** Whether caching is enabled (default: true) */
+    enabled?: boolean;
+    /** Maximum age for cached emails in days (default: 30) */
+    maxAgeDays?: number;
+    /** Maximum cache size in MB (default: 500) */
+    maxSizeMb?: number;
+  };
+}
+
+/**
+ * Email address with optional display name
+ */
+export interface EmailAddress {
+  /** Display name (e.g., "John Doe") */
+  name?: string;
+  /** Email address (e.g., "john@example.com") */
+  address: string;
+}
+
+/**
+ * Email attachment metadata
+ */
+export interface EmailAttachment {
+  /** Filename of the attachment */
+  filename: string;
+  /** MIME content type */
+  contentType: string;
+  /** Size in bytes */
+  size: number;
+  /** Content-ID for inline attachments */
+  contentId?: string;
+  /** Local file path if downloaded */
+  localPath?: string;
+}
+
+/**
+ * Full email data structure
+ */
+export interface Email {
+  /** Unique email ID (derived from S3 key or message-id) */
+  id: string;
+  /** RFC Message-ID header */
+  messageId: string;
+  /** Sender */
+  from: EmailAddress;
+  /** Recipients */
+  to: EmailAddress[];
+  /** CC recipients */
+  cc?: EmailAddress[];
+  /** Email subject */
+  subject: string;
+  /** Received date (ISO 8601) */
+  date: string;
+  /** Email body */
+  body: {
+    /** Plain text body */
+    text?: string;
+    /** HTML body */
+    html?: string;
+  };
+  /** Attachments */
+  attachments?: EmailAttachment[];
+  /** Email headers */
+  headers: Record<string, string>;
+  /** Raw email content (EML) */
+  raw?: string;
+  /** S3 object key */
+  s3Key?: string;
+  /** When cached locally (ISO 8601) */
+  cachedAt?: string;
+}
+
+/**
+ * Summary email item for listing
+ */
+export interface EmailListItem {
+  /** Unique email ID */
+  id: string;
+  /** RFC Message-ID header */
+  messageId: string;
+  /** Formatted sender string (name or address) */
+  from: string;
+  /** Email subject */
+  subject: string;
+  /** Received date (ISO 8601) */
+  date: string;
+  /** Whether email has attachments */
+  hasAttachments: boolean;
+  /** Whether email has been read */
+  isRead: boolean;
 }

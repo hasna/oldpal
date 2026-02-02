@@ -3,6 +3,7 @@ import type { RecordOptions } from '../voice/recorder';
 import type { ErrorStats } from '../errors';
 import type { ContextInfo, ContextProcessResult } from '../context';
 import type { AssistantManager, IdentityManager } from '../identity';
+import type { InboxManager } from '../inbox';
 
 // Re-export TokenUsage from shared
 export type { TokenUsage } from '@hasna/assistants-shared';
@@ -65,6 +66,7 @@ export interface CommandContext {
   getErrorStats?: () => ErrorStats[];
   getContextInfo?: () => ContextInfo | null;
   summarizeContext?: () => Promise<ContextProcessResult>;
+  getModel?: () => string | undefined;
   getEnergyState?: () => EnergyState | null;
   getVoiceState?: () => VoiceState | null;
   enableVoice?: () => void;
@@ -75,6 +77,7 @@ export interface CommandContext {
   stopListening?: () => void;
   getAssistantManager?: () => AssistantManager | null;
   getIdentityManager?: () => IdentityManager | null;
+  getInboxManager?: () => InboxManager | null;
   refreshIdentityContext?: () => Promise<void>;
   switchAssistant?: (assistantId: string) => Promise<void>;
   switchIdentity?: (identityId: string) => Promise<void>;

@@ -8,6 +8,7 @@ import { generateId } from '@hasna/assistants-shared';
 import { saveFeedbackEntry, type FeedbackType } from '../tools/feedback';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
 import { getSecurityLogger, severityFromString } from '../security/logger';
+import type { InboxManager } from '../inbox';
 import {
   saveSchedule,
   listSchedules,
@@ -146,6 +147,7 @@ export class BuiltinCommands {
     loader.register(this.connectorsCommand());
     loader.register(this.securityLogCommand());
     loader.register(this.verificationCommand());
+    loader.register(this.inboxCommand());
     loader.register(this.exitCommand());
   }
 
@@ -634,6 +636,8 @@ export class BuiltinCommands {
         this.tokenUsage.inputTokens = 0;
         this.tokenUsage.outputTokens = 0;
         this.tokenUsage.totalTokens = 0;
+        this.tokenUsage.cacheReadTokens = 0;
+        this.tokenUsage.cacheWriteTokens = 0;
         context.emit('text', 'Conversation cleared. Starting fresh.\n');
         context.emit('done');
         return { handled: true, clearConversation: true };
@@ -656,6 +660,8 @@ export class BuiltinCommands {
         this.tokenUsage.inputTokens = 0;
         this.tokenUsage.outputTokens = 0;
         this.tokenUsage.totalTokens = 0;
+        this.tokenUsage.cacheReadTokens = 0;
+        this.tokenUsage.cacheWriteTokens = 0;
         context.emit('text', 'Starting new conversation.\n');
         context.emit('done');
         return { handled: true, clearConversation: true };
@@ -779,6 +785,213 @@ export class BuiltinCommands {
   /**
    * /exit - Exit assistants
    */
+  /**
+   * /inbox - Manage agent inbox
+   */
+  private inboxCommand(): Command {
+    return {
+      name: 'inbox',
+      description: 'Manage agent inbox (list, fetch, read, send emails)',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const manager = context.getInboxManager?.();
+        if (!manager) {
+          context.emit('text', 'Inbox is not enabled. Configure inbox in config.json.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const parts = splitArgs(args);
+        const subcommand = parts[0]?.toLowerCase() || 'list';
+
+        // /inbox or /inbox list
+        if (subcommand === 'list' || (!parts[0] && !args.trim())) {
+          const unreadOnly = parts.includes('--unread') || parts.includes('-u');
+          const limitArg = parts.find((p) => p.match(/^\d+$/));
+          const limit = limitArg ? parseInt(limitArg, 10) : 20;
+
+          try {
+            const emails = await manager.list({ limit, unreadOnly });
+            if (emails.length === 0) {
+              context.emit('text', unreadOnly ? 'No unread emails.\n' : 'Inbox is empty.\n');
+            } else {
+              context.emit('text', `\n## Inbox (${emails.length} email${emails.length === 1 ? '' : 's'})\n\n`);
+              for (const email of emails) {
+                const readIndicator = email.isRead ? '📖' : '📬';
+                const attachmentIndicator = email.hasAttachments ? ' 📎' : '';
+                const date = new Date(email.date).toLocaleDateString();
+                context.emit('text', `${readIndicator} **${email.id}**${attachmentIndicator}\n`);
+                context.emit('text', `   From: ${email.from}\n`);
+                context.emit('text', `   Subject: ${email.subject}\n`);
+                context.emit('text', `   Date: ${date}\n\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error listing emails: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /inbox fetch [limit]
+        if (subcommand === 'fetch') {
+          const limitArg = parts[1];
+          const limit = limitArg ? parseInt(limitArg, 10) : 20;
+
+          context.emit('text', 'Fetching emails...\n');
+          try {
+            const count = await manager.fetch({ limit });
+            if (count === 0) {
+              context.emit('text', 'No new emails found.\n');
+            } else {
+              context.emit('text', `Fetched ${count} new email(s).\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error fetching: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /inbox read <id>
+        if (subcommand === 'read') {
+          const emailId = parts[1];
+          if (!emailId) {
+            context.emit('text', 'Usage: /inbox read <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const email = await manager.read(emailId);
+            if (!email) {
+              context.emit('text', `Email ${emailId} not found.\n`);
+            } else {
+              // Import formatEmailAsMarkdown dynamically to avoid circular deps
+              const { formatEmailAsMarkdown } = await import('../inbox/parser/email-parser');
+              context.emit('text', '\n' + formatEmailAsMarkdown(email) + '\n');
+            }
+          } catch (error) {
+            context.emit('text', `Error reading: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /inbox download <id> <index>
+        if (subcommand === 'download') {
+          const emailId = parts[1];
+          const indexArg = parts[2];
+
+          if (!emailId || !indexArg) {
+            context.emit('text', 'Usage: /inbox download <email-id> <attachment-index>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const index = parseInt(indexArg, 10);
+          if (isNaN(index) || index < 0) {
+            context.emit('text', 'Invalid attachment index.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const path = await manager.downloadAttachment(emailId, index);
+            context.emit('text', `Downloaded to: ${path}\n`);
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /inbox send <to> <subject>
+        if (subcommand === 'send') {
+          const to = parts[1];
+          const subject = parts.slice(2).join(' ');
+
+          if (!to || !subject) {
+            context.emit('text', 'Usage: /inbox send <to> <subject>\n');
+            context.emit('text', 'Then type your message and send.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // This is interactive - we need to prompt for the body
+          // For now, return a prompt to the LLM to help compose
+          context.emit('done');
+          return {
+            handled: false,
+            prompt: `Help me compose an email to ${to} with subject "${subject}". Ask me what I want to say, then use the inbox_send tool to send it.`,
+          };
+        }
+
+        // /inbox reply <id>
+        if (subcommand === 'reply') {
+          const emailId = parts[1];
+          if (!emailId) {
+            context.emit('text', 'Usage: /inbox reply <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // Load the email to show context
+          try {
+            const email = await manager.read(emailId);
+            if (!email) {
+              context.emit('text', `Email ${emailId} not found.\n`);
+              context.emit('done');
+              return { handled: true };
+            }
+
+            // Return a prompt to help compose the reply
+            context.emit('done');
+            return {
+              handled: false,
+              prompt: `Help me reply to this email from ${email.from.name || email.from.address} with subject "${email.subject}". Ask me what I want to say, then use the inbox_send tool with replyToId="${emailId}" to send it.`,
+            };
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+        }
+
+        // /inbox address
+        if (subcommand === 'address') {
+          const address = manager.getEmailAddress();
+          context.emit('text', `Agent email address: ${address}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /inbox help
+        if (subcommand === 'help') {
+          context.emit('text', '\n## Inbox Commands\n\n');
+          context.emit('text', '/inbox                     List emails (default)\n');
+          context.emit('text', '/inbox list [--unread]     List emails, optionally unread only\n');
+          context.emit('text', '/inbox fetch [limit]       Sync from S3 (default: 20)\n');
+          context.emit('text', '/inbox read <id>           Read specific email\n');
+          context.emit('text', '/inbox download <id> <n>   Download attachment\n');
+          context.emit('text', '/inbox send <to> <subject> Compose and send email\n');
+          context.emit('text', '/inbox reply <id>          Reply to an email\n');
+          context.emit('text', '/inbox address             Show agent email address\n');
+          context.emit('text', '/inbox help                Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown inbox command: ${subcommand}\n`);
+        context.emit('text', 'Use /inbox help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
   private exitCommand(): Command {
     return {
       name: 'exit',
@@ -1886,9 +2099,9 @@ Please summarize the last interaction and suggest 2-3 next steps.
       content: '',
       handler: async (args, context) => {
         let message = '\n**Model Information**\n\n';
-        message += 'Current model: claude-sonnet-4-20250514 (Claude 4 Sonnet)\n';
-        message += 'Context window: 200,000 tokens\n';
-        message += 'Max output: 64,000 tokens\n\n';
+        const model = context.getModel?.() || 'unknown';
+        message += `Current model: ${model}\n`;
+        message += `Context window: ${this.tokenUsage.maxContextTokens.toLocaleString()} tokens\n\n`;
         message += '*Model selection coming in a future update*\n';
 
         context.emit('text', message);

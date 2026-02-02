@@ -28,7 +28,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are Hasna Assistant, a helpful AI assistant r
 const DEFAULT_CONFIG: AssistantsConfig = {
   llm: {
     provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-opus-4-5',
     maxTokens: 8192,
   },
   voice: {
@@ -88,6 +88,15 @@ const DEFAULT_CONFIG: AssistantsConfig = {
     maxToolOutputLength: 50_000,
     maxTotalContextTokens: 180_000,
     maxFileReadSize: 10 * 1024 * 1024,
+  },
+  inbox: {
+    enabled: false,
+    provider: 'ses',
+    cache: {
+      enabled: true,
+      maxAgeDays: 30,
+      maxSizeMb: 500,
+    },
   },
 };
 
@@ -153,6 +162,31 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
       perTool: {
         ...(base.validation?.perTool || {}),
         ...(override.validation?.perTool || {}),
+      },
+    },
+    inbox: {
+      ...(base.inbox || {}),
+      ...(override.inbox || {}),
+      // Only merge storage if at least one config defines it with bucket
+      storage: (base.inbox?.storage?.bucket || override.inbox?.storage?.bucket)
+        ? {
+            bucket: override.inbox?.storage?.bucket ?? base.inbox?.storage?.bucket ?? '',
+            region: override.inbox?.storage?.region ?? base.inbox?.storage?.region ?? 'us-east-1',
+            prefix: override.inbox?.storage?.prefix ?? base.inbox?.storage?.prefix,
+            credentialsProfile: override.inbox?.storage?.credentialsProfile ?? base.inbox?.storage?.credentialsProfile,
+          }
+        : undefined,
+      ses: {
+        ...(base.inbox?.ses || {}),
+        ...(override.inbox?.ses || {}),
+      },
+      resend: {
+        ...(base.inbox?.resend || {}),
+        ...(override.inbox?.resend || {}),
+      },
+      cache: {
+        ...(base.inbox?.cache || {}),
+        ...(override.inbox?.cache || {}),
       },
     },
   };
@@ -280,6 +314,7 @@ export async function ensureConfigDir(sessionId?: string): Promise<void> {
     mkdir(join(configDir, 'heartbeats'), { recursive: true }),
     mkdir(join(configDir, 'state'), { recursive: true }),
     mkdir(join(configDir, 'energy'), { recursive: true }),
+    mkdir(join(configDir, 'inbox'), { recursive: true }),
   ];
 
   // Create session-specific temp folder if provided
