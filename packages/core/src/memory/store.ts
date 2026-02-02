@@ -64,7 +64,7 @@ export class MemoryStore {
   set(key: string, value: unknown, ttlMs?: number): void {
     const now = Date.now();
     const expiresAt = ttlMs ? now + ttlMs : null;
-    const valueStr = JSON.stringify(value);
+    const valueStr = JSON.stringify(value) ?? 'null';
 
     this.db.run(
       `
@@ -93,7 +93,11 @@ export class MemoryStore {
       return null;
     }
 
-    return JSON.parse(row.value) as T;
+    try {
+      return JSON.parse(row.value) as T;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -119,7 +123,7 @@ export class MemoryStore {
       : `SELECT key FROM memory`;
 
     const rows = pattern
-      ? this.db.query<{ key: string }, [string]>(query).all(pattern.replace('*', '%'))
+      ? this.db.query<{ key: string }, [string]>(query).all(pattern.replace(/\*/g, '%'))
       : this.db.query<{ key: string }, []>(query).all();
 
     return rows.map((r) => r.key);

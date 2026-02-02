@@ -32,12 +32,10 @@ export async function isPathSafe(
   for (const protectedPath of PROTECTED_PATHS) {
     const expanded = protectedPath.replace('~', home);
     if (resolved.startsWith(expanded)) {
-      if (operation === 'write' || operation === 'delete') {
-        return {
-          safe: false,
-          reason: `Cannot ${operation} protected path: ${protectedPath}`,
-        };
-      }
+      return {
+        safe: false,
+        reason: `Cannot ${operation} protected path: ${protectedPath}`,
+      };
     }
   }
 

@@ -38,6 +38,11 @@ describe('Path Security', () => {
     const result = await isPathSafe(linkPath, 'read', { cwd: base });
     expect(result.safe).toBe(false);
   });
+
+  test('should block reads of protected paths', async () => {
+    const result = await isPathSafe('/etc/passwd', 'read');
+    expect(result.safe).toBe(false);
+  });
 });
 
 describe('Security Logger', () => {

@@ -7,6 +7,7 @@ import {
   saveSchedule,
   deleteSchedule,
   updateSchedule,
+  readSchedule,
   computeNextRun,
   isValidTimeZone,
 } from '../scheduler/store';
@@ -122,11 +123,20 @@ export class SchedulerTool {
     if (action === 'pause' || action === 'resume') {
       const id = String(input.id || '').trim();
       if (!id) return 'Error: id is required.';
+      let nextRunAt: number | undefined;
+      if (action === 'resume') {
+        const schedule = await readSchedule(cwd, id);
+        if (!schedule) return `Schedule ${id} not found.`;
+        nextRunAt = computeNextRun(schedule, Date.now());
+        if (!nextRunAt) {
+          return `Error: unable to compute next run for schedule ${id}.`;
+        }
+      }
       const updated = await updateSchedule(cwd, id, (s) => ({
         ...s,
         status: action === 'pause' ? 'paused' : 'active',
         updatedAt: Date.now(),
-        nextRunAt: action === 'resume' ? computeNextRun(s, Date.now()) : s.nextRunAt,
+        nextRunAt: action === 'resume' ? nextRunAt : s.nextRunAt,
       }));
       if (!updated) return `Schedule ${id} not found.`;
       return `${action === 'pause' ? 'Paused' : 'Resumed'} schedule ${id}.`;

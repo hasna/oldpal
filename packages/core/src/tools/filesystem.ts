@@ -89,9 +89,21 @@ export class FilesystemTools {
 
   static readonly readExecutor: ToolExecutor = async (input) => {
     const baseCwd = (input.cwd as string) || process.cwd();
-    const path = resolve(baseCwd, input.path as string);
+    const rawPath = String(input.path || '').trim();
+    if (!rawPath) {
+      throw new ToolExecutionError('File path is required', {
+        toolName: 'read',
+        toolInput: input,
+        code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+        recoverable: false,
+        retryable: false,
+        suggestion: 'Provide a valid file path.',
+      });
+    }
+    const path = resolve(baseCwd, rawPath);
     const offset = ((input.offset as number) || 1) - 1;
-    const limit = input.limit as number | undefined;
+    const limitRaw = input.limit as number | undefined;
+    const limit = typeof limitRaw === 'number' && limitRaw > 0 ? Math.floor(limitRaw) : undefined;
 
     try {
       const safety = await isPathSafe(path, 'read', { cwd: baseCwd });
@@ -210,6 +222,17 @@ export class FilesystemTools {
     const content = input.content as string;
     const baseCwd = (input.cwd as string) || process.cwd();
 
+    if (typeof content !== 'string') {
+      throw new ToolExecutionError('Content must be a string', {
+        toolName: 'write',
+        toolInput: input,
+        code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+        recoverable: false,
+        retryable: false,
+        suggestion: 'Provide string content to write.',
+      });
+    }
+
     // Always write to scripts folder
     const scriptsFolder = getScriptsFolder(baseCwd, input.sessionId as string | undefined);
 
@@ -323,15 +346,60 @@ export class FilesystemTools {
   };
 
   static readonly globExecutor: ToolExecutor = async (input) => {
-    const pattern = input.pattern as string;
+    const pattern = String(input.pattern || '').trim();
     const baseCwd = (input.cwd as string) || process.cwd();
     const searchPath = resolve(baseCwd, (input.path as string) || '.');
 
     try {
+      if (!pattern) {
+        throw new ToolExecutionError('Pattern is required', {
+          toolName: 'glob',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+        });
+      }
+
+      const safety = await isPathSafe(searchPath, 'read', { cwd: baseCwd });
+      if (!safety.safe) {
+        getSecurityLogger().log({
+          eventType: 'path_violation',
+          severity: 'high',
+          details: {
+            tool: 'glob',
+            path: searchPath,
+            reason: safety.reason || 'Blocked path',
+          },
+          sessionId: (input.sessionId as string) || 'unknown',
+        });
+        throw new ToolExecutionError(safety.reason || 'Blocked path', {
+          toolName: 'glob',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+        });
+      }
+
+      const validated = await validatePath(searchPath, {
+        allowSymlinks: true,
+        allowedPaths: [baseCwd, searchPath],
+      });
+      if (!validated.valid) {
+        throw new ToolExecutionError(validated.error || 'Invalid path', {
+          toolName: 'glob',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+        });
+      }
+
       const glob = new Glob(pattern);
       const matches: string[] = [];
 
-      for await (const file of glob.scan({ cwd: searchPath })) {
+      for await (const file of glob.scan({ cwd: validated.resolved })) {
         matches.push(file);
         if (matches.length >= 1000) break; // Limit results
       }
@@ -389,13 +457,58 @@ export class FilesystemTools {
   };
 
   static readonly grepExecutor: ToolExecutor = async (input) => {
-    const pattern = input.pattern as string;
+    const pattern = String(input.pattern || '').trim();
     const baseCwd = (input.cwd as string) || process.cwd();
     const searchPath = resolve(baseCwd, (input.path as string) || '.');
     const globPattern = (input.glob as string) || '**/*';
     const caseSensitive = (input.caseSensitive as boolean) || false;
 
     try {
+      if (!pattern) {
+        throw new ToolExecutionError('Pattern is required', {
+          toolName: 'grep',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+        });
+      }
+
+      const safety = await isPathSafe(searchPath, 'read', { cwd: baseCwd });
+      if (!safety.safe) {
+        getSecurityLogger().log({
+          eventType: 'path_violation',
+          severity: 'high',
+          details: {
+            tool: 'grep',
+            path: searchPath,
+            reason: safety.reason || 'Blocked path',
+          },
+          sessionId: (input.sessionId as string) || 'unknown',
+        });
+        throw new ToolExecutionError(safety.reason || 'Blocked path', {
+          toolName: 'grep',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+        });
+      }
+
+      const validated = await validatePath(searchPath, {
+        allowSymlinks: true,
+        allowedPaths: [baseCwd, searchPath],
+      });
+      if (!validated.valid) {
+        throw new ToolExecutionError(validated.error || 'Invalid path', {
+          toolName: 'grep',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+        });
+      }
+
       // Don't use global flag - it causes stateful behavior with .test()
       const flags = caseSensitive ? '' : 'i';
       const regex = new RegExp(pattern, flags);
@@ -403,8 +516,8 @@ export class FilesystemTools {
 
       const glob = new Glob(globPattern);
 
-      for await (const file of glob.scan({ cwd: searchPath })) {
-        const filePath = join(searchPath, file);
+      for await (const file of glob.scan({ cwd: validated.resolved })) {
+        const filePath = join(validated.resolved, file);
 
         try {
           const content = await Bun.file(filePath).text();

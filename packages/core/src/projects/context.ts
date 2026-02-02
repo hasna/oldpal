@@ -19,17 +19,21 @@ export interface BuildProjectContextOptions {
 
 const DEFAULT_MAX_FILE_BYTES = 12_000;
 
+function singleLine(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim();
+}
+
 function formatPlan(plan: ProjectPlan): string {
   const lines: string[] = [];
-  lines.push(`- ${plan.title} (${plan.steps.length} steps)`);
+  lines.push(`- ${singleLine(plan.title)} (${plan.steps.length} steps)`);
   for (const step of plan.steps) {
-    lines.push(`  - [${step.status}] ${step.text}`);
+    lines.push(`  - [${step.status}] ${singleLine(step.text)}`);
   }
   return lines.join('\n');
 }
 
 function normalizeEntryLabel(entry: ProjectContextEntry): string {
-  return entry.label ? entry.label.trim() : entry.value.trim();
+  return entry.label ? singleLine(entry.label) : singleLine(entry.value);
 }
 
 async function renderFileEntry(entry: ProjectContextEntry, options: BuildProjectContextOptions): Promise<string> {

@@ -62,9 +62,10 @@ export class SessionManager {
       metadata,
     };
 
+    const metadataJson = safeJsonStringify(metadata || {}) ?? '{}';
     this.db.run(
       `INSERT INTO sessions (id, created_at, updated_at, metadata) VALUES (?, ?, ?, ?)`,
-      [session.id, session.createdAt, session.updatedAt, JSON.stringify(metadata || {})]
+      [session.id, session.createdAt, session.updatedAt, metadataJson]
     );
 
     return session;
@@ -100,10 +101,10 @@ export class SessionManager {
     const messages: Message[] = messageRows.map((row) => ({
       id: row.id,
       role: row.role as Message['role'],
-      content: row.content,
+      content: row.content ?? '',
       timestamp: row.timestamp,
-      toolCalls: row.tool_calls ? JSON.parse(row.tool_calls) : undefined,
-      toolResults: row.tool_results ? JSON.parse(row.tool_results) : undefined,
+      toolCalls: row.tool_calls ? safeJsonParse(row.tool_calls, undefined) : undefined,
+      toolResults: row.tool_results ? safeJsonParse(row.tool_results, undefined) : undefined,
     }));
 
     return {
@@ -111,7 +112,7 @@ export class SessionManager {
       createdAt: sessionRow.created_at,
       updatedAt: sessionRow.updated_at,
       messages,
-      metadata: JSON.parse(sessionRow.metadata || '{}'),
+      metadata: safeJsonParse(sessionRow.metadata || '{}', {}),
     };
   }
 
@@ -152,7 +153,7 @@ export class SessionManager {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       messages: [],
-      metadata: JSON.parse(row.metadata || '{}'),
+      metadata: safeJsonParse(row.metadata || '{}', {}),
     }));
   }
 
@@ -180,5 +181,21 @@ export class SessionManager {
    */
   close(): void {
     this.db.close();
+  }
+}
+
+function safeJsonParse<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeJsonStringify(value: unknown): string | null {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
   }
 }
