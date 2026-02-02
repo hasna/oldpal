@@ -7,6 +7,66 @@ import { runHeadless } from './headless';
 // Version is embedded at build time via define in build.ts
 const VERSION = process.env.ASSISTANTS_VERSION || 'dev';
 
+// DEC Mode 2026 - Synchronized Output
+// This prevents scrollback destruction by batching all updates atomically
+// Supported by: Ghostty, WezTerm, Windows Terminal, VS Code terminal
+const SYNC_START = '\x1b[?2026h';
+const SYNC_END = '\x1b[?2026l';
+
+/**
+ * Patch stdout.write to use synchronized output (DEC 2026)
+ * This batches writes and flushes them atomically, preventing partial renders
+ * that can destroy scrollback in terminals like Ghostty.
+ */
+function enableSynchronizedOutput(): () => void {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  let buffer = '';
+  let flushTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const flush = () => {
+    if (buffer) {
+      // Wrap the batched output in synchronized mode
+      originalWrite(SYNC_START + buffer + SYNC_END);
+      buffer = '';
+    }
+    flushTimeout = null;
+  };
+
+  // Patch the write method
+  process.stdout.write = function (
+    chunk: string | Uint8Array,
+    encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
+    callback?: (err?: Error) => void
+  ): boolean {
+    const str = typeof chunk === 'string' ? chunk : chunk.toString();
+    buffer += str;
+
+    // Debounce flushes to batch rapid updates
+    if (flushTimeout) {
+      clearTimeout(flushTimeout);
+    }
+    // Flush on next tick to batch synchronous writes
+    flushTimeout = setTimeout(flush, 0);
+
+    // Handle callback
+    const cb = typeof encodingOrCallback === 'function' ? encodingOrCallback : callback;
+    if (cb) {
+      setImmediate(() => cb());
+    }
+
+    return true;
+  } as typeof process.stdout.write;
+
+  // Return cleanup function
+  return () => {
+    if (flushTimeout) {
+      clearTimeout(flushTimeout);
+    }
+    flush();
+    process.stdout.write = originalWrite as typeof process.stdout.write;
+  };
+}
+
 // Parse CLI arguments
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
@@ -198,13 +258,18 @@ if (options.print !== null) {
   });
 } else {
   // Interactive mode
-  // Use incremental rendering to update only changed lines and preserve scrollback
+  // Enable synchronized output for terminals that support DEC 2026 (Ghostty, WezTerm, etc.)
+  // This batches all terminal writes and flushes them atomically, preserving scrollback
+  const disableSyncOutput = enableSynchronizedOutput();
+
   const { waitUntilExit } = render(<App cwd={options.cwd} version={VERSION} />, {
-    // Update only changed lines instead of full redraws - better for native scrollback
-    incrementalRendering: true,
+    // Patch console to route through our synced output
+    patchConsole: true,
   });
 
   waitUntilExit().then(() => {
+    // Restore original stdout.write before exiting
+    disableSyncOutput();
     process.exit(0);
   });
 }
