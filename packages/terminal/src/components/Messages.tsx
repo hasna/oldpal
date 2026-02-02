@@ -45,14 +45,22 @@ export function Messages({
 
   type Item =
     | { kind: 'message'; message: DisplayMessage }
+    | { kind: 'grouped'; messages: DisplayMessage[] }
     | { kind: 'activity'; entry: ActivityEntry }
     | { kind: 'streaming'; message: DisplayMessage };
 
+  const messageGroups = useMemo(() => groupConsecutiveToolMessages(messages), [messages]);
+  const messageItems = useMemo<Item[]>(() => {
+    return messageGroups.map((group) => (
+      group.type === 'single'
+        ? { kind: 'message', message: group.message }
+        : { kind: 'grouped', messages: group.messages }
+    ));
+  }, [messageGroups]);
+
   const items = useMemo<Item[]>(() => {
     const output: Item[] = [];
-    for (const message of messages) {
-      output.push({ kind: 'message', message });
-    }
+    output.push(...messageItems);
     for (const entry of activityLog) {
       output.push({ kind: 'activity', entry });
     }
@@ -68,7 +76,9 @@ export function Messages({
       const lines =
         item.kind === 'activity'
           ? estimateActivityEntryLines(item.entry, wrapWidth, messageWidth)
-          : estimateMessageLines(item.message, messageWidth);
+          : item.kind === 'grouped'
+            ? estimateGroupedToolLines(item.messages, messageWidth)
+            : estimateMessageLines(item.message, messageWidth);
       const start = cursor;
       cursor += lines;
       return { item, index, start, end: cursor, lines };
@@ -80,9 +90,9 @@ export function Messages({
   const startLine = Math.max(0, endLine - maxVisibleLines);
   const visibleSpans = lineSpans.filter((span) => span.end > startLine && span.start < endLine);
 
-  const visibleMessages = visibleSpans
-    .filter((span) => span.item.kind === 'message')
-    .map((span) => (span.item as { kind: 'message'; message: DisplayMessage }).message);
+  const visibleMessageItems = visibleSpans
+    .filter((span) => span.item.kind === 'message' || span.item.kind === 'grouped')
+    .map((span) => span.item as { kind: 'message'; message: DisplayMessage } | { kind: 'grouped'; messages: DisplayMessage[] });
   const visibleActivity = visibleSpans
     .filter((span) => span.item.kind === 'activity')
     .map((span) => (span.item as { kind: 'activity'; entry: ActivityEntry }).entry);
@@ -91,16 +101,12 @@ export function Messages({
     .map((span) => (span.item as { kind: 'streaming'; message: DisplayMessage }).message);
   const showCurrentResponse = Boolean(currentResponse) && streamingMessages.length === 0;
 
-  // Group consecutive tool-only assistant messages
-  const groupedMessages = groupConsecutiveToolMessages(visibleMessages);
-
   // Separate historical messages (stable) from current activity (dynamic)
-  // Historical messages use Static to prevent re-rendering and "eating"
-  const historicalItems = groupedMessages.map((group) => {
-    if (group.type === 'single') {
-      return { id: group.message.id, group };
+  const historicalItems = visibleMessageItems.map((item) => {
+    if (item.kind === 'message') {
+      return { id: item.message.id, item };
     }
-    return { id: group.messages[0].id, group };
+    return { id: item.messages[0].id, item };
   });
 
   const toolResultMap = useMemo(() => {
@@ -136,10 +142,10 @@ export function Messages({
     <Box flexDirection="column" width="100%">
       {/* Historical messages */}
       {historicalItems.map((item) => {
-        if (item.group.type === 'single') {
-          return <MessageBubble key={item.id} message={item.group.message} queuedMessageIds={queuedMessageIds} />;
+        if (item.item.kind === 'message') {
+          return <MessageBubble key={item.id} message={item.item.message} queuedMessageIds={queuedMessageIds} />;
         }
-        return <CombinedToolMessage key={item.id} messages={item.group.messages} />;
+        return <CombinedToolMessage key={item.id} messages={item.item.messages} />;
       })}
 
       {/* Show activity log - text, tool calls, and tool results */}
@@ -272,8 +278,29 @@ function CombinedToolMessage({ messages }: { messages: DisplayMessage[] }) {
   }
 
   return (
-    <ToolCallPanel toolCalls={allToolCalls} toolResults={allToolResults} />
+    <Box marginY={1}>
+      <ToolCallPanel toolCalls={allToolCalls} toolResults={allToolResults} />
+    </Box>
   );
+}
+
+function estimateGroupedToolLines(messages: DisplayMessage[], messageWidth: number): number {
+  const toolCalls: ToolCall[] = [];
+  const toolResults: ToolResult[] = [];
+  for (const msg of messages) {
+    if (msg.toolCalls) toolCalls.push(...msg.toolCalls);
+    if (msg.toolResults) toolResults.push(...msg.toolResults);
+  }
+  if (toolCalls.length === 0) return 0;
+  const synthetic: DisplayMessage = {
+    id: 'grouped-tool-call',
+    role: 'assistant',
+    content: '',
+    timestamp: 0,
+    toolCalls,
+    toolResults: toolResults.length > 0 ? toolResults : undefined,
+  };
+  return estimateMessageLines(synthetic, messageWidth);
 }
 
 interface MessageBubbleProps {

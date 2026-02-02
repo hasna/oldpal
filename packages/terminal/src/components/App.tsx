@@ -102,6 +102,16 @@ function stripAnsi(text: string): string {
   return text.replace(/\x1B\[[0-9;]*m/g, '');
 }
 
+function countWrappedLines(lines: string[], maxWidth?: number): number {
+  if (!maxWidth || maxWidth <= 0) return lines.length;
+  let total = 0;
+  for (const line of lines) {
+    const visible = stripAnsi(line).length;
+    total += Math.max(1, Math.ceil(visible / maxWidth));
+  }
+  return total;
+}
+
 function chunkRenderedLines(lines: string[], chunkLines: number): string[][] {
   const chunks: string[][] = [];
   let current: string[] = [];
@@ -168,18 +178,20 @@ function buildDisplayMessages(
       const rendered = renderMarkdown(content, { maxWidth: assistantWidth });
       const renderedLines = rendered.split('\n');
       if (renderedLines.length <= chunkLines) {
-        display.push({ ...msg, content: rendered, __rendered: true, __lineCount: renderedLines.length });
+        const lineCount = countWrappedLines(renderedLines, assistantWidth);
+        display.push({ ...msg, content: rendered, __rendered: true, __lineCount: lineCount });
         continue;
       }
       const chunks = chunkRenderedLines(renderedLines, chunkLines);
       for (let i = 0; i < chunks.length; i++) {
         const chunkContent = chunks[i].join('\n');
+        const lineCount = countWrappedLines(chunks[i], assistantWidth);
         display.push({
           ...msg,
           id: `${msg.id}::chunk-${i}`,
           content: chunkContent,
           __rendered: true,
-          __lineCount: chunks[i].length,
+          __lineCount: lineCount,
           toolCalls: i === chunks.length - 1 ? msg.toolCalls : undefined,
           toolResults: i === chunks.length - 1 ? msg.toolResults : undefined,
         });
