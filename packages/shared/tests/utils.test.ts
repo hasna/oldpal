@@ -109,6 +109,13 @@ Content`;
     expect(result.frontmatter.tags).toEqual(['one', 'two', 'three']);
   });
 
+  test('should parse frontmatter with CRLF newlines', () => {
+    const content = `---\r\nname: test\r\n---\r\n\r\nBody`;
+    const result = parseFrontmatter(content);
+    expect(result.frontmatter.name).toBe('test');
+    expect(result.content).toBe('Body');
+  });
+
   test('should parse single-item array values', () => {
     const content = `---
 tags: [single]

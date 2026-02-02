@@ -27,7 +27,7 @@ export function sleep(ms: number): Promise<void> {
 export function parseFrontmatter<T extends Record<string, unknown>>(
   content: string
 ): { frontmatter: T; content: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
 
   if (!match) {
     return { frontmatter: {} as T, content };
@@ -37,7 +37,7 @@ export function parseFrontmatter<T extends Record<string, unknown>>(
   const frontmatter: Record<string, unknown> = {};
 
   // Simple YAML parser for frontmatter
-  const lines = yamlContent.split('\n');
+  const lines = yamlContent.split(/\r?\n/);
   for (const line of lines) {
     const colonIndex = line.indexOf(':');
     if (colonIndex === -1) continue;

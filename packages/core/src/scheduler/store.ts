@@ -5,6 +5,7 @@ import { getProjectConfigDir } from '../config';
 import { getNextCronRun } from './cron';
 
 export const DEFAULT_LOCK_TTL_MS = 10 * 60 * 1000;
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 function schedulesDir(cwd: string): string {
   return join(getProjectConfigDir(cwd), 'schedules');
@@ -14,7 +15,12 @@ function locksDir(cwd: string): string {
   return join(schedulesDir(cwd), 'locks');
 }
 
-function schedulePath(cwd: string, id: string): string {
+function isSafeId(id: string): boolean {
+  return SAFE_ID_PATTERN.test(id);
+}
+
+function schedulePath(cwd: string, id: string): string | null {
+  if (!isSafeId(id)) return null;
   return join(schedulesDir(cwd), `${id}.json`);
 }
 
@@ -51,12 +57,17 @@ export async function listSchedules(cwd: string): Promise<ScheduledCommand[]> {
 export async function saveSchedule(cwd: string, schedule: ScheduledCommand): Promise<void> {
   await ensureDirs(cwd);
   const path = schedulePath(cwd, schedule.id);
+  if (!path) {
+    throw new Error(`Invalid schedule id: ${schedule.id}`);
+  }
   await writeFile(path, JSON.stringify(schedule, null, 2), 'utf-8');
 }
 
 export async function deleteSchedule(cwd: string, id: string): Promise<boolean> {
   try {
-    await unlink(schedulePath(cwd, id));
+    const path = schedulePath(cwd, id);
+    if (!path) return false;
+    await unlink(path);
     return true;
   } catch {
     return false;
@@ -95,7 +106,9 @@ export async function updateSchedule(
   updater: (schedule: ScheduledCommand) => ScheduledCommand
 ): Promise<ScheduledCommand | null> {
   try {
-    const raw = await readFile(schedulePath(cwd, id), 'utf-8');
+    const path = schedulePath(cwd, id);
+    if (!path) return null;
+    const raw = await readFile(path, 'utf-8');
     const schedule = JSON.parse(raw) as ScheduledCommand;
     const updated = updater(schedule);
     await saveSchedule(cwd, updated);
@@ -112,6 +125,7 @@ export async function acquireScheduleLock(
   ttlMs: number = DEFAULT_LOCK_TTL_MS,
   allowRetry: boolean = true
 ): Promise<boolean> {
+  if (!isSafeId(id)) return false;
   await ensureDirs(cwd);
   const path = lockPath(cwd, id);
   const now = Date.now();
@@ -147,6 +161,7 @@ export async function acquireScheduleLock(
 }
 
 export async function releaseScheduleLock(cwd: string, id: string, ownerId: string): Promise<void> {
+  if (!isSafeId(id)) return;
   const path = lockPath(cwd, id);
   try {
     const raw = await readFile(path, 'utf-8');
@@ -160,6 +175,7 @@ export async function releaseScheduleLock(cwd: string, id: string, ownerId: stri
 }
 
 export async function refreshScheduleLock(cwd: string, id: string, ownerId: string): Promise<void> {
+  if (!isSafeId(id)) return;
   const path = lockPath(cwd, id);
   try {
     const raw = await readFile(path, 'utf-8');
@@ -175,7 +191,9 @@ export async function refreshScheduleLock(cwd: string, id: string, ownerId: stri
 
 export async function readSchedule(cwd: string, id: string): Promise<ScheduledCommand | null> {
   try {
-    const raw = await readFile(schedulePath(cwd, id), 'utf-8');
+    const path = schedulePath(cwd, id);
+    if (!path) return null;
+    const raw = await readFile(path, 'utf-8');
     const schedule = JSON.parse(raw) as ScheduledCommand;
     if (!schedule?.id) return null;
     return schedule;

@@ -40,11 +40,18 @@ export interface ProjectRecord {
   plans: ProjectPlan[];
 }
 
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
 function projectsDir(cwd: string): string {
   return join(cwd, '.assistants', 'projects');
 }
 
-function projectPath(cwd: string, id: string): string {
+function isSafeId(id: string): boolean {
+  return SAFE_ID_PATTERN.test(id);
+}
+
+function projectPath(cwd: string, id: string): string | null {
+  if (!isSafeId(id)) return null;
   return join(projectsDir(cwd), `${id}.json`);
 }
 
@@ -81,7 +88,9 @@ export async function listProjects(cwd: string): Promise<ProjectRecord[]> {
 
 export async function readProject(cwd: string, id: string): Promise<ProjectRecord | null> {
   try {
-    const raw = await readFile(projectPath(cwd, id), 'utf-8');
+    const path = projectPath(cwd, id);
+    if (!path) return null;
+    const raw = await readFile(path, 'utf-8');
     const project = JSON.parse(raw) as ProjectRecord;
     if (!project?.id || !project?.name) return null;
     return project;
@@ -98,12 +107,18 @@ export async function findProjectByName(cwd: string, name: string): Promise<Proj
 
 export async function saveProject(cwd: string, project: ProjectRecord): Promise<void> {
   await ensureProjectsDir(cwd);
-  await writeFile(projectPath(cwd, project.id), JSON.stringify(project, null, 2), 'utf-8');
+  const path = projectPath(cwd, project.id);
+  if (!path) {
+    throw new Error(`Invalid project id: ${project.id}`);
+  }
+  await writeFile(path, JSON.stringify(project, null, 2), 'utf-8');
 }
 
 export async function deleteProject(cwd: string, id: string): Promise<boolean> {
   try {
-    await unlink(projectPath(cwd, id));
+    const path = projectPath(cwd, id);
+    if (!path) return false;
+    await unlink(path);
     return true;
   } catch {
     return false;
@@ -151,4 +166,3 @@ export function hasProjectNameConflict(projects: ProjectRecord[], name: string):
   const normalized = normalizeName(name);
   return projects.some((project) => normalizeName(project.name) === normalized);
 }
-

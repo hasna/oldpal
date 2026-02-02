@@ -38,6 +38,12 @@ function parseMarkdown(text: string, options?: { skipBlocks?: boolean; maxWidth?
     return `@@CODEBLOCK${codeBlocks.length - 1}@@`;
   });
 
+  const inlineCodeBlocks: string[] = [];
+  result = result.replace(/`([^`\n]+)`/g, (_, code) => {
+    inlineCodeBlocks.push(code);
+    return `@@INLINECODE${inlineCodeBlocks.length - 1}@@`;
+  });
+
   const blockSections: BlockSection[] = [];
   if (!options?.skipBlocks) {
     result = extractBlockSections(result, blockSections);
@@ -88,6 +94,11 @@ function parseMarkdown(text: string, options?: { skipBlocks?: boolean; maxWidth?
     const block = codeBlocks[parseInt(index)];
     // Remove ``` markers and language identifier
     const code = block.replace(/```\w*\n?/g, '').replace(/```$/g, '').trim();
+    return chalk.dim(code);
+  });
+
+  result = result.replace(/@@INLINECODE(\d+)@@/g, (_, index) => {
+    const code = inlineCodeBlocks[parseInt(index, 10)] ?? '';
     return chalk.dim(code);
   });
 
@@ -819,11 +830,17 @@ function wrapAnsiLine(line: string, width: number): string[] {
   const result: string[] = [];
   let current = '';
   let visible = 0;
+  let activeAnsi = '';
   let i = 0;
   while (i < line.length) {
     const match = line.slice(i).match(/^\x1b\[[0-9;]*m/);
     if (match) {
       current += match[0];
+      if (match[0] === '\x1b[0m') {
+        activeAnsi = '';
+      } else {
+        activeAnsi += match[0];
+      }
       i += match[0].length;
       continue;
     }
@@ -832,7 +849,7 @@ function wrapAnsiLine(line: string, width: number): string[] {
     i += 1;
     if (visible >= width) {
       result.push(current);
-      current = '';
+      current = activeAnsi;
       visible = 0;
     }
   }
@@ -842,6 +859,7 @@ function wrapAnsiLine(line: string, width: number): string[] {
 
 function truncateAnsi(line: string, width: number): string {
   if (stripAnsi(line).length <= width) return line;
+  const hasAnsi = /\x1b\[[0-9;]*m/.test(line);
   if (width <= 3) {
     let result = '';
     let visible = 0;
@@ -857,7 +875,7 @@ function truncateAnsi(line: string, width: number): string {
       visible += 1;
       i += 1;
     }
-    return result;
+    return hasAnsi && !result.endsWith('\x1b[0m') ? result + '\x1b[0m' : result;
   }
   const suffix = '...';
   const target = Math.max(0, width - suffix.length);
@@ -875,7 +893,8 @@ function truncateAnsi(line: string, width: number): string {
     visible += 1;
     i += 1;
   }
-  return current + suffix;
+  const truncated = current + suffix;
+  return hasAnsi && !truncated.endsWith('\x1b[0m') ? truncated + '\x1b[0m' : truncated;
 }
 
 export const __test__ = {

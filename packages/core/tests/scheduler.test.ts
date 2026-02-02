@@ -3,7 +3,14 @@ import { mkdtemp, rm, mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
-import { acquireScheduleLock, computeNextRun, listSchedules, saveSchedule } from '../src/scheduler/store';
+import {
+  acquireScheduleLock,
+  computeNextRun,
+  deleteSchedule,
+  listSchedules,
+  readSchedule,
+  saveSchedule,
+} from '../src/scheduler/store';
 import { getNextCronRun } from '../src/scheduler/cron';
 
 describe('Scheduler', () => {
@@ -49,6 +56,21 @@ describe('Scheduler', () => {
 
       const acquired = await acquireScheduleLock(tempDir, 'sched-1', 'owner-1');
       expect(acquired).toBe(true);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects unsafe schedule ids', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'assistants-sched-unsafe-'));
+    try {
+      const badId = '../escape';
+      const deleted = await deleteSchedule(tempDir, badId);
+      expect(deleted).toBe(false);
+      const read = await readSchedule(tempDir, badId);
+      expect(read).toBeNull();
+      const acquired = await acquireScheduleLock(tempDir, badId, 'owner-1');
+      expect(acquired).toBe(false);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

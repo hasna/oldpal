@@ -79,4 +79,11 @@ table:
     const output = stripAnsi(__test__.parseMarkdown(markdown));
     expect(output).toContain('a | b');
   });
+
+  test('preserves inline code with underscores', () => {
+    const markdown = 'Use `foo_bar` here';
+    const output = stripAnsi(__test__.parseMarkdown(markdown));
+    expect(output).toContain('foo_bar');
+    expect(output).not.toContain('foo bar');
+  });
 });
