@@ -347,6 +347,40 @@ You are operating as "Work Assistant" with the "Work" identity.
 
 ---
 
+
+## Current State
+
+TBD
+
+## Requirements
+
+### Functional
+- [ ] TBD
+
+### Non-Functional
+- [ ] TBD
+
+## Technical Design
+
+TBD
+
+## Testing Strategy
+
+TBD
+
+## Rollout Plan
+
+TBD
+
+## Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| TBD | TBD | TBD |
+
+## Open Questions
+
+- TBD
 ## Approval
 
 - [x] User requirements confirmed

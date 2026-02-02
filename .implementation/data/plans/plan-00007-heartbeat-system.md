@@ -374,6 +374,10 @@ describe('RecoveryManager', () => {
 
 ---
 
+
+## Open Questions
+
+- TBD
 ## Approval
 
 - [x] Technical design approved

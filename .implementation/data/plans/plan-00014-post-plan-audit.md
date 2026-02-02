@@ -34,6 +34,40 @@ Perform a repo-wide audit after the completed roadmap to catch lingering TODOs, 
 
 ---
 
+
+## Current State
+
+TBD
+
+## Requirements
+
+### Functional
+- [ ] TBD
+
+### Non-Functional
+- [ ] TBD
+
+## Technical Design
+
+TBD
+
+## Testing Strategy
+
+TBD
+
+## Rollout Plan
+
+TBD
+
+## Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| TBD | TBD | TBD |
+
+## Open Questions
+
+- TBD
 ## Approval
 
 - [x] Technical design approved

@@ -373,6 +373,10 @@ describe('Schedule Commands', () => {
 
 ---
 
+
+## Open Questions
+
+- TBD
 ## Approval
 
 - [ ] Technical design approved

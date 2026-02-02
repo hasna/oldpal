@@ -380,6 +380,10 @@ describe('EnergyBar', () => {
 
 ---
 
+
+## Open Questions
+
+- TBD
 ## Approval
 
 - [x] Technical design approved

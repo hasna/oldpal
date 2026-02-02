@@ -320,6 +320,10 @@ describe('Security Logger', () => {
 
 ---
 
+
+## Open Questions
+
+- TBD
 ## Approval
 
 - [ ] Technical design approved

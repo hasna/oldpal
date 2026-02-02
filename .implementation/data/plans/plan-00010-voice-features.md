@@ -470,6 +470,10 @@ describe('VoiceManager', () => {
 
 ---
 
+
+## Open Questions
+
+- TBD
 ## Approval
 
 - [ ] Technical design approved

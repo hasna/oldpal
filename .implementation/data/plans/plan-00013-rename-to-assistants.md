@@ -381,6 +381,10 @@ describe('CLI', () => {
 
 ---
 
+
+## Open Questions
+
+- TBD
 ## Approval
 
 - [ ] Technical design approved
