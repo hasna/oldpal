@@ -1,7 +1,7 @@
 import type { Tool, Connector, ConnectorCommand } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { homedir } from 'os';
-import { join, delimiter, dirname } from 'path';
+import { join, delimiter, dirname, extname } from 'path';
 import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { ConnectorError, ErrorCodes } from '../errors';
 
@@ -128,7 +128,11 @@ export class ConnectorBridge {
             continue;
           }
 
-          const name = file.replace('connect-', '');
+          const ext = extname(file);
+          let name = file.replace('connect-', '');
+          if (ext && ['.exe', '.cmd', '.bat', '.ps1'].includes(ext.toLowerCase())) {
+            name = name.slice(0, -ext.length);
+          }
           // Skip if it's a common non-connector (like connect.js or similar)
           if (name && !name.includes('.') && name.length > 1) {
             connectorNames.add(name);
@@ -273,7 +277,7 @@ export class ConnectorBridge {
   }
 
   private async populateCache(name: string): Promise<void> {
-    const cli = `connect-${name}`;
+    const cli = await this.resolveConnectorCli(name);
 
     try {
       // Quick existence check with timeout
@@ -282,10 +286,12 @@ export class ConnectorBridge {
         timeoutId = setTimeout(resolveTimeout, 500, resolve);
       });
 
-      const result = await Promise.race([
-        Bun.$`which ${cli}`.quiet().nothrow(),
-        timeoutPromise,
-      ]);
+      if (!cli) {
+        ConnectorBridge.cache.set(name, null);
+        return;
+      }
+
+      const result = await Promise.race([Bun.$`which ${cli}`.quiet().nothrow(), timeoutPromise]);
 
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -302,6 +308,28 @@ export class ConnectorBridge {
     } catch {
       ConnectorBridge.cache.set(name, null);
     }
+  }
+
+  private async resolveConnectorCli(name: string): Promise<string | null> {
+    const base = `connect-${name}`;
+    const candidates = [base];
+    const extCandidates = ['.exe', '.cmd', '.bat', '.ps1'];
+    for (const ext of extCandidates) {
+      candidates.push(`${base}${ext}`);
+    }
+
+    for (const candidate of candidates) {
+      try {
+        const result = await Bun.$`which ${candidate}`.quiet().nothrow();
+        if (result.exitCode === 0) {
+          return candidate;
+        }
+      } catch {
+        // ignore and try next candidate
+      }
+    }
+
+    return null;
   }
 
   /**

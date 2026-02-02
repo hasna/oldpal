@@ -1,6 +1,7 @@
 import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname, sep } from 'path';
+import { homedir } from 'os';
 import { getProjectConfigDir } from '../config';
 import { Glob } from 'bun';
 import { ErrorCodes, ToolExecutionError } from '../errors';
@@ -35,6 +36,15 @@ function isInScriptsFolder(path: string, cwd: string, sessionId?: string): boole
  * Write operations are RESTRICTED to the project scripts folder (.assistants/scripts/{session-id}/)
  */
 export class FilesystemTools {
+  private static resolveInputPath(baseCwd: string, inputPath: string): string {
+    if (inputPath === '~') {
+      return homedir();
+    }
+    if (inputPath.startsWith('~/')) {
+      return resolve(homedir(), inputPath.slice(2));
+    }
+    return resolve(baseCwd, inputPath);
+  }
   /**
    * Register all filesystem tools with session context
    */
@@ -100,7 +110,7 @@ export class FilesystemTools {
         suggestion: 'Provide a valid file path.',
       });
     }
-    const path = resolve(baseCwd, rawPath);
+    const path = FilesystemTools.resolveInputPath(baseCwd, rawPath);
     const offset = ((input.offset as number) || 1) - 1;
     const limitRaw = input.limit as number | undefined;
     const limit = typeof limitRaw === 'number' && limitRaw > 0 ? Math.floor(limitRaw) : undefined;
@@ -164,7 +174,8 @@ export class FilesystemTools {
       }
 
       const content = await file.text();
-      const lines = content.split('\n');
+      const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const lines = normalized.split('\n');
 
       const startLine = Math.max(0, offset);
       const endLine = limit ? startLine + limit : lines.length;
@@ -348,7 +359,7 @@ export class FilesystemTools {
   static readonly globExecutor: ToolExecutor = async (input) => {
     const pattern = String(input.pattern || '').trim();
     const baseCwd = (input.cwd as string) || process.cwd();
-    const searchPath = resolve(baseCwd, (input.path as string) || '.');
+    const searchPath = FilesystemTools.resolveInputPath(baseCwd, (input.path as string) || '.');
 
     try {
       if (!pattern) {
@@ -459,7 +470,7 @@ export class FilesystemTools {
   static readonly grepExecutor: ToolExecutor = async (input) => {
     const pattern = String(input.pattern || '').trim();
     const baseCwd = (input.cwd as string) || process.cwd();
-    const searchPath = resolve(baseCwd, (input.path as string) || '.');
+    const searchPath = FilesystemTools.resolveInputPath(baseCwd, (input.path as string) || '.');
     const globPattern = (input.glob as string) || '**/*';
     const caseSensitive = (input.caseSensitive as boolean) || false;
 
@@ -581,7 +592,7 @@ export class FilesystemTools {
 
   static readonly readPdfExecutor: ToolExecutor = async (input) => {
     const baseCwd = (input.cwd as string) || process.cwd();
-    const path = resolve(baseCwd, input.path as string);
+    const path = FilesystemTools.resolveInputPath(baseCwd, String(input.path || ''));
 
     try {
       // Validate path safety

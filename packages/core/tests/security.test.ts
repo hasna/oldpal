@@ -43,6 +43,16 @@ describe('Path Security', () => {
     const result = await isPathSafe('/etc/passwd', 'read');
     expect(result.safe).toBe(false);
   });
+
+  test('should block protected paths with home expansion', async () => {
+    const result = await isPathSafe('~/.ssh', 'read');
+    expect(result.safe).toBe(false);
+  });
+
+  test('should not block paths that only share a prefix', async () => {
+    const result = await isPathSafe('/etc/passwd2', 'read');
+    expect(result.safe).toBe(true);
+  });
 });
 
 describe('Security Logger', () => {

@@ -162,9 +162,12 @@ Commands:
     test('should auto-discover connect-* binaries on PATH', async () => {
       const binDir = mkdtempSync(join(tmpdir(), 'assistants-bin-'));
       const cliPath = join(binDir, 'connect-demo');
+      const exePath = join(binDir, 'connect-win.exe');
       const dirPath = join(binDir, 'connect-dir');
       writeFileSync(cliPath, '#!/bin/sh\necho demo\n');
+      writeFileSync(exePath, '#!/bin/sh\necho win\n');
       chmodSync(cliPath, 0o755);
+      chmodSync(exePath, 0o755);
       mkdirSync(dirPath, { recursive: true });
 
       const originalPath = process.env.PATH;
@@ -174,6 +177,7 @@ Commands:
         (ConnectorBridge as any).cache = new Map();
         const discovered = await bridge.discover();
         expect(discovered.some((c) => c.name === 'demo')).toBe(true);
+        expect(discovered.some((c) => c.name === 'win')).toBe(true);
         expect(discovered.some((c) => c.name === 'dir')).toBe(false);
       } finally {
         process.env.PATH = originalPath;
