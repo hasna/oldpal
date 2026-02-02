@@ -1285,6 +1285,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to create plan "${plan.title}".\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         if (sub === 'show') {
@@ -1350,6 +1353,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to add step to plan ${planId}.\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         if (sub === 'set') {
@@ -1400,6 +1406,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to update step ${stepId}.\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         if (sub === 'remove') {
@@ -1437,6 +1446,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to remove step ${stepId} from plan ${planId}.\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         if (sub === 'delete' || sub === 'rm') {
@@ -1463,6 +1475,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to delete plan ${planId}.\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         context.emit('text', 'Unknown /plans command. Use /plans help.\n');
@@ -1969,11 +1984,12 @@ Keep it concise but comprehensive.`,
           return { handled: true };
         }
 
+        const escapeCell = (value: string) => value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
         let output = '\n| ID | Status | Next Run | Command |\n';
         output += '|----|--------|----------|---------|\n';
         for (const schedule of schedules.sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))) {
           const next = schedule.nextRunAt ? new Date(schedule.nextRunAt).toISOString() : 'n/a';
-          output += `| ${schedule.id} | ${schedule.status} | ${next} | ${schedule.command} |\n`;
+          output += `| ${schedule.id} | ${schedule.status} | ${next} | ${escapeCell(schedule.command)} |\n`;
         }
         context.emit('text', output);
         context.emit('done');

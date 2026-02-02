@@ -391,7 +391,7 @@ export class AgentLoop {
       this.currentAllowedTools = null;
       this.isRunning = false;
       this.setHeartbeatState('idle');
-      this.drainScheduledQueue();
+      await this.drainScheduledQueue();
     }
   }
 
