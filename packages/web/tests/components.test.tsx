@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { act, create } from 'react-test-renderer';
 import { Button } from '../src/components/ui/Button';
 import { Badge } from '../src/components/ui/Badge';
 import { Card, CardContent, CardHeader } from '../src/components/ui/Card';
@@ -44,5 +45,88 @@ describe('UI components', () => {
       <ToolCallCard call={call as any} result={result as any} />
     );
     expect(markup).toContain('read');
+  });
+
+  test('ToolCallCard expands to show file preview for read results', () => {
+    const call = { id: 'call-2', name: 'read', input: { file_path: 'notes.txt' } };
+    const result = { toolCallId: 'call-2', content: 'hello', isError: false };
+    let renderer: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<ToolCallCard call={call as any} result={result as any} />);
+    });
+    const header = renderer!.root.find((node) => typeof node.props?.onClick === 'function');
+    act(() => header.props.onClick());
+    const preview = renderer!.root.findByType(FilePreview);
+    expect(preview.props.path).toBe('notes.txt');
+    expect(preview.props.content).toBe('hello');
+    renderer!.unmount();
+  });
+
+  test('ToolCallCard expands to show error output', () => {
+    const call = { id: 'call-3', name: 'bash', input: { cmd: 'ls' } };
+    const result = { toolCallId: 'call-3', content: 'boom', isError: true };
+    let renderer: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<ToolCallCard call={call as any} result={result as any} />);
+    });
+    const header = renderer!.root.find((node) => typeof node.props?.onClick === 'function');
+    act(() => header.props.onClick());
+    const tree = renderer!.toJSON();
+    expect(JSON.stringify(tree)).toContain('boom');
+    expect(JSON.stringify(tree)).toContain('Error');
+    renderer!.unmount();
+  });
+
+  test('ToolCallCard shows elapsed seconds while pending', () => {
+    const originalNow = Date.now;
+    const originalSetInterval = globalThis.setInterval;
+    const originalClearInterval = globalThis.clearInterval;
+    let intervalCb: (() => void) | null = null;
+    Date.now = () => 3500;
+    globalThis.setInterval = ((cb: () => void) => {
+      intervalCb = cb;
+      cb();
+      return 1 as any;
+    }) as any;
+    globalThis.clearInterval = (() => {}) as any;
+
+    const call = { id: 'call-4', name: 'bash', input: {}, startedAt: 1000 };
+    let renderer: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<ToolCallCard call={call as any} />);
+    });
+    act(() => {
+      intervalCb?.();
+    });
+    const tree = renderer!.toJSON();
+    expect(JSON.stringify(tree)).toContain('"2"');
+    expect(JSON.stringify(tree)).toContain('"s"');
+    renderer!.unmount();
+
+    Date.now = originalNow;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  });
+
+  test('ToolCallCard skips timer when startedAt is invalid', () => {
+    const originalSetInterval = globalThis.setInterval;
+    const originalClearInterval = globalThis.clearInterval;
+    let intervalCalled = false;
+    globalThis.setInterval = (() => {
+      intervalCalled = true;
+      return 1 as any;
+    }) as any;
+    globalThis.clearInterval = (() => {}) as any;
+
+    const call = { id: 'call-5', name: 'bash', input: {}, startedAt: Number.NaN };
+    let renderer: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<ToolCallCard call={call as any} />);
+    });
+    expect(intervalCalled).toBe(false);
+    renderer!.unmount();
+
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
   });
 });

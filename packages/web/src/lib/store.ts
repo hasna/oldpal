@@ -108,13 +108,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       let updated = false;
       let streamId: string | null = null;
       if (id) {
+        let matchIndex = -1;
         for (let i = messages.length - 1; i >= 0; i -= 1) {
-          if (messages[i].id === id && messages[i].role === 'assistant') {
-            messages[i] = { ...messages[i], content: messages[i].content + content };
-            updated = true;
-            streamId = id;
-            break;
+          if (matchIndex === -1 && messages[i].id === id && messages[i].role === 'assistant') {
+            matchIndex = i;
           }
+        }
+        if (matchIndex >= 0) {
+          messages[matchIndex] = { ...messages[matchIndex], content: messages[matchIndex].content + content };
+          updated = true;
+          streamId = id;
         }
       }
       if (!updated) {
@@ -155,13 +158,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       let targetMessageId = messageId ?? state.currentStreamMessageId;
       if (!targetMessageId) {
+        let fallbackId: string | undefined;
         for (let i = state.messages.length - 1; i >= 0; i -= 1) {
           const message = state.messages[i];
-          if (message.role === 'assistant') {
-            targetMessageId = message.id;
-            break;
+          if (!fallbackId && message.role === 'assistant') {
+            fallbackId = message.id;
           }
         }
+        targetMessageId = fallbackId ?? targetMessageId;
       }
       const shouldReset = targetMessageId && targetMessageId !== state.currentStreamMessageId;
       const callWithMeta: ToolCallWithMeta = { ...call, startedAt: Date.now() };
