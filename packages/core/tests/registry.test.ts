@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach } from 'bun:test';
-import { ToolRegistry } from '../src/tools/registry';
+import { ToolRegistry, __test__ as registryTest } from '../src/tools/registry';
 import type { Tool, ToolCall } from '@hasna/assistants-shared';
 
 describe('ToolRegistry', () => {
@@ -186,6 +186,22 @@ describe('ToolRegistry', () => {
       expect(results).toHaveLength(2);
       expect(results[0].isError).toBe(false);
       expect(results[1].isError).toBe(true);
+    });
+  });
+
+  describe('wait timeout helpers', () => {
+    test('deriveWaitTimeoutMs returns null for non-wait tools', () => {
+      expect(registryTest.deriveWaitTimeoutMs('bash', { seconds: 10 })).toBeNull();
+    });
+
+    test('deriveWaitTimeoutMs honors seconds', () => {
+      const timeout = registryTest.deriveWaitTimeoutMs('wait', { seconds: 2 });
+      expect(timeout).toBe(2000 + 5000);
+    });
+
+    test('deriveWaitTimeoutMs uses max of ranges', () => {
+      const timeout = registryTest.deriveWaitTimeoutMs('sleep', { minSeconds: 1, maxSeconds: 3 });
+      expect(timeout).toBe(3000 + 5000);
     });
   });
 });

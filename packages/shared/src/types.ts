@@ -164,6 +164,7 @@ export interface Skill {
   hooks?: HookConfig;
   content: string;
   filePath: string;
+  contentLoaded?: boolean;
 }
 
 export interface SkillFrontmatter {

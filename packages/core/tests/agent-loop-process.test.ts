@@ -400,6 +400,7 @@ describe('AgentLoop process', () => {
       content: 'Skill content',
       allowedTools: ['read'],
       filePath: join(cwd, 'SKILL.md'),
+      contentLoaded: true,
     });
 
     await agent.process('/demo arg1 arg2');

@@ -127,6 +127,17 @@ Content`;
     expect(result.frontmatter.tags).toEqual(['single']);
   });
 
+  test('should parse empty array values', () => {
+    const content = `---
+tags: []
+---
+
+Content`;
+
+    const result = parseFrontmatter(content);
+    expect(result.frontmatter.tags).toEqual([]);
+  });
+
   test('should not treat bracketed argument hints as arrays', () => {
     const content = `---
 argument-hint: [arg1] [arg2]
@@ -181,6 +192,18 @@ describe('substituteVariables', () => {
   test('should return empty string for missing env vars', () => {
     const result = substituteVariables('Value is ${NONEXISTENT}', [], {});
     expect(result).toBe('Value is ');
+  });
+
+  test('should fallback to process.env when env param missing', () => {
+    const original = process.env.TEST_ENV_VALUE;
+    process.env.TEST_ENV_VALUE = 'from-process';
+    const result = substituteVariables('Value is ${TEST_ENV_VALUE}', [], {});
+    expect(result).toBe('Value is from-process');
+    if (original === undefined) {
+      delete process.env.TEST_ENV_VALUE;
+    } else {
+      process.env.TEST_ENV_VALUE = original;
+    }
   });
 
   test('should handle multiple substitutions', () => {
