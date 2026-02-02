@@ -41,7 +41,7 @@ export function Messages({
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
   const messageWidth = Math.max(10, columns - 2);
-  const wrapWidth = Math.max(10, columns - 4);
+  const wrapWidth = messageWidth;
 
   type Item =
     | { kind: 'message'; message: DisplayMessage }
@@ -300,9 +300,9 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
       <Box marginY={isContinuation ? 0 : 1}>
         <Text dimColor>{isContinuation ? '  ' : '❯ '} </Text>
         {isQueued && !isContinuation ? (
-          <Text dimColor>⏳ {message.content}</Text>
+          <Text dimColor>⏳ {message.content ?? ''}</Text>
         ) : (
-          <Text>{message.content}</Text>
+          <Text>{message.content ?? ''}</Text>
         )}
       </Box>
     );
@@ -340,6 +340,8 @@ function startsWithListOrTable(content: string): boolean {
     if (/^[-*•]\s+/.test(trimmed)) return true;
     if (/^\d+\.\s+/.test(trimmed)) return true;
     if (trimmed.startsWith('|')) return true;
+    if (trimmed.startsWith('```')) return true;
+    if (trimmed.startsWith(':::')) return true;
     if (/^[┌┐└┘├┤┬┴┼│]/.test(trimmed)) return true;
     if (/^[╭╮╰╯│]/.test(trimmed)) return true;
     return false;
@@ -362,8 +364,8 @@ function ToolCallPanel({
 
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
-  const panelWidth = Math.max(24, columns - 4);
-  const innerWidth = Math.max(10, panelWidth - 4);
+  const panelWidth = Math.max(10, columns - 2);
+  const innerWidth = Math.max(6, panelWidth - 4);
 
   const resultMap = new Map<string, ToolResult>();
   for (const result of toolResults || []) {

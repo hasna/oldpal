@@ -669,8 +669,8 @@ export function App({ cwd, version }: AppProps) {
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
 
-  const wrapChars = columns ? Math.max(40, columns - 4) : MESSAGE_WRAP_CHARS;
-  const renderWidth = columns ? Math.max(20, columns - 2) : undefined;
+  const renderWidth = columns ? Math.max(10, columns - 2) : undefined;
+  const wrapChars = renderWidth ?? MESSAGE_WRAP_CHARS;
   const activityLogLineCount = useMemo(() => {
     if (activityLog.length === 0) return 0;
     return estimateActivityLogLines(activityLog, wrapChars, renderWidth);
@@ -680,7 +680,7 @@ export function App({ cwd, version }: AppProps) {
     let lines = 0;
 
     if (showWelcome) {
-      lines += 5; // WelcomeBanner lines + margin
+      lines += 4; // WelcomeBanner lines + margin
     }
     if (backgroundProcessingCount > 0) {
       lines += 1;
