@@ -1,7 +1,7 @@
 import type { Tool, Connector, ConnectorCommand } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { homedir } from 'os';
-import { join, delimiter } from 'path';
+import { join, delimiter, dirname } from 'path';
 import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { ConnectorError, ErrorCodes } from '../errors';
 
@@ -72,7 +72,7 @@ export class ConnectorBridge {
   private static saveDiskCache(): void {
     try {
       const cachePath = ConnectorBridge.getCachePath();
-      const cacheDir = join(cachePath, '..');
+      const cacheDir = dirname(cachePath);
       if (!existsSync(cacheDir)) {
         mkdirSync(cacheDir, { recursive: true });
       }

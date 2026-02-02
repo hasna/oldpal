@@ -52,15 +52,25 @@ function splitArgs(input: string): string[] {
   const args: string[] = [];
   let current = '';
   let quote: '"' | "'" | null = null;
+  let escaped = false;
 
   for (let i = 0; i < input.length; i += 1) {
     const char = input[i];
     if (quote) {
+      if (escaped) {
+        current += char;
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
       if (char === quote) {
         quote = null;
-      } else {
-        current += char;
+        continue;
       }
+      current += char;
       continue;
     }
 
@@ -826,7 +836,10 @@ export class BuiltinCommands {
       content: '',
       handler: async (args, context) => {
         const usage = this.tokenUsage;
-        const usedPercent = Math.round((usage.totalTokens / usage.maxContextTokens) * 100);
+        const rawPercent = usage.maxContextTokens > 0
+          ? Math.round((usage.totalTokens / usage.maxContextTokens) * 100)
+          : 0;
+        const usedPercent = Math.max(0, Math.min(100, rawPercent));
 
         let message = '\n**Token Usage**\n\n';
         message += `Input: ${usage.inputTokens.toLocaleString()}\n`;
@@ -835,8 +848,8 @@ export class BuiltinCommands {
 
         // Visual progress bar
         const barLength = 30;
-        const filledLength = Math.round((usedPercent / 100) * barLength);
-        const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
+        const filledLength = Math.max(0, Math.min(barLength, Math.round((usedPercent / 100) * barLength)));
+        const bar = '█'.repeat(filledLength) + '░'.repeat(Math.max(0, barLength - filledLength));
         message += `\n[${bar}] ${usedPercent}%\n`;
 
         context.emit('text', message);
@@ -887,7 +900,10 @@ export class BuiltinCommands {
           }
 
           const { config, state } = info;
-          const usedPercent = Math.round((state.totalTokens / config.maxContextTokens) * 100);
+          const rawPercent = config.maxContextTokens > 0
+            ? Math.round((state.totalTokens / config.maxContextTokens) * 100)
+            : 0;
+          const usedPercent = Math.max(0, Math.min(100, rawPercent));
 
           let message = '\n**Context Status**\n\n';
           message += `**Messages:** ${state.messageCount}\n`;
@@ -904,8 +920,8 @@ export class BuiltinCommands {
           }
 
           const barLength = 30;
-          const filledLength = Math.round((usedPercent / 100) * barLength);
-          const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
+          const filledLength = Math.max(0, Math.min(barLength, Math.round((usedPercent / 100) * barLength)));
+          const bar = '█'.repeat(filledLength) + '░'.repeat(Math.max(0, barLength - filledLength));
           message += `\n[${bar}] ${usedPercent}%\n`;
 
           context.emit('text', message);
@@ -1603,7 +1619,10 @@ export class BuiltinCommands {
       content: '',
       handler: async (args, context) => {
         const usage = this.tokenUsage;
-        const usedPercent = Math.round((usage.totalTokens / usage.maxContextTokens) * 100);
+        const rawPercent = usage.maxContextTokens > 0
+          ? Math.round((usage.totalTokens / usage.maxContextTokens) * 100)
+          : 0;
+        const usedPercent = Math.max(0, Math.min(100, rawPercent));
 
         let message = '\n**Session Status**\n\n';
         message += `**Session ID:** ${context.sessionId}\n`;
@@ -1661,15 +1680,16 @@ export class BuiltinCommands {
 
         // Visual progress bar
         const barLength = 30;
-        const filledLength = Math.round((usedPercent / 100) * barLength);
-        const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
+        const filledLength = Math.max(0, Math.min(barLength, Math.round((usedPercent / 100) * barLength)));
+        const bar = '█'.repeat(filledLength) + '░'.repeat(Math.max(0, barLength - filledLength));
         message += `\n  [${bar}] ${usedPercent}%\n`;
 
         const contextInfo = context.getContextInfo?.();
         if (contextInfo) {
-          const contextUsedPercent = Math.round(
-            (contextInfo.state.totalTokens / contextInfo.config.maxContextTokens) * 100
-          );
+          const contextRawPercent = contextInfo.config.maxContextTokens > 0
+            ? Math.round((contextInfo.state.totalTokens / contextInfo.config.maxContextTokens) * 100)
+            : 0;
+          const contextUsedPercent = Math.max(0, Math.min(100, contextRawPercent));
           message += '\n**Context Summary:**\n';
           message += `  Messages: ${contextInfo.state.messageCount}\n`;
           message += `  Estimated Tokens: ${contextInfo.state.totalTokens.toLocaleString()} / ${contextInfo.config.maxContextTokens.toLocaleString()} (${contextUsedPercent}%)\n`;
@@ -1984,7 +2004,8 @@ Keep it concise but comprehensive.`,
           return { handled: true };
         }
 
-        const escapeCell = (value: string) => value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+        const escapeCell = (value: string) =>
+          value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
         let output = '\n| ID | Status | Next Run | Command |\n';
         output += '|----|--------|----------|---------|\n';
         for (const schedule of schedules.sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))) {
@@ -2132,9 +2153,11 @@ Keep it concise but comprehensive.`,
           }
 
           // Show detailed info for this connector
+          const cli = connector.cli || `connect-${connector.name}`;
+          const description = connector.description?.trim() || 'No description provided.';
           let message = `\n**${connector.name}** Connector\n\n`;
-          message += `CLI: \`${connector.cli}\`\n`;
-          message += `Description: ${connector.description}\n\n`;
+          message += `CLI: \`${cli}\`\n`;
+          message += `Description: ${description}\n\n`;
 
           // Check auth status
           try {
@@ -2165,7 +2188,7 @@ Keep it concise but comprehensive.`,
           }
 
           message += `\n**Available Commands:**\n`;
-          for (const cmd of connector.commands) {
+          for (const cmd of connector.commands || []) {
             message += `  ${cmd.name} - ${cmd.description}\n`;
           }
 
@@ -2189,23 +2212,19 @@ Keep it concise but comprehensive.`,
           message += 'Then run `/connectors` again to verify it is detected.\n';
         } else {
           // Check auth status for each
-          const statuses: string[] = [];
-          for (const connector of context.connectors) {
+          const checkAuth = async (connector: typeof context.connectors[number]): Promise<string> => {
             let status = '○';
             let timeoutId: ReturnType<typeof setTimeout> | null = null;
             try {
+              const cli = connector.cli || `connect-${connector.name}`;
               const timeoutPromise = new Promise<{ exitCode: number; stdout: { toString: () => string } }>((resolve) => {
                 timeoutId = setTimeout(resolveAuthTimeout, 1000, resolve);
               });
 
               const result = await Promise.race([
-                Bun.$`${connector.cli} auth status --format json`.quiet().nothrow(),
+                Bun.$`${cli} auth status --format json`.quiet().nothrow(),
                 timeoutPromise,
               ]);
-
-              if (timeoutId) {
-                clearTimeout(timeoutId);
-              }
 
               if (result.exitCode === 0) {
                 try {
@@ -2222,17 +2241,20 @@ Keep it concise but comprehensive.`,
                 clearTimeout(timeoutId);
               }
             }
-            statuses.push(status);
-          }
+            return status;
+          };
 
+          const statuses = await Promise.all(context.connectors.map((connector) => checkAuth(connector)));
+
+          const escapeCell = (value: string) => value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
           message += '| Status | Connector | Commands |\n';
           message += '|--------|-----------|----------|\n';
 
           for (let i = 0; i < context.connectors.length; i++) {
             const connector = context.connectors[i];
             const status = statuses[i];
-            const cmdCount = connector.commands.length;
-            message += `| ${status} | ${connector.name.padEnd(12)} | ${cmdCount} commands |\n`;
+            const cmdCount = connector.commands?.length ?? 0;
+            message += `| ${status} | ${escapeCell(connector.name)} | ${cmdCount} commands |\n`;
           }
 
           message += `\n${context.connectors.length} connector(s) available.\n\n`;
@@ -2293,7 +2315,13 @@ Keep it concise but comprehensive.`,
         message += '| Time | Severity | Type | Details |\n';
         message += '| --- | --- | --- | --- |\n';
         for (const event of events) {
-          const detail = event.details.reason.replace(/\n/g, ' ');
+          const rawDetail =
+            event.details?.reason ||
+            event.details?.path ||
+            event.details?.command ||
+            event.details?.tool ||
+            'n/a';
+          const detail = String(rawDetail).replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
           message += `| ${event.timestamp} | ${event.severity} | ${event.eventType} | ${detail} |\n`;
         }
 
