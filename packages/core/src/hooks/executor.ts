@@ -1,5 +1,6 @@
 import type { HookMatcher, HookHandler, HookInput, HookOutput, Message } from '@hasna/assistants-shared';
 import type { LLMClient } from '../llm/client';
+import { existsSync } from 'fs';
 import { generateId, sleep } from '@hasna/assistants-shared';
 
 function killSpawnedProcess(proc: { kill: () => void }): void {
@@ -133,7 +134,9 @@ export class HookExecutor {
 
     try {
       // Run the command with input on stdin
+      const cwd = input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd();
       const proc = Bun.spawn(['bash', '-c', hook.command], {
+        cwd,
         stdin: 'pipe',
         stdout: 'pipe',
         stderr: 'pipe',
