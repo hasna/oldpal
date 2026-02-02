@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { SessionInfo } from '@hasna/assistants-core';
 
@@ -54,6 +54,10 @@ export function SessionSelector({
   onCancel,
 }: SessionSelectorProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    setSelectedIndex((prev) => Math.min(prev, sessions.length));
+  }, [sessions.length]);
 
   useInput((input, key) => {
     // 'n' or 'N' for new session - check first to prioritize

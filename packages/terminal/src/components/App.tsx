@@ -669,7 +669,7 @@ export function App({ cwd, version }: AppProps) {
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
 
-  const renderWidth = columns ? Math.max(10, columns - 2) : undefined;
+  const renderWidth = columns ? Math.max(1, columns - 2) : undefined;
   const wrapChars = renderWidth ?? MESSAGE_WRAP_CHARS;
   const activityLogLineCount = useMemo(() => {
     if (activityLog.length === 0) return 0;

@@ -40,7 +40,7 @@ export function Messages({
   const [now, setNow] = useState(Date.now());
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
-  const messageWidth = Math.max(10, columns - 2);
+  const messageWidth = Math.max(1, columns - 2);
   const wrapWidth = messageWidth;
 
   type Item =
@@ -364,8 +364,8 @@ function ToolCallPanel({
 
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
-  const panelWidth = Math.max(10, columns - 2);
-  const innerWidth = Math.max(6, panelWidth - 4);
+  const panelWidth = Math.max(1, columns - 2);
+  const innerWidth = Math.max(1, panelWidth - 4);
 
   const resultMap = new Map<string, ToolResult>();
   for (const result of toolResults || []) {

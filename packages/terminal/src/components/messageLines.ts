@@ -44,11 +44,10 @@ function estimateToolPanelLines(
 }
 
 function estimateToolResultLines(result: ToolResult, maxLines = 4): number {
-  const content = String(result.content || '');
+  const content = truncateToolResult(result, maxLines, 400);
   if (!content) return 1;
-  const lines = content.replace(/\x1B\[[0-9;]*m/g, '').split('\n');
-  if (lines.length <= maxLines) return Math.max(1, lines.length);
-  return maxLines + 1; // include truncation line
+  const lines = stripAnsi(content).split('\n');
+  return Math.max(1, lines.length);
 }
 
 export function estimateMessageLines(message: DisplayMessage, maxWidth?: number): number {

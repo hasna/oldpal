@@ -94,6 +94,10 @@ function splitArgs(input: string): string[] {
   return args;
 }
 
+function singleLine(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /**
  * Built-in slash commands for assistants
  */
@@ -942,10 +946,10 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
-          let output = `\n**Context Entries (${project.name})**\n\n`;
+          let output = `\n**Context Entries (${singleLine(project.name)})**\n\n`;
           for (const entry of project.context) {
-            const label = entry.label ? ` (${entry.label})` : '';
-            output += `- ${entry.id} [${entry.type}] ${entry.value}${label}\n`;
+            const label = entry.label ? ` (${singleLine(entry.label)})` : '';
+            output += `- ${entry.id} [${entry.type}] ${singleLine(entry.value)}${label}\n`;
           }
           context.emit('text', output);
           context.emit('done');
@@ -1088,7 +1092,7 @@ export class BuiltinCommands {
           let output = '\n**Projects**\n\n';
           for (const project of projects) {
             const marker = project.id === activeId ? '*' : ' ';
-            output += `${marker} ${project.name} (${project.id})\n`;
+            output += `${marker} ${singleLine(project.name)} (${project.id})\n`;
           }
           context.emit('text', output);
           context.emit('done');
@@ -1146,10 +1150,10 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
-          let output = `\n**Project: ${project.name}**\n\n`;
+          let output = `\n**Project: ${singleLine(project.name)}**\n\n`;
           output += `ID: ${project.id}\n`;
           if (project.description) {
-            output += `Description: ${project.description}\n`;
+            output += `Description: ${singleLine(project.description)}\n`;
           }
           output += `Context entries: ${project.context.length}\n`;
           output += `Plans: ${project.plans.length}\n`;
@@ -1266,9 +1270,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
-          let output = `\n**Plans (${project.name})**\n\n`;
+          let output = `\n**Plans (${singleLine(project.name)})**\n\n`;
           for (const plan of project.plans) {
-            output += `- ${plan.id} ${plan.title} (${plan.steps.length} steps)\n`;
+            output += `- ${plan.id} ${singleLine(plan.title)} (${plan.steps.length} steps)\n`;
           }
           context.emit('text', output);
           context.emit('done');
@@ -1319,13 +1323,13 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
-          let output = `\n**Plan: ${plan.title}**\n\n`;
+          let output = `\n**Plan: ${singleLine(plan.title)}**\n\n`;
           output += `ID: ${plan.id}\n`;
           if (plan.steps.length === 0) {
             output += 'No steps yet.\n';
           } else {
             for (const step of plan.steps) {
-              output += `- ${step.id} [${step.status}] ${step.text}\n`;
+              output += `- ${step.id} [${step.status}] ${singleLine(step.text)}\n`;
             }
           }
           context.emit('text', output);
@@ -1591,7 +1595,7 @@ export class BuiltinCommands {
 
         if (context.skills.length === 0) {
           message += 'No skills loaded.\n';
-        message += '\nAdd skills to ~/.assistants/assistants-shared/skills/ or .assistants/skills/\n';
+          message += '\nAdd skills to ~/.assistants/shared/skills/ or .assistants/skills/\n';
         } else {
           for (const skill of context.skills) {
             const hint = skill.argumentHint ? ` ${skill.argumentHint}` : '';
@@ -1946,6 +1950,12 @@ Keep it concise but comprehensive.`,
           at = parts[0];
         }
 
+        if (kind === 'cron' && !cron) {
+          context.emit('text', 'Usage:\n  /schedule cron "<expr>" <command>\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
         const command = parts.slice(commandStart).join(' ').trim();
         if (!command) {
           context.emit('text', 'Error: command is required.\n');
@@ -1971,6 +1981,11 @@ Keep it concise but comprehensive.`,
         schedule.nextRunAt = computeNextRun(schedule, now);
         if (!schedule.nextRunAt) {
           context.emit('text', 'Error: unable to compute next run time.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+        if (schedule.nextRunAt <= now) {
+          context.emit('text', 'Error: scheduled time must be in the future.\n');
           context.emit('done');
           return { handled: true };
         }
@@ -2109,13 +2124,30 @@ Keep it concise but comprehensive.`,
           return { handled: true };
         }
 
-        const updated = await updateSchedule(context.cwd, id, (schedule) => ({
-          ...schedule,
-          status: 'active',
-          updatedAt: Date.now(),
-          nextRunAt: computeNextRun(schedule, Date.now()),
-        }));
-        context.emit('text', updated ? `Resumed schedule ${id}.\n` : `Schedule ${id} not found.\n`);
+        let computedNext: number | undefined;
+        const updated = await updateSchedule(context.cwd, id, (schedule) => {
+          computedNext = computeNextRun(schedule, Date.now());
+          if (!computedNext) {
+            return schedule;
+          }
+          return {
+            ...schedule,
+            status: 'active',
+            updatedAt: Date.now(),
+            nextRunAt: computedNext,
+          };
+        });
+        if (!updated) {
+          context.emit('text', `Schedule ${id} not found.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+        if (!computedNext) {
+          context.emit('text', `Failed to compute next run for schedule ${id}.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+        context.emit('text', `Resumed schedule ${id}.\n`);
         context.emit('done');
         return { handled: true };
       },
@@ -2188,8 +2220,13 @@ Keep it concise but comprehensive.`,
           }
 
           message += `\n**Available Commands:**\n`;
-          for (const cmd of connector.commands || []) {
-            message += `  ${cmd.name} - ${cmd.description}\n`;
+          const commands = connector.commands || [];
+          if (commands.length === 0) {
+            message += '  (no commands discovered)\n';
+          } else {
+            for (const cmd of commands) {
+              message += `  ${cmd.name} - ${cmd.description}\n`;
+            }
           }
 
           message += `\n**Usage:**\n`;

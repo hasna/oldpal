@@ -147,6 +147,7 @@ export class ConnectorBridge {
    * This avoids slower per-connector checks and allows tools to be available right away.
    */
   fastDiscover(connectorNames?: string[]): Connector[] {
+    this.connectors.clear();
     // If we have cached connectors from disk, use those immediately
     if (ConnectorBridge.cache.size > 0) {
       const connectors: Connector[] = [];
@@ -240,14 +241,16 @@ export class ConnectorBridge {
 
     // Return all cached connectors
     const discovered: Connector[] = [];
+    const nextConnectors = new Map<string, Connector>();
     for (const name of names) {
       const connector = ConnectorBridge.cache.get(name);
       if (connector) {
         discovered.push(connector);
-        this.connectors.set(connector.name, connector);
+        nextConnectors.set(connector.name, connector);
       }
     }
 
+    this.connectors = nextConnectors;
     return discovered;
   }
 

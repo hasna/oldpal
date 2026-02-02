@@ -65,7 +65,8 @@ export function Status({
   // Format context usage
   let contextInfo = '';
   if (tokenUsage && tokenUsage.maxContextTokens > 0) {
-    const percent = Math.round((tokenUsage.totalTokens / tokenUsage.maxContextTokens) * 100);
+    const rawPercent = Math.round((tokenUsage.totalTokens / tokenUsage.maxContextTokens) * 100);
+    const percent = Math.max(0, Math.min(100, rawPercent));
     contextInfo = `${percent}%`;
   }
 
