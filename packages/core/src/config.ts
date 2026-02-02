@@ -23,6 +23,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are Hasna Assistant, a helpful AI assistant r
 - Be concise and direct in responses
 - Ask clarifying questions when requirements are ambiguous
 - Explain your reasoning when making architectural decisions
+- Use the ask_user tool to collect structured answers when you need details
 `;
 
 const DEFAULT_CONFIG: AssistantsConfig = {
@@ -104,6 +105,12 @@ const DEFAULT_CONFIG: AssistantsConfig = {
     security: {
       maxReadsPerHour: 10,
     },
+  },
+  jobs: {
+    enabled: true,
+    defaultTimeoutMs: 60_000, // 1 minute
+    maxJobAgeMs: 24 * 60 * 60 * 1000, // 24 hours
+    connectors: {},
   },
 };
 
@@ -210,6 +217,14 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
       security: {
         ...(base.wallet?.security || {}),
         ...(override.wallet?.security || {}),
+      },
+    },
+    jobs: {
+      ...(base.jobs || {}),
+      ...(override.jobs || {}),
+      connectors: {
+        ...(base.jobs?.connectors || {}),
+        ...(override.jobs?.connectors || {}),
       },
     },
   };
@@ -337,6 +352,7 @@ export async function ensureConfigDir(sessionId?: string): Promise<void> {
     mkdir(join(configDir, 'heartbeats'), { recursive: true }),
     mkdir(join(configDir, 'state'), { recursive: true }),
     mkdir(join(configDir, 'energy'), { recursive: true }),
+    mkdir(join(configDir, 'jobs'), { recursive: true }),
     mkdir(join(configDir, 'inbox'), { recursive: true }),
   ];
 

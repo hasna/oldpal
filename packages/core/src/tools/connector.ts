@@ -1,5 +1,6 @@
 import type { Tool, Connector, ConnectorCommand } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
+import type { JobManager } from '../jobs';
 import { homedir } from 'os';
 import { join, delimiter, dirname, extname } from 'path';
 import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
@@ -28,6 +29,7 @@ export class ConnectorBridge {
   private static cache: Map<string, Connector | null> = new Map();
   private static diskCacheLoaded = false;
   private cwd?: string;
+  private jobManagerGetter: (() => JobManager | null) | null = null;
 
   constructor(cwd?: string) {
     this.cwd = cwd;
@@ -35,6 +37,13 @@ export class ConnectorBridge {
     if (!ConnectorBridge.diskCacheLoaded) {
       ConnectorBridge.loadDiskCache();
     }
+  }
+
+  /**
+   * Set the job manager getter for async job support
+   */
+  setJobManagerGetter(getter: () => JobManager | null): void {
+    this.jobManagerGetter = getter;
   }
 
   private getHomeDir(): string {
@@ -502,12 +511,19 @@ export class ConnectorBridge {
       const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd();
       const timeoutMs = Number(options.timeoutMs || options.timeout || 15000);
 
+      // Check if this should run as an async job
+      const jobManager = this.jobManagerGetter?.();
+      if (jobManager && jobManager.shouldRunAsync(connector.name, input)) {
+        const job = await jobManager.startJob(connector.name, command, input, connector.cli);
+        return `Job started in background.\n\nJob ID: ${job.id}\nConnector: ${connector.name}\nCommand: ${command}\nTimeout: ${job.timeoutMs / 1000}s\n\nUse job_status or job_result to check progress.`;
+      }
+
       // Build the command
       const cmdParts = [connector.cli, ...command.split(' '), ...args];
 
       // Add options
       for (const [key, value] of Object.entries(options)) {
-        if (key === 'timeoutMs' || key === 'timeout') continue;
+        if (key === 'timeoutMs' || key === 'timeout' || key === 'async') continue;
         if (value === true) {
           cmdParts.push(`--${key}`);
         } else if (value !== false && value !== undefined) {

@@ -86,6 +86,25 @@ export interface ToolResult {
   toolName?: string;
 }
 
+export interface AskUserQuestion {
+  id: string;
+  question: string;
+  options?: string[];
+  placeholder?: string;
+  multiline?: boolean;
+  required?: boolean;
+}
+
+export interface AskUserRequest {
+  title?: string;
+  description?: string;
+  questions: AskUserQuestion[];
+}
+
+export interface AskUserResponse {
+  answers: Record<string, string>;
+}
+
 // ============================================
 // Connector Types
 // ============================================
@@ -353,6 +372,7 @@ export interface AssistantsConfig {
   validation?: ValidationConfig;
   inbox?: InboxConfig;
   wallet?: WalletConfig;
+  jobs?: JobsConfig;
 }
 
 export interface LLMConfig {
@@ -493,6 +513,34 @@ export interface ActiveIdentityInfo {
 export interface SchedulerConfig {
   enabled?: boolean;
   heartbeatIntervalMs?: number;
+}
+
+// ============================================
+// Jobs Types (async job system)
+// ============================================
+
+/**
+ * Per-connector job configuration
+ */
+export interface ConnectorJobConfig {
+  /** Whether async mode is enabled for this connector */
+  enabled?: boolean;
+  /** Custom timeout for this connector (ms) */
+  timeoutMs?: number;
+}
+
+/**
+ * Jobs system configuration
+ */
+export interface JobsConfig {
+  /** Whether jobs system is enabled (default: true) */
+  enabled?: boolean;
+  /** Default timeout for jobs in ms (default: 60000 = 1 minute) */
+  defaultTimeoutMs?: number;
+  /** Maximum age for job files in ms (default: 86400000 = 24 hours) */
+  maxJobAgeMs?: number;
+  /** Per-connector configuration */
+  connectors?: Record<string, ConnectorJobConfig>;
 }
 
 export interface HeartbeatConfig {
