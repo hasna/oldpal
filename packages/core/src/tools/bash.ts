@@ -3,6 +3,7 @@ import type { ToolExecutor } from './registry';
 import { ErrorCodes, ToolExecutionError } from '../errors';
 import { getSecurityLogger } from '../security/logger';
 import { validateBashCommand } from '../security/bash-validator';
+import { loadConfig } from '../config';
 
 /**
  * Bash tool - execute shell commands (restricted to safe, read-only operations)
@@ -178,6 +179,14 @@ export class BashTool {
     const timeoutInput = Number(input.timeout);
     const timeout = Number.isFinite(timeoutInput) && timeoutInput > 0 ? timeoutInput : 30000; // Reduced default timeout
 
+    let allowEnv = true;
+    try {
+      const config = await loadConfig(cwd);
+      allowEnv = config.validation?.perTool?.bash?.allowEnv ?? true;
+    } catch {
+      allowEnv = true;
+    }
+
     const baseCommand = command.replace(/\s*2>&1\s*/g, ' ').trim();
     const baseTrimmed = baseCommand.toLowerCase();
     const allowConnectorNewlines = baseTrimmed.startsWith('connect-') || baseTrimmed.startsWith('connect_');
@@ -236,10 +245,38 @@ export class BashTool {
       }
     }
 
-    // Check if command starts with an allowed prefix
     const commandTrimmed = commandForChecks.trim().toLowerCase();
+    const isEnvCommand = /^(env|printenv)(\s|$)/.test(commandTrimmed);
+    if (!allowEnv && isEnvCommand) {
+      getSecurityLogger().log({
+        eventType: 'blocked_command',
+        severity: 'medium',
+        details: {
+          tool: 'bash',
+          command,
+          reason: 'env/printenv disabled by config',
+        },
+        sessionId: (input.sessionId as string) || 'unknown',
+      });
+      throw new ToolExecutionError(
+        'Command not allowed: env/printenv disabled by config.',
+        {
+          toolName: 'bash',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Enable validation.perTool.bash.allowEnv to allow env/printenv.',
+        }
+      );
+    }
+
+    // Check if command starts with an allowed prefix
     let isAllowed = false;
-    for (const allowed of this.ALLOWED_COMMANDS) {
+    const allowlist = allowEnv
+      ? this.ALLOWED_COMMANDS
+      : this.ALLOWED_COMMANDS.filter((allowed) => allowed !== 'env' && allowed !== 'printenv');
+    for (const allowed of allowlist) {
       if (commandTrimmed.startsWith(allowed.toLowerCase())) {
         isAllowed = true;
         break;
