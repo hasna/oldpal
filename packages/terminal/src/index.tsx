@@ -4,7 +4,7 @@ import { render } from 'ink';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 
-const VERSION = '0.6.30';
+const VERSION = '0.6.31';
 process.env.ASSISTANTS_VERSION ??= VERSION;
 
 // Parse CLI arguments
