@@ -561,7 +561,9 @@ function formatMarkdownTables(text: string, maxWidth?: number): string {
 function parseTableRow(line: string): string[] {
   const trimmed = line.trim();
   const withoutEdges = trimmed.replace(/^\|/, '').replace(/\|$/, '');
-  return withoutEdges.split('|').map((cell) => cell.trim());
+  return withoutEdges
+    .split('|')
+    .map((cell) => cell.replace(/[\r\n]+/g, ' ').trim());
 }
 
 function renderTable(header: string[], rows: string[][], maxWidth?: number): string[] {
