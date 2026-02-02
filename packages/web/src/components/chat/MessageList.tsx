@@ -25,12 +25,12 @@ export function MessageList({ messages }: MessageListProps) {
           isStreaming &&
           message.role === 'assistant' &&
           (currentStreamMessageId ? message.id === currentStreamMessageId : isLast);
-        const shouldUseStreamingCalls = isStreamingMessage && toolCalls.length === 0;
-        const mergedToolCalls = shouldUseStreamingCalls ? currentToolCalls : toolCalls;
-        const mergedToolResults =
-          shouldUseStreamingCalls && currentToolCallResults.length > 0
-            ? currentToolCallResults
-            : toolResults;
+        const mergedToolCalls = isStreamingMessage
+          ? mergeToolCalls(toolCalls, currentToolCalls)
+          : toolCalls;
+        const mergedToolResults = isStreamingMessage
+          ? mergeToolResults(toolResults, currentToolCallResults)
+          : toolResults;
 
         return (
           <MessageBubble
@@ -43,4 +43,30 @@ export function MessageList({ messages }: MessageListProps) {
       })}
     </div>
   );
+}
+
+function mergeToolCalls(existing: ToolCall[], incoming: ToolCall[]): ToolCall[] {
+  if (incoming.length === 0) return existing;
+  const seen = new Set(existing.map((call) => call.id));
+  const merged = [...existing];
+  for (const call of incoming) {
+    if (!seen.has(call.id)) {
+      merged.push(call);
+      seen.add(call.id);
+    }
+  }
+  return merged;
+}
+
+function mergeToolResults(existing: ToolResult[], incoming: ToolResult[]): ToolResult[] {
+  if (incoming.length === 0) return existing;
+  const seen = new Set(existing.map((result) => result.toolCallId));
+  const merged = [...existing];
+  for (const result of incoming) {
+    if (!seen.has(result.toolCallId)) {
+      merged.push(result);
+      seen.add(result.toolCallId);
+    }
+  }
+  return merged;
 }

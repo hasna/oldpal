@@ -42,7 +42,7 @@ Project config: `.assistants/config.json`
 {
   "llm": {
     "provider": "anthropic",
-    "model": "claude-sonnet-4-20250514"
+    "model": "claude-opus-4-5"
   },
   "connectors": ["notion", "googledrive", "gmail", "linear", "slack"]
 }
