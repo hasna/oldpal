@@ -92,8 +92,26 @@ export * from './validation';
 // Security
 export * from './security';
 
-// Errors
-export * from './errors';
-
-// Re-export shared types
-export * from '@hasna/assistants-shared';
+// Re-export commonly used shared types (avoid duplicates with local definitions)
+export type {
+  Tool,
+  ToolCall,
+  ToolResult,
+  Message,
+  TokenUsage as SharedTokenUsage,
+  EnergyState,
+  HookEvent,
+  HookConfig,
+  HookMatcher,
+  HookInput,
+  HookOutput,
+  NativeHook,
+  NativeHookHandler,
+  NativeHookConfig,
+  ScopeContext,
+  VerificationSession,
+  VerificationResult,
+  GoalAnalysis,
+  DocumentAttachment,
+  DocumentSource,
+} from '@hasna/assistants-shared';

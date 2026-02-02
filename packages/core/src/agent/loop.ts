@@ -419,7 +419,6 @@ export class AgentLoop {
     const toolCall: ToolCall = {
       id: generateId(),
       name: 'bash',
-      type: 'tool',
       input: {
         command,
         cwd: this.cwd,

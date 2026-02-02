@@ -1888,6 +1888,7 @@ Keep it concise but comprehensive.`,
       description: 'Schedule a command (ISO time or cron)',
       builtin: true,
       selfHandled: true,
+      content: '',
       handler: async (args, context) => {
         const parts = splitArgs(args);
         if (parts.length < 2) {
@@ -1959,6 +1960,7 @@ Keep it concise but comprehensive.`,
       description: 'List scheduled commands',
       builtin: true,
       selfHandled: true,
+      content: '',
       handler: async (_args, context) => {
         const schedules = await listSchedules(context.cwd);
         if (schedules.length === 0) {
@@ -1989,6 +1991,7 @@ Keep it concise but comprehensive.`,
       description: 'Delete a scheduled command',
       builtin: true,
       selfHandled: true,
+      content: '',
       handler: async (args, context) => {
         const id = args.trim();
         if (!id) {
@@ -2014,6 +2017,7 @@ Keep it concise but comprehensive.`,
       description: 'Pause a scheduled command',
       builtin: true,
       selfHandled: true,
+      content: '',
       handler: async (args, context) => {
         const id = args.trim();
         if (!id) {
@@ -2051,6 +2055,7 @@ Keep it concise but comprehensive.`,
       description: 'Resume a scheduled command',
       builtin: true,
       selfHandled: true,
+      content: '',
       handler: async (args, context) => {
         const id = args.trim();
         if (!id) {
@@ -2356,10 +2361,10 @@ Keep it concise but comprehensive.`,
         let issueTitle = '';
         let labels = '';
 
-        if (feedbackType === 'bug' || feedbackType === 'issue') {
+        if (feedbackType === 'bug') {
           issueTitle = '[Bug] ';
           labels = 'bug';
-        } else if (feedbackType === 'feature' || feedbackType === 'request') {
+        } else if (feedbackType === 'feature') {
           issueTitle = '[Feature Request] ';
           labels = 'enhancement';
         } else {
