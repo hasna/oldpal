@@ -229,7 +229,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
     <Box flexDirection="column" marginTop={1}>
       {/* Top border */}
       <Box>
-        <Text color="gray">{'─'.repeat(terminalWidth)}</Text>
+        <Text color="#666666">{'-'.repeat(terminalWidth)}</Text>
       </Box>
 
       {/* Input area */}
@@ -254,7 +254,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
 
       {/* Bottom border */}
       <Box>
-        <Text color="gray">{'─'.repeat(terminalWidth)}</Text>
+        <Text color="#666666">{'-'.repeat(terminalWidth)}</Text>
       </Box>
 
       {isProcessing && (
