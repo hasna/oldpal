@@ -69,6 +69,9 @@ export { loadConfig, getConfigPath } from './config';
 // Inbox
 export * from './inbox';
 
+// Wallet
+export * from './wallet';
+
 // Scheduler
 export * from './scheduler';
 

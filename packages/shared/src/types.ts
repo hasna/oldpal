@@ -352,6 +352,7 @@ export interface AssistantsConfig {
   energy?: EnergyConfig;
   validation?: ValidationConfig;
   inbox?: InboxConfig;
+  wallet?: WalletConfig;
 }
 
 export interface LLMConfig {
@@ -643,6 +644,37 @@ export interface InboxConfig {
     maxAgeDays?: number;
     /** Maximum cache size in MB (default: 500) */
     maxSizeMb?: number;
+  };
+}
+
+// ============================================
+// Wallet Types
+// ============================================
+
+/**
+ * Configuration for agent wallet (payment card storage)
+ *
+ * SECURITY NOTE: Cards are NEVER stored locally. All card data is stored
+ * exclusively in AWS Secrets Manager and fetched on-demand with rate limiting.
+ */
+export interface WalletConfig {
+  /** Whether wallet is enabled (default: false) */
+  enabled?: boolean;
+
+  /** AWS Secrets Manager configuration */
+  secrets?: {
+    /** AWS region for Secrets Manager */
+    region: string;
+    /** Secret name prefix (default: "assistants/wallet/") */
+    prefix?: string;
+    /** AWS credentials profile for cross-account access */
+    credentialsProfile?: string;
+  };
+
+  /** Security settings */
+  security?: {
+    /** Maximum card reads per hour (default: 10) */
+    maxReadsPerHour?: number;
   };
 }
 

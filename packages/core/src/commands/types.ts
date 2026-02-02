@@ -4,6 +4,7 @@ import type { ErrorStats } from '../errors';
 import type { ContextInfo, ContextProcessResult } from '../context';
 import type { AssistantManager, IdentityManager } from '../identity';
 import type { InboxManager } from '../inbox';
+import type { WalletManager } from '../wallet';
 
 // Re-export TokenUsage from shared
 export type { TokenUsage } from '@hasna/assistants-shared';
@@ -78,6 +79,7 @@ export interface CommandContext {
   getAssistantManager?: () => AssistantManager | null;
   getIdentityManager?: () => IdentityManager | null;
   getInboxManager?: () => InboxManager | null;
+  getWalletManager?: () => WalletManager | null;
   refreshIdentityContext?: () => Promise<void>;
   switchAssistant?: (assistantId: string) => Promise<void>;
   switchIdentity?: (identityId: string) => Promise<void>;

@@ -98,6 +98,13 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       maxSizeMb: 500,
     },
   },
+  wallet: {
+    enabled: false,
+    // No local storage - cards only in AWS Secrets Manager
+    security: {
+      maxReadsPerHour: 10,
+    },
+  },
 };
 
 function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig>): AssistantsConfig {
@@ -187,6 +194,22 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
       cache: {
         ...(base.inbox?.cache || {}),
         ...(override.inbox?.cache || {}),
+      },
+    },
+    wallet: {
+      ...(base.wallet || {}),
+      ...(override.wallet || {}),
+      // Only merge secrets if region is configured
+      secrets: (base.wallet?.secrets?.region || override.wallet?.secrets?.region)
+        ? {
+            region: override.wallet?.secrets?.region ?? base.wallet?.secrets?.region ?? 'us-east-1',
+            prefix: override.wallet?.secrets?.prefix ?? base.wallet?.secrets?.prefix,
+            credentialsProfile: override.wallet?.secrets?.credentialsProfile ?? base.wallet?.secrets?.credentialsProfile,
+          }
+        : undefined,
+      security: {
+        ...(base.wallet?.security || {}),
+        ...(override.wallet?.security || {}),
       },
     },
   };
