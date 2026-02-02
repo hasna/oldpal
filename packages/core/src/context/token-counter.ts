@@ -1,20 +1,40 @@
 import type { Message } from '@hasna/assistants-shared';
-import { encoding_for_model, get_encoding, type Tiktoken } from 'tiktoken';
 
-const DEFAULT_MODEL = 'gpt-4';
 const MESSAGE_OVERHEAD_TOKENS = 4;
+const CHARS_PER_TOKEN = 4; // Rough estimate for fallback
+
+// Lazy load tiktoken to handle missing wasm gracefully
+let tiktokenEncoder: { encode: (text: string) => number[] } | null = null;
+let tiktokenLoadAttempted = false;
+
+function loadTiktoken(): typeof tiktokenEncoder {
+  if (tiktokenLoadAttempted) return tiktokenEncoder;
+  tiktokenLoadAttempted = true;
+
+  try {
+    // Dynamic import to catch wasm loading errors
+    const tiktoken = require('tiktoken');
+    try {
+      tiktokenEncoder = tiktoken.encoding_for_model('gpt-4');
+    } catch {
+      tiktokenEncoder = tiktoken.get_encoding('cl100k_base');
+    }
+  } catch (error) {
+    // Tiktoken wasm not available, will use fallback
+    console.warn('Token counting using estimation (tiktoken unavailable)');
+    tiktokenEncoder = null;
+  }
+
+  return tiktokenEncoder;
+}
 
 export class TokenCounter {
-  private encoder: Tiktoken;
   private cache: Map<string, number> = new Map();
   private maxCacheEntries = 10000;
 
-  constructor(model: string = DEFAULT_MODEL) {
-    try {
-      this.encoder = encoding_for_model(model);
-    } catch {
-      this.encoder = get_encoding('cl100k_base');
-    }
+  constructor(_model?: string) {
+    // Trigger lazy load
+    loadTiktoken();
   }
 
   count(text: string): number {
@@ -22,7 +42,14 @@ export class TokenCounter {
     const cached = this.cache.get(text);
     if (cached !== undefined) return cached;
 
-    const tokens = this.encoder.encode(text).length;
+    let tokens: number;
+    const encoder = loadTiktoken();
+    if (encoder) {
+      tokens = encoder.encode(text).length;
+    } else {
+      // Fallback: estimate ~4 characters per token
+      tokens = Math.ceil(text.length / CHARS_PER_TOKEN);
+    }
 
     if (text.length < 10000) {
       this.cache.set(text, tokens);
