@@ -133,28 +133,30 @@ export function estimateActivityEntryLines(
   renderWidth?: number
 ): number {
   const effectiveWidth = Math.max(1, wrapWidth - 2);
-  if (entry.type === 'text') {
-    const content = entry.content ?? '';
-    if (!content.trim()) return 0;
-    const rendered = renderMarkdown(content, { maxWidth: renderWidth });
-    const lines = stripAnsi(rendered).split('\n');
-    const wrapped = countWrappedLines(lines, effectiveWidth);
-    return Math.max(1, wrapped) + 2; // marginY=1
+  switch (entry.type) {
+    case 'text': {
+      const content = entry.content ?? '';
+      if (!content.trim()) return 0;
+      const rendered = renderMarkdown(content, { maxWidth: renderWidth });
+      const lines = stripAnsi(rendered).split('\n');
+      const wrapped = countWrappedLines(lines, effectiveWidth);
+      return Math.max(1, wrapped) + 2; // marginY=1
+    }
+    case 'tool_call':
+      // Two lines (call + elapsed) + marginY=1
+      return 4;
+    case 'tool_result':
+      return estimateToolResultEntryLines(entry, effectiveWidth);
+    default:
+      return 0;
   }
+}
 
-  if (entry.type === 'tool_call') {
-    // Two lines (call + elapsed) + marginY=1
-    return 4;
-  }
-
-  if (entry.type === 'tool_result') {
-    const content = entry.toolResult ? truncateToolResult(entry.toolResult) : '';
-    const lines = content.split('\n');
-    const wrapped = countWrappedLines(lines, effectiveWidth);
-    return Math.max(1, wrapped) + 2; // marginY=1
-  }
-
-  return 0;
+function estimateToolResultEntryLines(entry: ActivityEntryLike, effectiveWidth: number): number {
+  const content = entry.toolResult ? truncateToolResult(entry.toolResult) : '';
+  const lines = content.split('\n');
+  const wrapped = countWrappedLines(lines, effectiveWidth);
+  return Math.max(1, wrapped) + 2; // marginY=1
 }
 
 export function estimateActivityLogLines(
@@ -212,4 +214,7 @@ export function groupConsecutiveToolMessages(messages: DisplayMessage[]): Messag
 export const __test__ = {
   estimateMessageLines,
   estimateActivityEntryLines,
+  estimateActivityLogLines,
+  estimateToolPanelLines,
+  estimateToolResultLines,
 };
