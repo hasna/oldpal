@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 
 // Available commands with descriptions
@@ -208,6 +208,10 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
   const visibleSkills = getVisibleItems(filteredSkills);
   const visibleCommands = getVisibleItems(filteredCommands);
 
+  // Get terminal width for full-width borders
+  const { stdout } = useStdout();
+  const terminalWidth = stdout?.columns ?? 80;
+
   // Calculate the number of lines for display
   const lines = value.split('\n');
   const lineCount = lines.length;
@@ -216,7 +220,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
     <Box flexDirection="column" marginTop={1}>
       {/* Top border */}
       <Box>
-        <Text dimColor>{'─'.repeat(80)}</Text>
+        <Text dimColor>{'─'.repeat(terminalWidth)}</Text>
       </Box>
 
       {/* Input area */}
@@ -241,7 +245,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
 
       {/* Bottom border */}
       <Box>
-        <Text dimColor>{'─'.repeat(80)}</Text>
+        <Text dimColor>{'─'.repeat(terminalWidth)}</Text>
       </Box>
 
       {isProcessing && (
