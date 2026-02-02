@@ -9,6 +9,7 @@ import { saveFeedbackEntry, type FeedbackType } from '../tools/feedback';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
 import { getSecurityLogger, severityFromString } from '../security/logger';
 import type { InboxManager } from '../inbox';
+import type { WalletManager } from '../wallet';
 import {
   saveSchedule,
   listSchedules,
@@ -148,6 +149,7 @@ export class BuiltinCommands {
     loader.register(this.securityLogCommand());
     loader.register(this.verificationCommand());
     loader.register(this.inboxCommand());
+    loader.register(this.walletCommand());
     loader.register(this.exitCommand());
   }
 
@@ -399,7 +401,77 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
-        context.emit('text', 'Unknown /assistant command.\n');
+        // /assistant prompt <text> - Set the assistant's system prompt addition
+        if (action === 'prompt') {
+          const active = manager.getActive();
+          if (!active) {
+            context.emit('text', 'No active assistant.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          if (!target) {
+            // Show current prompt
+            if (active.settings.systemPromptAddition) {
+              context.emit('text', `Current system prompt for ${active.name}:\n`);
+              context.emit('text', active.settings.systemPromptAddition + '\n');
+            } else {
+              context.emit('text', `No system prompt set for ${active.name}.\n`);
+              context.emit('text', 'Usage: /assistant prompt <text>\n');
+            }
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // Set the prompt
+          await manager.updateAssistant(active.id, {
+            settings: {
+              ...active.settings,
+              systemPromptAddition: target,
+            },
+          });
+          await context.refreshIdentityContext?.();
+          context.emit('text', `System prompt updated for ${active.name}.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /assistant prompt-clear - Clear the assistant's system prompt addition
+        if (action === 'prompt-clear') {
+          const active = manager.getActive();
+          if (!active) {
+            context.emit('text', 'No active assistant.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const { systemPromptAddition, ...restSettings } = active.settings;
+          await manager.updateAssistant(active.id, {
+            settings: restSettings,
+          });
+          await context.refreshIdentityContext?.();
+          context.emit('text', `System prompt cleared for ${active.name}.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /assistant help
+        if (action === 'help') {
+          context.emit('text', '\n## Assistant Commands\n\n');
+          context.emit('text', '/assistant                    Show current assistant\n');
+          context.emit('text', '/assistant list               List all assistants\n');
+          context.emit('text', '/assistant create <name>      Create new assistant\n');
+          context.emit('text', '/assistant switch <name|id>   Switch to assistant\n');
+          context.emit('text', '/assistant delete <name|id>   Delete assistant\n');
+          context.emit('text', '/assistant settings           Show assistant settings\n');
+          context.emit('text', '/assistant prompt [text]      Get/set assistant system prompt\n');
+          context.emit('text', '/assistant prompt-clear       Clear assistant system prompt\n');
+          context.emit('text', '/assistant help               Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', 'Unknown /assistant command. Use /assistant help for options.\n');
         context.emit('done');
         return { handled: true };
       },
@@ -986,6 +1058,171 @@ export class BuiltinCommands {
 
         context.emit('text', `Unknown inbox command: ${subcommand}\n`);
         context.emit('text', 'Use /inbox help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /wallet - Manage agent payment cards
+   */
+  private walletCommand(): Command {
+    return {
+      name: 'wallet',
+      description: 'Manage payment cards in the agent wallet',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const manager = context.getWalletManager?.();
+        if (!manager) {
+          context.emit('text', 'Wallet is not enabled. Configure wallet in config.json.\n');
+          context.emit('text', '\nTo enable:\n');
+          context.emit('text', '```json\n');
+          context.emit('text', '{\n');
+          context.emit('text', '  "wallet": {\n');
+          context.emit('text', '    "enabled": true,\n');
+          context.emit('text', '    "secrets": {\n');
+          context.emit('text', '      "region": "us-east-1"\n');
+          context.emit('text', '    }\n');
+          context.emit('text', '  }\n');
+          context.emit('text', '}\n');
+          context.emit('text', '```\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const parts = splitArgs(args);
+        const subcommand = parts[0]?.toLowerCase() || 'list';
+
+        // /wallet or /wallet list
+        if (subcommand === 'list' || (!parts[0] && !args.trim())) {
+          try {
+            const cards = await manager.list();
+
+            if (cards.length === 0) {
+              context.emit('text', 'No cards stored in wallet.\n');
+              context.emit('text', 'Use /wallet add to add a card.\n');
+            } else {
+              context.emit('text', `\n## Wallet (${cards.length} card${cards.length === 1 ? '' : 's'})\n\n`);
+              for (const card of cards) {
+                context.emit('text', `💳 **${card.name}** (${card.id})\n`);
+                context.emit('text', `   **** **** **** ${card.last4}\n`);
+                context.emit('text', `   Expires: ${card.expiry}\n\n`);
+              }
+              const status = manager.getRateLimitStatus();
+              context.emit('text', `---\nRate limit: ${status.readsUsed}/${status.maxReads} reads this hour\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /wallet add
+        if (subcommand === 'add') {
+          context.emit('text', '\n## Add a Card\n\n');
+          context.emit('text', '⚠️ **PCI DSS Warning**: Storing payment card data requires compliance with PCI DSS.\n');
+          context.emit('text', 'Only store cards you have permission to use and ensure proper security controls.\n\n');
+          context.emit('text', 'To add a card, use the wallet_add tool with:\n');
+          context.emit('text', '- name: Friendly name (e.g., "Business Visa")\n');
+          context.emit('text', '- cardholderName: Name on card\n');
+          context.emit('text', '- cardNumber: Full card number\n');
+          context.emit('text', '- expiryMonth: MM (01-12)\n');
+          context.emit('text', '- expiryYear: YYYY\n');
+          context.emit('text', '- cvv: Security code\n');
+          context.emit('text', '- billingLine1, city, postalCode, country (optional)\n\n');
+          context.emit('text', 'Cards are stored securely in AWS Secrets Manager, never locally.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /wallet remove <id>
+        if (subcommand === 'remove') {
+          const cardId = parts[1];
+          if (!cardId) {
+            context.emit('text', 'Usage: /wallet remove <card-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = await manager.remove(cardId);
+            if (result.success) {
+              context.emit('text', `✓ ${result.message}\n`);
+            } else {
+              context.emit('text', `Error: ${result.message}\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /wallet status
+        if (subcommand === 'status') {
+          const status = manager.getRateLimitStatus();
+          const credCheck = await manager.checkCredentials();
+
+          context.emit('text', '\n## Wallet Status\n\n');
+          context.emit('text', `AWS Credentials: ${credCheck.valid ? '✓ Valid' : '✗ Invalid'}\n`);
+          if (!credCheck.valid && credCheck.error) {
+            context.emit('text', `  Error: ${credCheck.error}\n`);
+          }
+          context.emit('text', `Rate Limit: ${status.readsUsed}/${status.maxReads} reads used\n`);
+          context.emit('text', `Window Reset: ${status.windowResetMinutes} minutes\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /wallet warning
+        if (subcommand === 'warning') {
+          context.emit('text', '\n## ⚠️ PCI DSS Compliance Warning\n\n');
+          context.emit('text', 'Storing payment card data requires compliance with PCI DSS (Payment Card Industry Data Security Standard).\n\n');
+          context.emit('text', '**Before storing cards, ensure:**\n');
+          context.emit('text', '1. You have explicit permission to store the card data\n');
+          context.emit('text', '2. Your AWS account has appropriate security controls\n');
+          context.emit('text', '3. Access is restricted to authorized personnel only\n');
+          context.emit('text', '4. You maintain audit logs of card access\n');
+          context.emit('text', '5. Cards are encrypted at rest (handled by AWS Secrets Manager)\n\n');
+          context.emit('text', '**This wallet system provides:**\n');
+          context.emit('text', '- Encryption at rest via AWS Secrets Manager\n');
+          context.emit('text', '- Rate limiting to prevent abuse\n');
+          context.emit('text', '- Agent isolation (cards scoped by agent ID)\n');
+          context.emit('text', '- 30-day soft delete for recovery\n');
+          context.emit('text', '- No local storage of card data\n\n');
+          context.emit('text', '**You are responsible for:**\n');
+          context.emit('text', '- Proper AWS IAM policies\n');
+          context.emit('text', '- Network security and access controls\n');
+          context.emit('text', '- Compliance with applicable regulations\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /wallet help
+        if (subcommand === 'help') {
+          context.emit('text', '\n## Wallet Commands\n\n');
+          context.emit('text', '/wallet                  List stored cards\n');
+          context.emit('text', '/wallet list             List stored cards\n');
+          context.emit('text', '/wallet add              Show instructions to add a card\n');
+          context.emit('text', '/wallet remove <id>      Remove a card by ID\n');
+          context.emit('text', '/wallet status           Show wallet status and credentials\n');
+          context.emit('text', '/wallet warning          Show PCI compliance warning\n');
+          context.emit('text', '/wallet help             Show this help\n\n');
+          context.emit('text', '## Tools\n\n');
+          context.emit('text', 'wallet_list              List cards (safe summaries)\n');
+          context.emit('text', 'wallet_add               Add a new card\n');
+          context.emit('text', 'wallet_get               Get card details (rate limited)\n');
+          context.emit('text', 'wallet_remove            Remove a card\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown wallet command: ${subcommand}\n`);
+        context.emit('text', 'Use /wallet help for available commands.\n');
         context.emit('done');
         return { handled: true };
       },

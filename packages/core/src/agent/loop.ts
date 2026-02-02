@@ -56,6 +56,7 @@ import {
 import { VoiceManager } from '../voice/manager';
 import { AssistantManager, IdentityManager } from '../identity';
 import { createInboxManager, registerInboxTools, type InboxManager } from '../inbox';
+import { createWalletManager, registerWalletTools, type WalletManager } from '../wallet';
 
 export interface AgentLoopOptions {
   config?: AssistantsConfig;
@@ -116,6 +117,7 @@ export class AgentLoop {
   private assistantManager: AssistantManager | null = null;
   private identityManager: IdentityManager | null = null;
   private inboxManager: InboxManager | null = null;
+  private walletManager: WalletManager | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
   private activeProjectId: string | null = null;
@@ -248,6 +250,14 @@ export class AgentLoop {
         getConfigDir()
       );
       registerInboxTools(this.toolRegistry, () => this.inboxManager);
+    }
+
+    // Initialize wallet if enabled
+    if (this.config?.wallet?.enabled) {
+      const assistant = this.assistantManager?.getActive();
+      const agentId = assistant?.id || this.sessionId;
+      this.walletManager = createWalletManager(agentId, this.config.wallet);
+      registerWalletTools(this.toolRegistry, () => this.walletManager);
     }
 
     // Register connector tools
@@ -849,6 +859,7 @@ export class AgentLoop {
       getAssistantManager: () => this.assistantManager,
       getIdentityManager: () => this.identityManager,
       getInboxManager: () => this.inboxManager,
+      getWalletManager: () => this.walletManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
           this.identityContext = await this.identityManager.buildSystemPromptContext();
@@ -1397,7 +1408,7 @@ export class AgentLoop {
   }
 
   /**
-   * Build system prompt from base + extra + system messages in context
+   * Build system prompt from base + extra + assistant prompt + identity + system messages
    */
   private buildSystemPrompt(messages: Message[]): string | undefined {
     const parts: string[] = [];
@@ -1408,6 +1419,13 @@ export class AgentLoop {
     if (this.extraSystemPrompt) {
       parts.push(this.extraSystemPrompt);
     }
+
+    // Add assistant-specific system prompt addition
+    const assistant = this.assistantManager?.getActive();
+    if (assistant?.settings?.systemPromptAddition) {
+      parts.push(`## Assistant Instructions\n${assistant.settings.systemPromptAddition}`);
+    }
+
     if (this.identityContext) {
       parts.push(`## Your Identity\n${this.identityContext}`);
     }
