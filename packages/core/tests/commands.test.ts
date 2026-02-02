@@ -101,6 +101,15 @@ Content.
       expect(cmd?.tags).toEqual(['git', 'automation']);
     });
 
+    test('should parse frontmatter with CRLF newlines', async () => {
+      writeFileSync(join(commandsDir, 'crlf.md'), `---\r\nname: crlf\r\ndescription: CRLF\r\n---\r\n\r\nContent.`);
+
+      await loader.loadAll();
+      const cmd = loader.getCommand('crlf');
+      expect(cmd?.description).toBe('CRLF');
+      expect(cmd?.content).toBe('Content.');
+    });
+
     test('should parse allowed-tools from frontmatter', async () => {
       writeFileSync(join(commandsDir, 'restricted.md'), `---
 name: restricted
@@ -339,6 +348,32 @@ describe('CommandExecutor', () => {
       const result = await executor.execute('/shell', mockContext);
 
       expect(result.prompt).toContain('hello');
+    });
+
+    test('should preserve indentation for shell command output', async () => {
+      loader.register({
+        name: 'shell-indent',
+        description: 'Shell command with indent',
+        content: 'List:\n  !echo indented',
+        selfHandled: false,
+      });
+
+      const result = await executor.execute('/shell-indent', mockContext);
+      expect(result.prompt).toContain('  ```');
+      expect(result.prompt).toContain('  indented');
+    });
+
+    test('should ignore empty shell command lines', async () => {
+      loader.register({
+        name: 'shell-empty',
+        description: 'Empty shell command',
+        content: '!\nNext',
+        selfHandled: false,
+      });
+
+      const result = await executor.execute('/shell-empty', mockContext);
+      expect(result.prompt).toContain('!');
+      expect(result.prompt).toContain('Next');
     });
 
     test('should not execute shell commands inside code blocks', async () => {

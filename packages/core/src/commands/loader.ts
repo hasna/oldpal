@@ -104,7 +104,7 @@ export class CommandLoader {
    * Parse YAML frontmatter from markdown content
    */
   private parseFrontmatter(content: string): { frontmatter: CommandFrontmatter; body: string } {
-    const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
+    const frontmatterRegex = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/;
     const match = content.match(frontmatterRegex);
 
     if (!match) {
@@ -114,7 +114,7 @@ export class CommandLoader {
     const [, yamlContent, body] = match;
     const frontmatter: CommandFrontmatter = {};
 
-    const lines = yamlContent.split('\n');
+    const lines = yamlContent.split(/\r?\n/);
     let currentListKey: string | null = null;
     for (const rawLine of lines) {
       const line = rawLine.trimEnd();

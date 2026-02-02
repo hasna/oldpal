@@ -119,8 +119,14 @@ export class CommandExecutor {
       if (!inCodeBlock && trimmed.startsWith('!')) {
         // Execute shell command
         const command = trimmed.slice(1).trim();
+        if (!command) {
+          processedLines.push(line);
+          continue;
+        }
         const output = await this.executeShell(command, cwd);
-        processedLines.push(`\`\`\`\n${output}\n\`\`\``);
+        const indent = line.match(/^\s*/)?.[0] ?? '';
+        const fenced = [`${indent}\`\`\``, ...output.split('\n').map((o) => `${indent}${o}`), `${indent}\`\`\``];
+        processedLines.push(fenced.join('\n'));
       } else {
         processedLines.push(line);
       }

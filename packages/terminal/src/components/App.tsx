@@ -249,6 +249,7 @@ export function App({ cwd, version }: AppProps) {
 
   // Available skills for autocomplete
   const [skills, setSkills] = useState<{ name: string; description: string; argumentHint?: string }[]>([]);
+  const [commands, setCommands] = useState<{ name: string; description: string }[]>([]);
 
   // Use ref to track response for the done callback
   const responseRef = useRef('');
@@ -285,6 +286,26 @@ export function App({ cwd, version }: AppProps) {
     }
 
     return parts.join('\n').trim();
+  }, []);
+
+  const loadSessionMetadata = useCallback(async (session: SessionInfo) => {
+    try {
+      const [loadedSkills, loadedCommands] = await Promise.all([
+        session.client.getSkills(),
+        session.client.getCommands(),
+      ]);
+      setSkills(loadedSkills.map((s) => ({
+        name: s.name,
+        description: s.description || '',
+        argumentHint: s.argumentHint,
+      })));
+      setCommands(loadedCommands.map((cmd) => ({
+        name: cmd.name.startsWith('/') ? cmd.name : `/${cmd.name}`,
+        description: cmd.description || '',
+      })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }, []);
 
   const finalizeResponse = useCallback((status?: 'stopped' | 'interrupted' | 'error') => {
@@ -580,13 +601,7 @@ export function App({ cwd, version }: AppProps) {
         const session = await registry.createSession(cwd);
         setActiveSessionId(session.id);
 
-        // Load available skills for autocomplete
-        const loadedSkills = await session.client.getSkills();
-        setSkills(loadedSkills.map(s => ({
-          name: s.name,
-          description: s.description || '',
-          argumentHint: s.argumentHint,
-        })));
+        await loadSessionMetadata(session);
         setEnergyState(session.client.getEnergyState() ?? undefined);
         setVoiceState(session.client.getVoiceState() ?? undefined);
         setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
@@ -604,7 +619,7 @@ export function App({ cwd, version }: AppProps) {
     return () => {
       registry.closeAll();
     };
-  }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState]);
+  }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState, loadSessionMetadata]);
 
   // Process queued messages
   const processQueue = useCallback(async () => {
@@ -821,6 +836,7 @@ export function App({ cwd, version }: AppProps) {
       setEnergyState(session.client.getEnergyState() ?? undefined);
       setVoiceState(session.client.getVoiceState() ?? undefined);
       setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
+      await loadSessionMetadata(session);
     }
 
     // Now switch session in registry (may replay buffered chunks to the reset state)
@@ -851,6 +867,7 @@ export function App({ cwd, version }: AppProps) {
       setEnergyState(newSession.client.getEnergyState() ?? undefined);
       setVoiceState(newSession.client.getVoiceState() ?? undefined);
       setIdentityInfo(newSession.client.getIdentityInfo() ?? undefined);
+      await loadSessionMetadata(newSession);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
     }
@@ -1209,6 +1226,7 @@ export function App({ cwd, version }: AppProps) {
         onSubmit={handleSubmit}
         isProcessing={isProcessing}
         queueLength={activeQueue.length + inlineCount}
+        commands={commands}
         skills={skills}
       />
 

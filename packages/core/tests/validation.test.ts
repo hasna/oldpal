@@ -59,6 +59,14 @@ describe('validatePath', () => {
     expect(result.valid).toBe(true);
     expect(result.resolved).toBe(home);
   });
+
+  test('should not block paths that only share a prefix', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-path-block-'));
+    const blocked = join(base, 'secret');
+    const safe = join(base, 'secret-file');
+    const result = await validatePath(safe, { allowedPaths: [base], blockedPaths: [blocked] });
+    expect(result.valid).toBe(true);
+  });
 });
 
 describe('limits', () => {

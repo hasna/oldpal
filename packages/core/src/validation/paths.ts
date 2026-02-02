@@ -1,4 +1,4 @@
-import { resolve, normalize } from 'path';
+import { resolve, normalize, relative, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { lstat, realpath } from 'fs/promises';
 
@@ -45,7 +45,7 @@ export async function validatePath(
     }
   }
 
-  if (blockedPaths && blockedPaths.some((blocked) => resolved.startsWith(blocked))) {
+  if (blockedPaths && blockedPaths.some((blocked) => isWithinPath(resolved, blocked))) {
     return { valid: false, resolved, error: 'Path is in blocked list' };
   }
 
@@ -67,4 +67,13 @@ function expandHome(value: string): string {
 function isWithinAllowed(path: string, allowed?: string[]): boolean {
   if (!allowed || allowed.length === 0) return true;
   return allowed.some((allowedPath) => path === allowedPath || path.startsWith(`${allowedPath}/`));
+}
+
+function isWithinPath(target: string, base: string): boolean {
+  if (target === base) return true;
+  const rel = relative(base, target);
+  if (!rel || rel === '') return true;
+  if (rel.startsWith('..')) return false;
+  if (isAbsolute(rel)) return false;
+  return true;
 }
