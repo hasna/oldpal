@@ -40,7 +40,7 @@ function formatSessionTime(timestamp: number): string {
  */
 function formatPath(cwd: string): string {
   const home = process.env.HOME || '';
-  if (cwd.startsWith(home)) {
+  if (home && cwd.startsWith(home)) {
     return '~' + cwd.slice(home.length);
   }
   return cwd;

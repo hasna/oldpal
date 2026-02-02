@@ -10,7 +10,7 @@ interface WelcomeBannerProps {
 export function WelcomeBanner({ version, model, directory }: WelcomeBannerProps) {
   // Shorten directory for display
   const homeDir = process.env.HOME || '';
-  const displayDir = directory.startsWith(homeDir)
+  const displayDir = homeDir && directory.startsWith(homeDir)
     ? '~' + directory.slice(homeDir.length)
     : directory;
 
