@@ -4,8 +4,8 @@ import { render } from 'ink';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 
-const VERSION = '0.6.37';
-process.env.ASSISTANTS_VERSION ??= VERSION;
+// Version is embedded at build time via define in build.ts
+const VERSION = process.env.ASSISTANTS_VERSION || 'dev';
 
 // Parse CLI arguments
 function parseArgs(argv: string[]) {

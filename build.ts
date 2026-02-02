@@ -8,6 +8,10 @@ import { $ } from 'bun';
 
 const outdir = './dist';
 
+// Read version from package.json
+const packageJson = await Bun.file('./package.json').json();
+const version = packageJson.version || 'unknown';
+
 console.log('Building assistants...');
 
 // Clean dist
@@ -22,6 +26,10 @@ const result = await Bun.build({
   format: 'esm',
   minify: false, // Keep readable for debugging
   sourcemap: 'external',
+  // Embed version at build time
+  define: {
+    'process.env.ASSISTANTS_VERSION': JSON.stringify(version),
+  },
   // Stub out react-devtools-core to avoid window reference errors
   plugins: [
     {
