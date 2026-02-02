@@ -20,6 +20,7 @@ export type { Command, CommandContext, CommandResult, TokenUsage } from './comma
 // Skills
 export { SkillLoader } from './skills/loader';
 export { SkillExecutor } from './skills/executor';
+export { createSkill } from './skills/create';
 
 // Hooks
 export { HookLoader } from './hooks/loader';
@@ -74,6 +75,9 @@ export * from './wallet';
 
 // Scheduler
 export * from './scheduler';
+
+// Jobs
+export * from './jobs';
 
 // Client
 export { EmbeddedClient } from './client';

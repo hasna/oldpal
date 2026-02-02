@@ -18,6 +18,8 @@ import { WebTools } from '../tools/web';
 import { FeedbackTool } from '../tools/feedback';
 import { SchedulerTool } from '../tools/scheduler';
 import { ImageTools } from '../tools/image';
+import { SkillTool } from '../tools/skills';
+import { createAskUserTool, type AskUserHandler } from '../tools/ask-user';
 import { runHookAgent } from './subagent';
 import { SkillLoader } from '../skills/loader';
 import { SkillExecutor } from '../skills/executor';
@@ -57,6 +59,7 @@ import { VoiceManager } from '../voice/manager';
 import { AssistantManager, IdentityManager } from '../identity';
 import { createInboxManager, registerInboxTools, type InboxManager } from '../inbox';
 import { createWalletManager, registerWalletTools, type WalletManager } from '../wallet';
+import { JobManager, createJobTools } from '../jobs';
 
 export interface AgentLoopOptions {
   config?: AssistantsConfig;
@@ -118,10 +121,12 @@ export class AgentLoop {
   private identityManager: IdentityManager | null = null;
   private inboxManager: InboxManager | null = null;
   private walletManager: WalletManager | null = null;
+  private jobManager: JobManager | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
   private activeProjectId: string | null = null;
   private assistantId: string | null = null;
+  private askUserHandler: AskUserHandler | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -235,6 +240,9 @@ export class AgentLoop {
     FilesystemTools.registerAll(this.toolRegistry, this.sessionId);
     WebTools.registerAll(this.toolRegistry);
     ImageTools.registerAll(this.toolRegistry);
+    this.toolRegistry.register(SkillTool.tool, SkillTool.executor);
+    const askUserTool = createAskUserTool(() => this.askUserHandler);
+    this.toolRegistry.register(askUserTool.tool, askUserTool.executor);
     this.toolRegistry.register(FeedbackTool.tool, FeedbackTool.executor);
     this.toolRegistry.register(SchedulerTool.tool, SchedulerTool.executor);
 
@@ -258,6 +266,31 @@ export class AgentLoop {
       const agentId = assistant?.id || this.sessionId;
       this.walletManager = createWalletManager(agentId, this.config.wallet);
       registerWalletTools(this.toolRegistry, () => this.walletManager);
+    }
+
+    // Initialize jobs system if enabled
+    if (this.config?.jobs?.enabled !== false) {
+      this.jobManager = new JobManager(this.config?.jobs || {}, this.sessionId);
+
+      // Set up job completion notifications
+      this.jobManager.onJobComplete((event) => {
+        // Notify via stream chunk
+        const statusEmoji = event.status === 'completed' ? '✓' : event.status === 'failed' ? '✗' : '⚠';
+        const message = `\n[Job ${event.status}] ${event.connector} (${event.jobId}): ${event.summary}\n`;
+        this.emit({ type: 'text', content: message });
+      });
+
+      // Register job tools
+      const jobTools = createJobTools(() => this.jobManager);
+      for (const { tool, executor } of jobTools) {
+        this.toolRegistry.register(tool, executor);
+      }
+
+      // Connect job manager to connector bridge
+      this.connectorBridge.setJobManagerGetter(() => this.jobManager);
+
+      // Clean up old jobs on startup
+      this.jobManager.cleanup().catch(() => {});
     }
 
     // Register connector tools
@@ -865,6 +898,9 @@ export class AgentLoop {
           this.identityContext = await this.identityManager.buildSystemPromptContext();
         }
       },
+      refreshSkills: async () => {
+        await this.skillLoader.loadAll(this.cwd);
+      },
       switchAssistant: async (assistantId: string) => {
         await this.switchAssistant(assistantId);
       },
@@ -1163,6 +1199,10 @@ export class AgentLoop {
       this.context.addSystemMessage(`${tag}\n${content.trim()}`);
     }
     this.contextManager?.refreshState(this.context.getMessages());
+  }
+
+  setAskUserHandler(handler: AskUserHandler | null): void {
+    this.askUserHandler = handler;
   }
 
   /**
@@ -1583,12 +1623,17 @@ export class AgentLoop {
   private filterAllowedTools(tools: Tool[]): Tool[] {
     const allowed = this.getEffectiveAllowedTools();
     if (!allowed) return tools;
-    return tools.filter((tool) => allowed.has(tool.name.toLowerCase()));
+    return tools.filter((tool) => {
+      const name = tool.name.toLowerCase();
+      if (name === 'ask_user') return true;
+      return allowed.has(name);
+    });
   }
 
   private isToolAllowed(name: string): boolean {
     const allowed = this.getEffectiveAllowedTools();
     if (!allowed) return true;
+    if (name.toLowerCase() === 'ask_user') return true;
     return allowed.has(name.toLowerCase());
   }
 }

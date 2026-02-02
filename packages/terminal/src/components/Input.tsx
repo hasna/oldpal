@@ -13,6 +13,7 @@ const COMMANDS = [
   { name: '/cost', description: 'show estimated API cost' },
   { name: '/model', description: 'show model information' },
   { name: '/skills', description: 'list available skills' },
+  { name: '/skill', description: 'create or manage skills' },
   { name: '/config', description: 'show configuration' },
   { name: '/projects', description: 'manage projects in this folder' },
   { name: '/plans', description: 'manage project plans' },
@@ -42,9 +43,19 @@ interface InputProps {
   queueLength?: number;
   commands?: { name: string; description: string }[];
   skills?: SkillInfo[];
+  isAskingUser?: boolean;
+  askPlaceholder?: string;
 }
 
-export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skills = [] }: InputProps) {
+export function Input({
+  onSubmit,
+  isProcessing,
+  queueLength = 0,
+  commands,
+  skills = [],
+  isAskingUser = false,
+  askPlaceholder,
+}: InputProps) {
   const [value, setValue] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -63,6 +74,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
 
   // Determine autocomplete mode
   const autocompleteMode = useMemo(() => {
+    if (isAskingUser) return null;
     if (value.startsWith('$') && !value.includes(' ')) {
       return 'skill';
     }
@@ -100,6 +112,9 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
 
   // Handle keyboard input for autocomplete
   useInput((input, key) => {
+    if (isAskingUser) {
+      return;
+    }
     // Tab: autocomplete selected item
     if (key.tab) {
       if (autocompleteItems.length > 0) {
@@ -183,7 +198,9 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
   // Show different prompts based on state
   let placeholder = 'Type a message...';
 
-  if (isProcessing) {
+  if (isAskingUser) {
+    placeholder = askPlaceholder || 'Answer the question...';
+  } else if (isProcessing) {
     placeholder = queueLength > 0
       ? 'Type to queue (Tab) or interrupt (Shift+Enter)...'
       : 'Type to interrupt (Shift+Enter)...';
@@ -257,7 +274,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
         <Text color="#666666">{'-'.repeat(terminalWidth)}</Text>
       </Box>
 
-      {isProcessing && (
+      {isProcessing && !isAskingUser && (
         <Box marginLeft={2}>
           <Text dimColor>[esc] stop</Text>
         </Box>

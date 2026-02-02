@@ -81,6 +81,7 @@ export interface CommandContext {
   getInboxManager?: () => InboxManager | null;
   getWalletManager?: () => WalletManager | null;
   refreshIdentityContext?: () => Promise<void>;
+  refreshSkills?: () => Promise<void>;
   switchAssistant?: (assistantId: string) => Promise<void>;
   switchIdentity?: (identityId: string) => Promise<void>;
   getActiveProjectId?: () => string | null;

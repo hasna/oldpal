@@ -1,6 +1,7 @@
 import type { AssistantClient, StreamChunk, Tool, Skill, Message, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
 import { generateId } from '@hasna/assistants-shared';
 import { AgentLoop } from './agent/loop';
+import type { AskUserHandler } from './tools/ask-user';
 import { Logger, SessionStorage, initAssistantsDir } from './logger';
 import type { Command } from './commands';
 
@@ -206,6 +207,15 @@ export class EmbeddedClient implements AssistantClient {
    */
   onError(callback: (error: Error) => void): void {
     this.errorCallbacks.push(callback);
+  }
+
+  /**
+   * Register an ask-user handler for interactive prompts
+   */
+  setAskUserHandler(handler: AskUserHandler | null): void {
+    if (typeof (this.agent as any).setAskUserHandler === 'function') {
+      (this.agent as any).setAskUserHandler(handler);
+    }
   }
 
   /**

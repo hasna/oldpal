@@ -469,6 +469,8 @@ function getToolDisplayName(toolCall: ToolCall): string {
       return 'schedule';
     case 'submit_feedback':
       return 'feedback';
+    case 'ask_user':
+      return 'ask';
     case 'notion':
     case 'gmail':
     case 'googledrive':
@@ -505,6 +507,14 @@ function formatToolCall(toolCall: ToolCall): string {
       return formatScheduleCall(input);
     case 'submit_feedback':
       return formatFeedbackCall(input);
+    case 'ask_user': {
+      const title = String(input.title || '');
+      const question = Array.isArray(input.questions) && input.questions[0]?.question
+        ? String(input.questions[0].question)
+        : '';
+      const label = title || question || 'asking user';
+      return `Asking: ${truncate(label, 60)}`;
+    }
     case 'notion':
       return `Notion: ${truncate(String(input.command || input.action || ''), 60)}`;
     case 'gmail':

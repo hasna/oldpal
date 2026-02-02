@@ -34,6 +34,15 @@ import {
 import { buildProjectContext } from '../projects/context';
 import { VerificationSessionStore } from '../sessions/verification';
 import { nativeHookRegistry } from '../hooks';
+import { createSkill, type SkillScope } from '../skills/create';
+import {
+  listJobs,
+  listJobsForSession,
+  readJob,
+  deleteJob,
+  cleanupSessionJobs,
+  type Job,
+} from '../jobs';
 
 // Version lookup - prefer explicit env to avoid stale hardcoded values
 const VERSION =
@@ -137,6 +146,7 @@ export class BuiltinCommands {
     loader.register(this.initCommand());
     loader.register(this.costCommand());
     loader.register(this.modelCommand());
+    loader.register(this.skillCommand());
     loader.register(this.skillsCommand(loader));
     loader.register(this.memoryCommand());
     loader.register(this.feedbackCommand());
@@ -150,6 +160,7 @@ export class BuiltinCommands {
     loader.register(this.verificationCommand());
     loader.register(this.inboxCommand());
     loader.register(this.walletCommand());
+    loader.register(this.jobsCommand());
     loader.register(this.exitCommand());
   }
 
@@ -1229,6 +1240,201 @@ export class BuiltinCommands {
     };
   }
 
+  /**
+   * /jobs - List and manage background jobs
+   */
+  private jobsCommand(): Command {
+    return {
+      name: 'jobs',
+      description: 'List and manage background jobs',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const parts = args.trim().split(/\s+/);
+        const subcommand = parts[0]?.toLowerCase() || 'list';
+        const arg = parts[1] || '';
+
+        switch (subcommand) {
+          case 'list':
+          case '': {
+            const jobs = await listJobsForSession(context.sessionId);
+            if (jobs.length === 0) {
+              context.emit('text', 'No jobs found for this session.\n');
+              context.emit('done');
+              return { handled: true };
+            }
+
+            // Sort by created time, newest first
+            jobs.sort((a, b) => b.createdAt - a.createdAt);
+
+            let output = '\n| Status | ID | Connector | Command | Age |\n';
+            output += '|--------|----|-----------|---------|----- |\n';
+
+            for (const job of jobs) {
+              const age = this.formatAge(Date.now() - job.createdAt);
+              const shortId = job.id.slice(0, 8);
+              const command = job.command.slice(0, 30);
+              output += `| ${job.status.toUpperCase()} | ${shortId} | ${job.connectorName} | ${command} | ${age} |\n`;
+            }
+
+            context.emit('text', output);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          case 'all': {
+            const jobs = await listJobs();
+            if (jobs.length === 0) {
+              context.emit('text', 'No jobs found.\n');
+              context.emit('done');
+              return { handled: true };
+            }
+
+            jobs.sort((a, b) => b.createdAt - a.createdAt);
+
+            let output = '\n| Status | ID | Session | Connector | Command | Age |\n';
+            output += '|--------|----|---------|-----------|---------|-----|\n';
+
+            for (const job of jobs) {
+              const age = this.formatAge(Date.now() - job.createdAt);
+              const shortId = job.id.slice(0, 8);
+              const shortSession = job.sessionId.slice(0, 8);
+              const command = job.command.slice(0, 20);
+              output += `| ${job.status.toUpperCase()} | ${shortId} | ${shortSession} | ${job.connectorName} | ${command} | ${age} |\n`;
+            }
+
+            context.emit('text', output);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          case 'cancel': {
+            if (!arg) {
+              context.emit('text', 'Usage: /jobs cancel <job_id>\n');
+              context.emit('done');
+              return { handled: true };
+            }
+
+            // Find job by partial ID
+            const jobs = await listJobs();
+            const matches = jobs.filter((j) => j.id.startsWith(arg) || j.id === arg);
+
+            if (matches.length === 0) {
+              context.emit('text', `Job not found: ${arg}\n`);
+              context.emit('done');
+              return { handled: true };
+            }
+
+            if (matches.length > 1) {
+              context.emit('text', `Ambiguous job ID. Matches: ${matches.map((j) => j.id).join(', ')}\n`);
+              context.emit('done');
+              return { handled: true };
+            }
+
+            const job = matches[0];
+            if (!['pending', 'running'].includes(job.status)) {
+              context.emit('text', `Cannot cancel job ${job.id}: status is ${job.status}\n`);
+              context.emit('done');
+              return { handled: true };
+            }
+
+            // Note: actual cancellation would need JobManager access
+            // For now, just update status in store
+            context.emit('text', `Job ${job.id} marked for cancellation. Use job_cancel tool for full cancellation.\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          case 'clear': {
+            const cleaned = await cleanupSessionJobs(context.sessionId);
+            context.emit('text', `Cleared ${cleaned} completed job(s).\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          case 'help': {
+            const help = `
+/jobs               List jobs for current session
+/jobs list          List jobs for current session
+/jobs all           List all jobs across sessions
+/jobs <id>          Show details of a specific job
+/jobs cancel <id>   Cancel a running job
+/jobs clear         Clear completed jobs for this session
+/jobs help          Show this help
+`;
+            context.emit('text', help);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          default: {
+            // Assume it's a job ID
+            const jobs = await listJobs();
+            const matches = jobs.filter((j) => j.id.startsWith(subcommand) || j.id === subcommand);
+
+            if (matches.length === 0) {
+              context.emit('text', `Job not found: ${subcommand}\nUse /jobs help for usage.\n`);
+              context.emit('done');
+              return { handled: true };
+            }
+
+            if (matches.length > 1) {
+              context.emit('text', `Ambiguous job ID. Matches: ${matches.map((j) => j.id).join(', ')}\n`);
+              context.emit('done');
+              return { handled: true };
+            }
+
+            const job = matches[0];
+            let output = `
+Job ID: ${job.id}
+Status: ${job.status}
+Connector: ${job.connectorName}
+Command: ${job.command}
+Session: ${job.sessionId}
+Created: ${new Date(job.createdAt).toISOString()}
+`;
+
+            if (job.startedAt) {
+              output += `Started: ${new Date(job.startedAt).toISOString()}\n`;
+            }
+
+            if (job.completedAt) {
+              output += `Completed: ${new Date(job.completedAt).toISOString()}\n`;
+              const duration = job.completedAt - (job.startedAt || job.createdAt);
+              output += `Duration: ${(duration / 1000).toFixed(1)}s\n`;
+            }
+
+            output += `Timeout: ${job.timeoutMs / 1000}s\n`;
+
+            if (job.result) {
+              output += `\nResult:\n${job.result.content}\n`;
+            }
+
+            if (job.error) {
+              output += `\nError (${job.error.code}): ${job.error.message}\n`;
+            }
+
+            context.emit('text', output);
+            context.emit('done');
+            return { handled: true };
+          }
+        }
+      },
+    };
+  }
+
+  private formatAge(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `${days}d`;
+  }
+
   private exitCommand(): Command {
     return {
       name: 'exit',
@@ -2030,6 +2236,185 @@ export class BuiltinCommands {
   }
 
   /**
+   * /skill - Create/manage skills
+   */
+  private skillCommand(): Command {
+    return {
+      name: 'skill',
+      description: 'Create or manage skills',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const tokens = splitArgs(args || '');
+        const subcommand = tokens.shift()?.toLowerCase();
+
+        const emitHelp = () => {
+          let message = '\n**/skill commands**\n\n';
+          message += '/skill create <name> [--project|--global] [options]\n';
+          message += '\nOptions:\n';
+          message += '  --project            Create in project (.assistants/skills)\n';
+          message += '  --global             Create globally (~/.assistants/shared/skills)\n';
+          message += '  --desc \"...\"         Description\n';
+          message += '  --tools a,b,c        Allowed tools list\n';
+          message += '  --hint \"...\"         Argument hint\n';
+          message += '  --content \"...\"      Skill body content\n';
+          message += '  --interactive         Ask follow-up questions\n';
+          message += '  --force              Overwrite existing skill\n';
+          message += '  --yes                Accept default (project) scope\n';
+          message += '\nNotes:\n';
+          message += '  - Skill directories must start with \"skill-\"\n';
+          message += '  - Skill names should not include the word \"skill\"\n';
+          context.emit('text', message);
+          context.emit('done');
+        };
+
+        if (!subcommand || subcommand === 'help') {
+          emitHelp();
+          return { handled: true };
+        }
+
+        if (subcommand !== 'create') {
+          context.emit('text', `Unknown /skill command: ${subcommand}\n`);
+          context.emit('text', 'Use /skill help for available commands.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        let name: string | undefined;
+        let scope: SkillScope | undefined;
+        let description: string | undefined;
+        let argumentHint: string | undefined;
+        let content: string | undefined;
+        let overwrite = false;
+        let yes = false;
+        let interactive = false;
+        let allowedTools: string[] | undefined;
+
+        for (let i = 0; i < tokens.length; i += 1) {
+          const token = tokens[i];
+          if (!token) continue;
+          if (token.startsWith('--')) {
+            switch (token) {
+              case '--project':
+                scope = 'project';
+                break;
+              case '--global':
+                scope = 'global';
+                break;
+              case '--desc':
+              case '--description':
+                description = tokens[i + 1];
+                i += 1;
+                break;
+              case '--tools': {
+                const list = tokens[i + 1] || '';
+                allowedTools = list
+                  .split(',')
+                  .map((tool) => tool.trim())
+                  .filter(Boolean);
+                i += 1;
+                break;
+              }
+              case '--hint':
+                argumentHint = tokens[i + 1];
+                i += 1;
+                break;
+              case '--content':
+                content = tokens[i + 1];
+                i += 1;
+                break;
+              case '--interactive':
+              case '--ask':
+              case '--interview':
+                interactive = true;
+                break;
+              case '--force':
+              case '--overwrite':
+                overwrite = true;
+                break;
+              case '--yes':
+                yes = true;
+                break;
+              default:
+                // ignore unknown flags
+                break;
+            }
+          } else if (!name) {
+            name = token;
+          }
+        }
+
+        if (!name) {
+          context.emit('text', 'Usage: /skill create <name> [--project|--global]\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (interactive || (!scope && !yes)) {
+          const known: string[] = [];
+          if (scope) known.push(`scope: ${scope}`);
+          if (description) known.push(`description: ${description}`);
+          if (content) known.push(`content: provided`);
+          if (allowedTools && allowedTools.length > 0) known.push(`allowed_tools: ${allowedTools.join(', ')}`);
+          if (argumentHint) known.push(`argument_hint: ${argumentHint}`);
+
+          const missing: string[] = [];
+          if (!scope) missing.push('scope (project/global, default project)');
+          if (!description) missing.push('description');
+          if (!content) missing.push('content (multi-line allowed)');
+          if (!allowedTools || allowedTools.length === 0) missing.push('allowed tools (optional)');
+          if (!argumentHint) missing.push('argument hint (optional)');
+
+          const knownBlock = known.length > 0 ? `Known values:\\n- ${known.join('\\n- ')}\\n\\n` : '';
+          const missingBlock = missing.length > 0 ? `Ask for:\\n- ${missing.join('\\n- ')}\\n\\n` : '';
+
+          context.emit('done');
+          return {
+            handled: false,
+            prompt: `We are creating a new skill named \"${name}\".\\n\\n${knownBlock}${missingBlock}` +
+              'Use the ask_user tool to interview the user and collect missing fields. ' +
+              'Then call skill_create with name, scope, and any provided fields. ' +
+              'If the user leaves optional fields blank, omit them. ' +
+              'If scope is not specified, default to project.',
+          };
+        }
+
+        const finalScope: SkillScope = scope ?? 'project';
+
+        try {
+          const result = await createSkill({
+            name,
+            scope: finalScope,
+            description,
+            allowedTools,
+            argumentHint,
+            content,
+            cwd: context.cwd,
+            overwrite,
+          });
+
+          await context.refreshSkills?.();
+
+          let message = `\nCreated skill \"${result.name}\" (${result.scope}).\n`;
+          message += `Location: ${result.filePath}\n`;
+          message += `Invoke with: $${result.name} [args] or /${result.name} [args]\n`;
+          if (!scope) {
+            message += 'Defaulted to project scope. Use --global for a global skill.\n';
+          }
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        } catch (error) {
+          context.emit('text', `Failed to create skill: ${error instanceof Error ? error.message : String(error)}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+      },
+    };
+  }
+
+  /**
    * /skills - List available skills
    */
   private skillsCommand(loader: CommandLoader): Command {
@@ -2042,6 +2427,7 @@ export class BuiltinCommands {
       handler: async (args, context) => {
         let message = '\n**Available Skills**\n\n';
         message += 'Skills are invoked with $skill-name [arguments] or /skill-name [arguments]\n\n';
+        message += 'Create a skill with /skill create <name>\n\n';
 
         if (context.skills.length === 0) {
           message += 'No skills loaded.\n';

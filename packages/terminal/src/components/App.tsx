@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { ScrollView, type ScrollViewRef } from 'ink-scroll-view';
 import { SessionRegistry, type SessionInfo } from '@hasna/assistants-core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, AskUserRequest, AskUserResponse } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
@@ -14,6 +14,7 @@ import { WelcomeBanner } from './WelcomeBanner';
 import { SessionSelector } from './SessionSelector';
 import { ErrorBanner } from './ErrorBanner';
 import { QueueIndicator } from './QueueIndicator';
+import { AskUserPanel } from './AskUserPanel';
 import type { QueuedMessage } from './appTypes';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
@@ -57,6 +58,15 @@ interface SessionUIState {
   error: string | null;
 }
 
+interface AskUserState {
+  sessionId: string;
+  request: AskUserRequest;
+  index: number;
+  answers: Record<string, string>;
+  resolve: (response: AskUserResponse) => void;
+  reject: (error: Error) => void;
+}
+
 const MESSAGE_CHUNK_LINES = 12;
 const MESSAGE_WRAP_CHARS = 120;
 
@@ -92,6 +102,7 @@ export function App({ cwd, version }: AppProps) {
   const [voiceState, setVoiceState] = useState<VoiceState | undefined>();
   const [identityInfo, setIdentityInfo] = useState<ActiveIdentityInfo | undefined>();
   const [verboseTools, setVerboseTools] = useState(false);
+  const [askUserState, setAskUserState] = useState<AskUserState | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -111,6 +122,7 @@ export function App({ cwd, version }: AppProps) {
   const isProcessingRef = useRef(isProcessing);
   const processingStartTimeRef = useRef<number | undefined>(processingStartTime);
   const pendingSendsRef = useRef<Array<{ id: string; sessionId: string; mode: 'inline' | 'queued' }>>([]);
+  const askUserStateRef = useRef<AskUserState | null>(null);
 
   const updateScrollMetrics = useCallback((offset?: number) => {
     const currentOffset =
@@ -118,6 +130,54 @@ export function App({ cwd, version }: AppProps) {
     const bottomOffset = scrollRef.current?.getBottomOffset() ?? 0;
     setScrollOffset(currentOffset);
     setAutoScroll(currentOffset >= Math.max(0, bottomOffset - 1));
+  }, []);
+
+  const beginAskUser = useCallback((sessionId: string, request: AskUserRequest) => {
+    return new Promise<AskUserResponse>((resolve, reject) => {
+      if (askUserStateRef.current) {
+        reject(new Error('Another interview is already in progress.'));
+        return;
+      }
+      const state: AskUserState = {
+        sessionId,
+        request,
+        index: 0,
+        answers: {},
+        resolve,
+        reject,
+      };
+      askUserStateRef.current = state;
+      setAskUserState(state);
+    });
+  }, []);
+
+  const cancelAskUser = useCallback((reason: string) => {
+    const current = askUserStateRef.current;
+    if (!current) return;
+    askUserStateRef.current = null;
+    setAskUserState(null);
+    current.reject(new Error(reason));
+  }, []);
+
+  const submitAskAnswer = useCallback((answer: string) => {
+    setAskUserState((prev) => {
+      if (!prev) return prev;
+      const question = prev.request.questions[prev.index];
+      const answers = { ...prev.answers, [question.id]: answer };
+      const nextIndex = prev.index + 1;
+      if (nextIndex >= prev.request.questions.length) {
+        askUserStateRef.current = null;
+        prev.resolve({ answers });
+        return null;
+      }
+      const nextState: AskUserState = {
+        ...prev,
+        index: nextIndex,
+        answers,
+      };
+      askUserStateRef.current = nextState;
+      return nextState;
+    });
   }, []);
 
   useEffect(() => {
@@ -473,6 +533,7 @@ export function App({ cwd, version }: AppProps) {
         // Create first session
         const session = await registry.createSession(cwd);
         setActiveSessionId(session.id);
+        session.client.setAskUserHandler((request) => beginAskUser(session.id, request));
 
         await loadSessionMetadata(session);
         setEnergyState(session.client.getEnergyState() ?? undefined);
@@ -492,7 +553,7 @@ export function App({ cwd, version }: AppProps) {
     return () => {
       registry.closeAll();
     };
-  }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState, loadSessionMetadata]);
+  }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState, loadSessionMetadata, beginAskUser]);
 
   // Process queued messages
   const processQueue = useCallback(async () => {
@@ -570,6 +631,8 @@ export function App({ cwd, version }: AppProps) {
 
   const MAX_QUEUED_PREVIEW = 3;
   const inlineCount = activeInline.length;
+  const activeAskQuestion = askUserState?.request.questions[askUserState.index];
+  const askPlaceholder = activeAskQuestion?.placeholder || activeAskQuestion?.question || 'Answer the question...';
 
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
@@ -652,6 +715,7 @@ export function App({ cwd, version }: AppProps) {
 
       // Create new session
       const newSession = await registry.createSession(cwd);
+      newSession.client.setAskUserHandler((request) => beginAskUser(newSession.id, request));
 
       // Now switch to new session
       await registry.switchSession(newSession.id);
@@ -668,7 +732,7 @@ export function App({ cwd, version }: AppProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
     }
-  }, [cwd, registry, saveCurrentSessionState, loadSessionState]);
+  }, [cwd, registry, saveCurrentSessionState, loadSessionState, beginAskUser]);
 
   const getScrollStep = useCallback(() => {
     const viewport = scrollRef.current?.getViewportHeight();
@@ -689,6 +753,9 @@ export function App({ cwd, version }: AppProps) {
 
     // Ctrl+C: stop or exit
     if (key.ctrl && input === 'c') {
+      if (askUserStateRef.current) {
+        cancelAskUser('Cancelled by user');
+      }
       if (isProcessing && activeSession) {
         activeSession.client.stop();
         const finalized = finalizeResponse('stopped');
@@ -711,6 +778,9 @@ export function App({ cwd, version }: AppProps) {
     }
     // Escape: stop processing or close session selector
     if (key.escape) {
+      if (askUserStateRef.current) {
+        cancelAskUser('Cancelled by user');
+      }
       if (isProcessing && activeSession) {
         activeSession.client.stop();
         const finalized = finalizeResponse('stopped');
@@ -759,6 +829,10 @@ export function App({ cwd, version }: AppProps) {
   // Handle message submission
   const handleSubmit = useCallback(
     async (input: string, mode: 'normal' | 'interrupt' | 'queue' | 'inline' = 'normal') => {
+      if (askUserStateRef.current) {
+        submitAskAnswer(input.trim());
+        return;
+      }
       if (!activeSession || !input.trim()) return;
 
       const trimmedInput = input.trim();
@@ -905,6 +979,7 @@ export function App({ cwd, version }: AppProps) {
       finalizeResponse,
       resetTurnState,
       activeSessionId,
+      submitAskAnswer,
     ]
   );
 
@@ -999,6 +1074,17 @@ export function App({ cwd, version }: AppProps) {
         maxPreview={MAX_QUEUED_PREVIEW}
       />
 
+      {/* Ask-user interview */}
+      {askUserState && activeAskQuestion && (
+        <AskUserPanel
+          sessionId={askUserState.sessionId}
+          request={askUserState.request}
+          question={activeAskQuestion}
+          index={askUserState.index}
+          total={askUserState.request.questions.length}
+        />
+      )}
+
       {/* Error */}
       {error && <ErrorBanner error={error} showErrorCodes={SHOW_ERROR_CODES} />}
 
@@ -1017,6 +1103,8 @@ export function App({ cwd, version }: AppProps) {
         queueLength={activeQueue.length + inlineCount}
         commands={commands}
         skills={skills}
+        isAskingUser={Boolean(activeAskQuestion)}
+        askPlaceholder={askPlaceholder}
       />
 
       {/* Status bar */}
