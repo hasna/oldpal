@@ -12,6 +12,7 @@ export { FilesystemTools } from './tools/filesystem';
 export { WebTools } from './tools/web';
 export { FeedbackTool } from './tools/feedback';
 export { SchedulerTool } from './tools/scheduler';
+export { WaitTool, SleepTool } from './tools/wait';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';

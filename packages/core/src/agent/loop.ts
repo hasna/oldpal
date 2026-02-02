@@ -20,6 +20,7 @@ import { SchedulerTool } from '../tools/scheduler';
 import { ImageTools } from '../tools/image';
 import { SkillTool } from '../tools/skills';
 import { createAskUserTool, type AskUserHandler } from '../tools/ask-user';
+import { WaitTool, SleepTool } from '../tools/wait';
 import { runHookAgent } from './subagent';
 import { SkillLoader } from '../skills/loader';
 import { SkillExecutor } from '../skills/executor';
@@ -245,6 +246,8 @@ export class AgentLoop {
     this.toolRegistry.register(askUserTool.tool, askUserTool.executor);
     this.toolRegistry.register(FeedbackTool.tool, FeedbackTool.executor);
     this.toolRegistry.register(SchedulerTool.tool, SchedulerTool.executor);
+    this.toolRegistry.register(WaitTool.tool, WaitTool.executor);
+    this.toolRegistry.register(SleepTool.tool, SleepTool.executor);
 
     // Initialize inbox if enabled
     if (this.config?.inbox?.enabled) {

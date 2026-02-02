@@ -140,7 +140,11 @@ export class ToolRegistry {
 
       const timeoutMsRaw = input?.timeoutMs ?? input?.timeout;
       const timeoutMsParsed = typeof timeoutMsRaw === 'string' ? Number(timeoutMsRaw) : timeoutMsRaw;
-      const timeoutMs = typeof timeoutMsParsed === 'number' && timeoutMsParsed > 0 ? timeoutMsParsed : 60000;
+      let timeoutMs = typeof timeoutMsParsed === 'number' && timeoutMsParsed > 0 ? timeoutMsParsed : 60000;
+      const derivedWaitTimeout = deriveWaitTimeoutMs(toolCall.name, input);
+      if (derivedWaitTimeout !== null && derivedWaitTimeout > timeoutMs) {
+        timeoutMs = derivedWaitTimeout;
+      }
 
       const result = await Promise.race([
         registered.executor(input),
@@ -212,6 +216,55 @@ export class ToolRegistry {
 // Helpers
 function resolveMode(defaultMode: ValidationMode | undefined, override?: ValidationMode): ValidationMode {
   return override ?? defaultMode ?? 'strict';
+}
+
+function toNumber(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  const num = typeof value === 'string' ? Number(value) : (value as number);
+  if (!Number.isFinite(num)) return null;
+  return num;
+}
+
+function deriveWaitTimeoutMs(toolName: string, input?: Record<string, unknown>): number | null {
+  if (!input) return null;
+  if (toolName !== 'wait' && toolName !== 'sleep') return null;
+
+  const durationMs = toNumber(input.durationMs);
+  if (durationMs !== null) {
+    return clampWaitTimeout(durationMs);
+  }
+
+  const seconds = toNumber(input.seconds);
+  if (seconds !== null) {
+    return clampWaitTimeout(seconds * 1000);
+  }
+
+  const minutes = toNumber(input.minutes);
+  if (minutes !== null) {
+    return clampWaitTimeout(minutes * 60 * 1000);
+  }
+
+  const minSeconds = toNumber(input.minSeconds);
+  const maxSeconds = toNumber(input.maxSeconds);
+  if (minSeconds !== null && maxSeconds !== null) {
+    return clampWaitTimeout(Math.max(minSeconds, maxSeconds) * 1000);
+  }
+
+  const minMinutes = toNumber(input.minMinutes);
+  const maxMinutes = toNumber(input.maxMinutes);
+  if (minMinutes !== null && maxMinutes !== null) {
+    return clampWaitTimeout(Math.max(minMinutes, maxMinutes) * 60 * 1000);
+  }
+
+  return null;
+}
+
+function clampWaitTimeout(durationMs: number): number {
+  const bufferMs = 5000;
+  const maxMs = 7 * 24 * 60 * 60 * 1000;
+  const safeDuration = Math.max(0, durationMs);
+  const timeoutMs = safeDuration + bufferMs;
+  return Math.min(timeoutMs, maxMs);
 }
 
 function normalizeToolError(error: unknown, toolCall: ToolCall): AssistantError {
