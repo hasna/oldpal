@@ -63,7 +63,8 @@ export class MemoryStore {
    */
   set(key: string, value: unknown, ttlMs?: number): void {
     const now = Date.now();
-    const expiresAt = ttlMs ? now + ttlMs : null;
+    const ttl = typeof ttlMs === 'number' && ttlMs > 0 ? ttlMs : undefined;
+    const expiresAt = ttl ? now + ttl : null;
     const valueStr = JSON.stringify(value) ?? 'null';
 
     this.db.run(

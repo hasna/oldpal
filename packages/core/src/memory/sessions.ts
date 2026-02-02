@@ -129,8 +129,8 @@ export class SessionManager {
         message.role,
         message.content,
         message.timestamp,
-        message.toolCalls ? JSON.stringify(message.toolCalls) : null,
-        message.toolResults ? JSON.stringify(message.toolResults) : null,
+        message.toolCalls ? (safeJsonStringify(message.toolCalls) ?? null) : null,
+        message.toolResults ? (safeJsonStringify(message.toolResults) ?? null) : null,
       ]
     );
 
