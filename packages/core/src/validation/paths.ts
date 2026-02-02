@@ -1,4 +1,5 @@
 import { resolve, normalize } from 'path';
+import { homedir } from 'os';
 import { lstat, realpath } from 'fs/promises';
 
 export interface PathValidationOptions {
@@ -17,7 +18,7 @@ export async function validatePath(
   inputPath: string,
   options: PathValidationOptions = {}
 ): Promise<PathValidationResult> {
-  const normalized = normalize(inputPath);
+  const normalized = normalize(expandHome(inputPath));
   const resolved = resolve(normalized);
 
   const allowedPaths = options.allowedPaths?.map((p) => resolve(p));
@@ -53,6 +54,14 @@ export async function validatePath(
   }
 
   return { valid: true, resolved };
+}
+
+function expandHome(value: string): string {
+  if (value === '~') return homedir();
+  if (value.startsWith('~/')) {
+    return resolve(homedir(), value.slice(2));
+  }
+  return value;
 }
 
 function isWithinAllowed(path: string, allowed?: string[]): boolean {

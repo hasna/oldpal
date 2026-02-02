@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { mkdtemp, writeFile, symlink } from 'fs/promises';
-import { tmpdir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 import { validateToolInput } from '../src/validation/schema';
 import { validatePath } from '../src/validation/paths';
@@ -51,6 +51,13 @@ describe('validatePath', () => {
 
     const result = await validatePath(linkPath, { allowedPaths: [base], allowSymlinks: false });
     expect(result.valid).toBe(false);
+  });
+
+  test('should expand home directory in paths', async () => {
+    const home = homedir();
+    const result = await validatePath('~/', { allowedPaths: [home] });
+    expect(result.valid).toBe(true);
+    expect(result.resolved).toBe(home);
   });
 });
 

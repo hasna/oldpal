@@ -49,13 +49,25 @@ function parseMarkdown(text: string, options?: { skipBlocks?: boolean; maxWidth?
     result = extractBlockSections(result, blockSections);
   }
 
-  // Bold: **text** or __text__
-  result = result.replace(/\*\*(.+?)\*\*/g, (_, text) => chalk.bold(text));
-  result = result.replace(/__(.+?)__/g, (_, text) => chalk.bold(text));
+  // Bold: **text** or __text__ (avoid matching inside words)
+  result = result.replace(
+    /(^|[\s([{>])\*\*([^*]+?)\*\*(?=[\s)\]}<.,!?;:]|$)/gm,
+    (_, lead, text) => `${lead}${chalk.bold(text)}`
+  );
+  result = result.replace(
+    /(^|[\s([{>])__([^_]+?)__(?=[\s)\]}<.,!?;:]|$)/gm,
+    (_, lead, text) => `${lead}${chalk.bold(text)}`
+  );
 
-  // Italic: *text* or _text_
-  result = result.replace(/\*(.+?)\*/g, (_, text) => chalk.italic(text));
-  result = result.replace(/_(.+?)_/g, (_, text) => chalk.italic(text));
+  // Italic: *text* or _text_ (avoid matching inside words)
+  result = result.replace(
+    /(^|[\s([{>])\*([^*\n]+?)\*(?=[\s)\]}<.,!?;:]|$)/gm,
+    (_, lead, text) => `${lead}${chalk.italic(text)}`
+  );
+  result = result.replace(
+    /(^|[\s([{>])_([^_\n]+?)_(?=[\s)\]}<.,!?;:]|$)/gm,
+    (_, lead, text) => `${lead}${chalk.italic(text)}`
+  );
 
   // Inline code: `code`
   result = result.replace(/`([^`]+)`/g, (_, code) => chalk.dim(code));

@@ -86,4 +86,10 @@ table:
     expect(output).toContain('foo_bar');
     expect(output).not.toContain('foo bar');
   });
+
+  test('does not italicize underscores inside words', () => {
+    const markdown = 'file_name_test';
+    const output = stripAnsi(__test__.parseMarkdown(markdown));
+    expect(output).toContain('file_name_test');
+  });
 });
