@@ -10,6 +10,7 @@ import type { ScheduledCommand } from '@hasna/assistants-shared';
 import { getSecurityLogger, severityFromString } from '../security/logger';
 import type { InboxManager } from '../inbox';
 import type { WalletManager } from '../wallet';
+import type { SecretsManager } from '../secrets';
 import {
   saveSchedule,
   listSchedules,
@@ -160,6 +161,7 @@ export class BuiltinCommands {
     loader.register(this.verificationCommand());
     loader.register(this.inboxCommand());
     loader.register(this.walletCommand());
+    loader.register(this.secretsCommand());
     loader.register(this.jobsCommand());
     loader.register(this.exitCommand());
   }
@@ -1235,6 +1237,224 @@ export class BuiltinCommands {
 
         context.emit('text', `Unknown wallet command: ${subcommand}\n`);
         context.emit('text', 'Use /wallet help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /secrets - Manage agent secrets (API keys, tokens, passwords)
+   */
+  private secretsCommand(): Command {
+    return {
+      name: 'secrets',
+      description: 'Manage secrets (API keys, tokens, passwords)',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const manager = context.getSecretsManager?.();
+        if (!manager) {
+          context.emit('text', 'Secrets management is not enabled. Configure secrets in config.json.\n');
+          context.emit('text', '\nTo enable:\n');
+          context.emit('text', '```json\n');
+          context.emit('text', '{\n');
+          context.emit('text', '  "secrets": {\n');
+          context.emit('text', '    "enabled": true,\n');
+          context.emit('text', '    "storage": {\n');
+          context.emit('text', '      "region": "us-east-1"\n');
+          context.emit('text', '    }\n');
+          context.emit('text', '  }\n');
+          context.emit('text', '}\n');
+          context.emit('text', '```\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const parts = args.trim().split(/\s+/);
+        const subcommand = parts[0]?.toLowerCase() || 'list';
+
+        // /secrets or /secrets list [scope]
+        if (subcommand === 'list' || (!parts[0] && !args.trim())) {
+          try {
+            const scope = parts[1]?.toLowerCase() || 'all';
+            const secrets = await manager.list(scope as 'global' | 'agent' | 'all');
+
+            if (secrets.length === 0) {
+              context.emit('text', 'No secrets stored.\n');
+              context.emit('text', 'Use secrets_set tool to store a secret.\n');
+            } else {
+              context.emit('text', `\n## Secrets (${secrets.length} secret${secrets.length === 1 ? '' : 's'})\n\n`);
+
+              // Group by scope
+              const globalSecrets = secrets.filter(s => s.scope === 'global');
+              const agentSecrets = secrets.filter(s => s.scope === 'agent');
+
+              if (globalSecrets.length > 0) {
+                context.emit('text', '### Global Secrets\n');
+                for (const secret of globalSecrets) {
+                  context.emit('text', `- **${secret.name}**${secret.description ? ` - ${secret.description}` : ''}\n`);
+                }
+                context.emit('text', '\n');
+              }
+
+              if (agentSecrets.length > 0) {
+                context.emit('text', '### Agent Secrets\n');
+                for (const secret of agentSecrets) {
+                  context.emit('text', `- **${secret.name}**${secret.description ? ` - ${secret.description}` : ''}\n`);
+                }
+                context.emit('text', '\n');
+              }
+
+              const status = manager.getRateLimitStatus();
+              context.emit('text', `---\nRate limit: ${status.readsUsed}/${status.maxReads} reads this hour\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error listing secrets: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /secrets get <name> [scope]
+        if (subcommand === 'get') {
+          const name = parts[1];
+          if (!name) {
+            context.emit('text', 'Usage: /secrets get <name> [scope]\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const scope = parts[2]?.toLowerCase() as 'global' | 'agent' | undefined;
+
+          try {
+            const value = await manager.get(name, scope, 'plain');
+            if (value === null) {
+              context.emit('text', `Secret "${name}" not found.\n`);
+            } else {
+              // Mask the value for display (show first 4 and last 4 chars if long enough)
+              const valueStr = String(value);
+              let maskedValue: string;
+              if (valueStr.length <= 8) {
+                maskedValue = '********';
+              } else {
+                maskedValue = valueStr.slice(0, 4) + '****' + valueStr.slice(-4);
+              }
+              context.emit('text', `\n**${name}**: ${maskedValue}\n`);
+              context.emit('text', '\nTo use the full value, call secrets_get tool with the secret name.\n');
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /secrets set
+        if (subcommand === 'set') {
+          context.emit('text', '\n## Set a Secret\n\n');
+          context.emit('text', 'To set a secret, use the secrets_set tool with:\n');
+          context.emit('text', '- name: Secret name (e.g., "GITHUB_TOKEN", "STRIPE_API_KEY")\n');
+          context.emit('text', '- value: Secret value\n');
+          context.emit('text', '- description: Optional description\n');
+          context.emit('text', '- scope: "global" or "agent" (default: agent)\n\n');
+          context.emit('text', 'Secrets are stored securely in AWS Secrets Manager, never locally.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /secrets delete <name> [scope]
+        if (subcommand === 'delete') {
+          const name = parts[1];
+          if (!name) {
+            context.emit('text', 'Usage: /secrets delete <name> [scope]\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const scope = (parts[2]?.toLowerCase() as 'global' | 'agent') || 'agent';
+
+          try {
+            const result = await manager.delete(name, scope);
+            if (result.success) {
+              context.emit('text', `Secret "${name}" deleted. Recovery available for 7 days.\n`);
+            } else {
+              context.emit('text', `Error: ${result.message}\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /secrets export [scope]
+        if (subcommand === 'export') {
+          const scope = (parts[1]?.toLowerCase() as 'global' | 'agent' | 'all') || 'all';
+
+          try {
+            const envLines = await manager.export(scope);
+            if (envLines.length === 0) {
+              context.emit('text', 'No secrets to export.\n');
+            } else {
+              context.emit('text', '\n## Secrets Export (env format)\n\n');
+              context.emit('text', '```bash\n');
+              for (const line of envLines) {
+                context.emit('text', `${line}\n`);
+              }
+              context.emit('text', '```\n');
+              context.emit('text', '\nCopy these to your shell or .env file.\n');
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /secrets status
+        if (subcommand === 'status') {
+          const status = manager.getRateLimitStatus();
+          const credCheck = await manager.checkCredentials();
+
+          context.emit('text', '\n## Secrets Status\n\n');
+          context.emit('text', `AWS Credentials: ${credCheck.valid ? 'Valid' : 'Invalid'}\n`);
+          if (!credCheck.valid && credCheck.error) {
+            context.emit('text', `  Error: ${credCheck.error}\n`);
+          }
+          context.emit('text', `Rate Limit: ${status.readsUsed}/${status.maxReads} reads used\n`);
+          context.emit('text', `Window Reset: ${status.windowResetMinutes} minutes\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /secrets help
+        if (subcommand === 'help') {
+          context.emit('text', '\n## Secrets Commands\n\n');
+          context.emit('text', '/secrets                  List all secrets (names only)\n');
+          context.emit('text', '/secrets list [scope]     List secrets, optionally filtered by scope\n');
+          context.emit('text', '/secrets get <name>       Get a secret value (masked)\n');
+          context.emit('text', '/secrets set              Show instructions for secrets_set tool\n');
+          context.emit('text', '/secrets delete <name>    Delete a secret\n');
+          context.emit('text', '/secrets export [scope]   Export secrets as env format\n');
+          context.emit('text', '/secrets status           Show status and credentials\n');
+          context.emit('text', '/secrets help             Show this help\n\n');
+          context.emit('text', '## Tools\n\n');
+          context.emit('text', 'secrets_list              List secrets (names only)\n');
+          context.emit('text', 'secrets_get               Get a secret value (rate limited)\n');
+          context.emit('text', 'secrets_set               Create or update a secret\n');
+          context.emit('text', 'secrets_delete            Delete a secret\n\n');
+          context.emit('text', '## Scopes\n\n');
+          context.emit('text', 'global - Shared across all agents\n');
+          context.emit('text', 'agent  - Specific to this agent only\n');
+          context.emit('text', 'all    - Both global and agent (default for list)\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown secrets command: ${subcommand}\n`);
+        context.emit('text', 'Use /secrets help for available commands.\n');
         context.emit('done');
         return { handled: true };
       },
