@@ -106,6 +106,13 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       maxReadsPerHour: 10,
     },
   },
+  secrets: {
+    enabled: false,
+    // No local storage - secrets only in AWS Secrets Manager
+    security: {
+      maxReadsPerHour: 100,
+    },
+  },
   jobs: {
     enabled: true,
     defaultTimeoutMs: 60_000, // 1 minute
@@ -217,6 +224,22 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
       security: {
         ...(base.wallet?.security || {}),
         ...(override.wallet?.security || {}),
+      },
+    },
+    secrets: {
+      ...(base.secrets || {}),
+      ...(override.secrets || {}),
+      // Only merge storage if region is configured
+      storage: (base.secrets?.storage?.region || override.secrets?.storage?.region)
+        ? {
+            region: override.secrets?.storage?.region ?? base.secrets?.storage?.region ?? 'us-east-1',
+            prefix: override.secrets?.storage?.prefix ?? base.secrets?.storage?.prefix,
+            credentialsProfile: override.secrets?.storage?.credentialsProfile ?? base.secrets?.storage?.credentialsProfile,
+          }
+        : undefined,
+      security: {
+        ...(base.secrets?.security || {}),
+        ...(override.secrets?.security || {}),
       },
     },
     jobs: {

@@ -60,6 +60,7 @@ import { VoiceManager } from '../voice/manager';
 import { AssistantManager, IdentityManager } from '../identity';
 import { createInboxManager, registerInboxTools, type InboxManager } from '../inbox';
 import { createWalletManager, registerWalletTools, type WalletManager } from '../wallet';
+import { createSecretsManager, registerSecretsTools, type SecretsManager } from '../secrets';
 import { JobManager, createJobTools } from '../jobs';
 
 export interface AgentLoopOptions {
@@ -122,6 +123,7 @@ export class AgentLoop {
   private identityManager: IdentityManager | null = null;
   private inboxManager: InboxManager | null = null;
   private walletManager: WalletManager | null = null;
+  private secretsManager: SecretsManager | null = null;
   private jobManager: JobManager | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
@@ -269,6 +271,14 @@ export class AgentLoop {
       const agentId = assistant?.id || this.sessionId;
       this.walletManager = createWalletManager(agentId, this.config.wallet);
       registerWalletTools(this.toolRegistry, () => this.walletManager);
+    }
+
+    // Initialize secrets if enabled
+    if (this.config?.secrets?.enabled) {
+      const assistant = this.assistantManager?.getActive();
+      const agentId = assistant?.id || this.sessionId;
+      this.secretsManager = createSecretsManager(agentId, this.config.secrets);
+      registerSecretsTools(this.toolRegistry, () => this.secretsManager);
     }
 
     // Initialize jobs system if enabled
@@ -896,6 +906,7 @@ export class AgentLoop {
       getIdentityManager: () => this.identityManager,
       getInboxManager: () => this.inboxManager,
       getWalletManager: () => this.walletManager,
+      getSecretsManager: () => this.secretsManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
           this.identityContext = await this.identityManager.buildSystemPromptContext();

@@ -74,6 +74,9 @@ export * from './inbox';
 // Wallet
 export * from './wallet';
 
+// Secrets
+export * from './secrets';
+
 // Scheduler
 export * from './scheduler';
 
