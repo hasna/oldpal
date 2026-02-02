@@ -190,6 +190,16 @@ function extractBlockSections(text: string, blocks: BlockSection[]): string {
       continue;
     }
 
+    const cardMatch = line.match(/^(\s*):::card(.*)$/);
+    if (cardMatch) {
+      const indent = cardMatch[1] ?? '';
+      const parsed = parseDelimitedBlock(lines, i, indent);
+      const warning = parsed?.warning || 'Card blocks must be inside :::grid.';
+      output.push(createMalformedBlock(blocks, indent, 'block', warning));
+      i = parsed ? parsed.nextIndex : i + 1;
+      continue;
+    }
+
     output.push(line);
     i += 1;
   }
@@ -212,7 +222,18 @@ function extractCards(body: string): { type: string; title?: string; body: strin
 
     const indent = match[1] ?? '';
     const attrs = parseAttributes(match[2] ?? '');
-    const type = String(attrs.type || 'note');
+    let type = String(attrs.type || 'note');
+    const normalizedType = type.toLowerCase();
+    if (!ALLOWED_BLOCK_TYPES.has(normalizedType)) {
+      cards.push({
+        type: 'warning',
+        title: 'Malformed card',
+        body: `Unknown card type "${type}". Using note.`,
+      });
+      type = 'note';
+    } else {
+      type = normalizedType;
+    }
     const title = attrs.title ? String(attrs.title) : undefined;
     const bodyLines: string[] = [];
     let closed = false;
@@ -375,7 +396,7 @@ function renderCardGrid(
   indent = ''
 ): string {
   const gap = 2;
-  const totalWidth = maxWidth ? Math.max(20, maxWidth) : undefined;
+  const totalWidth = maxWidth;
   let effectiveColumns = columns;
   if (totalWidth) {
     const minCardWidth = 18;
@@ -456,7 +477,7 @@ function renderBoxLines(
   forceWidth = false
 ): string[] {
   const headerStyled = styleHeader(header, type);
-  const maxInnerWidth = maxWidth ? Math.max(10, maxWidth - 4) : undefined;
+  const maxInnerWidth = maxWidth ? Math.max(1, maxWidth - 4) : undefined;
   const headerLine = maxInnerWidth ? truncateAnsi(headerStyled, maxInnerWidth) : headerStyled;
   const wrappedLines = maxInnerWidth ? wrapAnsiLines(lines, maxInnerWidth) : lines;
   const contentWidth = Math.max(
@@ -556,9 +577,8 @@ function renderTable(header: string[], rows: string[][], maxWidth?: number): str
     }
   }
 
-  const minCellWidth = 4;
   const availableCellWidth = maxWidth
-    ? Math.max(colCount * minCellWidth, maxWidth - (colCount - 1) * 3 - 4)
+    ? Math.max(colCount, maxWidth - (colCount - 1) * 3 - 4)
     : undefined;
   if (availableCellWidth) {
     const total = widths.reduce((sum, width) => sum + width, 0);
@@ -661,8 +681,9 @@ function renderReport(body: string, maxWidth?: number, indent = ''): string {
       .filter((match): match is RegExpMatchArray => Boolean(match))
       .map((match) => ({ label: match[1].trim(), value: Math.max(0, Math.min(100, Number(match[2]))) }));
     if (parsed.length > 0) {
-      const labelWidth = Math.min(24, Math.max(...parsed.map((p) => p.label.length), 10));
-      const barWidth = maxWidth ? Math.max(10, Math.min(30, maxWidth - labelWidth - 10)) : 24;
+      const maxLabelWidth = maxWidth ? Math.max(4, maxWidth - 14) : 24;
+      const labelWidth = Math.min(maxLabelWidth, Math.max(...parsed.map((p) => p.label.length), 10));
+      const barWidth = maxWidth ? Math.max(4, Math.min(30, maxWidth - labelWidth - 8)) : 24;
       for (const entry of parsed) {
         output.push(indent + renderProgressLine(entry.label, entry.value, labelWidth, barWidth));
       }

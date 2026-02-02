@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Markdown } from './Markdown';
-import { estimateMessageLines, type DisplayMessage } from './messageLines';
+import { estimateActivityEntryLines, estimateMessageLines, type DisplayMessage } from './messageLines';
+import { truncateToolResult } from './toolDisplay';
 
 interface ActivityEntry {
   id: string;
@@ -40,35 +41,54 @@ export function Messages({
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
   const messageWidth = Math.max(10, columns - 2);
+  const wrapWidth = Math.max(10, columns - 4);
 
-  const combinedMessages = useMemo(
-    () => [...messages, ...streamingMessages],
-    [messages, streamingMessages]
-  );
+  type Item =
+    | { kind: 'message'; message: DisplayMessage }
+    | { kind: 'activity'; entry: ActivityEntry }
+    | { kind: 'streaming'; message: DisplayMessage };
 
-  // Calculate visible messages based on line offsets
+  const items = useMemo<Item[]>(() => {
+    const output: Item[] = [];
+    for (const message of messages) {
+      output.push({ kind: 'message', message });
+    }
+    for (const entry of activityLog) {
+      output.push({ kind: 'activity', entry });
+    }
+    for (const message of streamingMessages) {
+      output.push({ kind: 'streaming', message });
+    }
+    return output;
+  }, [messages, activityLog, streamingMessages]);
+
   const lineSpans = useMemo(() => {
     let cursor = 0;
-    return combinedMessages.map((message, index) => {
-      const lines = estimateMessageLines(message, messageWidth);
+    return items.map((item, index) => {
+      const lines =
+        item.kind === 'activity'
+          ? estimateActivityEntryLines(item.entry, wrapWidth, messageWidth)
+          : estimateMessageLines(item.message, messageWidth);
       const start = cursor;
       cursor += lines;
-      return { message, index, start, end: cursor, lines };
+      return { item, index, start, end: cursor, lines };
     });
-  }, [combinedMessages, messageWidth]);
+  }, [items, wrapWidth, messageWidth]);
 
   const totalLines = lineSpans.length > 0 ? lineSpans[lineSpans.length - 1].end : 0;
   const endLine = Math.max(0, totalLines - scrollOffsetLines);
   const startLine = Math.max(0, endLine - maxVisibleLines);
   const visibleSpans = lineSpans.filter((span) => span.end > startLine && span.start < endLine);
 
-  const historicalCount = messages.length;
   const visibleMessages = visibleSpans
-    .filter((span) => span.index < historicalCount)
-    .map((span) => span.message);
+    .filter((span) => span.item.kind === 'message')
+    .map((span) => (span.item as { kind: 'message'; message: DisplayMessage }).message);
+  const visibleActivity = visibleSpans
+    .filter((span) => span.item.kind === 'activity')
+    .map((span) => (span.item as { kind: 'activity'; entry: ActivityEntry }).entry);
   const visibleStreaming = visibleSpans
-    .filter((span) => span.index >= historicalCount)
-    .map((span) => span.message);
+    .filter((span) => span.item.kind === 'streaming')
+    .map((span) => (span.item as { kind: 'streaming'; message: DisplayMessage }).message);
   const showCurrentResponse = Boolean(currentResponse) && streamingMessages.length === 0;
 
   // Group consecutive tool-only assistant messages
@@ -123,7 +143,7 @@ export function Messages({
       })}
 
       {/* Show activity log - text, tool calls, and tool results */}
-      {activityLog.map((entry) => {
+      {visibleActivity.map((entry) => {
         if (entry.type === 'text' && entry.content) {
           return (
             <Box key={entry.id} marginY={1}>
@@ -315,14 +335,20 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
 function startsWithListOrTable(content: string): boolean {
   const lines = content.split('\n');
   for (const line of lines) {
-    const trimmed = line.trimStart();
+    const trimmed = stripAnsi(line).trimStart();
     if (!trimmed) continue;
     if (/^[-*•]\s+/.test(trimmed)) return true;
     if (/^\d+\.\s+/.test(trimmed)) return true;
     if (trimmed.startsWith('|')) return true;
+    if (/^[┌┐└┘├┤┬┴┼│]/.test(trimmed)) return true;
+    if (/^[╭╮╰╯│]/.test(trimmed)) return true;
     return false;
   }
   return false;
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1B\[[0-9;]*m/g, '');
 }
 
 function ToolCallPanel({
@@ -337,6 +363,7 @@ function ToolCallPanel({
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
   const panelWidth = Math.max(24, columns - 4);
+  const innerWidth = Math.max(10, panelWidth - 4);
 
   const resultMap = new Map<string, ToolResult>();
   for (const result of toolResults || []) {
@@ -353,7 +380,7 @@ function ToolCallPanel({
       borderStyle="round"
       borderColor={borderColor}
       paddingX={1}
-      width="100%"
+      width={panelWidth}
     >
       <Box justifyContent="space-between">
         <Text color={borderColor} bold>Tool Calls</Text>
@@ -367,8 +394,9 @@ function ToolCallPanel({
         const statusColor = result ? (result.isError ? 'red' : 'green') : 'yellow';
         const displayName = getToolDisplayName(toolCall);
         const context = getToolContext(toolCall);
-        const maxLine = panelWidth ? Math.max(20, panelWidth - 8) : 80;
+        const maxLine = Math.max(16, innerWidth - 2);
         const summaryLine = truncate(formatToolCall(toolCall), maxLine);
+        const resultText = result ? indentMultiline(truncateToolResult(result, 4, 400), '  ') : '';
         return (
           <Box key={toolCall.id} flexDirection="column" marginTop={1}>
             <Box>
@@ -379,7 +407,7 @@ function ToolCallPanel({
             <Text dimColor>{summaryLine}</Text>
             {result && (
               <Box marginLeft={2}>
-                <Text dimColor>↳ {truncateToolResult(result, 4, 400)}</Text>
+                <Text dimColor>↳ {resultText}</Text>
               </Box>
             )}
           </Box>
@@ -595,171 +623,8 @@ function truncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3) + '...';
 }
 
-/**
- * Truncate tool result for display - keeps it readable
- */
-function truncateToolResult(toolResult: ToolResult, maxLines = 15, maxChars = 3000): string {
-  const toolName = toolResult.toolName || 'tool';
-  let content = String(toolResult.content || '');
-
-  // Try to format the result more nicely based on the tool
-  const formatted = formatToolResultNicely(toolName, content, toolResult.isError);
-  if (formatted) {
-    return formatted;
-  }
-
-  const prefix = toolResult.isError ? `Error: ` : '';
-
-  // Strip ANSI codes
-  content = content.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-
-  // Replace tabs with spaces
-  content = content.replace(/\t/g, '  ');
-
-  // Truncate by lines first
-  const lines = content.split('\n');
-  if (lines.length > maxLines) {
-    content = lines.slice(0, maxLines).join('\n') + `\n... (${lines.length - maxLines} more lines)`;
-  }
-
-  // Then truncate by chars
-  if (content.length > maxChars) {
-    content = content.slice(0, maxChars) + '...';
-  }
-
-  return prefix + content.trim();
-}
-
-/**
- * Format tool results in a more user-friendly way
- */
-function formatToolResultNicely(toolName: string, content: string, isError?: boolean): string | null {
-  if (isError) {
-    // Simplify common error messages
-    if (content.includes('ENOENT') || content.includes('no such file')) {
-      return '⚠ File not found';
-    }
-    if (content.includes('EACCES') || content.includes('permission denied')) {
-      return '⚠ Permission denied';
-    }
-    if (content.includes('ETIMEDOUT') || content.includes('timeout')) {
-      return '⚠ Request timed out';
-    }
-    return null; // Use default formatting
-  }
-
-  switch (toolName) {
-    case 'schedule':
-      return formatScheduleResult(content);
-    case 'submit_feedback':
-      return formatFeedbackResult(content);
-    case 'read':
-      return formatReadResult(content);
-    case 'write':
-      return formatWriteResult(content);
-    case 'glob':
-      return formatGlobResult(content);
-    case 'grep':
-      return formatGrepResult(content);
-    case 'bash':
-      return formatBashResult(content);
-    case 'web_search':
-      return formatSearchResult(content);
-    default:
-      return null; // Use default formatting
-  }
-}
-
-function formatScheduleResult(content: string): string | null {
-  const trimmed = content.trim().toLowerCase();
-  if (trimmed === 'no schedules found.' || trimmed.includes('no schedules')) {
-    return '📅 No scheduled tasks';
-  }
-  if (trimmed.includes('created') || trimmed.includes('scheduled')) {
-    return '✓ Schedule created';
-  }
-  if (trimmed.includes('deleted') || trimmed.includes('removed')) {
-    return '✓ Schedule deleted';
-  }
-  if (trimmed.includes('paused')) {
-    return '⏸ Schedule paused';
-  }
-  if (trimmed.includes('resumed')) {
-    return '▶ Schedule resumed';
-  }
-  // Check if it's a list of schedules
-  if (content.includes('id:') || content.includes('command:')) {
-    const lines = content.split('\n').filter(l => l.trim());
-    return `📅 ${lines.length} scheduled task${lines.length !== 1 ? 's' : ''}`;
-  }
-  return null;
-}
-
-function formatFeedbackResult(content: string): string | null {
-  if (content.includes('submitted') || content.includes('created')) {
-    return '✓ Feedback submitted';
-  }
-  return null;
-}
-
-function formatReadResult(content: string): string | null {
-  const lines = content.split('\n').length;
-  if (lines > 20) {
-    return `📄 Read ${lines} lines`;
-  }
-  return null; // Show actual content for small files
-}
-
-function formatWriteResult(content: string): string | null {
-  if (content.includes('written') || content.includes('saved') || content.includes('created')) {
-    return '✓ File saved';
-  }
-  return null;
-}
-
-function formatGlobResult(content: string): string | null {
-  const lines = content.split('\n').filter(l => l.trim());
-  if (lines.length === 0) {
-    return '🔍 No files found';
-  }
-  if (lines.length > 10) {
-    return `🔍 Found ${lines.length} files`;
-  }
-  return null; // Show actual files for small results
-}
-
-function formatGrepResult(content: string): string | null {
-  const lines = content.split('\n').filter(l => l.trim());
-  if (lines.length === 0) {
-    return '🔍 No matches found';
-  }
-  if (lines.length > 10) {
-    return `🔍 Found ${lines.length} matches`;
-  }
-  return null; // Show actual matches for small results
-}
-
-function formatBashResult(content: string): string | null {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    return '✓ Command completed';
-  }
-  // For very short output, let it show
-  if (trimmed.length < 100 && !trimmed.includes('\n')) {
-    return null;
-  }
-  const lines = trimmed.split('\n').length;
-  if (lines > 20) {
-    return `✓ Output: ${lines} lines`;
-  }
-  return null;
-}
-
-function formatSearchResult(content: string): string | null {
-  // Try to count results
-  const resultCount = (content.match(/https?:\/\//g) || []).length;
-  if (resultCount > 0) {
-    return `🔍 Found ${resultCount} result${resultCount !== 1 ? 's' : ''}`;
-  }
-  return null;
+function indentMultiline(text: string, padding: string): string {
+  const parts = text.split('\n');
+  if (parts.length <= 1) return text;
+  return [parts[0], ...parts.slice(1).map((line) => `${padding}${line}`)].join('\n');
 }

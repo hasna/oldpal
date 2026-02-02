@@ -1,6 +1,14 @@
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
+import { renderMarkdown } from './Markdown';
+import { truncateToolResult } from './toolDisplay';
 
 export type DisplayMessage = Message & { __rendered?: boolean };
+
+export interface ActivityEntryLike {
+  type: 'text' | 'tool_call' | 'tool_result';
+  content?: string;
+  toolResult?: ToolResult;
+}
 
 function estimateToolPanelLines(
   toolCalls: ToolCall[],
@@ -58,6 +66,13 @@ export function estimateMessageLines(message: DisplayMessage, maxWidth?: number)
     lines += estimateToolPanelLines(message.toolCalls, message.toolResults, hasContent);
   }
 
+  if (message.role === 'user' || message.role === 'assistant') {
+    if (!isContinuationChunk(message.id)) {
+      // marginY=1 adds two empty lines
+      lines += 2;
+    }
+  }
+
   return lines;
 }
 
@@ -78,6 +93,51 @@ function stripAnsi(text: string): string {
   return text.replace(/\x1B\[[0-9;]*m/g, '');
 }
 
+export function estimateActivityEntryLines(
+  entry: ActivityEntryLike,
+  wrapWidth: number,
+  renderWidth?: number
+): number {
+  if (entry.type === 'text') {
+    const content = entry.content ?? '';
+    if (!content.trim()) return 0;
+    const rendered = renderMarkdown(content, { maxWidth: renderWidth });
+    const lines = stripAnsi(rendered).split('\n');
+    const wrapped = countWrappedLines(lines, wrapWidth);
+    return Math.max(1, wrapped) + 2; // marginY=1
+  }
+
+  if (entry.type === 'tool_call') {
+    // Two lines (call + elapsed) + marginY=1
+    return 4;
+  }
+
+  if (entry.type === 'tool_result') {
+    const content = entry.toolResult ? truncateToolResult(entry.toolResult) : '';
+    const lines = content.split('\n');
+    const wrapped = countWrappedLines(lines, wrapWidth);
+    return Math.max(1, wrapped) + 2; // marginY=1
+  }
+
+  return 0;
+}
+
+export function estimateActivityLogLines(
+  entries: ActivityEntryLike[],
+  wrapWidth: number,
+  renderWidth?: number
+): number {
+  return entries.reduce((sum, entry) => sum + estimateActivityEntryLines(entry, wrapWidth, renderWidth), 0);
+}
+
+function isContinuationChunk(id: string): boolean {
+  const match = id.match(/::chunk-(\d+)$/);
+  if (!match) return false;
+  const idx = Number(match[1]);
+  return Number.isFinite(idx) && idx > 0;
+}
+
 export const __test__ = {
   estimateMessageLines,
+  estimateActivityEntryLines,
 };
