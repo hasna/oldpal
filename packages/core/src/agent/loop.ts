@@ -649,7 +649,7 @@ export class AgentLoop {
       if (toolInput.cwd === undefined) {
         toolInput.cwd = this.cwd;
       }
-      if (toolInput.sessionId === undefined) {
+      if (typeof toolInput.sessionId !== 'string' || toolInput.sessionId.length === 0) {
         toolInput.sessionId = this.sessionId;
       }
       toolCall.input = toolInput;
@@ -694,7 +694,7 @@ export class AgentLoop {
       if (input.cwd === undefined) {
         input.cwd = this.cwd;
       }
-      if (input.sessionId === undefined) {
+      if (typeof input.sessionId !== 'string' || input.sessionId.length === 0) {
         input.sessionId = this.sessionId;
       }
 

@@ -37,11 +37,13 @@ function isInScriptsFolder(path: string, cwd: string, sessionId?: string): boole
  */
 export class FilesystemTools {
   private static resolveInputPath(baseCwd: string, inputPath: string): string {
+    const envHome = process.env.HOME || process.env.USERPROFILE;
+    const home = envHome && envHome.trim().length > 0 ? envHome : homedir();
     if (inputPath === '~') {
-      return homedir();
+      return home;
     }
     if (inputPath.startsWith('~/')) {
-      return resolve(homedir(), inputPath.slice(2));
+      return resolve(home, inputPath.slice(2));
     }
     return resolve(baseCwd, inputPath);
   }

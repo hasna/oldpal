@@ -220,6 +220,7 @@ export class ConnectorBridge {
 
     if (names.length === 0) {
       // No connectors found
+      this.connectors = new Map();
       return [];
     }
 
@@ -320,7 +321,14 @@ export class ConnectorBridge {
 
     for (const candidate of candidates) {
       try {
-        const result = await Bun.$`which ${candidate}`.quiet().nothrow();
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const timeoutPromise = new Promise<{ exitCode: number }>((resolve) => {
+          timeoutId = setTimeout(resolveTimeout, 500, resolve);
+        });
+        const result = await Promise.race([Bun.$`which ${candidate}`.quiet().nothrow(), timeoutPromise]);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         if (result.exitCode === 0) {
           return candidate;
         }
