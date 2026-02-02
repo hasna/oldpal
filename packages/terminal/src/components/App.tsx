@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Box, Text, useApp, useInput, useStdout } from 'ink';
-import { ScrollView, type ScrollViewRef } from 'ink-scroll-view';
+import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
 import { SessionRegistry, type SessionInfo } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, AskUserRequest, AskUserResponse } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
@@ -105,9 +104,6 @@ export function App({ cwd, version }: AppProps) {
   const [askUserState, setAskUserState] = useState<AskUserState | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const scrollRef = useRef<ScrollViewRef>(null);
 
   // Available skills for autocomplete
   const [skills, setSkills] = useState<{ name: string; description: string; argumentHint?: string }[]>([]);
@@ -124,13 +120,7 @@ export function App({ cwd, version }: AppProps) {
   const pendingSendsRef = useRef<Array<{ id: string; sessionId: string; mode: 'inline' | 'queued' }>>([]);
   const askUserStateRef = useRef<AskUserState | null>(null);
 
-  const updateScrollMetrics = useCallback((offset?: number) => {
-    const currentOffset =
-      typeof offset === 'number' ? offset : scrollRef.current?.getScrollOffset() ?? 0;
-    const bottomOffset = scrollRef.current?.getBottomOffset() ?? 0;
-    setScrollOffset(currentOffset);
-    setAutoScroll(currentOffset >= Math.max(0, bottomOffset - 1));
-  }, []);
+  // Native terminal scrolling is used - no manual scroll tracking needed
 
   const beginAskUser = useCallback((sessionId: string, request: AskUserRequest) => {
     return new Promise<AskUserResponse>((resolve, reject) => {
@@ -180,17 +170,7 @@ export function App({ cwd, version }: AppProps) {
     });
   }, []);
 
-  useEffect(() => {
-    if (!stdout) return;
-    const handleResize = () => {
-      scrollRef.current?.remeasure();
-      updateScrollMetrics();
-    };
-    stdout.on('resize', handleResize);
-    return () => {
-      stdout.off('resize', handleResize);
-    };
-  }, [stdout, updateScrollMetrics]);
+  // Terminal resize is handled natively
   const turnIdRef = useRef(0);
 
   useEffect(() => {
@@ -371,8 +351,6 @@ export function App({ cwd, version }: AppProps) {
       setCurrentTurnTokens(0);
       setError(null);
     }
-    setScrollOffset(0);
-    setAutoScroll(true);
   }, []);
 
   // Handle chunk from registry
@@ -633,6 +611,23 @@ export function App({ cwd, version }: AppProps) {
   const inlineCount = activeInline.length;
   const activeAskQuestion = askUserState?.request.questions[askUserState.index];
   const askPlaceholder = activeAskQuestion?.placeholder || activeAskQuestion?.question || 'Answer the question...';
+  const hasPendingTools = useMemo(() => {
+    const toolResultIds = new Set<string>();
+    for (const entry of activityLog) {
+      if (entry.type === 'tool_result' && entry.toolResult) {
+        toolResultIds.add(entry.toolResult.toolCallId);
+      }
+    }
+    for (const entry of activityLog) {
+      if (entry.type === 'tool_call' && entry.toolCall) {
+        if (!toolResultIds.has(entry.toolCall.id)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [activityLog]);
+  const isBusy = isProcessing || hasPendingTools;
 
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
@@ -662,16 +657,7 @@ export function App({ cwd, version }: AppProps) {
     }
   }, [isProcessing, activeQueue.length, activeInline.length, processQueue]);
 
-  // Auto-scroll to bottom when new content arrives
-  useEffect(() => {
-    if (!autoScroll) return;
-    scrollRef.current?.scrollToBottom();
-  }, [displayMessages, activityLog, streamingMessages, autoScroll]);
-
-  // Ensure scroll metrics are up to date when content changes
-  useEffect(() => {
-    updateScrollMetrics();
-  }, [displayMessages, activityLog, streamingMessages, updateScrollMetrics]);
+  // Native terminal scrolling handles scroll position automatically
 
   // Handle session switch
   const handleSessionSwitch = useCallback(async (sessionId: string) => {
@@ -734,12 +720,6 @@ export function App({ cwd, version }: AppProps) {
     }
   }, [cwd, registry, saveCurrentSessionState, loadSessionState, beginAskUser]);
 
-  const getScrollStep = useCallback(() => {
-    const viewport = scrollRef.current?.getViewportHeight();
-    const fallback = Math.max(3, rows - 6);
-    const height = viewport ?? fallback;
-    return Math.max(3, Math.floor(height / 2));
-  }, [rows]);
 
   // Handle keyboard shortcuts (inactive when session selector is shown)
   useInput((input, key) => {
@@ -756,7 +736,7 @@ export function App({ cwd, version }: AppProps) {
       if (askUserStateRef.current) {
         cancelAskUser('Cancelled by user');
       }
-      if (isProcessing && activeSession) {
+      if ((isProcessing || hasPendingTools) && activeSession) {
         activeSession.client.stop();
         const finalized = finalizeResponse('stopped');
         if (finalized) {
@@ -781,7 +761,7 @@ export function App({ cwd, version }: AppProps) {
       if (askUserStateRef.current) {
         cancelAskUser('Cancelled by user');
       }
-      if (isProcessing && activeSession) {
+      if ((isProcessing || hasPendingTools) && activeSession) {
         activeSession.client.stop();
         const finalized = finalizeResponse('stopped');
         if (finalized) {
@@ -794,37 +774,9 @@ export function App({ cwd, version }: AppProps) {
       }
     }
 
-    // Page Up: scroll up through messages
-    if (key.pageUp || (key.shift && key.upArrow)) {
-      const step = getScrollStep();
-      scrollRef.current?.scrollBy(-step);
-      setAutoScroll(false);
-    }
-
-    // Page Down: scroll down through messages
-    if (key.pageDown || (key.shift && key.downArrow)) {
-      const step = getScrollStep();
-      scrollRef.current?.scrollBy(step);
-    }
-
-    // Home: scroll to top
-    if (key.ctrl && input === 'u') {
-      scrollRef.current?.scrollToTop();
-      setAutoScroll(false);
-    }
-
-    // End: scroll to bottom
-    if (key.ctrl && input === 'd') {
-      scrollRef.current?.scrollToBottom();
-      setAutoScroll(true);
-    }
+    // Native terminal scrolling is used - scroll with terminal's scrollback
   }, { isActive: !showSessionSelector });
 
-  useEffect(() => {
-    if (!activeSessionId) return;
-    scrollRef.current?.scrollToBottom();
-    setAutoScroll(true);
-  }, [activeSessionId]);
 
   // Handle message submission
   const handleSubmit = useCallback(
@@ -1020,7 +972,7 @@ export function App({ cwd, version }: AppProps) {
   const isThinking = isProcessing && !currentResponse && !currentToolCall && toolCallEntries.length === 0;
 
   return (
-    <Box flexDirection="column" padding={1} height={rows}>
+    <Box flexDirection="column" padding={1}>
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
@@ -1039,34 +991,37 @@ export function App({ cwd, version }: AppProps) {
         </Box>
       )}
 
-      {/* Scroll indicator */}
-      {scrollOffset > 0 && (
-        <Box>
-          <Text dimColor>↑ {Math.round(scrollOffset)} more lines above (Shift+↓ or Page Down to scroll down)</Text>
-        </Box>
-      )}
-
-      {/* Messages - key forces remount on session switch for clean state */}
-      <Box flexGrow={1} flexShrink={1} minHeight={1}>
-        <ScrollView
-          ref={scrollRef}
-          onScroll={(offset) => updateScrollMetrics(offset)}
-          onContentHeightChange={() => updateScrollMetrics()}
-          onViewportSizeChange={() => updateScrollMetrics()}
-        >
+      {/* Historical messages - rendered with Static for native terminal scrollback */}
+      <Static items={displayMessages}>
+        {(message) => (
           <Messages
-            key={activeSessionId || 'default'}
-            messages={displayMessages}
+            key={message.id}
+            messages={[message]}
             currentResponse={undefined}
-            streamingMessages={streamingMessages}
+            streamingMessages={[]}
             currentToolCall={undefined}
             lastToolResult={undefined}
-            activityLog={isProcessing ? activityLog : []}
+            activityLog={[]}
             queuedMessageIds={queuedMessageIds}
             verboseTools={verboseTools}
           />
-        </ScrollView>
-      </Box>
+        )}
+      </Static>
+
+      {/* Current streaming content and activity - rendered dynamically */}
+      {isProcessing && (
+        <Messages
+          key="streaming"
+          messages={[]}
+          currentResponse={undefined}
+          streamingMessages={streamingMessages}
+          currentToolCall={undefined}
+          lastToolResult={undefined}
+          activityLog={activityLog}
+          queuedMessageIds={queuedMessageIds}
+          verboseTools={verboseTools}
+        />
+      )}
 
       {/* Queue indicator */}
       <QueueIndicator
@@ -1099,7 +1054,7 @@ export function App({ cwd, version }: AppProps) {
       {/* Input - always enabled, supports queue/interrupt */}
       <Input
         onSubmit={handleSubmit}
-        isProcessing={isProcessing}
+        isProcessing={isBusy}
         queueLength={activeQueue.length + inlineCount}
         commands={commands}
         skills={skills}
@@ -1109,7 +1064,7 @@ export function App({ cwd, version }: AppProps) {
 
       {/* Status bar */}
       <Status
-        isProcessing={isProcessing}
+        isProcessing={isBusy}
         cwd={activeSession?.cwd || cwd}
         queueLength={activeQueue.length + inlineCount}
         tokenUsage={tokenUsage}
