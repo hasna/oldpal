@@ -140,7 +140,8 @@ export class ContextManager {
   }
 
   private isSummaryMessage(message: Message): boolean {
-    return message.role === 'system' && message.content.trim().startsWith(SUMMARY_TAG);
+    const content = message.content ?? '';
+    return message.role === 'system' && content.trim().startsWith(SUMMARY_TAG);
   }
 
   private partitionMessages(messages: Message[]): {

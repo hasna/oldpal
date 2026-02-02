@@ -46,11 +46,11 @@ function summarizeConversation(messages: Message[]): string {
     if (msg.role === 'user') {
       if (msg.toolResults && msg.toolResults.length > 0) {
         for (const result of msg.toolResults) {
-          const content = result.content.slice(0, 500);
+          const content = (result.content || '').slice(0, 500);
           summary.push(`[Tool Result - ${result.toolName || 'unknown'}]: ${content}`);
         }
       } else {
-        summary.push(`User: ${msg.content.slice(0, 300)}`);
+        summary.push(`User: ${(msg.content ?? '').slice(0, 300)}`);
       }
     } else if (msg.role === 'assistant') {
       if (msg.toolCalls && msg.toolCalls.length > 0) {
@@ -59,8 +59,9 @@ function summarizeConversation(messages: Message[]): string {
           summary.push(`[Tool Call - ${call.name}]: ${input}`);
         }
       }
-      if (msg.content.trim()) {
-        summary.push(`Assistant: ${msg.content.slice(0, 300)}`);
+      const assistantContent = msg.content ?? '';
+      if (assistantContent.trim()) {
+        summary.push(`Assistant: ${assistantContent.slice(0, 300)}`);
       }
     }
   }

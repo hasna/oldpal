@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 
@@ -88,6 +88,15 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
 
   // Combined items for selection
   const autocompleteItems = autocompleteMode === 'skill' ? filteredSkills : filteredCommands;
+
+  // Keep selected index in range when list size changes
+  useEffect(() => {
+    if (autocompleteItems.length === 0) {
+      setSelectedIndex(0);
+      return;
+    }
+    setSelectedIndex((prev) => Math.min(prev, autocompleteItems.length - 1));
+  }, [autocompleteItems.length]);
 
   // Handle keyboard input for autocomplete
   useInput((input, key) => {
@@ -220,12 +229,12 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
     <Box flexDirection="column" marginTop={1}>
       {/* Top border */}
       <Box>
-        <Text dimColor>{'─'.repeat(terminalWidth)}</Text>
+        <Text color="gray">{'─'.repeat(terminalWidth)}</Text>
       </Box>
 
       {/* Input area */}
       <Box paddingY={0}>
-        <Text dimColor={isProcessing} color={isProcessing ? undefined : 'cyan'}>&gt; </Text>
+        <Text color={isProcessing ? 'gray' : 'cyan'}>&gt; </Text>
         <Box flexGrow={1}>
           <TextInput
             value={value}
@@ -239,13 +248,13 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
       {/* Show line count if multiline */}
       {lineCount > 1 && (
         <Box marginLeft={2}>
-          <Text dimColor>({lineCount} lines)</Text>
+          <Text color="gray">({lineCount} lines)</Text>
         </Box>
       )}
 
       {/* Bottom border */}
       <Box>
-        <Text dimColor>{'─'.repeat(terminalWidth)}</Text>
+        <Text color="gray">{'─'.repeat(terminalWidth)}</Text>
       </Box>
 
       {isProcessing && (

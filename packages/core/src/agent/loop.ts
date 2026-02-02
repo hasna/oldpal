@@ -1388,7 +1388,7 @@ export class AgentLoop {
 
     for (const msg of messages) {
       if (msg.role !== 'system') continue;
-      const content = msg.content.trim();
+      const content = (msg.content ?? '').trim();
       if (!content) continue;
       if (parts.includes(content)) continue;
       parts.push(content);

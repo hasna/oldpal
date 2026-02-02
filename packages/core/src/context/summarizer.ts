@@ -144,7 +144,8 @@ export class HybridSummarizer implements SummaryStrategy {
     const pathRegex = /(?:\.?\/|[A-Za-z]:\\)[\w\-.\/\\]+\.[A-Za-z0-9]+/g;
 
     for (const msg of messages) {
-      const matches = msg.content.match(pathRegex);
+      const content = msg.content ?? '';
+      const matches = content.match(pathRegex);
       if (matches) {
         for (const match of matches) {
           paths.add(match.replace(/\\/g, '/'));
@@ -159,7 +160,8 @@ export class HybridSummarizer implements SummaryStrategy {
     const commands = new Set<string>();
 
     for (const msg of messages) {
-      const lines = msg.content.split('\n');
+      const content = msg.content ?? '';
+      const lines = content.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
@@ -186,7 +188,8 @@ export class HybridSummarizer implements SummaryStrategy {
     const errors = new Set<string>();
 
     for (const msg of messages) {
-      const lines = msg.content.split('\n');
+      const content = msg.content ?? '';
+      const lines = content.split('\n');
       for (const line of lines) {
         if (/error|failed|exception/i.test(line)) {
           errors.add(line.trim());

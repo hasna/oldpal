@@ -92,6 +92,7 @@ export class AgentContext {
    * Extract PDF attachment from tool result if present
    */
   private extractPdfAttachment(content: string): DocumentAttachment | null {
+    if (!content) return null;
     try {
       const parsed = JSON.parse(content);
       if (parsed && parsed.__pdf_attachment__ === true) {
@@ -140,7 +141,8 @@ export class AgentContext {
   removeSystemMessages(predicate: (content: string) => boolean): void {
     this.messages = this.messages.filter((msg) => {
       if (msg.role !== 'system') return true;
-      return !predicate(msg.content);
+      const content = msg.content ?? '';
+      return !predicate(content);
     });
   }
 
@@ -178,8 +180,8 @@ export class AgentContext {
     const systemMessages = this.messages.filter((m) => m.role === 'system');
     const nonSystemMessages = this.messages.filter((m) => m.role !== 'system');
 
-    const targetCount = this.maxMessages - systemMessages.length;
-    let recentMessages = nonSystemMessages.slice(-targetCount);
+    const targetCount = Math.max(0, this.maxMessages - systemMessages.length);
+    let recentMessages = targetCount > 0 ? nonSystemMessages.slice(-targetCount) : [];
 
     // Ensure we don't start with tool_results (orphaned from their tool_use)
     // If the first message has tool_results, we need to find its corresponding
@@ -191,7 +193,7 @@ export class AgentContext {
         // Include the previous message
         recentMessages = nonSystemMessages.slice(firstIndex - 1);
         // But limit to target count + 1 to include the pair
-        if (recentMessages.length > targetCount + 1) {
+        if (recentMessages.length > targetCount + 1 && targetCount > 0) {
           recentMessages = recentMessages.slice(-(targetCount + 1));
         }
       } else {
