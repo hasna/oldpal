@@ -252,6 +252,24 @@ describe('SessionRegistry', () => {
       await registry.switchSession(session1.id);
       expect(chunks).toHaveLength(1);
     });
+
+    test('should cap buffered chunks for background sessions', async () => {
+      const chunks: StreamChunk[] = [];
+      registry.onChunk((chunk) => chunks.push(chunk));
+
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+
+      for (let i = 0; i < 2100; i += 1) {
+        createdMockClients[1]._emitChunk({ type: 'text', content: `bg-${i}` });
+      }
+      expect(chunks).toHaveLength(0);
+
+      await registry.switchSession(session2.id);
+      expect(chunks.length).toBe(2000);
+
+      await registry.switchSession(session1.id);
+    });
   });
 
   describe('createSession', () => {
@@ -279,6 +297,20 @@ describe('SessionRegistry', () => {
       createdMockClients[1]._emitError(new Error('now-active'));
       expect(errors.some((e) => e.message === 'now-active')).toBe(true);
     });
+
+    test('should buffer background errors and replay on switch', async () => {
+      const chunks: StreamChunk[] = [];
+      registry.onChunk((chunk) => chunks.push(chunk));
+
+      await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+
+      createdMockClients[1]._emitError(new Error('background-failure'));
+      expect(chunks).toHaveLength(0);
+
+      await registry.switchSession(session2.id);
+      expect(chunks.some((chunk) => chunk.type === 'error' && chunk.error === 'background-failure')).toBe(true);
+    });
   });
 
   describe('closeSession', () => {
@@ -289,6 +321,21 @@ describe('SessionRegistry', () => {
 
       registry.closeSession(session1.id);
       expect(registry.getActiveSessionId()).toBe(session2.id);
+    });
+
+    test('should replay buffered chunks when closing active session', async () => {
+      const chunks: StreamChunk[] = [];
+      registry.onChunk((chunk) => chunks.push(chunk));
+
+      const session1 = await registry.createSession('/tmp/one');
+      const session2 = await registry.createSession('/tmp/two');
+
+      createdMockClients[1]._emitChunk({ type: 'text', content: 'bg' });
+      expect(chunks).toHaveLength(0);
+
+      registry.closeSession(session1.id);
+      expect(registry.getActiveSessionId()).toBe(session2.id);
+      expect(chunks.some((chunk) => chunk.type === 'text' && chunk.content === 'bg')).toBe(true);
     });
   });
 

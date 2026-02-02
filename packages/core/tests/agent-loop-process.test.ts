@@ -4,12 +4,17 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import type { StreamChunk } from '@hasna/assistants-shared';
 import { AgentLoop } from '../src/agent/loop';
+import { nativeHookRegistry } from '../src/hooks/native';
 import { ContextManager } from '../src/context/manager';
 import type { SummaryStrategy } from '../src/context/summarizer';
 
 let callCount = 0;
 
 describe('AgentLoop process', () => {
+  beforeEach(() => {
+    nativeHookRegistry.clear();
+  });
+
   beforeEach(() => {
     callCount = 0;
   });
@@ -224,6 +229,42 @@ describe('AgentLoop process', () => {
     expect(last?.content).toContain('first');
     expect(last?.content).not.toContain('second');
     expect(chunks.filter((c) => c.type === 'text').length).toBe(1);
+  });
+
+  test('stop skips scope verification rerun', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-stop-scope-'));
+    const chunks: StreamChunk[] = [];
+    const agent = new AgentLoop({
+      cwd,
+      onChunk: (chunk) => {
+        chunks.push(chunk);
+        if (chunk.type === 'text') {
+          agent.stop();
+        }
+      },
+    });
+
+    let chatCalls = 0;
+    (agent as any).llmClient = {
+      getModel: () => 'mock',
+      chat: async function* (): AsyncGenerator<StreamChunk> {
+        chatCalls += 1;
+        yield { type: 'text', content: 'first' };
+        yield { type: 'done' };
+      },
+    };
+    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+
+    nativeHookRegistry.register({
+      id: 'scope-verification',
+      event: 'Stop',
+      priority: 1,
+      handler: async () => ({ continue: false, systemMessage: 'retry' }),
+    });
+
+    await agent.process('fix this bug in the system');
+
+    expect(chatCalls).toBe(2);
   });
 
   test('stop prevents tool execution after tool_use', async () => {

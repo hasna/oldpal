@@ -341,6 +341,24 @@ describe('CommandExecutor', () => {
       expect(result.prompt).toContain('hello');
     });
 
+    test('should not execute shell commands inside code blocks', async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'assistants-shell-block-'));
+      loader.register({
+        name: 'block',
+        description: 'Shell in code block',
+        content: '```bash\n!pwd\n```',
+        selfHandled: false,
+      });
+
+      mockContext.cwd = tempDir;
+      const result = await executor.execute('/block', mockContext);
+
+      expect(result.prompt).toContain('!pwd');
+      expect(result.prompt).not.toContain(tempDir);
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
     test('should run shell commands from context cwd', async () => {
       const tempDir = mkdtempSync(join(tmpdir(), 'assistants-shell-'));
       loader.register({
