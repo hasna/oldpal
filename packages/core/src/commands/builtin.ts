@@ -948,6 +948,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to clear context entries for "${project.name}".\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         if (sub === 'remove') {
@@ -973,6 +976,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to remove context entry ${id} from "${project.name}".\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         if (sub === 'add') {
@@ -1014,6 +1020,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to add context entry to "${project.name}".\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         context.emit('text', 'Unknown /context command. Use /context help.\n');
@@ -1158,6 +1167,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to update project "${project.name}".\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         if (sub === 'delete' || sub === 'rm') {
@@ -1183,6 +1195,9 @@ export class BuiltinCommands {
             context.emit('done');
             return { handled: true };
           }
+          context.emit('text', `Failed to delete project "${project.name}".\n`);
+          context.emit('done');
+          return { handled: true };
         }
 
         context.emit('text', 'Unknown /projects command. Use /projects help.\n');
