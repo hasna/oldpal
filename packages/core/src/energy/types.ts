@@ -13,19 +13,19 @@ export interface EnergyEffects {
 }
 
 export const DEFAULT_ENERGY_COSTS: EnergyCosts = {
-  message: 2,
-  toolCall: 5,
-  llmCall: 3,
-  longContext: 10,
+  message: 200,
+  toolCall: 500,
+  llmCall: 300,
+  longContext: 1000,
 };
 
 export const DEFAULT_ENERGY_CONFIG: Required<EnergyConfig> = {
   enabled: true,
   costs: DEFAULT_ENERGY_COSTS,
-  regenRate: 5,
-  lowEnergyThreshold: 30,
-  criticalThreshold: 10,
-  maxEnergy: 100,
+  regenRate: 500,
+  lowEnergyThreshold: 3000,
+  criticalThreshold: 1000,
+  maxEnergy: 10000,
 };
 
 export function buildEnergyConfig(config?: EnergyConfig): Required<EnergyConfig> {
