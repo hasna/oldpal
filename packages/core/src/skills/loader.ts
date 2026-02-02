@@ -7,27 +7,32 @@ import { parseFrontmatter } from '@hasna/assistants-shared';
 /**
  * Skill loader - discovers and loads SKILL.md files
  */
+export interface SkillLoadOptions {
+  includeContent?: boolean;
+}
+
 export class SkillLoader {
   private skills: Map<string, Skill> = new Map();
 
   /**
    * Load all skills from user and project directories
    */
-  async loadAll(projectDir: string = process.cwd()): Promise<void> {
+  async loadAll(projectDir: string = process.cwd(), options: SkillLoadOptions = {}): Promise<void> {
+    const includeContent = options.includeContent ?? true;
     // Load user skills
     const envHome = process.env.HOME || process.env.USERPROFILE;
     const userHome = envHome && envHome.trim().length > 0 ? envHome : homedir();
     const userSkillsDir = join(userHome, '.assistants', 'shared', 'skills');
-    await this.loadFromDirectory(userSkillsDir);
+    await this.loadFromDirectory(userSkillsDir, { includeContent });
 
     // Load project skills
     const projectSkillsDir = join(projectDir, '.assistants', 'skills');
-    await this.loadFromDirectory(projectSkillsDir);
+    await this.loadFromDirectory(projectSkillsDir, { includeContent });
 
     // Also check nested .assistants/skills in monorepo
     const nestedGlob = new Glob('**/.assistants/skills/*/SKILL.md');
     for await (const file of nestedGlob.scan({ cwd: projectDir, dot: true })) {
-      await this.loadSkillFile(join(projectDir, file));
+      await this.loadSkillFile(join(projectDir, file), { includeContent });
     }
   }
 
@@ -35,7 +40,8 @@ export class SkillLoader {
    * Load skills from a directory
    * Supports both `skill-name/SKILL.md` and `name/SKILL.md` patterns
    */
-  async loadFromDirectory(dir: string): Promise<void> {
+  async loadFromDirectory(dir: string, options: SkillLoadOptions = {}): Promise<void> {
+    const includeContent = options.includeContent ?? true;
     try {
       // Check if directory exists using native fs
       const { stat } = await import('fs/promises');
@@ -68,7 +74,7 @@ export class SkillLoader {
       // Load all skill files in parallel
       const loadTasks: Array<Promise<Skill | null>> = [];
       for (const file of filesToLoad) {
-        loadTasks.push(this.loadSkillFile(file));
+        loadTasks.push(this.loadSkillFile(file, { includeContent }));
       }
       await Promise.all(loadTasks);
     } catch {
@@ -79,10 +85,11 @@ export class SkillLoader {
   /**
    * Load a single skill file
    */
-  async loadSkillFile(filePath: string): Promise<Skill | null> {
+  async loadSkillFile(filePath: string, options: SkillLoadOptions = {}): Promise<Skill | null> {
     try {
       const content = await Bun.file(filePath).text();
       const { frontmatter, content: markdownContent } = parseFrontmatter<SkillFrontmatter>(content);
+      const includeContent = options.includeContent ?? true;
 
       // Get skill name from frontmatter or directory name
       const dirName = basename(dirname(filePath));
@@ -135,8 +142,9 @@ export class SkillLoader {
         context: frontmatter.context,
         agent: frontmatter.agent,
         hooks: frontmatter.hooks,
-        content: markdownContent,
+        content: includeContent ? markdownContent : '',
         filePath,
+        contentLoaded: includeContent,
       };
 
       this.skills.set(name, skill);
@@ -159,6 +167,16 @@ export class SkillLoader {
    */
   getSkills(): Skill[] {
     return Array.from(this.skills.values());
+  }
+
+  /**
+   * Ensure full content is loaded for a skill
+   */
+  async ensureSkillContent(name: string): Promise<Skill | null> {
+    const skill = this.skills.get(name);
+    if (!skill) return null;
+    if (skill.contentLoaded) return skill;
+    return this.loadSkillFile(skill.filePath, { includeContent: true });
   }
 
   /**

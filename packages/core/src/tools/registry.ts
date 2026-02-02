@@ -267,6 +267,11 @@ function clampWaitTimeout(durationMs: number): number {
   return Math.min(timeoutMs, maxMs);
 }
 
+export const __test__ = {
+  deriveWaitTimeoutMs,
+  clampWaitTimeout,
+};
+
 function normalizeToolError(error: unknown, toolCall: ToolCall): AssistantError {
   if (error instanceof AssistantError) return error;
 

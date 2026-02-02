@@ -18,7 +18,7 @@ import { WebTools } from '../tools/web';
 import { FeedbackTool } from '../tools/feedback';
 import { SchedulerTool } from '../tools/scheduler';
 import { ImageTools } from '../tools/image';
-import { SkillTool } from '../tools/skills';
+import { SkillTool, createSkillListTool, createSkillReadTool } from '../tools/skills';
 import { createAskUserTool, type AskUserHandler } from '../tools/ask-user';
 import { WaitTool, SleepTool } from '../tools/wait';
 import { runHookAgent } from './subagent';
@@ -213,8 +213,8 @@ export class AgentLoop {
 
     const [, , hooksConfig, systemPrompt] = await Promise.all([
       llmClientPromise,
-      // Load skills
-      this.skillLoader.loadAll(this.cwd),
+      // Load skills metadata (descriptions only)
+      this.skillLoader.loadAll(this.cwd, { includeContent: false }),
       // Load hooks config
       loadHooksConfig(this.cwd),
       // Load system prompt
@@ -244,6 +244,10 @@ export class AgentLoop {
     WebTools.registerAll(this.toolRegistry);
     ImageTools.registerAll(this.toolRegistry);
     this.toolRegistry.register(SkillTool.tool, SkillTool.executor);
+    const skillListTool = createSkillListTool(() => this.skillLoader);
+    this.toolRegistry.register(skillListTool.tool, skillListTool.executor);
+    const skillReadTool = createSkillReadTool(() => this.skillLoader);
+    this.toolRegistry.register(skillReadTool.tool, skillReadTool.executor);
     const askUserTool = createAskUserTool(() => this.askUserHandler);
     this.toolRegistry.register(askUserTool.tool, askUserTool.executor);
     this.toolRegistry.register(FeedbackTool.tool, FeedbackTool.executor);
@@ -913,7 +917,7 @@ export class AgentLoop {
         }
       },
       refreshSkills: async () => {
-        await this.skillLoader.loadAll(this.cwd);
+        await this.skillLoader.loadAll(this.cwd, { includeContent: false });
       },
       switchAssistant: async (assistantId: string) => {
         await this.switchAssistant(assistantId);
@@ -1032,7 +1036,12 @@ export class AgentLoop {
 
     // Execute the skill
     const argsList = args ? args.split(/\s+/) : [];
-    const content = await this.skillExecutor.prepare(skill, argsList);
+    const hydrated = await this.skillLoader.ensureSkillContent(skill.name);
+    if (!hydrated) {
+      this.context.addAssistantMessage(`Skill "${skillName}" could not be loaded.`);
+      return true;
+    }
+    const content = await this.skillExecutor.prepare(hydrated, argsList);
 
     // Add skill content as context
     this.currentAllowedTools = this.normalizeAllowedTools(skill.allowedTools);
@@ -1472,6 +1481,11 @@ export class AgentLoop {
     }
     if (this.extraSystemPrompt) {
       parts.push(this.extraSystemPrompt);
+    }
+
+    const skillDescriptions = this.skillLoader.getSkillDescriptions();
+    if (skillDescriptions) {
+      parts.push(`## Skills\n${skillDescriptions}`);
     }
 
     // Add assistant-specific system prompt addition

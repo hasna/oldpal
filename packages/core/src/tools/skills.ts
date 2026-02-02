@@ -2,6 +2,7 @@ import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor } from './registry';
 import { ToolExecutionError, ErrorCodes } from '../errors';
 import { createSkill, type SkillScope } from '../skills/create';
+import type { SkillLoader } from '../skills/loader';
 
 function normalizeScope(input: unknown): SkillScope | null {
   if (!input) return null;
@@ -115,4 +116,92 @@ export class SkillTool {
       `Invoke with: $${result.name} [args] or /${result.name} [args]`,
     ].join('\n');
   };
+}
+
+export function createSkillListTool(getLoader: () => SkillLoader | null) {
+  const tool: Tool = {
+    name: 'skills_list',
+    description: 'List available skills and their descriptions.',
+    parameters: {
+      type: 'object',
+      properties: {
+        cwd: {
+          type: 'string',
+          description: 'Project directory to scan for skills.',
+        },
+      },
+    },
+  };
+
+  const executor: ToolExecutor = async (input) => {
+    const loader = getLoader();
+    if (!loader) {
+      throw new ToolExecutionError('Skill loader is not available.', {
+        toolName: 'skills_list',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
+    }
+    const cwd = typeof input.cwd === 'string' && input.cwd.trim().length > 0 ? input.cwd : process.cwd();
+    await loader.loadAll(cwd, { includeContent: false });
+    const descriptions = loader.getSkillDescriptions();
+    return descriptions || 'No skills loaded.';
+  };
+
+  return { tool, executor };
+}
+
+export function createSkillReadTool(getLoader: () => SkillLoader | null) {
+  const tool: Tool = {
+    name: 'skill_read',
+    description: 'Load and return the full content of a skill.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Skill name to load.',
+        },
+      },
+      required: ['name'],
+    },
+  };
+
+  const executor: ToolExecutor = async (input) => {
+    const loader = getLoader();
+    if (!loader) {
+      throw new ToolExecutionError('Skill loader is not available.', {
+        toolName: 'skill_read',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
+    }
+    const name = String(input.name || '').trim();
+    if (!name) {
+      throw new ToolExecutionError('Skill name is required.', {
+        toolName: 'skill_read',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: false,
+        retryable: false,
+      });
+    }
+    const skill = await loader.ensureSkillContent(name);
+    if (!skill) {
+      throw new ToolExecutionError(`Skill "${name}" not found.`, {
+        toolName: 'skill_read',
+        toolInput: input,
+        code: ErrorCodes.TOOL_NOT_FOUND,
+        recoverable: true,
+        retryable: false,
+      });
+    }
+    return skill.content || '(empty skill content)';
+  };
+
+  return { tool, executor };
 }

@@ -39,7 +39,7 @@ Instructions for the skill.
 `;
       await writeFile(join(skillDir, 'SKILL.md'), skillContent);
 
-      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'), { includeContent: true });
 
       expect(skill).not.toBeNull();
       expect(skill?.name).toBe('my-skill');
@@ -63,7 +63,7 @@ allowed-tools: [bash, "notion"]
 Content`;
       await writeFile(join(skillDir, 'SKILL.md'), skillContent);
 
-      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'), { includeContent: true });
       expect(skill?.allowedTools).toEqual(['bash', 'notion']);
     });
 
@@ -79,7 +79,7 @@ argument-hint: [one, two]
 Content`;
       await writeFile(join(skillDir, 'SKILL.md'), skillContent);
 
-      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'), { includeContent: true });
       expect(skill?.argumentHint).toBe('[one, two]');
     });
 
@@ -95,7 +95,7 @@ View and manage calendar events.
 `;
       await writeFile(join(skillDir, 'SKILL.md'), skillContent);
 
-      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'), { includeContent: true });
 
       expect(skill?.name).toBe('calendar');
     });
@@ -117,7 +117,7 @@ More instructions here.
 `;
       await writeFile(join(skillDir, 'SKILL.md'), skillContent);
 
-      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'), { includeContent: true });
 
       // First paragraph after frontmatter
       expect(skill?.description).toBe('Quick note management tool.');
@@ -133,14 +133,14 @@ Just some instructions without frontmatter.
 `;
       await writeFile(join(skillDir, 'SKILL.md'), skillContent);
 
-      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'));
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'), { includeContent: true });
 
       expect(skill?.name).toBe('simple');
       expect(skill?.content).toContain('Simple Skill');
     });
 
     test('should return null for non-existent file', async () => {
-      const skill = await loader.loadSkillFile(join(tempDir, 'non-existent', 'SKILL.md'));
+      const skill = await loader.loadSkillFile(join(tempDir, 'non-existent', 'SKILL.md'), { includeContent: true });
       expect(skill).toBeNull();
     });
   });
@@ -190,6 +190,40 @@ Content`);
     });
   });
 
+  describe('metadata-only loading', () => {
+    test('should load descriptions without content', async () => {
+      const skillDir = join(tempDir, 'meta-skill');
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, 'SKILL.md'), `---
+name: meta-skill
+description: Metadata only
+---
+
+Full content here.`);
+
+      const skill = await loader.loadSkillFile(join(skillDir, 'SKILL.md'), { includeContent: false });
+      expect(skill?.description).toBe('Metadata only');
+      expect(skill?.content).toBe('');
+      expect(skill?.contentLoaded).toBe(false);
+    });
+
+    test('should hydrate content when requested', async () => {
+      const skillDir = join(tempDir, 'hydrate-skill');
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, 'SKILL.md'), `---
+name: hydrate-skill
+description: Needs content
+---
+
+Hydrated content.`);
+
+      await loader.loadSkillFile(join(skillDir, 'SKILL.md'), { includeContent: false });
+      const hydrated = await loader.ensureSkillContent('hydrate-skill');
+      expect(hydrated?.contentLoaded).toBe(true);
+      expect(hydrated?.content).toContain('Hydrated content');
+    });
+  });
+
   describe('loadAll', () => {
     test('should load user, project, and nested skills', async () => {
       const originalHome = process.env.HOME;
@@ -220,7 +254,7 @@ description: Nested skill
 ---
 Content`);
 
-      await loader.loadAll(projectDir);
+      await loader.loadAll(projectDir, { includeContent: true });
 
       const skills = loader.getSkills().map((s) => s.name).sort();
       expect(skills).toEqual(['nested-skill', 'project-skill', 'user-skill']);
