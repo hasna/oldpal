@@ -52,10 +52,12 @@ export function createEmailProvider(config: InboxConfig): EmailProvider {
   }
 
   // Default to SES
+  // SES can use its own credentials profile (different AWS account) or fall back to storage profile
   const region = config.ses?.region || config.storage?.region || 'us-east-1';
+  const credentialsProfile = config.ses?.credentialsProfile || config.storage?.credentialsProfile;
   return new SESProvider({
     region,
-    credentialsProfile: config.storage?.credentialsProfile,
+    credentialsProfile,
   });
 }
 
