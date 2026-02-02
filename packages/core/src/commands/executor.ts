@@ -105,11 +105,18 @@ export class CommandExecutor {
   private async processShellCommands(content: string, cwd: string): Promise<string> {
     const lines = content.split('\n');
     const processedLines: string[] = [];
+    let inCodeBlock = false;
 
     for (const line of lines) {
       const trimmed = line.trim();
 
-      if (trimmed.startsWith('!')) {
+      if (trimmed.startsWith('```')) {
+        inCodeBlock = !inCodeBlock;
+        processedLines.push(line);
+        continue;
+      }
+
+      if (!inCodeBlock && trimmed.startsWith('!')) {
         // Execute shell command
         const command = trimmed.slice(1).trim();
         const output = await this.executeShell(command, cwd);
