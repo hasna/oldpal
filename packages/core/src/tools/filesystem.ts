@@ -46,6 +46,7 @@ export class FilesystemTools {
     registry.register(this.writeTool, this.writeExecutor);
     registry.register(this.globTool, this.globExecutor);
     registry.register(this.grepTool, this.grepExecutor);
+    registry.register(this.readPdfTool, this.readPdfExecutor);
   }
 
   /**
@@ -431,6 +432,137 @@ export class FilesystemTools {
       if (error instanceof ToolExecutionError) throw error;
       throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
         toolName: 'grep',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
+    }
+  };
+
+  // ============================================
+  // Read PDF Tool
+  // ============================================
+
+  static readonly readPdfTool: Tool = {
+    name: 'read_pdf',
+    description:
+      'Read a PDF file and attach it to the conversation for analysis. ' +
+      'Claude can analyze text, images, charts, and tables in the PDF. ' +
+      'Max 32MB, 100 pages. Returns a reference that allows Claude to see the PDF content.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'The PDF file path to read (absolute or relative to cwd)',
+        },
+        cwd: {
+          type: 'string',
+          description: 'Base working directory for relative paths (optional)',
+        },
+      },
+      required: ['path'],
+    },
+  };
+
+  static readonly readPdfExecutor: ToolExecutor = async (input) => {
+    const baseCwd = (input.cwd as string) || process.cwd();
+    const path = resolve(baseCwd, input.path as string);
+
+    try {
+      // Validate path safety
+      const safety = await isPathSafe(path, 'read', { cwd: baseCwd });
+      if (!safety.safe) {
+        getSecurityLogger().log({
+          eventType: 'path_violation',
+          severity: 'high',
+          details: {
+            tool: 'read_pdf',
+            path,
+            reason: safety.reason || 'Blocked path',
+          },
+          sessionId: (input.sessionId as string) || 'unknown',
+        });
+        throw new ToolExecutionError(safety.reason || 'Blocked path', {
+          toolName: 'read_pdf',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+        });
+      }
+
+      const validated = await validatePath(path, { allowSymlinks: true });
+      if (!validated.valid) {
+        throw new ToolExecutionError(validated.error || 'Invalid path', {
+          toolName: 'read_pdf',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Provide a valid PDF file path.',
+        });
+      }
+
+      const file = Bun.file(validated.resolved);
+      if (!(await file.exists())) {
+        throw new ToolExecutionError(`PDF file not found: ${path}`, {
+          toolName: 'read_pdf',
+          toolInput: input,
+          code: ErrorCodes.TOOL_EXECUTION_FAILED,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Check the file path and try again.',
+        });
+      }
+
+      // Check file extension
+      if (!path.toLowerCase().endsWith('.pdf')) {
+        throw new ToolExecutionError(`File is not a PDF: ${path}`, {
+          toolName: 'read_pdf',
+          toolInput: input,
+          code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Provide a .pdf file.',
+        });
+      }
+
+      // Check file size (max 32MB for Anthropic API)
+      const maxSize = 32 * 1024 * 1024; // 32MB
+      if (file.size > maxSize) {
+        throw new ToolExecutionError(
+          `PDF file too large: ${(file.size / 1024 / 1024).toFixed(1)}MB (max 32MB)`,
+          {
+            toolName: 'read_pdf',
+            toolInput: input,
+            code: ErrorCodes.VALIDATION_OUT_OF_RANGE,
+            recoverable: false,
+            retryable: false,
+            suggestion: 'Use a smaller PDF file (max 32MB, 100 pages).',
+          }
+        );
+      }
+
+      // Read and base64 encode the PDF
+      const buffer = await file.arrayBuffer();
+      const base64Data = Buffer.from(buffer).toString('base64');
+
+      // Return a special format that the agent loop will recognize
+      // and convert to a document attachment
+      return JSON.stringify({
+        __pdf_attachment__: true,
+        path: validated.resolved,
+        name: path.split('/').pop() || 'document.pdf',
+        mediaType: 'application/pdf',
+        data: base64Data,
+        size: file.size,
+      });
+    } catch (error) {
+      if (error instanceof ToolExecutionError) throw error;
+      throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
+        toolName: 'read_pdf',
         toolInput: input,
         code: ErrorCodes.TOOL_EXECUTION_FAILED,
         recoverable: true,

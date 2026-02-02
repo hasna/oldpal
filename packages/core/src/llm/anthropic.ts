@@ -170,7 +170,20 @@ export class AnthropicClient implements LLMClient {
         | Anthropic.TextBlockParam
         | Anthropic.ToolUseBlockParam
         | Anthropic.ToolResultBlockParam
+        | Anthropic.DocumentBlockParam
       > = [];
+
+      // Add document attachments first (PDFs should come before text per Anthropic best practices)
+      if (msg.documents && msg.documents.length > 0) {
+        for (const doc of msg.documents) {
+          if (doc.type === 'pdf') {
+            const docBlock = this.convertDocumentToBlock(doc);
+            if (docBlock) {
+              content.push(docBlock);
+            }
+          }
+        }
+      }
 
       // Add text content
       if (msg.content) {
@@ -217,6 +230,29 @@ export class AnthropicClient implements LLMClient {
     }
 
     return result;
+  }
+
+  private convertDocumentToBlock(doc: import('@hasna/assistants-shared').DocumentAttachment): Anthropic.DocumentBlockParam | null {
+    if (doc.source.type === 'base64') {
+      return {
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: doc.source.mediaType as 'application/pdf',
+          data: doc.source.data,
+        },
+      };
+    } else if (doc.source.type === 'url') {
+      return {
+        type: 'document',
+        source: {
+          type: 'url',
+          url: doc.source.url,
+        },
+      };
+    }
+    // file type not yet supported
+    return null;
   }
 
   private convertTools(tools: Tool[]): Anthropic.Tool[] {

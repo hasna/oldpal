@@ -11,7 +11,23 @@ export interface Message {
   timestamp: number;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  documents?: DocumentAttachment[];
 }
+
+// ============================================
+// Document Types (PDF support)
+// ============================================
+
+export interface DocumentAttachment {
+  type: 'pdf';
+  source: DocumentSource;
+  name?: string;
+}
+
+export type DocumentSource =
+  | { type: 'base64'; mediaType: string; data: string }
+  | { type: 'url'; url: string }
+  | { type: 'file'; fileId: string };
 
 export interface StreamChunk {
   type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'usage' | 'exit';

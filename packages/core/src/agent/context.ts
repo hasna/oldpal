@@ -1,4 +1,4 @@
-import type { Message, ToolCall, ToolResult, ScopeContext } from '@hasna/assistants-shared';
+import type { Message, ToolCall, ToolResult, ScopeContext, DocumentAttachment } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 
 /**
@@ -54,18 +54,70 @@ export class AgentContext {
 
   /**
    * Add tool results as a user message
+   * Also extracts any PDF attachments from tool results
    */
   addToolResults(results: ToolResult[]): Message {
+    const documents: DocumentAttachment[] = [];
+    const processedResults: ToolResult[] = [];
+
+    for (const result of results) {
+      // Check if this is a PDF attachment
+      const pdfAttachment = this.extractPdfAttachment(result.content);
+      if (pdfAttachment) {
+        documents.push(pdfAttachment);
+        // Replace the tool result content with a friendly message
+        processedResults.push({
+          ...result,
+          content: `PDF loaded: ${pdfAttachment.name || 'document.pdf'} (${this.formatBytes(pdfAttachment.source.type === 'base64' ? pdfAttachment.source.data.length * 0.75 : 0)})`,
+        });
+      } else {
+        processedResults.push(result);
+      }
+    }
+
     const message: Message = {
       id: generateId(),
       role: 'user',
       content: '',
       timestamp: now(),
-      toolResults: results,
+      toolResults: processedResults,
+      documents: documents.length > 0 ? documents : undefined,
     };
     this.messages.push(message);
     this.prune();
     return message;
+  }
+
+  /**
+   * Extract PDF attachment from tool result if present
+   */
+  private extractPdfAttachment(content: string): DocumentAttachment | null {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.__pdf_attachment__ === true) {
+        return {
+          type: 'pdf',
+          source: {
+            type: 'base64',
+            mediaType: parsed.mediaType || 'application/pdf',
+            data: parsed.data,
+          },
+          name: parsed.name,
+        };
+      }
+    } catch {
+      // Not JSON or not a PDF attachment
+    }
+    return null;
+  }
+
+  /**
+   * Format bytes to human readable string
+   */
+  private formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
   /**

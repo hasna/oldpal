@@ -19,7 +19,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.0",
+    "@anthropic-ai/sdk": "^0.72.1",
     "@hasna/assistants-shared": "workspace:*",
     "ajv": "^8.17.1",
     "tiktoken": "^1.0.12"
