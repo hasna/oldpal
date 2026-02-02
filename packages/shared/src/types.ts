@@ -63,8 +63,10 @@ export interface ToolParameters {
   required?: string[];
 }
 
+type ToolPropertyType = 'string' | 'number' | 'boolean' | 'array' | 'object';
+
 export interface ToolProperty {
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+  type: ToolPropertyType | ToolPropertyType[];
   description: string;
   enum?: string[];
   items?: ToolProperty;
@@ -379,6 +381,7 @@ export interface AssistantsConfig {
   wallet?: WalletConfig;
   secrets?: SecretsConfig;
   jobs?: JobsConfig;
+  messages?: MessagesConfig;
 }
 
 export interface LLMConfig {
@@ -769,6 +772,43 @@ export interface SecretsConfig {
   };
 }
 
+// ============================================
+// Messages Types (Agent-to-Agent)
+// ============================================
+
+/**
+ * Message priority level
+ */
+export type MessagePriority = 'low' | 'normal' | 'high' | 'urgent';
+
+/**
+ * Configuration for agent-to-agent messaging
+ */
+export interface MessagesConfig {
+  /** Whether messages are enabled (default: false) */
+  enabled?: boolean;
+
+  /** Auto-injection settings */
+  injection?: {
+    /** Auto-inject at turn start (default: true) */
+    enabled?: boolean;
+    /** Max messages to inject per turn (default: 5) */
+    maxPerTurn?: number;
+    /** Only inject >= this priority (default: 'low') */
+    minPriority?: MessagePriority;
+  };
+
+  /** Storage settings */
+  storage?: {
+    /** Base path (default: ~/.assistants/messages) */
+    basePath?: string;
+    /** Max messages per inbox (default: 1000) */
+    maxMessages?: number;
+    /** Max age in days (default: 90) */
+    maxAgeDays?: number;
+  };
+}
+
 /**
  * Email address with optional display name
  */
@@ -850,4 +890,108 @@ export interface EmailListItem {
   hasAttachments: boolean;
   /** Whether email has been read */
   isRead: boolean;
+}
+
+// ============================================
+// User & Authentication Types
+// ============================================
+
+export type UserRole = 'user' | 'admin';
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  role: UserRole;
+  emailVerified: boolean;
+  createdAt: string;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  accessToken: string;
+  refreshToken: string;
+}
+
+// ============================================
+// API Response Types
+// ============================================
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    errors?: Record<string, string[]>;
+  };
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// ============================================
+// Database Entity Types (for web API)
+// ============================================
+
+export interface DbSession {
+  id: string;
+  userId: string;
+  label: string | null;
+  cwd: string | null;
+  agentId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DbAgent {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  avatar: string | null;
+  model: string;
+  systemPrompt: string | null;
+  settings: Record<string, unknown> | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DbMessage {
+  id: string;
+  sessionId: string;
+  userId: string | null;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  toolCalls: ToolCall[] | null;
+  toolResults: ToolResult[] | null;
+  createdAt: string;
+}
+
+export interface DbAgentMessage {
+  id: string;
+  threadId: string;
+  parentId: string | null;
+  fromAgentId: string | null;
+  toAgentId: string | null;
+  subject: string | null;
+  body: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  status: 'unread' | 'read' | 'archived' | 'injected';
+  readAt: string | null;
+  injectedAt: string | null;
+  createdAt: string;
 }
