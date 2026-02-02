@@ -2,7 +2,7 @@ import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { renderMarkdown } from './Markdown';
 import { truncateToolResult } from './toolDisplay';
 
-export type DisplayMessage = Message & { __rendered?: boolean };
+export type DisplayMessage = Message & { __rendered?: boolean; __lineCount?: number };
 
 export interface ActivityEntryLike {
   type: 'text' | 'tool_call' | 'tool_result';
@@ -60,7 +60,12 @@ export function estimateMessageLines(message: DisplayMessage, maxWidth?: number)
   const hasContent = contentLines.length > 0;
   const prefixWidth = message.role === 'user' || message.role === 'assistant' ? 2 : 0;
   const effectiveWidth = maxWidth ? Math.max(1, maxWidth - prefixWidth) : maxWidth;
-  const wrappedLines = contentLines.length > 0 ? countWrappedLines(contentLines, effectiveWidth) : 0;
+  const wrappedLines =
+    typeof message.__lineCount === 'number'
+      ? message.__lineCount
+      : contentLines.length > 0
+        ? countWrappedLines(contentLines, effectiveWidth)
+        : 0;
   let lines = hasContent ? Math.max(1, wrappedLines) : 0;
 
   if (message.role === 'assistant' && message.toolCalls?.length) {

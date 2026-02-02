@@ -529,7 +529,13 @@ function formatMarkdownTables(text: string, maxWidth?: number): string {
   const lines = text.split('\n');
   const output: string[] = [];
 
-  const isSeparator = (line: string) => /^\s*\|?[\s:-]+\|?[\s:-]*$/.test(line);
+  const isSeparator = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    const withoutPipes = trimmed.replace(/\|/g, '');
+    if (!withoutPipes) return false;
+    return /^[\s:-]+$/.test(withoutPipes);
+  };
   const hasPipes = (line: string) => line.includes('|');
 
   let i = 0;
@@ -561,9 +567,30 @@ function formatMarkdownTables(text: string, maxWidth?: number): string {
 function parseTableRow(line: string): string[] {
   const trimmed = line.trim();
   const withoutEdges = trimmed.replace(/^\|/, '').replace(/\|$/, '');
-  return withoutEdges
-    .split('|')
-    .map((cell) => cell.replace(/[\r\n]+/g, ' ').trim());
+  const cells: string[] = [];
+  let current = '';
+  let escaping = false;
+  for (let i = 0; i < withoutEdges.length; i += 1) {
+    const ch = withoutEdges[i];
+    if (escaping) {
+      current += ch;
+      escaping = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaping = true;
+      continue;
+    }
+    if (ch === '|') {
+      cells.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (escaping) current += '\\';
+  cells.push(current);
+  return cells.map((cell) => cell.replace(/[\r\n]+/g, ' ').trim());
 }
 
 function renderTable(header: string[], rows: string[][], maxWidth?: number): string[] {

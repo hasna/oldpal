@@ -71,4 +71,12 @@ table:
     expect(output).toContain('Detailed Status Table');
     expect(output).toContain('HIGH PRIORITY');
   });
+
+  test('renders tables with escaped pipes', () => {
+    const markdown = `| Col A | Col B |
+| --- | --- |
+| a \\| b | c |`;
+    const output = stripAnsi(__test__.parseMarkdown(markdown));
+    expect(output).toContain('a | b');
+  });
 });

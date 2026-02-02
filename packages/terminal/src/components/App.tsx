@@ -168,7 +168,7 @@ function buildDisplayMessages(
       const rendered = renderMarkdown(content, { maxWidth: assistantWidth });
       const renderedLines = rendered.split('\n');
       if (renderedLines.length <= chunkLines) {
-        display.push({ ...msg, content: rendered, __rendered: true });
+        display.push({ ...msg, content: rendered, __rendered: true, __lineCount: renderedLines.length });
         continue;
       }
       const chunks = chunkRenderedLines(renderedLines, chunkLines);
@@ -179,6 +179,7 @@ function buildDisplayMessages(
           id: `${msg.id}::chunk-${i}`,
           content: chunkContent,
           __rendered: true,
+          __lineCount: chunks[i].length,
           toolCalls: i === chunks.length - 1 ? msg.toolCalls : undefined,
           toolResults: i === chunks.length - 1 ? msg.toolResults : undefined,
         });
@@ -189,7 +190,7 @@ function buildDisplayMessages(
     const effectiveWrap = msg.role === 'user' ? Math.max(1, wrapChars - 2) : wrapChars;
     const lines = wrapTextLines(content, effectiveWrap);
     if (lines.length <= chunkLines) {
-      display.push(msg);
+      display.push({ ...msg, __lineCount: lines.length });
       continue;
     }
 
@@ -200,6 +201,7 @@ function buildDisplayMessages(
         ...msg,
         id: `${msg.id}::chunk-${i}`,
         content: chunkContent,
+        __lineCount: chunks[i].length,
         toolCalls: i === chunks.length - 1 ? msg.toolCalls : undefined,
         toolResults: i === chunks.length - 1 ? msg.toolResults : undefined,
       });
