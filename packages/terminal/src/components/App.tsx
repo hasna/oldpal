@@ -164,7 +164,8 @@ function buildDisplayMessages(
     }
 
     if (msg.role === 'assistant') {
-      const rendered = renderMarkdown(content, { maxWidth: options?.maxWidth });
+      const assistantWidth = options?.maxWidth ? Math.max(1, options.maxWidth - 2) : undefined;
+      const rendered = renderMarkdown(content, { maxWidth: assistantWidth });
       const renderedLines = rendered.split('\n');
       if (renderedLines.length <= chunkLines) {
         display.push({ ...msg, content: rendered, __rendered: true });
@@ -185,7 +186,8 @@ function buildDisplayMessages(
       continue;
     }
 
-    const lines = wrapTextLines(content, wrapChars);
+    const effectiveWrap = msg.role === 'user' ? Math.max(1, wrapChars - 2) : wrapChars;
+    const lines = wrapTextLines(content, effectiveWrap);
     if (lines.length <= chunkLines) {
       display.push(msg);
       continue;
