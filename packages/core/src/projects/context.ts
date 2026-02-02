@@ -1,5 +1,6 @@
 import { readFile } from 'fs/promises';
-import { resolve } from 'path';
+import { homedir } from 'os';
+import { resolve, join } from 'path';
 import type { ProjectRecord, ProjectContextEntry, ProjectPlan } from './store';
 import { validatePath } from '../validation/paths';
 
@@ -33,7 +34,12 @@ function normalizeEntryLabel(entry: ProjectContextEntry): string {
 
 async function renderFileEntry(entry: ProjectContextEntry, options: BuildProjectContextOptions): Promise<string> {
   const rawPath = entry.value.trim();
-  const resolved = resolve(options.cwd, rawPath);
+  const expandedPath = rawPath === '~'
+    ? homedir()
+    : rawPath.startsWith('~/')
+      ? join(homedir(), rawPath.slice(2))
+      : rawPath;
+  const resolved = resolve(options.cwd, expandedPath);
   const validation = await validatePath(resolved, { allowedPaths: [options.cwd] });
   if (!validation.valid) {
     return `- File: ${rawPath} (unavailable: ${validation.error || 'invalid path'})`;

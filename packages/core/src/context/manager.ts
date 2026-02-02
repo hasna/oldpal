@@ -101,7 +101,33 @@ export class ContextManager {
       };
     }
 
-    const summary = await this.summarizer.summarize(toSummarize);
+    let summary = '';
+    try {
+      summary = await this.summarizer.summarize(toSummarize);
+    } catch {
+      const tokens = this.tokenCounter.countMessages(messages);
+      this.state.totalTokens = tokens;
+      this.state.messageCount = messages.length;
+      return {
+        messages,
+        summarized: false,
+        tokensBefore: tokens,
+        tokensAfter: tokens,
+        summarizedCount: 0,
+      };
+    }
+    if (!summary.trim()) {
+      const tokens = this.tokenCounter.countMessages(messages);
+      this.state.totalTokens = tokens;
+      this.state.messageCount = messages.length;
+      return {
+        messages,
+        summarized: false,
+        tokensBefore: tokens,
+        tokensAfter: tokens,
+        summarizedCount: 0,
+      };
+    }
 
     const summaryMessage: Message = {
       id: generateId(),

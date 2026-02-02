@@ -68,7 +68,9 @@ export function computeNextRun(schedule: ScheduledCommand, fromTime: number): nu
   const validTimezone = timezone && isValidTimeZone(timezone) ? timezone : undefined;
   if (schedule.schedule.kind === 'once') {
     if (!schedule.schedule.at) return undefined;
-    return parseScheduledTime(schedule.schedule.at, validTimezone);
+    const next = parseScheduledTime(schedule.schedule.at, validTimezone);
+    if (!next || next <= fromTime) return undefined;
+    return next;
   }
   if (schedule.schedule.kind === 'cron') {
     if (!schedule.schedule.cron) return undefined;
@@ -82,6 +84,7 @@ export async function getDueSchedules(cwd: string, nowTime: number): Promise<Sch
   return schedules.filter((schedule) => {
     if (schedule.status !== 'active') return false;
     if (!schedule.nextRunAt) return false;
+    if (!Number.isFinite(schedule.nextRunAt)) return false;
     return schedule.nextRunAt <= nowTime;
   });
 }
@@ -232,6 +235,15 @@ function parseDateTime(value: string): {
     !Number.isFinite(hour) ||
     !Number.isFinite(minute) ||
     !Number.isFinite(second)
+  ) {
+    return null;
+  }
+  if (
+    month < 1 || month > 12 ||
+    day < 1 || day > 31 ||
+    hour < 0 || hour > 23 ||
+    minute < 0 || minute > 59 ||
+    second < 0 || second > 59
   ) {
     return null;
   }

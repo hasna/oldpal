@@ -96,6 +96,9 @@ export class AgentContext {
     try {
       const parsed = JSON.parse(content);
       if (parsed && parsed.__pdf_attachment__ === true) {
+        if (!parsed.data || typeof parsed.data !== 'string') {
+          return null;
+        }
         return {
           type: 'pdf',
           source: {
@@ -177,8 +180,12 @@ export class AgentContext {
     }
 
     // Keep system messages
-    const systemMessages = this.messages.filter((m) => m.role === 'system');
+    let systemMessages = this.messages.filter((m) => m.role === 'system');
     const nonSystemMessages = this.messages.filter((m) => m.role !== 'system');
+
+    if (systemMessages.length > this.maxMessages) {
+      systemMessages = systemMessages.slice(-this.maxMessages);
+    }
 
     const targetCount = Math.max(0, this.maxMessages - systemMessages.length);
     let recentMessages = targetCount > 0 ? nonSystemMessages.slice(-targetCount) : [];
