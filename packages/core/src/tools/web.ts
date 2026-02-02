@@ -39,7 +39,8 @@ export class WebFetchTool {
   static readonly executor: ToolExecutor = async (input) => {
     const url = input.url as string;
     const extractType = (input.extract_type as string) || 'text';
-    const timeout = (input.timeout as number) || 30000;
+    const timeoutInput = Number(input.timeout);
+    const timeout = Number.isFinite(timeoutInput) && timeoutInput > 0 ? timeoutInput : 30000;
 
     try {
       let currentUrl = url;
@@ -216,6 +217,10 @@ export class WebSearchTool {
           type: 'number',
           description: 'Maximum number of results to return (default: 5, max: 10)',
         },
+        timeout: {
+          type: 'number',
+          description: 'Timeout in milliseconds (default: 15000)',
+        },
       },
       required: ['query'],
     },
@@ -223,18 +228,34 @@ export class WebSearchTool {
 
   static readonly executor: ToolExecutor = async (input) => {
     const query = input.query as string;
-    const maxResults = Math.min((input.max_results as number) || 5, 10);
+    const requested = Number(input.max_results);
+    const maxResults = Number.isFinite(requested) && requested > 0
+      ? Math.min(requested, 10)
+      : 5;
+    const timeoutInput = Number(input.timeout);
+    const timeout = Number.isFinite(timeoutInput) && timeoutInput > 0 ? timeoutInput : 15000;
 
     try {
       // Use DuckDuckGo HTML search (no API key needed)
       const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-
-      const response = await fetch(searchUrl, {
-        headers: {
-          'User-Agent': 'assistants/1.0 (AI Assistant)',
-          'Accept': 'text/html',
-        },
-      });
+      const controller = new AbortController();
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const response = await (async () => {
+        try {
+          timeoutId = setTimeout(abortController, timeout, controller);
+          return await fetch(searchUrl, {
+            headers: {
+              'User-Agent': 'assistants/1.0 (AI Assistant)',
+              'Accept': 'text/html',
+            },
+            signal: controller.signal,
+          });
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
+      })();
 
       if (!response.ok) {
         throw new ToolExecutionError(`Search request failed with HTTP ${response.status}`, {
@@ -269,6 +290,16 @@ export class WebSearchTool {
 
       return output.trim();
     } catch (error) {
+      if (error instanceof Error && /aborted|timeout/i.test(error.message)) {
+        throw new ToolExecutionError(`Search request timed out after ${timeout}ms`, {
+          toolName: 'web_search',
+          toolInput: input,
+          code: ErrorCodes.TOOL_TIMEOUT,
+          recoverable: true,
+          retryable: true,
+          suggestion: 'Try again or increase the timeout.',
+        });
+      }
       if (error instanceof ToolExecutionError) throw error;
       throw new ToolExecutionError(error instanceof Error ? error.message : String(error), {
         toolName: 'web_search',
@@ -380,6 +411,10 @@ export class CurlTool {
           type: 'string',
           description: 'Request body for POST/PUT requests',
         },
+        timeout: {
+          type: 'number',
+          description: 'Timeout in milliseconds (default: 30000)',
+        },
       },
       required: ['url'],
     },
@@ -387,10 +422,22 @@ export class CurlTool {
 
   static readonly executor: ToolExecutor = async (input) => {
     const url = input.url as string;
-    const method = (input.method as string) || 'GET';
+    const methodRaw = (input.method as string) || 'GET';
+    const method = methodRaw.toUpperCase();
     const headers = (input.headers as Record<string, string>) || {};
     const body = input.body as string | undefined;
-    const timeout = 30000;
+    const timeoutInput = Number(input.timeout);
+    const timeout = Number.isFinite(timeoutInput) && timeoutInput > 0 ? timeoutInput : 30000;
+
+    if (!['GET', 'POST', 'PUT', 'DELETE'].includes(method)) {
+      throw new ToolExecutionError(`Unsupported HTTP method "${methodRaw}"`, {
+        toolName: 'curl',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: false,
+        retryable: false,
+      });
+    }
 
     try {
       let currentUrl = url;

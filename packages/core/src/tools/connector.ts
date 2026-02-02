@@ -279,6 +279,7 @@ export class ConnectorBridge {
 
   private async populateCache(name: string): Promise<void> {
     const cli = await this.resolveConnectorCli(name);
+    const whichCommand = process.platform === 'win32' ? 'where' : 'which';
 
     try {
       // Quick existence check with timeout
@@ -288,11 +289,14 @@ export class ConnectorBridge {
       });
 
       if (!cli) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         ConnectorBridge.cache.set(name, null);
         return;
       }
 
-      const result = await Promise.race([Bun.$`which ${cli}`.quiet().nothrow(), timeoutPromise]);
+      const result = await Promise.race([Bun.$`${whichCommand} ${cli}`.quiet().nothrow(), timeoutPromise]);
 
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -315,17 +319,18 @@ export class ConnectorBridge {
     const base = `connect-${name}`;
     const candidates = [base];
     const extCandidates = ['.exe', '.cmd', '.bat', '.ps1'];
+    const whichCommand = process.platform === 'win32' ? 'where' : 'which';
     for (const ext of extCandidates) {
       candidates.push(`${base}${ext}`);
     }
 
     for (const candidate of candidates) {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
       try {
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
         const timeoutPromise = new Promise<{ exitCode: number }>((resolve) => {
           timeoutId = setTimeout(resolveTimeout, 500, resolve);
         });
-        const result = await Promise.race([Bun.$`which ${candidate}`.quiet().nothrow(), timeoutPromise]);
+        const result = await Promise.race([Bun.$`${whichCommand} ${candidate}`.quiet().nothrow(), timeoutPromise]);
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -333,6 +338,9 @@ export class ConnectorBridge {
           return candidate;
         }
       } catch {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         // ignore and try next candidate
       }
     }

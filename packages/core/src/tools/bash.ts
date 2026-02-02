@@ -125,6 +125,7 @@ export class BashTool {
     'git status', 'git log', 'git diff', 'git branch', 'git show', 'git remote', 'git tag',
     // Connectors
     'connect-',
+    'connect_',
     // Node/bun info
     'node --version', 'bun --version', 'npm --version', 'pnpm --version',
   ];
@@ -174,11 +175,12 @@ export class BashTool {
   static readonly executor: ToolExecutor = async (input) => {
     const command = input.command as string;
     const cwd = (input.cwd as string) || process.cwd();
-    const timeout = (input.timeout as number) || 30000; // Reduced default timeout
+    const timeoutInput = Number(input.timeout);
+    const timeout = Number.isFinite(timeoutInput) && timeoutInput > 0 ? timeoutInput : 30000; // Reduced default timeout
 
     const baseCommand = command.replace(/\s*2>&1\s*/g, ' ').trim();
     const baseTrimmed = baseCommand.toLowerCase();
-    const allowConnectorNewlines = baseTrimmed.startsWith('connect-');
+    const allowConnectorNewlines = baseTrimmed.startsWith('connect-') || baseTrimmed.startsWith('connect_');
     const commandForExec = allowConnectorNewlines
       ? normalizeNewlinesOutsideQuotes(baseCommand).trim()
       : baseCommand;

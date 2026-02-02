@@ -157,23 +157,29 @@ export class ToolRegistry {
       ]);
       const isError = isErrorResult(result);
       const outputLimit = this.getToolOutputLimit(toolCall.name);
-      const content = enforceToolOutputLimit(result, outputLimit);
+      const rawContent = typeof result === 'string' ? result : safeStringify(result);
+      const content = enforceToolOutputLimit(rawContent, outputLimit);
       return {
         toolCallId: toolCall.id,
         content,
+        rawContent,
+        truncated: content !== rawContent,
         isError,
         toolName: toolCall.name,
       };
     } catch (error) {
       const toolError = normalizeToolError(error, toolCall);
       const outputLimit = this.getToolOutputLimit(toolCall.name);
-      const content = enforceToolOutputLimit(formatToolError(toolError), outputLimit);
+      const rawContent = formatToolError(toolError);
+      const content = enforceToolOutputLimit(rawContent, outputLimit);
       if (toolError instanceof AssistantError) {
         this.errorAggregator?.record(toolError);
       }
       return {
         toolCallId: toolCall.id,
         content,
+        rawContent,
+        truncated: content !== rawContent,
         isError: true,
         toolName: toolCall.name,
       };
@@ -219,6 +225,15 @@ function normalizeToolError(error: unknown, toolCall: ToolCall): AssistantError 
     recoverable: true,
     retryable: false,
   });
+}
+
+function safeStringify(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value ?? '');
+  }
 }
 
 function formatToolError(error: AssistantError): string {
