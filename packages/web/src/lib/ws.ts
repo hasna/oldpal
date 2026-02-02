@@ -97,8 +97,7 @@ class ChatWebSocket {
         store.addToolCall({
           id: message.id,
           name: message.name,
-          input: message.input,
-          type: 'tool',
+          input: message.input as Record<string, unknown>,
         }, message.messageId);
         break;
       case 'tool_result':

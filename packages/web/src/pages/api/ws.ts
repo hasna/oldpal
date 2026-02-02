@@ -10,6 +10,7 @@ type NextApiResponseWithSocket = {
   socket: {
     server: HTTPServer & { wss?: WebSocketServer };
   };
+  end: () => void;
 };
 
 export const config = {
@@ -55,7 +56,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
     res.socket.server.wss = wss;
 
     wss.on('connection', (ws) => {
-      let sessionId = randomUUID();
+      let sessionId: string = randomUUID();
       let unsubscribe: (() => void) | null = null;
       const pendingMessageIds: string[] = [];
       let currentMessageId: string | null = null;
