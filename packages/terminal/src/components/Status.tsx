@@ -22,6 +22,7 @@ interface StatusProps {
   backgroundProcessingCount?: number;
   sessionId?: string | null;
   processingStartTime?: number;
+  verboseTools?: boolean;
 }
 
 export function Status({
@@ -37,6 +38,7 @@ export function Status({
   backgroundProcessingCount = 0,
   sessionId,
   processingStartTime,
+  verboseTools = false,
 }: StatusProps) {
   const [elapsed, setElapsed] = useState(0);
 
@@ -71,8 +73,8 @@ export function Status({
   }
 
   // Session indicator (only show if multiple sessions)
-  const sessionInfo = sessionIndex && sessionCount && sessionCount > 1
-    ? `${sessionIndex}/${sessionCount}`
+  const sessionInfo = sessionCount && sessionCount > 1 && sessionIndex !== undefined
+    ? `${sessionIndex + 1}/${sessionCount}`
     : '';
 
   // Background processing indicator
@@ -86,6 +88,8 @@ export function Status({
     : '';
 
   const sessionLabel = sessionId ? `id ${sessionId}` : '';
+  const queueInfo = queueLength > 0 ? `${queueLength} queued` : '';
+  const verboseLabel = verboseTools ? 'verbose' : '';
 
   return (
     <Box marginTop={1} justifyContent="space-between">
@@ -98,8 +102,14 @@ export function Status({
         {isProcessing && processingStartTime && (
           <Text dimColor> · {formatDuration(elapsed)}</Text>
         )}
+        {verboseLabel && (
+          <Text dimColor>{(contextInfo || (isProcessing && processingStartTime) || sessionInfo) ? ' · ' : ''}{verboseLabel}</Text>
+        )}
+        {queueInfo && (
+          <Text dimColor>{(contextInfo || (isProcessing && processingStartTime) || sessionInfo || verboseLabel) ? ' · ' : ''}{queueInfo}</Text>
+        )}
         {sessionLabel && (
-          <Text dimColor>{(contextInfo || (isProcessing && processingStartTime) || sessionInfo) ? ' · ' : ''}{sessionLabel}</Text>
+          <Text dimColor>{(contextInfo || (isProcessing && processingStartTime) || sessionInfo || queueInfo || verboseLabel) ? ' · ' : ''}{sessionLabel}</Text>
         )}
       </Box>
     </Box>

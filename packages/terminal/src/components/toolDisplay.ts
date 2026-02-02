@@ -3,9 +3,21 @@ import type { ToolResult } from '@hasna/assistants-shared';
 /**
  * Truncate tool result for display - keeps it readable
  */
-export function truncateToolResult(toolResult: ToolResult, maxLines = 15, maxChars = 3000): string {
+export function truncateToolResult(
+  toolResult: ToolResult,
+  maxLines = 15,
+  maxChars = 3000,
+  options?: { verbose?: boolean }
+): string {
   const toolName = toolResult.toolName || 'tool';
-  let content = String(toolResult.content || '');
+  const rawContent = toolResult.rawContent ?? toolResult.content ?? '';
+  let content = String(toolResult.content || rawContent);
+
+  if (options?.verbose) {
+    let full = String(rawContent);
+    full = stripAnsi(full).replace(/\t/g, '  ');
+    return full.trimEnd();
+  }
 
   // Try to format the result more nicely based on the tool
   const formatted = formatToolResultNicely(toolName, content, toolResult.isError);

@@ -1,15 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text } from 'ink';
 import type { Message, ToolCall, ToolResult } from '@hasna/assistants-shared';
 import { Markdown } from './Markdown';
 import {
-  estimateActivityEntryLines,
-  estimateGroupedToolMessagesLines,
-  estimateMessageLines,
   groupConsecutiveToolMessages,
   type DisplayMessage,
 } from './messageLines';
 import { truncateToolResult } from './toolDisplay';
+import { basename } from 'path';
 
 interface ActivityEntry {
   id: string;
@@ -27,9 +25,8 @@ interface MessagesProps {
   currentToolCall?: ToolCall;
   lastToolResult?: ToolResult;
   activityLog?: ActivityEntry[];
-  scrollOffsetLines?: number;
-  maxVisibleLines?: number;
   queuedMessageIds?: Set<string>;
+  verboseTools?: boolean;
 }
 
 export function Messages({
@@ -39,15 +36,10 @@ export function Messages({
   currentToolCall,
   lastToolResult,
   activityLog = [],
-  scrollOffsetLines = 0,
-  maxVisibleLines = 10,
   queuedMessageIds,
+  verboseTools = false,
 }: MessagesProps) {
   const [now, setNow] = useState(Date.now());
-  const { stdout } = useStdout();
-  const columns = stdout?.columns ?? 80;
-  const messageWidth = Math.max(1, columns - 2);
-  const wrapWidth = messageWidth;
 
   type Item =
     | { kind: 'message'; message: DisplayMessage }
@@ -64,47 +56,9 @@ export function Messages({
     ));
   }, [messageGroups]);
 
-  const items = useMemo<Item[]>(() => {
-    const output: Item[] = [];
-    output.push(...messageItems);
-    for (const entry of activityLog) {
-      output.push({ kind: 'activity', entry });
-    }
-    for (const message of streamingMessages) {
-      output.push({ kind: 'streaming', message });
-    }
-    return output;
-  }, [messages, activityLog, streamingMessages]);
-
-  const lineSpans = useMemo(() => {
-    let cursor = 0;
-    return items.map((item, index) => {
-      const lines =
-        item.kind === 'activity'
-          ? estimateActivityEntryLines(item.entry, wrapWidth, messageWidth)
-          : item.kind === 'grouped'
-            ? estimateGroupedToolMessagesLines(item.messages, messageWidth)
-            : estimateMessageLines(item.message, messageWidth);
-      const start = cursor;
-      cursor += lines;
-      return { item, index, start, end: cursor, lines };
-    });
-  }, [items, wrapWidth, messageWidth]);
-
-  const totalLines = lineSpans.length > 0 ? lineSpans[lineSpans.length - 1].end : 0;
-  const endLine = Math.max(0, totalLines - scrollOffsetLines);
-  const startLine = Math.max(0, endLine - maxVisibleLines);
-  const visibleSpans = lineSpans.filter((span) => span.end > startLine && span.start < endLine);
-
-  const visibleMessageItems = visibleSpans
-    .filter((span) => span.item.kind === 'message' || span.item.kind === 'grouped')
-    .map((span) => span.item as { kind: 'message'; message: DisplayMessage } | { kind: 'grouped'; messages: DisplayMessage[] });
-  const visibleActivity = visibleSpans
-    .filter((span) => span.item.kind === 'activity')
-    .map((span) => (span.item as { kind: 'activity'; entry: ActivityEntry }).entry);
-  const visibleStreaming = visibleSpans
-    .filter((span) => span.item.kind === 'streaming')
-    .map((span) => (span.item as { kind: 'streaming'; message: DisplayMessage }).message);
+  const visibleMessageItems = messageItems;
+  const visibleActivity = activityLog;
+  const visibleStreaming = streamingMessages;
   const showCurrentResponse = Boolean(currentResponse) && streamingMessages.length === 0;
 
   // Separate historical messages (stable) from current activity (dynamic)
@@ -149,9 +103,16 @@ export function Messages({
       {/* Historical messages */}
       {historicalItems.map((item) => {
         if (item.item.kind === 'message') {
-          return <MessageBubble key={item.id} message={item.item.message} queuedMessageIds={queuedMessageIds} />;
+          return (
+            <MessageBubble
+              key={item.id}
+              message={item.item.message}
+              queuedMessageIds={queuedMessageIds}
+              verboseTools={verboseTools}
+            />
+          );
         }
-        return <CombinedToolMessage key={item.id} messages={item.item.messages} />;
+        return <CombinedToolMessage key={item.id} messages={item.item.messages} verboseTools={verboseTools} />;
       })}
 
       {/* Show activity log - text, tool calls, and tool results */}
@@ -183,7 +144,7 @@ export function Messages({
           );
         }
         if (entry.type === 'tool_result' && entry.toolResult) {
-          const output = truncateToolResult(entry.toolResult);
+          const output = truncateToolResult(entry.toolResult, undefined, undefined, { verbose: verboseTools });
           return (
             <Box key={entry.id} marginY={1}>
               <Text dimColor>↳ </Text>
@@ -197,7 +158,12 @@ export function Messages({
       })}
 
       {visibleStreaming.map((message) => (
-        <MessageBubble key={message.id} message={message} queuedMessageIds={queuedMessageIds} />
+        <MessageBubble
+          key={message.id}
+          message={message}
+          queuedMessageIds={queuedMessageIds}
+          verboseTools={verboseTools}
+        />
       ))}
 
       {/* Show current streaming response (text being typed now) */}
@@ -224,7 +190,7 @@ function formatDuration(ms: number): string {
 /**
  * Render multiple tool-only messages as a single combined row
  */
-function CombinedToolMessage({ messages }: { messages: DisplayMessage[] }) {
+function CombinedToolMessage({ messages, verboseTools }: { messages: DisplayMessage[]; verboseTools?: boolean }) {
   // Collect all tool calls from all messages
   const allToolCalls: ToolCall[] = [];
   const allToolResults: ToolResult[] = [];
@@ -239,7 +205,7 @@ function CombinedToolMessage({ messages }: { messages: DisplayMessage[] }) {
 
   return (
     <Box marginY={1}>
-      <ToolCallPanel toolCalls={allToolCalls} toolResults={allToolResults} />
+      <ToolCallPanel toolCalls={allToolCalls} toolResults={allToolResults} verboseTools={verboseTools} />
     </Box>
   );
 }
@@ -248,9 +214,10 @@ function CombinedToolMessage({ messages }: { messages: DisplayMessage[] }) {
 interface MessageBubbleProps {
   message: DisplayMessage;
   queuedMessageIds?: Set<string>;
+  verboseTools?: boolean;
 }
 
-function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
+function MessageBubble({ message, queuedMessageIds, verboseTools }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isQueued = isUser && queuedMessageIds?.has(message.id);
@@ -294,7 +261,7 @@ function MessageBubble({ message, queuedMessageIds }: MessageBubbleProps) {
       )}
       {toolCalls.length > 0 && (
         <Box marginTop={hasContent ? 1 : 0}>
-          <ToolCallPanel toolCalls={toolCalls} toolResults={toolResults} />
+          <ToolCallPanel toolCalls={toolCalls} toolResults={toolResults} verboseTools={verboseTools} />
         </Box>
       )}
     </Box>
@@ -325,9 +292,11 @@ function stripAnsi(text: string): string {
 function ToolCallPanel({
   toolCalls,
   toolResults,
+  verboseTools,
 }: {
   toolCalls: ToolCall[];
   toolResults?: ToolResult[];
+  verboseTools?: boolean;
 }) {
   if (toolCalls.length === 0) return null;
 
@@ -367,7 +336,9 @@ function ToolCallPanel({
         const context = getToolContext(toolCall);
         const maxLine = Math.max(1, innerWidth - 2);
         const summaryLine = truncate(formatToolCall(toolCall), maxLine);
-        const resultText = result ? indentMultiline(truncateToolResult(result, 4, 400), '  ') : '';
+        const resultText = result
+          ? indentMultiline(truncateToolResult(result, 4, 400, { verbose: verboseTools }), '  ')
+          : '';
         return (
           <Box key={toolCall.id} flexDirection="column" marginTop={1}>
             <Box>
@@ -379,6 +350,11 @@ function ToolCallPanel({
             {result && (
               <Box marginLeft={2}>
                 <Text dimColor>↳ {resultText}</Text>
+              </Box>
+            )}
+            {result && !verboseTools && result.truncated && (
+              <Box marginLeft={2}>
+                <Text dimColor>↳ (truncated · Ctrl+O for full output)</Text>
               </Box>
             )}
           </Box>
@@ -435,10 +411,10 @@ function getToolContext(toolCall: ToolCall): string {
       return truncate(String(input.command || ''), 20);
     case 'read':
       const path = String(input.path || input.file_path || '');
-      return path.split('/').pop() || '';
+      return basename(path) || path;
     case 'write':
       const writePath = String(input.filename || input.path || input.file_path || '');
-      return writePath.split('/').pop() || '';
+      return basename(writePath) || writePath;
     case 'glob':
       return truncate(String(input.pattern || ''), 20);
     case 'grep':
@@ -543,7 +519,7 @@ function formatToolCall(toolCall: ToolCall): string {
       return `Slack: ${truncate(String(input.command || input.action || ''), 60)}`;
     default:
       // For connector tools (connect-*), try to format nicely
-      if (name.startsWith('connect_') || name.includes('_')) {
+      if (name.startsWith('connect_') || name.startsWith('connect-') || name.includes('_') || name.includes('-')) {
         const action = String(input.command || input.action || input.operation || '');
         if (action) {
           return `${formatToolDisplayName(name)}: ${truncate(action, 50)}`;
@@ -556,8 +532,8 @@ function formatToolCall(toolCall: ToolCall): string {
 function formatToolDisplayName(name: string): string {
   // Convert snake_case to Title Case
   return name
-    .replace(/^connect_/, '')
-    .replace(/_/g, ' ')
+    .replace(/^connect[_-]/, '')
+    .replace(/[_-]/g, ' ')
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 

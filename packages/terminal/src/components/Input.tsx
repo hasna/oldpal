@@ -112,7 +112,7 @@ export function Input({ onSubmit, isProcessing, queueLength = 0, commands, skill
         setSelectedIndex(0);
         return;
       }
-      if (value.trim()) {
+      if (isProcessing && value.trim()) {
         onSubmit(value, 'queue');
         setValue('');
         setSelectedIndex(0);

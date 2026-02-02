@@ -1,43 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
+import { ScrollView, type ScrollViewRef } from 'ink-scroll-view';
 import { SessionRegistry, type SessionInfo } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
-import { renderMarkdown } from './Markdown';
+import { buildDisplayMessages } from './messageRender';
 import { Status } from './Status';
 import { Spinner } from './Spinner';
 import { ProcessingIndicator } from './ProcessingIndicator';
 import { WelcomeBanner } from './WelcomeBanner';
 import { SessionSelector } from './SessionSelector';
-import {
-  estimateActivityLogLines,
-  estimateGroupedToolMessagesLines,
-  estimateMessageLines,
-  groupConsecutiveToolMessages,
-  type DisplayMessage,
-} from './messageLines';
+import { ErrorBanner } from './ErrorBanner';
+import { QueueIndicator } from './QueueIndicator';
+import type { QueuedMessage } from './appTypes';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
-
-function parseErrorMessage(error: string): { code?: string; message: string; suggestion?: string } {
-  const lines = error.split('\n');
-  const suggestionLine = lines.find((line) => line.toLowerCase().startsWith('suggestion:'));
-  const suggestion = suggestionLine ? suggestionLine.replace(/^suggestion:\s*/i, '').trim() : undefined;
-  const mainLines = suggestionLine ? lines.filter((line) => line !== suggestionLine) : lines;
-  let message = mainLines.join('\n').trim();
-  let code: string | undefined;
-  const index = message.indexOf(':');
-  if (index > 0) {
-    const candidate = message.slice(0, index).trim();
-    if (/^[A-Z0-9_]+$/.test(candidate)) {
-      code = candidate;
-      message = message.slice(index + 1).trim();
-    }
-  }
-  return { code, message, suggestion };
-}
 
 function formatElapsedDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -78,156 +57,8 @@ interface SessionUIState {
   error: string | null;
 }
 
-interface QueuedMessage {
-  id: string;
-  sessionId: string;
-  content: string;
-  queuedAt: number;
-  mode: 'queued' | 'inline';
-}
-
 const MESSAGE_CHUNK_LINES = 12;
 const MESSAGE_WRAP_CHARS = 120;
-
-function wrapTextLines(text: string, wrapChars: number): string[] {
-  const rawLines = text.split('\n');
-  const lines: string[] = [];
-  for (const line of rawLines) {
-    if (line.length <= wrapChars) {
-      lines.push(line);
-      continue;
-    }
-    for (let i = 0; i < line.length; i += wrapChars) {
-      lines.push(line.slice(i, i + wrapChars));
-    }
-  }
-  return lines;
-}
-
-function stripAnsi(text: string): string {
-  return text.replace(/\x1B\[[0-9;]*m/g, '');
-}
-
-function countWrappedLines(lines: string[], maxWidth?: number): number {
-  if (!maxWidth || maxWidth <= 0) return lines.length;
-  let total = 0;
-  for (const line of lines) {
-    const visible = stripAnsi(line).length;
-    total += Math.max(1, Math.ceil(visible / maxWidth));
-  }
-  return total;
-}
-
-function chunkRenderedLines(lines: string[], chunkLines: number): string[][] {
-  const chunks: string[][] = [];
-  let current: string[] = [];
-  let i = 0;
-
-  const isBoxStart = (line: string) => stripAnsi(line).trimStart().startsWith('┌');
-  const isBoxEnd = (line: string) => stripAnsi(line).trimStart().startsWith('└');
-
-  while (i < lines.length) {
-    const line = lines[i];
-    if (isBoxStart(line)) {
-      let end = i + 1;
-      while (end < lines.length && !isBoxEnd(lines[end])) {
-        end += 1;
-      }
-      if (end < lines.length) end += 1;
-      const boxLines = lines.slice(i, end);
-      if (current.length > 0 && current.length + boxLines.length > chunkLines) {
-        chunks.push(current);
-        current = [];
-      }
-      if (boxLines.length >= chunkLines) {
-        chunks.push(boxLines);
-      } else {
-        current.push(...boxLines);
-      }
-      i = end;
-      continue;
-    }
-
-    if (current.length >= chunkLines) {
-      chunks.push(current);
-      current = [];
-    }
-    current.push(line);
-    i += 1;
-  }
-
-  if (current.length > 0) {
-    chunks.push(current);
-  }
-
-  return chunks;
-}
-
-function buildDisplayMessages(
-  messages: Message[],
-  chunkLines: number,
-  wrapChars: number,
-  options?: { maxWidth?: number }
-): DisplayMessage[] {
-  const display: DisplayMessage[] = [];
-
-  for (const msg of messages) {
-    const content = msg.content ?? '';
-    const shouldChunk = content.trim() !== '';
-    if (!shouldChunk) {
-      display.push(msg);
-      continue;
-    }
-
-    if (msg.role === 'assistant') {
-      const assistantWidth = options?.maxWidth ? Math.max(1, options.maxWidth - 2) : undefined;
-      const rendered = renderMarkdown(content, { maxWidth: assistantWidth });
-      const renderedLines = rendered.split('\n');
-      if (renderedLines.length <= chunkLines) {
-        const lineCount = countWrappedLines(renderedLines, assistantWidth);
-        display.push({ ...msg, content: rendered, __rendered: true, __lineCount: lineCount });
-        continue;
-      }
-      const chunks = chunkRenderedLines(renderedLines, chunkLines);
-      for (let i = 0; i < chunks.length; i++) {
-        const chunkContent = chunks[i].join('\n');
-        const lineCount = countWrappedLines(chunks[i], assistantWidth);
-        display.push({
-          ...msg,
-          id: `${msg.id}::chunk-${i}`,
-          content: chunkContent,
-          __rendered: true,
-          __lineCount: lineCount,
-          toolCalls: i === chunks.length - 1 ? msg.toolCalls : undefined,
-          toolResults: i === chunks.length - 1 ? msg.toolResults : undefined,
-        });
-      }
-      continue;
-    }
-
-    const effectiveWrap = msg.role === 'user' ? Math.max(1, wrapChars - 2) : wrapChars;
-    const lines = wrapTextLines(content, effectiveWrap);
-    if (lines.length <= chunkLines) {
-      display.push({ ...msg, __lineCount: lines.length });
-      continue;
-    }
-
-    const chunks = chunkRenderedLines(lines, chunkLines);
-    for (let i = 0; i < chunks.length; i++) {
-      const chunkContent = chunks[i].join('\n');
-      display.push({
-        ...msg,
-        id: `${msg.id}::chunk-${i}`,
-        content: chunkContent,
-        __lineCount: chunks[i].length,
-        toolCalls: i === chunks.length - 1 ? msg.toolCalls : undefined,
-        toolResults: i === chunks.length - 1 ? msg.toolResults : undefined,
-      });
-    }
-  }
-
-  return display;
-}
 
 export function App({ cwd, version }: AppProps) {
   const { exit } = useApp();
@@ -260,10 +91,12 @@ export function App({ cwd, version }: AppProps) {
   const [energyState, setEnergyState] = useState<EnergyState | undefined>();
   const [voiceState, setVoiceState] = useState<VoiceState | undefined>();
   const [identityInfo, setIdentityInfo] = useState<ActiveIdentityInfo | undefined>();
+  const [verboseTools, setVerboseTools] = useState(false);
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
+  const scrollRef = useRef<ScrollViewRef>(null);
 
   // Available skills for autocomplete
   const [skills, setSkills] = useState<{ name: string; description: string; argumentHint?: string }[]>([]);
@@ -274,10 +107,30 @@ export function App({ cwd, version }: AppProps) {
   const toolCallsRef = useRef<ToolCall[]>([]);
   const toolResultsRef = useRef<ToolResult[]>([]);
   const activityLogRef = useRef<ActivityEntry[]>([]);
-  const prevDisplayLineCountRef = useRef(0);
   const skipNextDoneRef = useRef(false);
   const isProcessingRef = useRef(isProcessing);
   const processingStartTimeRef = useRef<number | undefined>(processingStartTime);
+  const pendingSendsRef = useRef<Array<{ id: string; sessionId: string; mode: 'inline' | 'queued' }>>([]);
+
+  const updateScrollMetrics = useCallback((offset?: number) => {
+    const currentOffset =
+      typeof offset === 'number' ? offset : scrollRef.current?.getScrollOffset() ?? 0;
+    const bottomOffset = scrollRef.current?.getBottomOffset() ?? 0;
+    setScrollOffset(currentOffset);
+    setAutoScroll(currentOffset >= Math.max(0, bottomOffset - 1));
+  }, []);
+
+  useEffect(() => {
+    if (!stdout) return;
+    const handleResize = () => {
+      scrollRef.current?.remeasure();
+      updateScrollMetrics();
+    };
+    stdout.on('resize', handleResize);
+    return () => {
+      stdout.off('resize', handleResize);
+    };
+  }, [stdout, updateScrollMetrics]);
   const turnIdRef = useRef(0);
 
   useEffect(() => {
@@ -369,7 +222,7 @@ export function App({ cwd, version }: AppProps) {
       content = content ? `${content}\n\n[error]` : '[error]';
     }
 
-    if (processingStartTimeRef.current) {
+    if ((status === 'stopped' || status === 'interrupted') && processingStartTimeRef.current) {
       const workedFor = formatElapsedDuration(Date.now() - processingStartTimeRef.current);
       content = content ? `${content}\n\n✻ Worked for ${workedFor}` : `✻ Worked for ${workedFor}`;
     }
@@ -476,11 +329,13 @@ export function App({ cwd, version }: AppProps) {
         setIsProcessing(true);
         isProcessingRef.current = true;
         setProcessingStartTime(Date.now());
-        setInlinePending((prev) => {
-          const idx = prev.findIndex((msg) => msg.sessionId === active.id);
-          if (idx === -1) return prev;
-          return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
-        });
+        const pendingIndex = pendingSendsRef.current.findIndex((entry) => entry.sessionId === active.id);
+        if (pendingIndex !== -1) {
+          const [started] = pendingSendsRef.current.splice(pendingIndex, 1);
+          if (started?.mode === 'inline') {
+            setInlinePending((prev) => prev.filter((msg) => msg.id !== started.id));
+          }
+        }
       }
     }
 
@@ -656,6 +511,12 @@ export function App({ cwd, version }: AppProps) {
 
     if (!nextMessage) return;
 
+    pendingSendsRef.current.push({
+      id: nextMessage.id,
+      sessionId: activeSessionId,
+      mode: 'queued',
+    });
+
     // Add user message if not already shown (queued messages are pre-rendered)
     const userMessage: Message = {
       id: nextMessage.id,
@@ -708,11 +569,6 @@ export function App({ cwd, version }: AppProps) {
   const backgroundProcessingCount = registry.getBackgroundProcessingSessions().length;
 
   const MAX_QUEUED_PREVIEW = 3;
-  const truncateQueued = (text: string, maxLen: number = 80) => {
-    if (text.length <= maxLen) return text;
-    return text.slice(0, maxLen - 3) + '...';
-  };
-  const queuedCount = activeQueue.filter((msg) => msg.mode === 'queued').length;
   const inlineCount = activeInline.length;
 
   // Show welcome banner only when no messages
@@ -720,75 +576,6 @@ export function App({ cwd, version }: AppProps) {
 
   const renderWidth = columns ? Math.max(1, columns - 2) : undefined;
   const wrapChars = renderWidth ?? MESSAGE_WRAP_CHARS;
-  const activityLogLineCount = useMemo(() => {
-    if (activityLog.length === 0) return 0;
-    return estimateActivityLogLines(activityLog, wrapChars, renderWidth);
-  }, [activityLog, renderWidth, wrapChars]);
-
-  const reservedLines = useMemo(() => {
-    let lines = 0;
-    const wrapWidth = Math.max(1, (columns ?? 80) - 2);
-
-    // Root padding (Box padding={1}) adds top + bottom lines
-    lines += 2;
-
-    if (showWelcome) {
-      lines += 4; // WelcomeBanner lines + margin
-    }
-    if (backgroundProcessingCount > 0) {
-      lines += 1;
-    }
-    if (scrollOffset > 0) {
-      lines += 1;
-    }
-
-    if (activeQueue.length > 0 || inlineCount > 0) {
-      const previewCount = Math.min(MAX_QUEUED_PREVIEW, activeQueue.length + inlineCount);
-      const hasMore = activeQueue.length + inlineCount > MAX_QUEUED_PREVIEW;
-      lines += 2; // marginY
-      lines += 1; // summary line
-      const previewWidth = Math.max(1, wrapWidth - 2);
-      const previewItems = [...activeInline, ...activeQueue].slice(0, MAX_QUEUED_PREVIEW);
-      const previewLines = previewItems.reduce((sum, queued) => {
-        const label = queued.mode === 'inline' ? '↳' : '⏳';
-        const text = `${label} ${truncateQueued(queued.content)}`;
-        return sum + countWrappedLines([text], previewWidth);
-      }, 0);
-      lines += Math.max(previewCount, previewLines);
-      if (hasMore) lines += 1;
-    }
-
-    if (error) {
-      const parsed = parseErrorMessage(error);
-      const messageLines = parsed.message ? countWrappedLines(parsed.message.split('\n'), wrapWidth) : 1;
-      const suggestionLines = parsed.suggestion ? countWrappedLines(parsed.suggestion.split('\n'), wrapWidth) : 0;
-      lines += 2; // marginY
-      lines += Math.max(1, messageLines) + suggestionLines;
-    }
-
-    if (isProcessing) {
-      lines += 3; // ProcessingIndicator margin + line
-    }
-
-    lines += 1; // Input marginTop
-    lines += 3; // Input border + input line + border
-    if (isProcessing) {
-      lines += 1; // esc hint line
-    }
-
-    lines += 2; // Status marginTop + line
-
-    return lines;
-  }, [
-    activeQueue.length,
-    inlineCount,
-    backgroundProcessingCount,
-    scrollOffset,
-    error,
-    isProcessing,
-    showWelcome,
-    columns,
-  ]);
 
   const displayMessages = useMemo(
     () => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth }),
@@ -804,51 +591,24 @@ export function App({ cwd, version }: AppProps) {
     };
     return buildDisplayMessages([streamingMessage], MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth });
   }, [currentResponse, isProcessing, wrapChars, renderWidth]);
-  const displayLineCount = useMemo(() => {
-    const grouped = groupConsecutiveToolMessages(displayMessages);
-    const groupedLines = grouped.reduce((sum, group) => {
-      if (group.type === 'single') {
-        return sum + estimateMessageLines(group.message, renderWidth);
-      }
-      return sum + estimateGroupedToolMessagesLines(group.messages, renderWidth);
-    }, 0);
-    const streamingLines = streamingMessages.reduce((sum, msg) => sum + estimateMessageLines(msg, renderWidth), 0);
-    return groupedLines + streamingLines;
-  }, [displayMessages, streamingMessages, renderWidth]);
-  const totalLineCount = displayLineCount + activityLogLineCount;
 
   // Process queue when not processing
   useEffect(() => {
-    if (!isProcessing && activeQueue.length > 0) {
+    if (!isProcessing && activeQueue.length > 0 && activeInline.length === 0) {
       processQueue();
     }
-  }, [isProcessing, activeQueue.length, processQueue]);
+  }, [isProcessing, activeQueue.length, activeInline.length, processQueue]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new content arrives
   useEffect(() => {
-    if (autoScroll) {
-      setScrollOffset(0);
-    }
-  }, [totalLineCount, autoScroll]);
+    if (!autoScroll) return;
+    scrollRef.current?.scrollToBottom();
+  }, [displayMessages, activityLog, streamingMessages, autoScroll]);
 
-  // Keep viewport stable when not auto-scrolling
+  // Ensure scroll metrics are up to date when content changes
   useEffect(() => {
-    const prevCount = prevDisplayLineCountRef.current;
-    if (!autoScroll && totalLineCount > prevCount) {
-      const delta = totalLineCount - prevCount;
-      setScrollOffset((prev) => prev + delta);
-    }
-    prevDisplayLineCountRef.current = totalLineCount;
-  }, [totalLineCount, autoScroll]);
-
-  // Max visible messages - size to terminal height when available
-  const maxVisibleLines = rows ? Math.max(1, rows - reservedLines) : 20;
-
-  // Clamp scroll offset to available range
-  useEffect(() => {
-    const maxOffset = Math.max(0, totalLineCount - maxVisibleLines);
-    setScrollOffset((prev) => Math.min(prev, maxOffset));
-  }, [totalLineCount, maxVisibleLines]);
+    updateScrollMetrics();
+  }, [displayMessages, activityLog, streamingMessages, updateScrollMetrics]);
 
   // Handle session switch
   const handleSessionSwitch = useCallback(async (sessionId: string) => {
@@ -910,6 +670,13 @@ export function App({ cwd, version }: AppProps) {
     }
   }, [cwd, registry, saveCurrentSessionState, loadSessionState]);
 
+  const getScrollStep = useCallback(() => {
+    const viewport = scrollRef.current?.getViewportHeight();
+    const fallback = Math.max(3, rows - 6);
+    const height = viewport ?? fallback;
+    return Math.max(3, Math.floor(height / 2));
+  }, [rows]);
+
   // Handle keyboard shortcuts (inactive when session selector is shown)
   useInput((input, key) => {
     // Ctrl+S: show session selector
@@ -937,6 +704,11 @@ export function App({ cwd, version }: AppProps) {
         exit();
       }
     }
+    // Ctrl+O: toggle full tool output
+    if (key.ctrl && input === 'o') {
+      setVerboseTools((prev) => !prev);
+      return;
+    }
     // Escape: stop processing or close session selector
     if (key.escape) {
       if (isProcessing && activeSession) {
@@ -954,38 +726,35 @@ export function App({ cwd, version }: AppProps) {
 
     // Page Up: scroll up through messages
     if (key.pageUp || (key.shift && key.upArrow)) {
-      setScrollOffset((prev) => {
-        const maxOffset = Math.max(0, totalLineCount - maxVisibleLines);
-        const step = Math.max(3, Math.floor(maxVisibleLines / 2));
-        const newOffset = Math.min(prev + step, maxOffset);
-        if (newOffset > 0) setAutoScroll(false);
-        return newOffset;
-      });
+      const step = getScrollStep();
+      scrollRef.current?.scrollBy(-step);
+      setAutoScroll(false);
     }
 
     // Page Down: scroll down through messages
     if (key.pageDown || (key.shift && key.downArrow)) {
-      setScrollOffset((prev) => {
-        const step = Math.max(3, Math.floor(maxVisibleLines / 2));
-        const newOffset = Math.max(0, prev - step);
-        if (newOffset === 0) setAutoScroll(true);
-        return newOffset;
-      });
+      const step = getScrollStep();
+      scrollRef.current?.scrollBy(step);
     }
 
     // Home: scroll to top
     if (key.ctrl && input === 'u') {
-      const maxOffset = Math.max(0, totalLineCount - maxVisibleLines);
-      setScrollOffset(maxOffset);
+      scrollRef.current?.scrollToTop();
       setAutoScroll(false);
     }
 
     // End: scroll to bottom
     if (key.ctrl && input === 'd') {
-      setScrollOffset(0);
+      scrollRef.current?.scrollToBottom();
       setAutoScroll(true);
     }
   }, { isActive: !showSessionSelector });
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    scrollRef.current?.scrollToBottom();
+    setAutoScroll(true);
+  }, [activeSessionId]);
 
   // Handle message submission
   const handleSubmit = useCallback(
@@ -1070,6 +839,7 @@ export function App({ cwd, version }: AppProps) {
             timestamp: now(),
           },
         ]);
+        pendingSendsRef.current.push({ id: inlineId, sessionId: activeSessionId, mode: 'inline' });
         await activeSession.client.send(trimmedInput);
         return;
       }
@@ -1140,7 +910,7 @@ export function App({ cwd, version }: AppProps) {
 
   if (isInitializing) {
     return (
-      <Box flexDirection="column" padding={1}>
+      <Box flexDirection="column" padding={1} height={rows}>
         <Spinner label="Initializing..." />
       </Box>
     );
@@ -1149,7 +919,7 @@ export function App({ cwd, version }: AppProps) {
   // Show session selector modal
   if (showSessionSelector) {
     return (
-      <Box flexDirection="column" padding={1}>
+      <Box flexDirection="column" padding={1} height={rows}>
         <SessionSelector
           sessions={sessions}
           activeSessionId={activeSessionId}
@@ -1175,12 +945,12 @@ export function App({ cwd, version }: AppProps) {
   const isThinking = isProcessing && !currentResponse && !currentToolCall && toolCallEntries.length === 0;
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" padding={1} height={rows}>
       {/* Welcome banner */}
       {showWelcome && (
         <WelcomeBanner
           version={version ?? 'unknown'}
-          model="claude-sonnet-4"
+          model={activeSession?.client.getModel() ?? 'unknown'}
           directory={activeSession?.cwd || cwd}
         />
       )}
@@ -1197,58 +967,40 @@ export function App({ cwd, version }: AppProps) {
       {/* Scroll indicator */}
       {scrollOffset > 0 && (
         <Box>
-          <Text dimColor>↑ {scrollOffset} more lines above (Shift+↓ or Page Down to scroll down)</Text>
+          <Text dimColor>↑ {Math.round(scrollOffset)} more lines above (Shift+↓ or Page Down to scroll down)</Text>
         </Box>
       )}
 
       {/* Messages - key forces remount on session switch for clean state */}
-      <Messages
-        key={activeSessionId || 'default'}
-        messages={displayMessages}
-        currentResponse={undefined}
-        streamingMessages={streamingMessages}
-        currentToolCall={undefined}
-        lastToolResult={undefined}
-        activityLog={isProcessing ? activityLog : []}
-        queuedMessageIds={queuedMessageIds}
-        scrollOffsetLines={scrollOffset}
-        maxVisibleLines={maxVisibleLines}
-      />
+      <Box flexGrow={1} flexShrink={1} minHeight={1}>
+        <ScrollView
+          ref={scrollRef}
+          onScroll={(offset) => updateScrollMetrics(offset)}
+          onContentHeightChange={() => updateScrollMetrics()}
+          onViewportSizeChange={() => updateScrollMetrics()}
+        >
+          <Messages
+            key={activeSessionId || 'default'}
+            messages={displayMessages}
+            currentResponse={undefined}
+            streamingMessages={streamingMessages}
+            currentToolCall={undefined}
+            lastToolResult={undefined}
+            activityLog={isProcessing ? activityLog : []}
+            queuedMessageIds={queuedMessageIds}
+            verboseTools={verboseTools}
+          />
+        </ScrollView>
+      </Box>
 
       {/* Queue indicator */}
-      {(activeQueue.length > 0 || inlineCount > 0) && (
-        <Box marginY={1} flexDirection="column">
-          <Text dimColor>
-            {activeQueue.length + inlineCount} pending message{activeQueue.length + inlineCount > 1 ? 's' : ''}
-            {inlineCount > 0 || queuedCount > 0
-              ? ` · ${inlineCount} in-stream · ${queuedCount} queued`
-              : ''}
-          </Text>
-          {[...activeInline, ...activeQueue].slice(0, MAX_QUEUED_PREVIEW).map((queued) => (
-            <Box key={queued.id} marginLeft={2}>
-              <Text dimColor>{queued.mode === 'inline' ? '↳' : '⏳'} {truncateQueued(queued.content)}</Text>
-            </Box>
-          ))}
-          {activeQueue.length + inlineCount > MAX_QUEUED_PREVIEW && (
-            <Text dimColor>  ... and {activeQueue.length + inlineCount - MAX_QUEUED_PREVIEW} more</Text>
-          )}
-        </Box>
-      )}
+      <QueueIndicator
+        messages={[...activeInline, ...activeQueue]}
+        maxPreview={MAX_QUEUED_PREVIEW}
+      />
 
       {/* Error */}
-      {error && (() => {
-        const parsed = parseErrorMessage(error);
-        const severity = parsed.code && /TIMEOUT|RATE_LIMITED/.test(parsed.code) ? 'yellow' : 'red';
-        const prefix = SHOW_ERROR_CODES && parsed.code ? `${parsed.code}: ` : '';
-        return (
-          <Box marginY={1} flexDirection="column">
-            <Text color={severity}>{prefix}{parsed.message}</Text>
-            {parsed.suggestion && (
-              <Text color={severity}>Suggestion: {parsed.suggestion}</Text>
-            )}
-          </Box>
-        );
-      })()}
+      {error && <ErrorBanner error={error} showErrorCodes={SHOW_ERROR_CODES} />}
 
       {/* Processing indicator */}
       <ProcessingIndicator
@@ -1281,6 +1033,7 @@ export function App({ cwd, version }: AppProps) {
         backgroundProcessingCount={backgroundProcessingCount}
         sessionId={activeSessionId}
         processingStartTime={processingStartTime}
+        verboseTools={verboseTools}
       />
     </Box>
   );
