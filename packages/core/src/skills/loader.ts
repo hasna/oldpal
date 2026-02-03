@@ -30,8 +30,12 @@ export class SkillLoader {
     const projectSkillsDir = join(projectDir, '.assistants', 'skills');
     await this.loadFromDirectory(projectSkillsDir, { includeContent });
 
-    // Also check nested .assistants/skills in monorepo
-    const nestedFiles = await fg('**/.assistants/skills/*/SKILL.md', { cwd: projectDir, dot: true });
+    // Also check nested .assistants/skills in monorepo (excluding node_modules)
+    const nestedFiles = await fg('**/.assistants/skills/*/SKILL.md', {
+      cwd: projectDir,
+      dot: true,
+      ignore: ['**/node_modules/**'],
+    });
     for (const file of nestedFiles) {
       await this.loadSkillFile(join(projectDir, file), { includeContent });
     }
