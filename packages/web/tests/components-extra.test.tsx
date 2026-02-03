@@ -232,7 +232,7 @@ describe('web extra components', () => {
 
     const renderer = await renderWithAct(<ChatContainer />);
 
-    expect(connected[0]).toBe('wss://example.com/api/ws');
+    expect(connected[0]).toBe('wss://example.com/api/v1/ws');
     expect(sent.some((msg) => msg.type === 'session' && msg.sessionId === 'session-9')).toBe(true);
 
     const tree = renderer!.toJSON();

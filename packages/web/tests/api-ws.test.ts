@@ -17,7 +17,7 @@ mock.module('ws', () => ({
   WebSocketServer: MockWebSocketServer,
 }));
 
-const handler = (await import('../src/pages/api/ws')).default;
+const handler = (await import('../src/pages/api/v1/ws')).default;
 
 function createRes() {
   return {
