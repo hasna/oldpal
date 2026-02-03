@@ -1,0 +1,14 @@
+{
+  "id": "533",
+  "subject": "Add PKCE to Google OAuth flow",
+  "description": "Google OAuth flow uses authorization code without PKCE. Add PKCE (code_verifier/challenge) to mitigate code interception for browser-based clients; store verifier server-side (encrypted cookie or session) and validate on callback.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "security",
+    "oauth",
+    "pkce"
+  ],
+  "created": "2026-02-03T18:25:36.122Z",
+  "updated": "2026-02-03T18:25:36.122Z"
+}

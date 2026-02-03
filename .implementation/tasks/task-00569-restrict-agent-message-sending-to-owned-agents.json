@@ -1,0 +1,8 @@
+{
+  "id": "569",
+  "subject": "Restrict agent message sending to owned agents",
+  "description": "packages/web/src/app/api/v1/messages/route.ts POST allows sending to any toAgentId; add an ownership or ACL check to prevent sending to arbitrary agents by UUID.",
+  "status": "pending",
+  "created": "2026-02-03T18:34:28.502Z",
+  "updated": "2026-02-03T18:34:28.502Z"
+}

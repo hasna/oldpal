@@ -1,0 +1,8 @@
+{
+  "id": "582",
+  "subject": "Terminal input cannot insert newlines (no multiline compose)",
+  "description": "Input filters out newline characters and Enter always submits, so users cannot compose multiline messages (except possible paste). This breaks multiline editing despite layout/line-count support. Add a shortcut to insert '\\n' (e.g., Shift+Enter) and adjust interrupt keybinding accordingly, or add a dedicated multiline mode toggle. File: packages/terminal/src/components/Input.tsx:279-301.",
+  "status": "pending",
+  "created": "2026-02-03T18:38:26.494Z",
+  "updated": "2026-02-03T18:38:26.494Z"
+}

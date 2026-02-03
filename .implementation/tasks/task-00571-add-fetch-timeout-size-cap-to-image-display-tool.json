@@ -1,0 +1,8 @@
+{
+  "id": "571",
+  "subject": "Add fetch timeout/size cap to image display tool",
+  "description": "packages/core/src/tools/image.ts downloads entire remote images without timeout or size limits; add AbortController timeout and maximum bytes to avoid hangs/DoS.",
+  "status": "pending",
+  "created": "2026-02-03T18:36:05.593Z",
+  "updated": "2026-02-03T18:36:05.593Z"
+}

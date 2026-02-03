@@ -1,0 +1,8 @@
+{
+  "id": "613",
+  "subject": "Validate IdentityManager assistantId/identity IDs (path traversal guard)",
+  "description": "Harden packages/core/src/identity/identity-manager.ts: validate assistantId in constructor and identity IDs loaded from index/active or passed to read/delete/switch. Reject/ignore invalid IDs (no path separators, safe regex) so identityPath and identitiesRoot cannot escape basePath. Add tests for invalid IDs and active/index poisoning.",
+  "status": "pending",
+  "created": "2026-02-03T19:33:57.367Z",
+  "updated": "2026-02-03T19:33:57.367Z"
+}

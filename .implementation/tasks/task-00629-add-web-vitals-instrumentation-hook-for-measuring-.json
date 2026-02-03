@@ -1,0 +1,8 @@
+{
+  "id": "629",
+  "subject": "Add Web Vitals instrumentation hook for measuring speed",
+  "description": "Add a lightweight Web Vitals reporter in packages/web (e.g., using Next.js web-vitals hook) to capture LCP/CLS/INP and log or POST to an internal endpoint. Use it to guide performance work; ensure it is disabled in dev or behind a flag.",
+  "status": "pending",
+  "created": "2026-02-03T19:45:41.846Z",
+  "updated": "2026-02-03T19:45:41.846Z"
+}

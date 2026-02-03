@@ -1,0 +1,8 @@
+{
+  "id": "561",
+  "subject": "Login/Register: errors not focused or associated to fields",
+  "description": "Auth pages render inline error banners but do not move focus to them on submit failure, and fields are not linked to error text. Add focus management (focus error banner) and aria-describedby/aria-invalid per field. Files: packages/web/src/components/auth/login-form.tsx:36-65, register-form.tsx:49-104, and login page error from query params packages/web/src/app/(auth)/login/page.tsx:17-31.",
+  "status": "pending",
+  "created": "2026-02-03T18:31:34.830Z",
+  "updated": "2026-02-03T18:31:34.830Z"
+}

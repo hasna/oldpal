@@ -1,0 +1,8 @@
+{
+  "id": "204",
+  "subject": "Add tests for packages/web/src/lib/auth/middleware.ts",
+  "description": "Create/extend tests for packages/web/src/lib/auth/middleware.ts. No matching test file by basename found in this package. Verify if coverage exists elsewhere; if not, add focused tests for core behavior.",
+  "status": "pending",
+  "created": "2026-02-03T18:06:57.286Z",
+  "updated": "2026-02-03T18:06:57.286Z"
+}

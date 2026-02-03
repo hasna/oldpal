@@ -1,0 +1,8 @@
+{
+  "id": "603",
+  "subject": "Enforce max chat message size (API + WS)",
+  "description": "Add max length validation for incoming chat messages to prevent huge payload DoS. Update packages/web/src/app/api/v1/chat/route.ts (zod message), packages/web/src/app/api/chat/route.ts, and packages/web/src/pages/api/ws.ts message handler to reject oversized message.content with 413/400 and send error on WS.",
+  "status": "pending",
+  "created": "2026-02-03T19:11:26.863Z",
+  "updated": "2026-02-03T19:11:26.863Z"
+}

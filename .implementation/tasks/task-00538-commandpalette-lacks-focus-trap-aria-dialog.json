@@ -1,0 +1,8 @@
+{
+  "id": "538",
+  "subject": "CommandPalette lacks focus trap/ARIA dialog",
+  "description": "CommandPalette renders a full-screen overlay but never traps focus or sets dialog semantics. There is no role=\"dialog\"/aria-modal, no initial focus, and tabbing can move focus behind the overlay. Add a focus trap, set appropriate ARIA (role, aria-modal, aria-labelledby), move focus to first command on open, and restore focus on close. File: packages/web/src/components/shared/CommandPalette.tsx (around lines 33-63).",
+  "status": "pending",
+  "created": "2026-02-03T18:26:18.541Z",
+  "updated": "2026-02-03T18:26:18.541Z"
+}

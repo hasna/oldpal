@@ -1,0 +1,8 @@
+{
+  "id": "624",
+  "subject": "Headless stream-json: usage/done event coverage",
+  "description": "Extend packages/terminal/tests/headless.test.ts to emit usage and done chunks and assert stream-json outputs corresponding event lines with timestamps. Verify the event shape matches formatStreamEvent for usage/done/error.",
+  "status": "pending",
+  "created": "2026-02-03T19:42:35.378Z",
+  "updated": "2026-02-03T19:42:35.378Z"
+}

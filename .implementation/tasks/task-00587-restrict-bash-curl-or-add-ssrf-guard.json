@@ -1,0 +1,14 @@
+{
+  "id": "587",
+  "subject": "Restrict bash curl or add SSRF guard",
+  "description": "Bash tool allowlist includes curl with no URL validation. This bypasses web_fetch SSRF protections and enables access to internal services. Remove curl or add URL allowlist/SSRF guard.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "bash",
+    "ssrf"
+  ],
+  "created": "2026-02-03T18:38:57.142Z",
+  "updated": "2026-02-03T18:38:57.142Z"
+}

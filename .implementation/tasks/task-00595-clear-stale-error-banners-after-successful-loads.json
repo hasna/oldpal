@@ -1,0 +1,8 @@
+{
+  "id": "595",
+  "subject": "Clear stale error banners after successful loads",
+  "description": "packages/web/src/app/(dashboard)/agents/page.tsx, sessions/page.tsx, messages/page.tsx, and admin/stats/page.tsx set error on failure but never clear it on success. Reset error state at start of load or on success to avoid persistent error banners.",
+  "status": "pending",
+  "created": "2026-02-03T18:51:36.684Z",
+  "updated": "2026-02-03T18:51:36.684Z"
+}

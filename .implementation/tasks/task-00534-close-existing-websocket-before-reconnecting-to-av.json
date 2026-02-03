@@ -1,0 +1,8 @@
+{
+  "id": "534",
+  "subject": "Close existing WebSocket before reconnecting to avoid duplicate streams",
+  "description": "packages/web/src/lib/ws.ts:13-63: connect() always creates a new WebSocket without closing the previous instance. If connect is called again (token change, send-triggered reconnect, remount), old socket stays open and can deliver duplicate messages. Close existing ws/clear handlers or guard when already connected.",
+  "status": "pending",
+  "created": "2026-02-03T18:25:43.112Z",
+  "updated": "2026-02-03T18:25:43.112Z"
+}

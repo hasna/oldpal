@@ -1,0 +1,8 @@
+{
+  "id": "620",
+  "subject": "Headless CLI: support -- end-of-options + fix -p swallowing flags",
+  "description": "Update packages/terminal/src/index.tsx (or extracted parser) to honor  and to treat -p/--print missing-arg if the next token is another flag. Ensure flags after -p still parse (e.g.,  errors for missing prompt rather than using  as prompt). Add unit tests for prompt starting with '-' using  separator.",
+  "status": "pending",
+  "created": "2026-02-03T19:40:40.369Z",
+  "updated": "2026-02-03T19:40:40.369Z"
+}

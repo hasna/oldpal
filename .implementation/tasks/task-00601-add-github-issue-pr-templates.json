@@ -1,0 +1,8 @@
+{
+  "id": "601",
+  "subject": "Add GitHub issue/PR templates",
+  "description": "Create .github/ISSUE_TEMPLATE/bug_report.yml and feature_request.yml plus .github/PULL_REQUEST_TEMPLATE.md to capture repro steps, expected behavior, security disclosure guidance, and checklist.",
+  "status": "pending",
+  "created": "2026-02-03T19:04:00.731Z",
+  "updated": "2026-02-03T19:04:00.731Z"
+}

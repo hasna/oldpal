@@ -1,0 +1,8 @@
+{
+  "id": "566",
+  "subject": "Protect public /api/chat from session hijack",
+  "description": "In packages/web/src/app/api/chat/route.ts, unauthenticated requests can pass arbitrary sessionId and stream/send to sessions with no ownership checks. Require auth or validate session ownership before subscribing/sending.",
+  "status": "pending",
+  "created": "2026-02-03T18:34:28.370Z",
+  "updated": "2026-02-03T18:34:28.370Z"
+}

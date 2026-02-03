@@ -1,0 +1,14 @@
+{
+  "id": "585",
+  "subject": "Harden web_fetch/curl SSRF guard on DNS failure",
+  "description": "SSRF guard allows fetch if DNS lookup fails (fail-open). Change isPrivateHostOrResolved to fail-closed or resolve and block on lookup errors; prevent DNS rebinding bypass.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "ssrf",
+    "web"
+  ],
+  "created": "2026-02-03T18:38:35.442Z",
+  "updated": "2026-02-03T18:38:35.442Z"
+}

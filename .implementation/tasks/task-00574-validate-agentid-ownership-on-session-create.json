@@ -1,0 +1,14 @@
+{
+  "id": "574",
+  "subject": "Validate agentId ownership on session create",
+  "description": "POST /api/v1/sessions accepts agentId without ownership check; user can attach someone else’s agent and leak agent details via session GET/list. Verify agent belongs to user or reject.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "api",
+    "auth"
+  ],
+  "created": "2026-02-03T18:37:15.786Z",
+  "updated": "2026-02-03T18:37:15.786Z"
+}

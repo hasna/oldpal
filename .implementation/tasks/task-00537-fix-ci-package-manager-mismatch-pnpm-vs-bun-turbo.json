@@ -1,0 +1,8 @@
+{
+  "id": "537",
+  "subject": "Fix CI package manager mismatch (pnpm vs bun/turbo)",
+  "status": "pending",
+  "priority": "high",
+  "created": "2026-02-03T18:26:15.830Z",
+  "updated": "2026-02-03T18:26:15.830Z"
+}

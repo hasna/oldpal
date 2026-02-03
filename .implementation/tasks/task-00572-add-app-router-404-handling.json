@@ -1,0 +1,13 @@
+{
+  "id": "572",
+  "subject": "Add app-router 404 handling",
+  "description": "App router has no not-found.tsx or error.tsx, so unknown routes show generic Next error. Add not-found.tsx (and optional error.tsx) in packages/web/src/app to provide consistent 404/error UX.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "routing",
+    "ux"
+  ],
+  "created": "2026-02-03T18:37:01.188Z",
+  "updated": "2026-02-03T18:37:01.188Z"
+}

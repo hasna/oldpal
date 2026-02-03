@@ -1,0 +1,8 @@
+{
+  "id": "541",
+  "subject": "Make build script cross-platform (avoid rm/cp/chmod/ls)",
+  "status": "pending",
+  "priority": "medium",
+  "created": "2026-02-03T18:26:30.355Z",
+  "updated": "2026-02-03T18:26:30.355Z"
+}

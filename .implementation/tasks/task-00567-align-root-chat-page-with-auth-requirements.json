@@ -1,0 +1,8 @@
+{
+  "id": "567",
+  "subject": "Align root chat page with auth requirements",
+  "description": "packages/web/src/app/page.tsx renders the chat UI (WS) without auth guard, while /chat is the authenticated app chat. Decide on one entry point and enforce auth or redirect from / to /chat to avoid exposing WS chat to unauthenticated users.",
+  "status": "pending",
+  "created": "2026-02-03T18:34:28.413Z",
+  "updated": "2026-02-03T18:34:28.413Z"
+}

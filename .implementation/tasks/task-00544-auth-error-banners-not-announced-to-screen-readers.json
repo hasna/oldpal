@@ -1,0 +1,8 @@
+{
+  "id": "544",
+  "subject": "Auth error banners not announced to screen readers",
+  "description": "Login/Register error banners are plain divs with no role=\"alert\"/aria-live, and inputs are not marked aria-invalid or linked to the error message. Add aria-live=\"assertive\" or role=\"alert\", set aria-invalid on relevant inputs, and connect via aria-describedby. Files: packages/web/src/components/auth/login-form.tsx:36-65, register-form.tsx:49-104.",
+  "status": "pending",
+  "created": "2026-02-03T18:26:44.322Z",
+  "updated": "2026-02-03T18:26:44.322Z"
+}

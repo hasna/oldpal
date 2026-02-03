@@ -1,0 +1,8 @@
+{
+  "id": "616",
+  "subject": "Add headless option parsing tests (extract parseArgs)",
+  "description": "Extract CLI arg parsing from packages/terminal/src/index.tsx into a testable helper (e.g., src/cli/args.ts). Add unit tests to cover all headless options: -p/--print required, --output-format (text/json/stream-json + invalid default), --allowed-tools trimming, --system-prompt, --json-schema, --continue, --resume (resume overrides continue), and --cwd + cwdProvided flag.",
+  "status": "pending",
+  "created": "2026-02-03T19:36:55.991Z",
+  "updated": "2026-02-03T19:36:55.991Z"
+}

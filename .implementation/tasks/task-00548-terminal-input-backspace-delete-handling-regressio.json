@@ -1,0 +1,8 @@
+{
+  "id": "548",
+  "subject": "Terminal input Backspace/Delete handling regression",
+  "description": "Input treats key.delete as Backspace and ignores raw DEL/BS codes; on some terminals this makes Backspace delete forward or stop working. Restore handling for \\x7f/\\x08 and distinguish forward-delete (\\x1b[3~) from Backspace. File: packages/terminal/src/components/Input.tsx:265-275.",
+  "status": "pending",
+  "created": "2026-02-03T18:27:15.339Z",
+  "updated": "2026-02-03T18:27:15.339Z"
+}

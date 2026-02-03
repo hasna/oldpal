@@ -1,0 +1,8 @@
+{
+  "id": "564",
+  "subject": "Make streaming state per-session in chat store",
+  "description": "packages/web/src/lib/store.ts:40-86: isStreaming is global and switchSession forces it false, but sessionSnapshots do not store streaming state. When switching sessions mid-stream, returning loses streaming indicator; background messages can flip isStreaming for the wrong session. Track isStreaming per session in snapshots or include it in session state.",
+  "status": "pending",
+  "created": "2026-02-03T18:32:30.026Z",
+  "updated": "2026-02-03T18:32:30.026Z"
+}

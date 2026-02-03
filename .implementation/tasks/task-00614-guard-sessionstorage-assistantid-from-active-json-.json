@@ -1,0 +1,8 @@
+{
+  "id": "614",
+  "subject": "Guard SessionStorage assistantId from active.json path traversal",
+  "description": "In packages/core/src/logger.ts SessionStorage, validate assistantId inputs (constructor arg and active.json in resolveSessionsDir). If invalid, fall back to root sessions dir and avoid join with unsafe IDs. Add tests in packages/core/tests/session-storage.test.ts covering malicious active.json and constructor assistantId.",
+  "status": "pending",
+  "created": "2026-02-03T19:34:03.103Z",
+  "updated": "2026-02-03T19:34:03.103Z"
+}

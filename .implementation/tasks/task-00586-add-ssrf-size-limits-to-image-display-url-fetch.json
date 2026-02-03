@@ -1,0 +1,14 @@
+{
+  "id": "586",
+  "subject": "Add SSRF + size limits to image display URL fetch",
+  "description": "display_image fetches any URL without private-network checks or size limits. Add SSRF guard (block private/localhost), enforce max download size, and restrict to http/https only.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "ssrf",
+    "image"
+  ],
+  "created": "2026-02-03T18:38:45.774Z",
+  "updated": "2026-02-03T18:38:45.774Z"
+}

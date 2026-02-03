@@ -1,0 +1,14 @@
+{
+  "id": "532",
+  "subject": "Enforce WebSocket Origin check",
+  "description": "WS server accepts any Origin; no Origin validation on connection, enabling cross-site WebSocket hijacking if tokens/cookies are present. Enforce allowed origins (e.g., NEXT_PUBLIC_URL) in ws handler before accepting messages.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "websocket",
+    "origin"
+  ],
+  "created": "2026-02-03T18:25:29.572Z",
+  "updated": "2026-02-03T18:25:29.572Z"
+}

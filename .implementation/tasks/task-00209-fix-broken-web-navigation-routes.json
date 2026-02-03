@@ -1,0 +1,14 @@
+{
+  "id": "209",
+  "subject": "Fix broken web navigation routes",
+  "description": "Sidebar/breadcrumb map include /agents/new and /settings/api-keys without matching pages, and /messages?filter=sent is unsupported because Messages page ignores query params and only supports all/unread/archived. Align links with existing routes or add missing pages/filters.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "routing",
+    "web",
+    "ux"
+  ],
+  "created": "2026-02-03T18:09:06.424Z",
+  "updated": "2026-02-03T18:09:06.424Z"
+}

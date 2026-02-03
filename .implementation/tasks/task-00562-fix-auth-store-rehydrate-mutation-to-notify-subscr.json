@@ -1,0 +1,8 @@
+{
+  "id": "562",
+  "subject": "Fix auth store rehydrate mutation to notify subscribers",
+  "description": "packages/web/src/hooks/use-auth.ts:67-75: onRehydrateStorage mutates  directly (isLoading/isAuthenticated) without set(), which can skip Zustand subscriber updates and leave UI stuck in loading/unauth state. Use set() in onRehydrateStorage or a post-rehydrate action.",
+  "status": "pending",
+  "created": "2026-02-03T18:32:03.589Z",
+  "updated": "2026-02-03T18:32:03.589Z"
+}

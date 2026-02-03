@@ -1,0 +1,8 @@
+{
+  "id": "608",
+  "subject": "Sanitize LocalInboxCache path inputs",
+  "description": "packages/core/src/inbox/storage/local-cache.ts uses agentId/emailId/attachment filename directly in join() paths. A malicious ID or filename with '../' or absolute paths can escape the cache dir and overwrite/delete arbitrary files (saveAttachment, saveEmail, cleanup, clear). Validate IDs (safe pattern), sanitize attachment filenames (basename + strip separators), and reject unsafe inputs.",
+  "status": "pending",
+  "created": "2026-02-03T19:20:06.721Z",
+  "updated": "2026-02-03T19:20:06.721Z"
+}

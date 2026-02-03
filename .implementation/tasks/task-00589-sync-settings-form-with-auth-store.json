@@ -1,0 +1,8 @@
+{
+  "id": "589",
+  "subject": "Sync Settings form with auth store",
+  "description": "packages/web/src/app/(dashboard)/settings/page.tsx initializes name from user once; if user loads after rehydrate, the form stays empty and can submit /api/v1/users/undefined. Add useEffect to sync name when user changes, disable save until user is loaded, and update auth store after successful save so nav shows new name.",
+  "status": "pending",
+  "created": "2026-02-03T18:41:50.419Z",
+  "updated": "2026-02-03T18:41:50.419Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "536",
+  "subject": "Guard against late WS messages from previous session",
+  "description": "packages/web/src/lib/ws.ts:87-120 + store append/addToolCall/updateToolResult: server messages lack sessionId; after switching sessions, in-flight deltas/tool calls can still arrive and be applied to the current session, causing cross-session message/tool-call contamination. Track active session in ChatWebSocket (last session sent) and drop mismatched messages, or extend protocol to include sessionId and validate before updating store.",
+  "status": "pending",
+  "created": "2026-02-03T18:25:59.406Z",
+  "updated": "2026-02-03T18:25:59.406Z"
+}

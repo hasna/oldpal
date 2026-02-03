@@ -1,0 +1,8 @@
+{
+  "id": "597",
+  "subject": "Clear chat state on logout",
+  "description": "packages/web/src/hooks/use-auth.ts logout only clears auth tokens; the chat store in packages/web/src/lib/store.ts retains messages and sessions in memory. After logout/login, previous user messages can remain visible. Clear chat sessions/messages on logout (and possibly on auth change).",
+  "status": "pending",
+  "created": "2026-02-03T18:53:40.870Z",
+  "updated": "2026-02-03T18:53:40.870Z"
+}

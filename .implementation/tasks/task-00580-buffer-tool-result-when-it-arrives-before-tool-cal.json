@@ -1,0 +1,8 @@
+{
+  "id": "580",
+  "subject": "Buffer tool_result when it arrives before tool_call",
+  "description": "packages/web/src/lib/ws.ts:103-115 + packages/web/src/lib/store.ts:189-205: updateToolResult only updates existing currentToolCalls. If tool_result arrives before tool_call (out-of-order stream) or after clearToolCalls, the result is dropped. Add buffering by toolCallId or merge results when tool_call later arrives.",
+  "status": "pending",
+  "created": "2026-02-03T18:37:45.230Z",
+  "updated": "2026-02-03T18:37:45.230Z"
+}

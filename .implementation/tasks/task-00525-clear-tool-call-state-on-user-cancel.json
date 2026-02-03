@@ -1,0 +1,8 @@
+{
+  "id": "525",
+  "subject": "Clear tool-call state on user cancel",
+  "description": "In packages/web/src/components/chat/InputArea.tsx and packages/web/src/lib/ws.ts, cancel sets isStreaming false but currentToolCalls can remain if server doesn’t emit completion. Add local cleanup on cancel or a timeout-based reset.",
+  "status": "pending",
+  "created": "2026-02-03T18:22:39.376Z",
+  "updated": "2026-02-03T18:22:39.376Z"
+}

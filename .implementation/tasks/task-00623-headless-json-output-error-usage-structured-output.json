@@ -1,0 +1,8 @@
+{
+  "id": "623",
+  "subject": "Headless JSON output: error/usage/structured_output tests",
+  "description": "In packages/terminal/tests/headless.test.ts, add cases for outputFormat=json: (1) tool_result error or error chunk adds an error field in final JSON and exits with code 1, (2) usage is included when emitted, (3) invalid JSON with jsonSchema does not throw and leaves structured_output undefined.",
+  "status": "pending",
+  "created": "2026-02-03T19:42:29.643Z",
+  "updated": "2026-02-03T19:42:29.643Z"
+}

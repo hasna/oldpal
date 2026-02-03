@@ -1,0 +1,14 @@
+{
+  "id": "531",
+  "subject": "Add rate limiting to auth/chat endpoints",
+  "description": "Login/register/refresh (and chat streaming endpoints) lack rate limiting or lockouts. Add per-IP/user rate limits to prevent brute force and abuse.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "api",
+    "security"
+  ],
+  "created": "2026-02-03T18:25:23.290Z",
+  "updated": "2026-02-03T18:25:23.290Z"
+}

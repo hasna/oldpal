@@ -1,0 +1,8 @@
+{
+  "id": "577",
+  "subject": "Handle tool_call/tool_result events in SSE chat UI",
+  "description": "packages/web/src/app/(dashboard)/chat/page.tsx:165-188: SSE client only processes text_delta and error. API streams tool_call/tool_result/message_complete, so tool calls/results are dropped and tool-only responses render as empty. Add handling for tool_call/tool_result and end-of-message to match WS UI behavior.",
+  "status": "pending",
+  "created": "2026-02-03T18:37:24.160Z",
+  "updated": "2026-02-03T18:37:24.160Z"
+}

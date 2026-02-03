@@ -1,0 +1,8 @@
+{
+  "id": "606",
+  "subject": "Reject empty PATCH /api/v1/messages/:id",
+  "description": "packages/web/src/app/api/v1/messages/[id]/route.ts allows empty PATCH body; updateData stays empty and update() may no-op or error. Return 400 when no updatable fields are provided, and add tests.",
+  "status": "pending",
+  "created": "2026-02-03T19:11:41.450Z",
+  "updated": "2026-02-03T19:11:41.450Z"
+}

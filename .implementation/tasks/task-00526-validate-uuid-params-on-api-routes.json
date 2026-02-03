@@ -1,0 +1,14 @@
+{
+  "id": "526",
+  "subject": "Validate UUID params on API routes",
+  "description": "Add zod/uuid validation for route params (sessions, agents, users, messages, chat, threads, stop) to avoid DB errors and return 400 on invalid IDs.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "api",
+    "validation"
+  ],
+  "created": "2026-02-03T18:25:01.502Z",
+  "updated": "2026-02-03T18:25:01.502Z"
+}

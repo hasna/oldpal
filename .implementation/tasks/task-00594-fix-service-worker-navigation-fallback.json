@@ -1,0 +1,8 @@
+{
+  "id": "594",
+  "subject": "Fix service worker navigation fallback",
+  "description": "packages/web/public/sw.js always falls back to cached '/' for navigations, which can serve the wrong page (e.g., /login or /chat) and bypass auth UI offline. Add a proper offline fallback page or cache-match by request path before falling back.",
+  "status": "pending",
+  "created": "2026-02-03T18:51:36.641Z",
+  "updated": "2026-02-03T18:51:36.641Z"
+}

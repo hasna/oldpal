@@ -1,0 +1,8 @@
+{
+  "id": "609",
+  "subject": "Sanitize LocalMessagesStorage path inputs",
+  "description": "packages/core/src/messages/storage/local-storage.ts uses agentId/messageId/threadId directly in filesystem paths. If any ID includes path separators or traversal, reads/writes/deletes can escape basePath. Enforce safe ID pattern and reject/normalize unsafe values before building paths.",
+  "status": "pending",
+  "created": "2026-02-03T19:20:13.985Z",
+  "updated": "2026-02-03T19:20:13.985Z"
+}

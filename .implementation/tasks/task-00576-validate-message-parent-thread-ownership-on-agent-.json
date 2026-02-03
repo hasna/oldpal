@@ -1,0 +1,14 @@
+{
+  "id": "576",
+  "subject": "Validate message parent/thread ownership on agent message create",
+  "description": "POST /api/v1/messages allows arbitrary threadId/parentId; no ownership validation, so clients can link to others’ threads/messages if IDs are known. Require parentId to belong to user’s agents and enforce threadId consistency/ownership.",
+  "status": "pending",
+  "priority": "medium",
+  "tags": [
+    "web",
+    "api",
+    "integrity"
+  ],
+  "created": "2026-02-03T18:37:23.992Z",
+  "updated": "2026-02-03T18:37:23.992Z"
+}

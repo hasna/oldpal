@@ -1,0 +1,8 @@
+{
+  "id": "558",
+  "subject": "Settings page success/error banners not announced",
+  "description": "SettingsPage renders success/error banners as plain divs without role=\"status\"/aria-live, so updates aren\\'t announced to assistive tech. Add aria-live (polite for success, assertive for error) or role=\"status\"/\"alert\", and optionally aria-describedby on inputs. File: packages/web/src/app/(dashboard)/settings/page.tsx:32-52.",
+  "status": "pending",
+  "created": "2026-02-03T18:31:10.047Z",
+  "updated": "2026-02-03T18:31:10.047Z"
+}

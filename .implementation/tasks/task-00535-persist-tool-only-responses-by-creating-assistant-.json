@@ -1,0 +1,8 @@
+{
+  "id": "535",
+  "subject": "Persist tool-only responses by creating assistant placeholder",
+  "description": "packages/web/src/lib/store.ts:157-241: addToolCall/finalizeToolCalls assume an assistant message exists for messageId/currentStreamMessageId. If a tool_call arrives before any assistant text (tool-only response), no assistant message exists so tool calls are invisible during streaming and dropped when finalizeToolCalls runs. Create a placeholder assistant message when first tool_call arrives or in finalizeToolCalls when no target message found.",
+  "status": "pending",
+  "created": "2026-02-03T18:25:50.618Z",
+  "updated": "2026-02-03T18:25:50.618Z"
+}

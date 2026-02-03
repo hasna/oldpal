@@ -1,0 +1,14 @@
+{
+  "id": "529",
+  "subject": "Stop running sessions on WS disconnect",
+  "description": "When WS client disconnects mid-generation, handler only unsubscribes/release owner; it never calls stopSession, so background jobs keep running. Add stopSession (guarded) on close.",
+  "status": "pending",
+  "priority": "medium",
+  "tags": [
+    "web",
+    "api",
+    "streaming"
+  ],
+  "created": "2026-02-03T18:25:15.972Z",
+  "updated": "2026-02-03T18:25:15.972Z"
+}

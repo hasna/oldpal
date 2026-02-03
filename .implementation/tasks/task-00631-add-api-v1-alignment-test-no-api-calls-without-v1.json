@@ -1,0 +1,8 @@
+{
+  "id": "631",
+  "subject": "API v1 alignment test (no /api/* without /v1)",
+  "description": "Add a lightweight test/lint in packages/web/tests that scans source for client fetches and WS connections and asserts they use /api/v1/* (no /api/* without /v1). This prevents regressions and enforces v1-only API usage.",
+  "status": "pending",
+  "created": "2026-02-03T19:47:00.412Z",
+  "updated": "2026-02-03T20:00:31.965Z"
+}

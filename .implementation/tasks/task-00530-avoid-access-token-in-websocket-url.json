@@ -1,0 +1,14 @@
+{
+  "id": "530",
+  "subject": "Avoid access token in WebSocket URL",
+  "description": "Chat WS connection appends access token as URL query param (leaks to logs/Referer and intermediaries). Use cookie or subprotocol-based auth, and update ws handler to read from headers/cookies.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "websocket",
+    "token"
+  ],
+  "created": "2026-02-03T18:25:18.246Z",
+  "updated": "2026-02-03T18:25:18.246Z"
+}

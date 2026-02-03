@@ -1,0 +1,8 @@
+{
+  "id": "626",
+  "subject": "Headless CLI: validate missing option values + invalid output-format",
+  "description": "Improve CLI arg parsing to require values for flags that expect them (output-format, allowed-tools, system-prompt, json-schema, resume, cwd). If missing or next token is another flag, emit a clear error and exit 1. Treat invalid output-format as an error instead of silently defaulting. Add tests that exercise each flag with missing values and invalid format.",
+  "status": "pending",
+  "created": "2026-02-03T19:42:44.081Z",
+  "updated": "2026-02-03T19:42:44.081Z"
+}

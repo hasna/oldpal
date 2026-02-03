@@ -1,0 +1,8 @@
+{
+  "id": "542",
+  "subject": "Chat inputs missing accessible labels",
+  "description": "Chat input fields rely on placeholder text only, so screen readers have no stable label. Add a visible label or aria-label/aria-labelledby to the inputs in both web chat UIs. Files: packages/web/src/components/chat/InputArea.tsx (input) and packages/web/src/app/(dashboard)/chat/page.tsx (form input).",
+  "status": "pending",
+  "created": "2026-02-03T18:26:35.349Z",
+  "updated": "2026-02-03T18:26:35.349Z"
+}

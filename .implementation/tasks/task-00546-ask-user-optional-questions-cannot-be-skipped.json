@@ -1,0 +1,8 @@
+{
+  "id": "546",
+  "subject": "Ask-user optional questions cannot be skipped",
+  "description": "Ask-user answers are always trimmed and Input blocks empty submission, so optional questions (required=false) cannot be skipped. Allow blank answers when question.required is false and avoid trimming away intended empty responses. Files: packages/terminal/src/components/App.tsx:866-869, Input.tsx:128-130.",
+  "status": "pending",
+  "created": "2026-02-03T18:27:05.536Z",
+  "updated": "2026-02-03T18:27:05.536Z"
+}

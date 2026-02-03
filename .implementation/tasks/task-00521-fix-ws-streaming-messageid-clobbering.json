@@ -1,0 +1,8 @@
+{
+  "id": "521",
+  "subject": "Fix WS streaming messageId clobbering",
+  "description": "In packages/web/src/pages/api/ws.ts, activeMessageId is a single mutable value; if multiple messages overlap, streamed chunks can be tagged to the wrong message. Track per-message stream or queue outbound messages to keep IDs consistent.",
+  "status": "pending",
+  "created": "2026-02-03T18:22:39.159Z",
+  "updated": "2026-02-03T18:22:39.159Z"
+}

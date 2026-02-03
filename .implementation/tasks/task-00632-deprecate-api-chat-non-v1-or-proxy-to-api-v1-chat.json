@@ -1,0 +1,8 @@
+{
+  "id": "632",
+  "subject": "Remove /api/chat (non-v1) and update tests",
+  "description": "Delete packages/web/src/app/api/chat/route.ts and migrate tests to use /api/v1/chat only. Ensure only v1 chat routes exist and no non-v1 imports remain.",
+  "status": "pending",
+  "created": "2026-02-03T19:48:28.582Z",
+  "updated": "2026-02-03T20:00:36.467Z"
+}

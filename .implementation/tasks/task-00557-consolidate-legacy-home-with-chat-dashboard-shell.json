@@ -1,0 +1,13 @@
+{
+  "id": "557",
+  "subject": "Consolidate legacy / home with /chat dashboard shell",
+  "description": "App router has duplicate chat experiences: / renders Header/Sidebar/ChatContainer (legacy) while /chat uses the dashboard layout + different chat page. This causes inconsistent UX and auth behavior. Decide on canonical entry (likely /chat) and redirect / (and possibly /dashboard) to it, or migrate components under (dashboard). Files: packages/web/src/app/page.tsx:1-18, packages/web/src/app/(dashboard)/chat/page.tsx:1-248.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "routing",
+    "ux"
+  ],
+  "created": "2026-02-03T18:30:56.964Z",
+  "updated": "2026-02-03T18:30:56.964Z"
+}

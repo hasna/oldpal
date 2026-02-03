@@ -1,0 +1,8 @@
+{
+  "id": "600",
+  "subject": "Add account deletion flow (API + UI)",
+  "description": "Implement user deletion API (e.g., DELETE /api/v1/users/:id) that validates ownership, revokes refresh tokens, and deletes dependent records (sessions/messages/agents/agentMessages) in a transaction. Wire Settings page delete button to call the endpoint, then logout + redirect on success.",
+  "status": "pending",
+  "created": "2026-02-03T19:03:57.452Z",
+  "updated": "2026-02-03T19:03:57.452Z"
+}

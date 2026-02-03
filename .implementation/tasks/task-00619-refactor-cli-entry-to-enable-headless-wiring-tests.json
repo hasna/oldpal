@@ -1,0 +1,8 @@
+{
+  "id": "619",
+  "subject": "Refactor CLI entry to enable headless wiring tests",
+  "description": "Extract a testable CLI entry (e.g., export main(argv, deps) from packages/terminal/src/cli/main.ts). Allow injecting runHeadless and print functions for tests. Add integration tests to assert that headless flags (-p/--print, --output-format, --allowed-tools, --system-prompt, --json-schema, --continue, --resume, --cwd) are passed to runHeadless with correct values and cwdProvided behavior, without launching the real agent.",
+  "status": "pending",
+  "created": "2026-02-03T19:38:48.909Z",
+  "updated": "2026-02-03T19:38:48.909Z"
+}

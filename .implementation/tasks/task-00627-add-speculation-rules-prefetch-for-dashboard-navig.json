@@ -1,0 +1,8 @@
+{
+  "id": "627",
+  "subject": "Add Speculation Rules prefetch for dashboard navigation",
+  "description": "Introduce a small component or middleware in packages/web to emit Speculation Rules (prefetch) for likely next dashboard routes (e.g., /chat, /sessions, /agents) once authenticated. Keep it conservative (prefetch only, no prerender) and gate behind a config flag to avoid side effects. Add basic tests to ensure rules only render for authenticated pages.",
+  "status": "pending",
+  "created": "2026-02-03T19:45:33.173Z",
+  "updated": "2026-02-03T19:45:33.173Z"
+}

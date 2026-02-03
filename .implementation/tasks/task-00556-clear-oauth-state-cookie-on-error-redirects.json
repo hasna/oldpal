@@ -1,0 +1,14 @@
+{
+  "id": "556",
+  "subject": "Clear OAuth state cookie on error redirects",
+  "description": "OAuth callback only deletes oauth_state cookie on success; error paths (redirectWithError) leave it set. Clear oauth_state on all error redirects to avoid stale state and reduce replay risk.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "security",
+    "oauth",
+    "csrf"
+  ],
+  "created": "2026-02-03T18:30:54.857Z",
+  "updated": "2026-02-03T18:30:54.857Z"
+}

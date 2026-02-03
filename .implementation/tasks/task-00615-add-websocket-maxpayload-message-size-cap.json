@@ -1,0 +1,8 @@
+{
+  "id": "615",
+  "subject": "Add WebSocket maxPayload + message size cap",
+  "description": "In packages/web/src/pages/api/ws.ts set WebSocketServer maxPayload (e.g., 1MB) and reject incoming messages that exceed limit with close code 1009. Also guard JSON.parse by checking data length/type before parsing. Update packages/web/tests/api-ws.test.ts to cover oversize payload handling.",
+  "status": "pending",
+  "created": "2026-02-03T19:34:06.795Z",
+  "updated": "2026-02-03T19:34:06.795Z"
+}

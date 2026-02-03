@@ -1,0 +1,8 @@
+{
+  "id": "581",
+  "subject": "Clear stale pending WS messages on session change/reconnect",
+  "description": "packages/web/src/lib/ws.ts:24-34,65-73: pending queue stores messages while disconnected. If session switches before reconnect, pending still includes messages for the old session and will be sent on the next connect, causing wrong-session ordering. Clear or partition pending by sessionId, and drop pending session/cancel messages when session changes.",
+  "status": "pending",
+  "created": "2026-02-03T18:37:53.864Z",
+  "updated": "2026-02-03T18:37:53.864Z"
+}

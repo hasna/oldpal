@@ -1,0 +1,8 @@
+{
+  "id": "598",
+  "subject": "Implement /api/v1/tools real registry",
+  "description": "Replace placeholder AVAILABLE_TOOLS in packages/web/src/app/api/v1/tools/route.ts with a real list from assistants-core ToolRegistry or config. Include tool name/description/category and honor allowed-tools config. Keep route authenticated.",
+  "status": "pending",
+  "created": "2026-02-03T19:03:49.316Z",
+  "updated": "2026-02-03T19:03:49.316Z"
+}

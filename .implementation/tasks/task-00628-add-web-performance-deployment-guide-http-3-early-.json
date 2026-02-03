@@ -1,0 +1,8 @@
+{
+  "id": "628",
+  "subject": "Add web performance deployment guide (HTTP/3, Early Hints, Brotli/Zstd)",
+  "description": "Create docs/PERFORMANCE.md (or update README) with deployment recommendations: enable HTTP/3/QUIC, 103 Early Hints for critical assets, and Brotli/Zstandard compression at CDN/reverse proxy. Include when to use each and links to specs; emphasize safe defaults (no caching for user-specific API responses).",
+  "status": "pending",
+  "created": "2026-02-03T19:45:37.159Z",
+  "updated": "2026-02-03T19:45:37.159Z"
+}

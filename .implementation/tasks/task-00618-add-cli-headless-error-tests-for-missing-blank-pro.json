@@ -1,0 +1,8 @@
+{
+  "id": "618",
+  "subject": "Add CLI headless error tests for missing/blank prompt",
+  "description": "Extend packages/terminal/tests/cli.test.ts (or new cli-headless.test.ts) to run the CLI with -p/--print but no prompt or whitespace, assert exit code 1 and error message 'Prompt is required'. This path should exit before runHeadless so it stays fast and deterministic.",
+  "status": "pending",
+  "created": "2026-02-03T19:38:42.033Z",
+  "updated": "2026-02-03T19:38:42.033Z"
+}

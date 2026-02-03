@@ -1,0 +1,8 @@
+{
+  "id": "34",
+  "subject": "Add tests for packages/core/src/identity/types.ts",
+  "description": "Create/extend tests for packages/core/src/identity/types.ts. No matching test file by basename found in this package. Verify if coverage exists elsewhere; if not, add focused tests for core behavior.",
+  "status": "pending",
+  "created": "2026-02-03T18:06:49.712Z",
+  "updated": "2026-02-03T18:06:49.712Z"
+}

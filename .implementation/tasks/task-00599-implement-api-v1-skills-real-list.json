@@ -1,0 +1,8 @@
+{
+  "id": "599",
+  "subject": "Implement /api/v1/skills real list",
+  "description": "Replace placeholder AVAILABLE_SKILLS in packages/web/src/app/api/v1/skills/route.ts with real skill metadata from assistants-core SkillLoader (project + global). Return name/description/category + count.",
+  "status": "pending",
+  "created": "2026-02-03T19:03:52.846Z",
+  "updated": "2026-02-03T19:03:52.846Z"
+}

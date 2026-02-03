@@ -1,0 +1,14 @@
+{
+  "id": "559",
+  "subject": "Guard admin users list when search filter is absent",
+  "description": "admin/users route builds whereClause only when search provided, then passes undefined to .where(). Ensure queries handle no filter explicitly to avoid where(undefined) errors and count mismatches.",
+  "status": "pending",
+  "priority": "medium",
+  "tags": [
+    "web",
+    "api",
+    "pagination"
+  ],
+  "created": "2026-02-03T18:31:11.685Z",
+  "updated": "2026-02-03T18:31:11.685Z"
+}

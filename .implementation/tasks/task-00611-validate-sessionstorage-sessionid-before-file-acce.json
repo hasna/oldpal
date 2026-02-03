@@ -1,0 +1,8 @@
+{
+  "id": "611",
+  "subject": "Validate SessionStorage sessionId before file access",
+  "description": "packages/core/src/logger.ts SessionStorage builds file paths from sessionId (load/save/list). CLI can pass --resume with arbitrary sessionId, enabling path traversal if sessionId contains '../'. Enforce safe ID pattern when reading/writing session files and reject invalid IDs.",
+  "status": "pending",
+  "created": "2026-02-03T19:23:58.288Z",
+  "updated": "2026-02-03T19:23:58.288Z"
+}

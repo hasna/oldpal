@@ -1,0 +1,13 @@
+{
+  "id": "547",
+  "subject": "Guard or redirect / and /dashboard routes",
+  "description": "Routes at / and /dashboard render full app shells without auth guard, bypassing the (dashboard) auth layout. Consider redirecting to /chat or /login, or moving these pages under (dashboard) with guard. Files: packages/web/src/app/page.tsx:1-18, packages/web/src/app/dashboard/page.tsx:1-51.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "routing",
+    "auth"
+  ],
+  "created": "2026-02-03T18:27:07.402Z",
+  "updated": "2026-02-03T18:27:07.402Z"
+}

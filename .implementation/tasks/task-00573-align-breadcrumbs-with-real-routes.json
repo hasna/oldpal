@@ -1,0 +1,13 @@
+{
+  "id": "573",
+  "subject": "Align breadcrumbs with real routes",
+  "description": "Dashboard breadcrumbs use href=\"#\" and a parent label string that doesn't map to a real route (no parent path stored). This breaks breadcrumb navigation and can point to nonexistent pages like Admin parent. Update pathToBreadcrumb to include parentPath and render real links only, or omit parent links when no route exists. Files: packages/web/src/app/(dashboard)/layout.tsx:26-87.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "routing",
+    "ux"
+  ],
+  "created": "2026-02-03T18:37:07.933Z",
+  "updated": "2026-02-03T18:37:07.933Z"
+}

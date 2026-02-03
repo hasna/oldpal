@@ -1,0 +1,13 @@
+{
+  "id": "583",
+  "subject": "Restrict filesystem read tool to safe allowlist",
+  "description": "Filesystem read tool allows arbitrary paths outside project except a small protected list. Add allowlist (project root/config) or stricter path policy to reduce secret leakage.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "filesystem"
+  ],
+  "created": "2026-02-03T18:38:27.454Z",
+  "updated": "2026-02-03T18:38:27.454Z"
+}

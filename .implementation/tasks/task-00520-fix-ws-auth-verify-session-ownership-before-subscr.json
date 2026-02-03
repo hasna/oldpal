@@ -1,0 +1,8 @@
+{
+  "id": "520",
+  "subject": "Fix WS auth: verify session ownership before subscribe",
+  "description": "In packages/web/src/pages/api/ws.ts, WS auth only checks token validity and sessionOwners; it never verifies sessionId belongs to the authenticated user. Add a DB lookup (sessions.userId) or server-side session creation to prevent cross-user session access.",
+  "status": "pending",
+  "created": "2026-02-03T18:22:39.094Z",
+  "updated": "2026-02-03T18:22:39.094Z"
+}

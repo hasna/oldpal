@@ -1,0 +1,8 @@
+{
+  "id": "592",
+  "subject": "Stop and close active sessions on delete",
+  "description": "In packages/web/src/app/api/v1/sessions/[id]/route.ts DELETE, the DB row is removed but any active in-memory session keeps running in agent-pool. Import stopSession/closeSession (or check hasSession) and terminate active sessions before deleting to avoid orphaned workers.",
+  "status": "pending",
+  "created": "2026-02-03T18:51:36.557Z",
+  "updated": "2026-02-03T18:51:36.557Z"
+}

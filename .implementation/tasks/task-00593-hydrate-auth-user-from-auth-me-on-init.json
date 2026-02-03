@@ -1,0 +1,8 @@
+{
+  "id": "593",
+  "subject": "Hydrate auth user from /auth/me on init",
+  "description": "packages/web/src/components/auth/auth-provider.tsx validates accessToken but never updates user data from /api/v1/auth/me. If user is missing/stale in storage, the app stays unauthenticated despite a valid token. Update AuthProvider to setAuth from /auth/me when accessToken is valid (and consider clearing isAuthenticated if no token).",
+  "status": "pending",
+  "created": "2026-02-03T18:51:36.601Z",
+  "updated": "2026-02-03T18:51:36.601Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "553",
+  "subject": "Prevent concurrent refresh token races",
+  "description": "In packages/web/src/hooks/use-auth.ts, multiple concurrent 401s can trigger overlapping refreshes; token rotation revokes the old refresh token and a second refresh fails, logging the user out. Add a refresh lock/queue to reuse a single in-flight refresh.",
+  "status": "pending",
+  "created": "2026-02-03T18:30:19.516Z",
+  "updated": "2026-02-03T18:30:19.516Z"
+}

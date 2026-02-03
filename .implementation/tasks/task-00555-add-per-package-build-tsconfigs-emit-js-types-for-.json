@@ -1,0 +1,8 @@
+{
+  "id": "555",
+  "subject": "Add per-package build tsconfigs (emit JS + types) for runtime compatibility",
+  "status": "pending",
+  "priority": "high",
+  "created": "2026-02-03T18:30:52.073Z",
+  "updated": "2026-02-03T18:30:52.073Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "621",
+  "subject": "Headless runHeadless: continue with no sessions uses provided cwd",
+  "description": "Add tests in packages/terminal/tests/headless.test.ts for the --continue path when SessionStorage.getLatestSession() returns null. Ensure runHeadless does not throw, uses the provided cwd, and starts a new session without initial messages.",
+  "status": "pending",
+  "created": "2026-02-03T19:40:52.238Z",
+  "updated": "2026-02-03T19:40:52.238Z"
+}

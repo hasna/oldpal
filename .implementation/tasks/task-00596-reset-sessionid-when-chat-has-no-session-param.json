@@ -1,0 +1,8 @@
+{
+  "id": "596",
+  "subject": "Reset sessionId when /chat has no session param",
+  "description": "packages/web/src/app/(dashboard)/chat/page.tsx keeps previous sessionId if the URL lacks ?session=. This means “New Session” or direct /chat navigations keep writing to the old session. When requestedSession is null, clear sessionId/messages so POST creates a new session.",
+  "status": "pending",
+  "created": "2026-02-03T18:52:39.940Z",
+  "updated": "2026-02-03T18:52:39.940Z"
+}

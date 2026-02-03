@@ -1,0 +1,8 @@
+{
+  "id": "540",
+  "subject": "ToolCallCard expand is not keyboard accessible",
+  "description": "ToolCallCard uses a clickable CardHeader div without button semantics, so it cannot be focused or toggled via keyboard and has no aria-expanded state. Convert the header to a <button> or add role=\"button\", tabIndex=0, key handlers, and aria-expanded. File: packages/web/src/components/chat/ToolCallCard.tsx:47-63.",
+  "status": "pending",
+  "created": "2026-02-03T18:26:27.272Z",
+  "updated": "2026-02-03T18:26:27.272Z"
+}

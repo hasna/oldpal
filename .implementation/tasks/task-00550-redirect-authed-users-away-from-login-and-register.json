@@ -1,0 +1,13 @@
+{
+  "id": "550",
+  "subject": "Redirect authed users away from /login and /register",
+  "description": "Login/Register pages have no guard; authenticated users can hit /login or /register without redirect. Add a redirect to /chat when already authenticated. Files: packages/web/src/app/(auth)/login/page.tsx:1-48, packages/web/src/app/(auth)/register/page.tsx:1-28.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "routing",
+    "auth"
+  ],
+  "created": "2026-02-03T18:27:24.780Z",
+  "updated": "2026-02-03T18:27:24.780Z"
+}

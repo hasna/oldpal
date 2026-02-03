@@ -1,0 +1,14 @@
+{
+  "id": "528",
+  "subject": "Restrict thread message access to owned agents",
+  "description": "Thread endpoint loads all messages in thread and returns them if user owns any agent in the thread. This can expose other users’ agent messages. Filter by agentIds or enforce thread ownership before returning.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "api",
+    "auth"
+  ],
+  "created": "2026-02-03T18:25:08.353Z",
+  "updated": "2026-02-03T18:25:08.353Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "584",
+  "subject": "Ctrl+S session selector conflicts with terminal flow control",
+  "description": "App binds Ctrl+S to open SessionSelector, but many terminals treat Ctrl+S as XOFF (freeze output), so the shortcut often fails and can lock the UI. Add an alternative shortcut (e.g., Ctrl+N or F2), and update the UI hint in Status/placeholder. File: packages/terminal/src/components/App.tsx:792-861, Status.tsx:57-89.",
+  "status": "pending",
+  "created": "2026-02-03T18:38:34.007Z",
+  "updated": "2026-02-03T18:38:34.007Z"
+}

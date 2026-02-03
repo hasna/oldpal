@@ -1,0 +1,14 @@
+{
+  "id": "207",
+  "subject": "Fix auth/session security findings",
+  "description": "Address auth/session issues found in review: enforce required JWT secrets (no dev defaults), tighten WebSocket session authorization (no unauthenticated session access), avoid tokens in OAuth callback URL, and align Google OAuth emailVerified handling.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "auth",
+    "session"
+  ],
+  "created": "2026-02-03T18:07:32.225Z",
+  "updated": "2026-02-03T18:07:32.225Z"
+}

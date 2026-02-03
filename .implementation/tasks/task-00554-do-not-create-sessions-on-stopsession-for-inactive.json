@@ -1,0 +1,8 @@
+{
+  "id": "554",
+  "subject": "Do not create sessions on stopSession for inactive sessions",
+  "description": "In packages/web/src/lib/server/agent-pool.ts, stopSession calls getSession and creates a new EmbeddedClient even when the session is not active. Guard stopSession to no-op when session is not present, or add a separate lookup to avoid spinning up clients just to stop.",
+  "status": "pending",
+  "created": "2026-02-03T18:30:19.571Z",
+  "updated": "2026-02-03T18:30:19.571Z"
+}

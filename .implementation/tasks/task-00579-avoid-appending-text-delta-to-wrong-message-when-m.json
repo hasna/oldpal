@@ -1,0 +1,8 @@
+{
+  "id": "579",
+  "subject": "Avoid appending text_delta to wrong message when messageId missing",
+  "description": "packages/web/src/lib/store.ts:105-137: appendMessageContent falls back to last assistant if provided messageId is not found. This can corrupt ordering when late deltas arrive for a prior message or when messageId is missing due to reconnect. Prefer creating a placeholder with that id or dropping stale deltas if id not found.",
+  "status": "pending",
+  "created": "2026-02-03T18:37:34.011Z",
+  "updated": "2026-02-03T18:37:34.011Z"
+}

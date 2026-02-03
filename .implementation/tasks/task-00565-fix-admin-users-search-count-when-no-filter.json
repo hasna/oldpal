@@ -1,0 +1,8 @@
+{
+  "id": "565",
+  "subject": "Fix admin users search count when no filter",
+  "description": "In packages/web/src/app/api/v1/admin/users/route.ts, whereClause is undefined when no search. Passing undefined to db.select().where(whereClause) may error or behave unexpectedly. Guard .where only when search is present or default to a true condition.",
+  "status": "pending",
+  "created": "2026-02-03T18:34:28.329Z",
+  "updated": "2026-02-03T18:34:28.329Z"
+}

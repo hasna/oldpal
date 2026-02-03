@@ -1,0 +1,8 @@
+{
+  "id": "588",
+  "subject": "Wire up NavUser logout action",
+  "description": "packages/web/src/components/nav-user.tsx renders a “Log out” menu item but it has no onClick and never calls useAuth.logout or redirects. Add logout handler (and optional confirm) to actually sign the user out.",
+  "status": "pending",
+  "created": "2026-02-03T18:41:50.375Z",
+  "updated": "2026-02-03T18:41:50.375Z"
+}

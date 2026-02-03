@@ -1,0 +1,8 @@
+{
+  "id": "633",
+  "subject": "Remove legacy app/api/ws dir (use only /api/v1/ws)",
+  "description": "Delete the empty packages/web/src/app/api/ws/ directory and ensure the only WebSocket entry point is /api/v1/ws. Remove any legacy references.",
+  "status": "pending",
+  "created": "2026-02-03T19:48:37.500Z",
+  "updated": "2026-02-03T20:00:41.114Z"
+}

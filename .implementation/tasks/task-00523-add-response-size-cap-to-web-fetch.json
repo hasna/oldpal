@@ -1,0 +1,8 @@
+{
+  "id": "523",
+  "subject": "Add response size cap to web_fetch",
+  "description": "In packages/core/src/tools/web.ts, web_fetch reads full response via response.text() before truncating. Implement streaming read with a max byte limit to avoid memory exhaustion from huge responses.",
+  "status": "pending",
+  "created": "2026-02-03T18:22:39.262Z",
+  "updated": "2026-02-03T18:22:39.262Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "563",
+  "subject": "Ensure auth refresh keeps isAuthenticated true",
+  "description": "packages/web/src/hooks/use-auth.ts:45-47,151-152: setTokens only updates access/refresh tokens. If isAuthenticated is false (e.g., rehydrate bug or after logout), refreshAccessToken can succeed but UI still treats user as unauthenticated. Consider setting isAuthenticated=true and isLoading=false when tokens are refreshed.",
+  "status": "pending",
+  "created": "2026-02-03T18:32:19.295Z",
+  "updated": "2026-02-03T18:32:19.295Z"
+}

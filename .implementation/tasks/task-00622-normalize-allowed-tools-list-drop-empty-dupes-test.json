@@ -1,0 +1,8 @@
+{
+  "id": "622",
+  "subject": "Normalize --allowed-tools list (drop empty/dupes) + tests",
+  "description": "Update headless CLI arg parsing to normalize allowedTools by trimming, dropping empty entries, and de-duplicating while preserving order. Add tests for inputs like \"Read, , Bash,Read\" and for the --allowedTools alias to ensure parity.",
+  "status": "pending",
+  "created": "2026-02-03T19:40:58.205Z",
+  "updated": "2026-02-03T19:40:58.205Z"
+}

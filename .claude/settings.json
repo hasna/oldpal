@@ -1,5 +1,25 @@
 {
   "env": {
     "CLAUDE_CODE_TASK_LIST_ID": "opensource-assistants-dev"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bunx @hasnaxyz/hook-checktasks@latest run",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  },
+  "checkTasksConfig": {
+    "taskListId": "opensource-assistants-dev",
+    "keywords": [
+      "dev"
+    ],
+    "enabled": true
   }
 }

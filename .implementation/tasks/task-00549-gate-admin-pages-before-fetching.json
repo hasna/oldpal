@@ -1,0 +1,14 @@
+{
+  "id": "549",
+  "subject": "Gate admin pages before fetching",
+  "description": "Admin pages call fetchWithAuth and load data even when user is not admin, then redirect to /chat; this can trigger 403s/flash for non-admins. Add role guard before loadUsers/loadStats or short-circuit effects. Files: packages/web/src/app/(dashboard)/admin/users/page.tsx:29-59, packages/web/src/app/(dashboard)/admin/stats/page.tsx:51-75.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "routing",
+    "auth",
+    "admin"
+  ],
+  "created": "2026-02-03T18:27:16.337Z",
+  "updated": "2026-02-03T18:27:16.337Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "617",
+  "subject": "Expand runHeadless tests to cover all options",
+  "description": "In packages/terminal/tests/headless.test.ts, add cases for: allowedTools + systemPrompt passed to EmbeddedClient; --continue uses latest session data; --resume overrides --continue; cwdProvided determines whether session cwd overrides; outputFormat text newline behavior; stream-json includes usage/done/error events; jsonSchema invalid JSON does not throw; client.onError sets exit code 1. Update mocks to capture constructor args and options.",
+  "status": "pending",
+  "created": "2026-02-03T19:37:07.275Z",
+  "updated": "2026-02-03T19:37:07.275Z"
+}

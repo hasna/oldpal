@@ -1,0 +1,14 @@
+{
+  "id": "210",
+  "subject": "Fix web chat WS auth/persistence gaps",
+  "description": "Audit ws handler for session ownership checks, require auth, and persist messages/sessions when using WebSocket; avoid creating sessions on stop unless active.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "api",
+    "security"
+  ],
+  "created": "2026-02-03T18:09:53.390Z",
+  "updated": "2026-02-03T18:09:53.390Z"
+}

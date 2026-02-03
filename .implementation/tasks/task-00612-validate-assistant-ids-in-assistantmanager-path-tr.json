@@ -1,0 +1,8 @@
+{
+  "id": "612",
+  "subject": "Validate assistant IDs in AssistantManager (path traversal guard)",
+  "description": "Harden packages/core/src/identity/assistant-manager.ts: enforce a safe ID pattern when reading index.json/active.json and when delete/switch/update is called. Ignore or reject IDs with path separators or traversal, and ensure rm/join cannot escape assistants root. Add tests that malicious IDs in index/active are skipped and do not read/write/delete outside base path.",
+  "status": "pending",
+  "created": "2026-02-03T19:33:52.012Z",
+  "updated": "2026-02-03T19:33:52.012Z"
+}

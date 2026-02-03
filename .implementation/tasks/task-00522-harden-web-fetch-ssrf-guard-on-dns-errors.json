@@ -1,0 +1,8 @@
+{
+  "id": "522",
+  "subject": "Harden web_fetch SSRF guard on DNS errors",
+  "description": "In packages/core/src/tools/web.ts, isPrivateHostOrResolved returns false on DNS lookup failures (fail-open). Switch to fail-closed or verify resolved IPs another way to prevent SSRF bypass.",
+  "status": "pending",
+  "created": "2026-02-03T18:22:39.209Z",
+  "updated": "2026-02-03T18:22:39.209Z"
+}

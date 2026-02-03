@@ -1,0 +1,8 @@
+{
+  "id": "607",
+  "subject": "Harden !shell execution in custom commands",
+  "description": "packages/core/src/commands/executor.ts executes lines starting with ! directly via shell without validation. Apply the same bash validator/allowlist used by BashTool (or add a config flag to disable), and cap output length to prevent abuse.",
+  "status": "pending",
+  "created": "2026-02-03T19:15:02.574Z",
+  "updated": "2026-02-03T19:15:02.574Z"
+}

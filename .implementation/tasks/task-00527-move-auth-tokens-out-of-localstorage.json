@@ -1,0 +1,14 @@
+{
+  "id": "527",
+  "subject": "Move auth tokens out of localStorage",
+  "description": "Auth tokens are persisted via zustand persist (localStorage), exposing access/refresh tokens to XSS. Switch to httpOnly secure cookies (or in-memory access + refresh cookie) and adjust login/register/refresh/logout flows accordingly.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "auth",
+    "token-storage"
+  ],
+  "created": "2026-02-03T18:25:07.323Z",
+  "updated": "2026-02-03T18:25:07.323Z"
+}

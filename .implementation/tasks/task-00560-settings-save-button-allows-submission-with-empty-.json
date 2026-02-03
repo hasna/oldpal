@@ -1,0 +1,8 @@
+{
+  "id": "560",
+  "subject": "Settings Save button allows submission with empty name",
+  "description": "SettingsPage does not validate or disable saving when name is empty; empty name can be submitted and error only surfaces after API response. Add client-side validation, disable Save when name is blank or unchanged, and announce validation errors. File: packages/web/src/app/(dashboard)/settings/page.tsx:62-90.",
+  "status": "pending",
+  "created": "2026-02-03T18:31:22.627Z",
+  "updated": "2026-02-03T18:31:22.627Z"
+}

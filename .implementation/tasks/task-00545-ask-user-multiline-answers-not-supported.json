@@ -1,0 +1,8 @@
+{
+  "id": "545",
+  "subject": "Ask-user multiline answers not supported",
+  "description": "AskUserPanel tells users multi-line answers are allowed, but Input filters out newlines and Enter always submits, so multiline cannot be entered. Support Shift+Enter (or similar) to insert '\\n' when askUserQuestion.multiline is true, or update UI copy to match behavior. Files: packages/terminal/src/components/AskUserPanel.tsx:43-46, Input.tsx:279-301.",
+  "status": "pending",
+  "created": "2026-02-03T18:26:53.672Z",
+  "updated": "2026-02-03T18:26:53.672Z"
+}

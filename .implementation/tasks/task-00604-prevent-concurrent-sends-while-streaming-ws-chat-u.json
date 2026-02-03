@@ -1,0 +1,8 @@
+{
+  "id": "604",
+  "subject": "Prevent concurrent sends while streaming (WS chat UI)",
+  "description": "packages/web/src/components/chat/InputArea.tsx allows send while isStreaming, which can overlap streams and corrupt tool-call state. Disable input/send or queue messages when isStreaming is true; ensure stop/cancel state restores input.",
+  "status": "pending",
+  "created": "2026-02-03T19:11:33.565Z",
+  "updated": "2026-02-03T19:11:33.565Z"
+}
