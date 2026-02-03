@@ -1,5 +1,5 @@
 {
   "env": {
-    "CLAUDE_CODE_TASK_LIST_ID": "opensource-oldpal-dev"
+    "CLAUDE_CODE_TASK_LIST_ID": "opensource-assistants-dev"
   }
 }
