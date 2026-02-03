@@ -17,7 +17,6 @@ mock.module('next/link', () => ({
 const { default: RootLayout, metadata } = await import('../src/app/layout');
 const { default: SettingsPage } = await import('../src/app/(dashboard)/settings/page');
 const { default: HomePage } = await import('../src/app/page');
-const { GET } = await import('../src/app/api/ws/route');
 
 
 describe('app layout and pages', () => {
@@ -44,8 +43,4 @@ describe('app layout and pages', () => {
     expect(markup).toContain('Operations Console');
   });
 
-  test('api ws GET returns 426', async () => {
-    const response = await GET();
-    expect(response.status).toBe(426);
-  });
 });

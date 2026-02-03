@@ -21,6 +21,14 @@ const { ChatContainer } = await import('../src/components/chat/ChatContainer');
 const { MarkdownRenderer } = await import('../src/components/chat/MarkdownRenderer');
 const { ServiceWorker } = await import('../src/components/shared/ServiceWorker');
 
+async function renderWithAct(element: React.ReactElement) {
+  let renderer: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(element);
+  });
+  return renderer!;
+}
+
 const createWindowStub = () => {
   const listeners: Record<string, Array<(event: any) => void>> = {};
   const addEventListener = (event: string, cb: (evt: any) => void) => {
@@ -99,17 +107,16 @@ describe('web extra components', () => {
     }
   });
 
-  test('Header starts a new session and sends cancel when streaming', () => {
+  test('Header starts a new session and sends cancel when streaming', async () => {
     (globalThis as any).crypto = { randomUUID: () => 'session-2' };
     useChatStore.setState({ isStreaming: true, sessionId: 'session-1' });
 
-    let renderer: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(<Header />);
-    });
+    const renderer = await renderWithAct(<Header />);
 
     const buttons = renderer!.root.findAll((node) => typeof node.props?.onClick === 'function');
-    act(() => buttons.at(-1)!.props.onClick());
+    await act(async () => {
+      buttons.at(-1)!.props.onClick();
+    });
 
     expect(sent.some((msg) => msg.type === 'cancel' && msg.sessionId === 'session-1')).toBe(true);
     expect(sent.some((msg) => msg.type === 'session' && msg.sessionId === 'session-2')).toBe(true);
@@ -117,7 +124,7 @@ describe('web extra components', () => {
     renderer!.unmount();
   });
 
-  test('Sidebar switches sessions and cancels streaming', () => {
+  test('Sidebar switches sessions and cancels streaming', async () => {
     (globalThis as any).crypto = { randomUUID: () => 'session-3' };
     useChatStore.setState({
       isStreaming: true,
@@ -128,13 +135,12 @@ describe('web extra components', () => {
       ],
     });
 
-    let renderer: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(<Sidebar />);
-    });
+    const renderer = await renderWithAct(<Sidebar />);
 
     const buttons = renderer!.root.findAll((node) => typeof node.props?.onClick === 'function');
-    act(() => buttons[1].props.onClick());
+    await act(async () => {
+      buttons[1].props.onClick();
+    });
 
     expect(sent.some((msg) => msg.type === 'cancel')).toBe(true);
     expect(sent.some((msg) => msg.type === 'session' && msg.sessionId === 'session-2')).toBe(true);
@@ -142,19 +148,16 @@ describe('web extra components', () => {
     renderer!.unmount();
   });
 
-  test('CommandPalette toggles and triggers new session', () => {
+  test('CommandPalette toggles and triggers new session', async () => {
     const { listeners } = createWindowStub();
     (globalThis as any).crypto = { randomUUID: () => 'session-4' };
     useChatStore.setState({ isStreaming: true, sessionId: 'session-1' });
 
-    let renderer: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(<CommandPalette />);
-    });
+    const renderer = await renderWithAct(<CommandPalette />);
 
     expect(renderer!.toJSON()).toBeNull();
 
-    act(() => {
+    await act(async () => {
       listeners.keydown?.[0]({
         metaKey: true,
         key: 'k',
@@ -166,32 +169,35 @@ describe('web extra components', () => {
     expect(JSON.stringify(tree)).toContain('Commands');
 
     const buttons = renderer!.root.findAll((node) => typeof node.props?.onClick === 'function');
-    act(() => buttons[0].props.onClick());
+    await act(async () => {
+      buttons[0].props.onClick();
+    });
 
     expect(sent.some((msg) => msg.type === 'cancel' && msg.sessionId === 'session-1')).toBe(true);
     expect(sent.some((msg) => msg.type === 'session' && msg.sessionId === 'session-4')).toBe(true);
     renderer!.unmount();
   });
 
-  test('InputArea sends messages and handles escape cancel', () => {
+  test('InputArea sends messages and handles escape cancel', async () => {
     const { listeners } = createWindowStub();
     (globalThis as any).crypto = { randomUUID: () => 'session-5' };
 
-    let renderer: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(<InputArea />);
-    });
+    const renderer = await renderWithAct(<InputArea />);
 
     const input = renderer!.root.findByType(Input);
-    act(() => input.props.onChange({ target: { value: 'Hello' } }));
-    act(() => input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} }));
+    await act(async () => {
+      input.props.onChange({ target: { value: 'Hello' } });
+    });
+    await act(async () => {
+      input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+    });
 
     expect(useChatStore.getState().messages.length).toBe(2);
     expect(useChatStore.getState().isStreaming).toBe(true);
     expect(sent.some((msg) => msg.type === 'message' && msg.content === 'Hello')).toBe(true);
 
     useChatStore.setState({ isStreaming: true, sessionId: 'session-5' });
-    act(() => {
+    await act(async () => {
       listeners.keydown?.[0]({ key: 'Escape' });
     });
 
@@ -201,7 +207,7 @@ describe('web extra components', () => {
     renderer!.unmount();
   });
 
-  test('MessageList merges streaming tool calls', () => {
+  test('MessageList merges streaming tool calls', async () => {
     useChatStore.setState({
       isStreaming: true,
       currentToolCalls: [{ id: 't2', name: 'read', input: {}, type: 'tool' } as any],
@@ -212,25 +218,19 @@ describe('web extra components', () => {
       { id: 'a1', role: 'assistant', content: 'hello', timestamp: Date.now(), toolCalls: [{ id: 't1', name: 'bash', input: {}, type: 'tool' } as any] },
     ];
 
-    let renderer: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(<MessageList messages={messages} />);
-    });
+    const renderer = await renderWithAct(<MessageList messages={messages} />);
 
     const bubble = renderer!.root.findByType(MessageBubble);
     expect(bubble.props.message.toolCalls.length).toBe(2);
     renderer!.unmount();
   });
 
-  test('ChatContainer connects and renders empty state', () => {
+  test('ChatContainer connects and renders empty state', async () => {
     const { listeners } = createWindowStub();
     (globalThis as any).window.location.protocol = 'https:';
     useChatStore.setState({ sessionId: 'session-9' });
 
-    let renderer: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(<ChatContainer />);
-    });
+    const renderer = await renderWithAct(<ChatContainer />);
 
     expect(connected[0]).toBe('wss://example.com/api/ws');
     expect(sent.some((msg) => msg.type === 'session' && msg.sessionId === 'session-9')).toBe(true);
@@ -248,15 +248,12 @@ describe('web extra components', () => {
     expect(markup).toContain('<strong>Bold</strong>');
   });
 
-  test('ServiceWorker registers when available', () => {
+  test('ServiceWorker registers when available', async () => {
     createWindowStub();
     const register = mock(async () => ({}));
     (globalThis as any).navigator = { serviceWorker: { register } };
 
-    let renderer: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(<ServiceWorker />);
-    });
+    const renderer = await renderWithAct(<ServiceWorker />);
 
     expect(register).toHaveBeenCalledWith('/sw.js');
     renderer!.unmount();
