@@ -267,7 +267,9 @@ if (options.print !== null) {
   // Interactive mode
   // Enable synchronized output for terminals that support DEC 2026 (Ghostty, WezTerm, etc.)
   // This batches all terminal writes and flushes them atomically, preserving scrollback
-  const disableSyncOutput = enableSynchronizedOutput();
+  // Can be disabled with ASSISTANTS_NO_SYNC=1 if causing rendering issues
+  const useSyncOutput = process.env.ASSISTANTS_NO_SYNC !== '1';
+  const disableSyncOutput = useSyncOutput ? enableSynchronizedOutput() : () => {};
 
   const { waitUntilExit } = render(<App cwd={options.cwd} version={VERSION} />, {
     // Patch console to route through our synced output

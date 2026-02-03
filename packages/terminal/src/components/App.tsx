@@ -185,6 +185,7 @@ export function App({ cwd, version }: AppProps) {
 
   // Terminal resize is handled natively
   const turnIdRef = useRef(0);
+  const initStateRef = useRef<'idle' | 'pending' | 'done'>('idle');
 
   useEffect(() => {
     isProcessingRef.current = isProcessing;
@@ -510,9 +511,20 @@ export function App({ cwd, version }: AppProps) {
 
   // Initialize first session
   useEffect(() => {
+    // Only skip if initialization completed successfully
+    // Allow retry if we were interrupted (state is still 'idle' or was reset to 'idle')
+    if (initStateRef.current === 'done') return;
+
+    // If already pending, another instance is running
+    if (initStateRef.current === 'pending') return;
+
+    initStateRef.current = 'pending';
+
+    let cancelled = false;
+
     const initSession = async () => {
       try {
-        // Register chunk handler
+        // Register chunk handler (only once)
         registry.onChunk(handleChunk);
         registry.onError((err) => {
           const finalized = finalizeResponse('error');
@@ -531,16 +543,25 @@ export function App({ cwd, version }: AppProps) {
 
         // Create first session
         const session = await registry.createSession(cwd);
+
+        // Once session is created, always complete initialization
+        // Even if cleanup was called, the session is ready to use
+        // This prevents the "Initializing..." hang when cleanup races with creation
+
         setActiveSessionId(session.id);
         session.client.setAskUserHandler((request) => beginAskUser(session.id, request));
 
         await loadSessionMetadata(session);
+
         setEnergyState(session.client.getEnergyState() ?? undefined);
         setVoiceState(session.client.getVoiceState() ?? undefined);
         setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
 
+        initStateRef.current = 'done';
         setIsInitializing(false);
       } catch (err) {
+        initStateRef.current = 'idle'; // Allow retry on error
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : String(err));
         setIsInitializing(false);
       }
@@ -550,6 +571,8 @@ export function App({ cwd, version }: AppProps) {
 
     // Cleanup on unmount
     return () => {
+      cancelled = true;
+      // Close registry when component is unmounting
       registry.closeAll();
     };
   }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState, loadSessionMetadata, beginAskUser]);

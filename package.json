@@ -36,8 +36,8 @@
     "ink-text-input": "^6.0.0",
     "marked": "^15.0.0",
     "marked-terminal": "^7.2.0",
-    "react": "^19.2.4",
-    "react-test-renderer": "^19.2.4",
+    "react": "^19.0.0",
+    "react-test-renderer": "^19.0.0",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0"
   },
