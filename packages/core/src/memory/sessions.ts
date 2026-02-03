@@ -1,6 +1,7 @@
-import { Database } from 'bun:sqlite';
 import { join } from 'path';
 import { getConfigDir } from '../config';
+import { getRuntime } from '../runtime';
+import type { DatabaseConnection } from '../runtime';
 import type { Session, Message } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 
@@ -8,14 +9,15 @@ import { generateId, now } from '@hasna/assistants-shared';
  * Session manager - handles conversation session persistence
  */
 export class SessionManager {
-  private db: Database;
+  private db: DatabaseConnection;
 
   constructor(dbPath?: string, assistantId?: string | null) {
     const baseDir = getConfigDir();
     const path = dbPath || (assistantId
       ? join(baseDir, 'assistants', assistantId, 'memory.db')
       : join(baseDir, 'memory.db'));
-    this.db = new Database(path, { create: true });
+    const runtime = getRuntime();
+    this.db = runtime.openDatabase(path);
     this.initialize();
   }
 
@@ -23,7 +25,7 @@ export class SessionManager {
    * Initialize database schema
    */
   private initialize(): void {
-    this.db.run(`
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         created_at INTEGER NOT NULL,
@@ -32,7 +34,7 @@ export class SessionManager {
       )
     `);
 
-    this.db.run(`
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
@@ -45,7 +47,7 @@ export class SessionManager {
       )
     `);
 
-    this.db.run(`
+    this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)
     `);
   }
@@ -63,10 +65,9 @@ export class SessionManager {
     };
 
     const metadataJson = safeJsonStringify(metadata || {}) ?? '{}';
-    this.db.run(
-      `INSERT INTO sessions (id, created_at, updated_at, metadata) VALUES (?, ?, ?, ?)`,
-      [session.id, session.createdAt, session.updatedAt, metadataJson]
-    );
+    this.db.prepare(
+      `INSERT INTO sessions (id, created_at, updated_at, metadata) VALUES (?, ?, ?, ?)`
+    ).run(session.id, session.createdAt, session.updatedAt, metadataJson);
 
     return session;
   }
@@ -76,26 +77,22 @@ export class SessionManager {
    */
   get(sessionId: string): Session | null {
     const sessionRow = this.db
-      .query<
-        { id: string; created_at: number; updated_at: number; metadata: string },
-        [string]
-      >(`SELECT * FROM sessions WHERE id = ?`)
+      .query<{ id: string; created_at: number; updated_at: number; metadata: string }>(
+        `SELECT * FROM sessions WHERE id = ?`
+      )
       .get(sessionId);
 
     if (!sessionRow) return null;
 
     const messageRows = this.db
-      .query<
-        {
-          id: string;
-          role: string;
-          content: string;
-          timestamp: number;
-          tool_calls: string | null;
-          tool_results: string | null;
-        },
-        [string]
-      >(`SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp`)
+      .query<{
+        id: string;
+        role: string;
+        content: string;
+        timestamp: number;
+        tool_calls: string | null;
+        tool_results: string | null;
+      }>(`SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp`)
       .all(sessionId);
 
     const messages: Message[] = messageRows.map((row) => ({
@@ -120,21 +117,20 @@ export class SessionManager {
    * Add a message to a session
    */
   addMessage(sessionId: string, message: Message): void {
-    this.db.run(
+    this.db.prepare(
       `INSERT INTO messages (id, session_id, role, content, timestamp, tool_calls, tool_results)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        message.id,
-        sessionId,
-        message.role,
-        message.content,
-        message.timestamp,
-        message.toolCalls ? (safeJsonStringify(message.toolCalls) ?? null) : null,
-        message.toolResults ? (safeJsonStringify(message.toolResults) ?? null) : null,
-      ]
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      message.id,
+      sessionId,
+      message.role,
+      message.content,
+      message.timestamp,
+      message.toolCalls ? (safeJsonStringify(message.toolCalls) ?? null) : null,
+      message.toolResults ? (safeJsonStringify(message.toolResults) ?? null) : null
     );
 
-    this.db.run(`UPDATE sessions SET updated_at = ? WHERE id = ?`, [now(), sessionId]);
+    this.db.prepare(`UPDATE sessions SET updated_at = ? WHERE id = ?`).run(now(), sessionId);
   }
 
   /**
@@ -142,10 +138,9 @@ export class SessionManager {
    */
   list(limit: number = 20): Session[] {
     const rows = this.db
-      .query<
-        { id: string; created_at: number; updated_at: number; metadata: string },
-        [number]
-      >(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`)
+      .query<{ id: string; created_at: number; updated_at: number; metadata: string }>(
+        `SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`
+      )
       .all(limit);
 
     return rows.map((row) => ({
@@ -161,8 +156,8 @@ export class SessionManager {
    * Delete a session and its messages
    */
   delete(sessionId: string): void {
-    this.db.run(`DELETE FROM messages WHERE session_id = ?`, [sessionId]);
-    this.db.run(`DELETE FROM sessions WHERE id = ?`, [sessionId]);
+    this.db.prepare(`DELETE FROM messages WHERE session_id = ?`).run(sessionId);
+    this.db.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
   }
 
   /**
@@ -170,7 +165,7 @@ export class SessionManager {
    */
   getLatest(): Session | null {
     const row = this.db
-      .query<{ id: string }, []>(`SELECT id FROM sessions ORDER BY updated_at DESC LIMIT 1`)
+      .query<{ id: string }>(`SELECT id FROM sessions ORDER BY updated_at DESC LIMIT 1`)
       .get();
 
     return row ? this.get(row.id) : null;

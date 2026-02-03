@@ -2,6 +2,7 @@ import type { Command, CommandContext, CommandResult, TokenUsage } from './types
 import type { CommandLoader } from './loader';
 import { join } from 'path';
 import { homedir, platform, release, arch } from 'os';
+import { getRuntime } from '../runtime';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
 import { generateId } from '@hasna/assistants-shared';
@@ -11,6 +12,7 @@ import { getSecurityLogger, severityFromString } from '../security/logger';
 import type { InboxManager } from '../inbox';
 import type { WalletManager } from '../wallet';
 import type { SecretsManager } from '../secrets';
+import type { MessagesManager } from '../messages';
 import {
   saveSchedule,
   listSchedules,
@@ -163,6 +165,7 @@ export class BuiltinCommands {
     loader.register(this.walletCommand());
     loader.register(this.secretsCommand());
     loader.register(this.jobsCommand());
+    loader.register(this.messagesCommand());
     loader.register(this.exitCommand());
   }
 
@@ -1654,6 +1657,296 @@ Created: ${new Date(job.createdAt).toISOString()}
     if (hours < 24) return `${hours}h`;
     const days = Math.floor(hours / 24);
     return `${days}d`;
+  }
+
+  /**
+   * /messages - Agent-to-agent messaging
+   */
+  private messagesCommand(): Command {
+    return {
+      name: 'messages',
+      description: 'Agent-to-agent messaging (list, send, read, threads)',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const manager = context.getMessagesManager?.();
+        if (!manager) {
+          context.emit('text', 'Messages are not enabled. Configure messages in config.json.\n');
+          context.emit('text', '\nTo enable:\n');
+          context.emit('text', '```json\n');
+          context.emit('text', '{\n');
+          context.emit('text', '  "messages": {\n');
+          context.emit('text', '    "enabled": true\n');
+          context.emit('text', '  }\n');
+          context.emit('text', '}\n');
+          context.emit('text', '```\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const parts = splitArgs(args);
+        const subcommand = parts[0]?.toLowerCase() || 'list';
+
+        // /messages or /messages list
+        if (subcommand === 'list' || (!parts[0] && !args.trim())) {
+          const unreadOnly = parts.includes('--unread') || parts.includes('-u');
+          const limitArg = parts.find((p) => p.match(/^\d+$/));
+          const limit = limitArg ? parseInt(limitArg, 10) : 20;
+
+          try {
+            const messages = await manager.list({ limit, unreadOnly });
+            if (messages.length === 0) {
+              context.emit('text', unreadOnly ? 'No unread messages.\n' : 'Inbox is empty.\n');
+            } else {
+              context.emit('text', `\n## Messages (${messages.length} message${messages.length === 1 ? '' : 's'})\n\n`);
+              for (const msg of messages) {
+                const statusIcon = msg.status === 'read' ? '📖' : msg.status === 'injected' ? '👁️' : '📬';
+                const priorityIcon =
+                  msg.priority === 'urgent'
+                    ? ' 🔴'
+                    : msg.priority === 'high'
+                    ? ' 🟠'
+                    : '';
+                const date = new Date(msg.createdAt).toLocaleDateString();
+                context.emit('text', `${statusIcon}${priorityIcon} **${msg.id}**\n`);
+                context.emit('text', `   From: ${msg.fromAgentName}\n`);
+                if (msg.subject) {
+                  context.emit('text', `   Subject: ${msg.subject}\n`);
+                }
+                context.emit('text', `   Preview: ${msg.preview}\n`);
+                context.emit('text', `   Date: ${date}${msg.replyCount > 0 ? ` | ${msg.replyCount} replies` : ''}\n\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error listing messages: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages threads
+        if (subcommand === 'threads') {
+          try {
+            const threads = await manager.listThreads();
+            if (threads.length === 0) {
+              context.emit('text', 'No conversation threads found.\n');
+            } else {
+              context.emit('text', `\n## Threads (${threads.length})\n\n`);
+              for (const thread of threads) {
+                const participants = thread.participants.map((p) => p.agentName).join(', ');
+                const updated = new Date(thread.updatedAt).toLocaleDateString();
+                context.emit('text', `**${thread.threadId}**\n`);
+                if (thread.subject) {
+                  context.emit('text', `   Subject: ${thread.subject}\n`);
+                }
+                context.emit('text', `   Participants: ${participants}\n`);
+                context.emit('text', `   Messages: ${thread.messageCount} (${thread.unreadCount} unread)\n`);
+                context.emit('text', `   Updated: ${updated}\n\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error listing threads: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages read <id>
+        if (subcommand === 'read') {
+          const messageId = parts[1];
+          if (!messageId) {
+            context.emit('text', 'Usage: /messages read <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const message = await manager.read(messageId);
+            if (!message) {
+              context.emit('text', `Message ${messageId} not found.\n`);
+            } else {
+              context.emit('text', `\n## Message: ${message.id}\n\n`);
+              context.emit('text', `**From:** ${message.fromAgentName} (${message.fromAgentId})\n`);
+              context.emit('text', `**To:** ${message.toAgentName} (${message.toAgentId})\n`);
+              if (message.subject) {
+                context.emit('text', `**Subject:** ${message.subject}\n`);
+              }
+              context.emit('text', `**Priority:** ${message.priority}\n`);
+              context.emit('text', `**Sent:** ${new Date(message.createdAt).toLocaleString()}\n`);
+              if (message.readAt) {
+                context.emit('text', `**Read:** ${new Date(message.readAt).toLocaleString()}\n`);
+              }
+              context.emit('text', `**Thread:** ${message.threadId}\n`);
+              if (message.parentId) {
+                context.emit('text', `**In reply to:** ${message.parentId}\n`);
+              }
+              context.emit('text', '\n---\n\n');
+              context.emit('text', message.body + '\n');
+            }
+          } catch (error) {
+            context.emit('text', `Error reading message: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages thread <id>
+        if (subcommand === 'thread') {
+          const threadId = parts[1];
+          if (!threadId) {
+            context.emit('text', 'Usage: /messages thread <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const messages = await manager.readThread(threadId);
+            if (messages.length === 0) {
+              context.emit('text', `Thread ${threadId} not found or empty.\n`);
+            } else {
+              context.emit('text', `\n## Thread: ${threadId}\n`);
+              context.emit('text', `**${messages.length} message(s)**\n\n`);
+              for (const msg of messages) {
+                context.emit('text', '---\n');
+                context.emit('text', `### From: ${msg.fromAgentName} → ${msg.toAgentName}\n`);
+                if (msg.subject) {
+                  context.emit('text', `**Subject:** ${msg.subject}\n`);
+                }
+                context.emit('text', `**Sent:** ${new Date(msg.createdAt).toLocaleString()}\n\n`);
+                context.emit('text', msg.body + '\n');
+                context.emit('text', `*ID: ${msg.id}*\n\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error reading thread: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages send <to> <subject>
+        if (subcommand === 'send') {
+          context.emit('text', 'To send a message, use the messages_send tool:\n\n');
+          context.emit('text', 'Example:\n');
+          context.emit('text', '```\n');
+          context.emit('text', 'Use messages_send with:\n');
+          context.emit('text', '  to: "AgentName"  (or agent ID)\n');
+          context.emit('text', '  body: "Your message content"\n');
+          context.emit('text', '  subject: "Optional subject" (optional)\n');
+          context.emit('text', '  priority: "normal" (optional: low, normal, high, urgent)\n');
+          context.emit('text', '```\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages reply <id>
+        if (subcommand === 'reply') {
+          const messageId = parts[1];
+          if (!messageId) {
+            context.emit('text', 'Usage: /messages reply <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          context.emit('text', `To reply to message ${messageId}, use the messages_send tool:\n\n`);
+          context.emit('text', 'Example:\n');
+          context.emit('text', '```\n');
+          context.emit('text', 'Use messages_send with:\n');
+          context.emit('text', '  to: "<recipient>"\n');
+          context.emit('text', '  body: "Your reply"\n');
+          context.emit('text', `  replyTo: "${messageId}"\n`);
+          context.emit('text', '```\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages delete <id>
+        if (subcommand === 'delete') {
+          const messageId = parts[1];
+          if (!messageId) {
+            context.emit('text', 'Usage: /messages delete <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = await manager.delete(messageId);
+            context.emit('text', result.message + '\n');
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages agents
+        if (subcommand === 'agents') {
+          try {
+            const agents = await manager.listAgents();
+            if (agents.length === 0) {
+              context.emit('text', 'No other agents found. Agents appear here after sending or receiving messages.\n');
+            } else {
+              context.emit('text', `\n## Known Agents (${agents.length})\n\n`);
+              for (const agent of agents) {
+                const lastSeen = new Date(agent.lastSeen).toLocaleDateString();
+                context.emit('text', `- **${agent.name}** (ID: ${agent.id})\n`);
+                context.emit('text', `  Last seen: ${lastSeen}\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages stats
+        if (subcommand === 'stats') {
+          try {
+            const stats = await manager.getStats();
+            context.emit('text', '\n## Messages Statistics\n\n');
+            context.emit('text', `Total Messages: ${stats.totalMessages}\n`);
+            context.emit('text', `Unread: ${stats.unreadCount}\n`);
+            context.emit('text', `Threads: ${stats.threadCount}\n`);
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages help
+        if (subcommand === 'help') {
+          context.emit('text', '\n## Messages Commands\n\n');
+          context.emit('text', '/messages                List recent messages (default: 20)\n');
+          context.emit('text', '/messages list [--unread] List messages, optionally unread only\n');
+          context.emit('text', '/messages threads        List conversation threads\n');
+          context.emit('text', '/messages read <id>      Read specific message\n');
+          context.emit('text', '/messages thread <id>    Read entire thread\n');
+          context.emit('text', '/messages send           Show how to send messages\n');
+          context.emit('text', '/messages reply <id>     Show how to reply\n');
+          context.emit('text', '/messages delete <id>    Delete a message\n');
+          context.emit('text', '/messages agents         List known agents\n');
+          context.emit('text', '/messages stats          Show inbox statistics\n');
+          context.emit('text', '/messages help           Show this help\n\n');
+          context.emit('text', '## Tools\n\n');
+          context.emit('text', 'messages_send            Send a message to another agent\n');
+          context.emit('text', 'messages_list            List inbox messages\n');
+          context.emit('text', 'messages_read            Read a specific message\n');
+          context.emit('text', 'messages_read_thread     Read entire thread\n');
+          context.emit('text', 'messages_delete          Delete a message\n');
+          context.emit('text', 'messages_list_agents     List known agents\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown messages command: ${subcommand}\n`);
+        context.emit('text', 'Use /messages help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
   }
 
   private exitCommand(): Command {
@@ -3255,8 +3548,9 @@ Keep it concise but comprehensive.`,
               timeoutId = setTimeout(resolveAuthTimeout, 1000, resolve);
             });
 
+            const runtime = getRuntime();
             const result = await Promise.race([
-              Bun.$`${connector.cli} auth status --format json`.quiet().nothrow(),
+              runtime.shell`${connector.cli} auth status --format json`.quiet().nothrow(),
               timeoutPromise,
             ]);
 
@@ -3315,8 +3609,9 @@ Keep it concise but comprehensive.`,
                 timeoutId = setTimeout(resolveAuthTimeout, 1000, resolve);
               });
 
+              const runtime = getRuntime();
               const result = await Promise.race([
-                Bun.$`${cli} auth status --format json`.quiet().nothrow(),
+                runtime.shell`${cli} auth status --format json`.quiet().nothrow(),
                 timeoutPromise,
               ]);
 
@@ -3452,13 +3747,15 @@ Keep it concise but comprehensive.`,
         const summary = typeToken ? rest.join(' ').trim() : rawArgs;
 
         // Collect system info
+        const runtime = getRuntime();
         const systemInfo = {
           version: VERSION,
           platform: platform(),
           release: release(),
           arch: arch(),
           nodeVersion: process.version,
-          bunVersion: typeof Bun !== 'undefined' ? Bun.version : 'N/A',
+          runtimeName: runtime.name,
+          runtimeVersion: runtime.version,
         };
 
         // GitHub repo URL
@@ -3487,7 +3784,7 @@ Keep it concise but comprehensive.`,
 
 - **assistants version**: ${systemInfo.version}
 - **Platform**: ${systemInfo.platform} ${systemInfo.release} (${systemInfo.arch})
-- **Bun version**: ${systemInfo.bunVersion}
+- **Runtime**: ${systemInfo.runtimeName} ${systemInfo.runtimeVersion}
 - **Node version**: ${systemInfo.nodeVersion}
 
 ## Additional Context
@@ -3550,7 +3847,7 @@ Keep it concise but comprehensive.`,
 
 - **assistants version**: ${systemInfo.version}
 - **Platform**: ${systemInfo.platform} (${systemInfo.arch})
-- **Bun version**: ${systemInfo.bunVersion}
+- **Runtime**: ${systemInfo.runtimeName} ${systemInfo.runtimeVersion}
 `;
           const shortUrl = new URL(`${repoUrl}/issues/new`);
           shortUrl.searchParams.set('title', issueTitle);
@@ -3566,7 +3863,8 @@ Keep it concise but comprehensive.`,
           const openCmd = platform() === 'darwin' ? 'open' :
                          platform() === 'win32' ? 'start' : 'xdg-open';
 
-          await Bun.$`${openCmd} ${finalUrl}`.quiet();
+          const runtime = getRuntime();
+          await runtime.shell`${openCmd} ${finalUrl}`.quiet();
 
           let message = '\n**Opening GitHub to submit feedback...**\n\n';
           message += 'A browser window should open with a pre-filled issue template.\n';
@@ -3586,7 +3884,7 @@ Keep it concise but comprehensive.`,
           message += '**System Information:**\n';
           message += `- assistants version: ${systemInfo.version}\n`;
           message += `- Platform: ${systemInfo.platform} ${systemInfo.release}\n`;
-          message += `- Bun version: ${systemInfo.bunVersion}\n`;
+          message += `- Runtime: ${systemInfo.runtimeName} ${systemInfo.runtimeVersion}\n`;
 
           context.emit('text', message);
         }

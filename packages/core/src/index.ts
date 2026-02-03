@@ -1,5 +1,9 @@
 // Core exports for assistants
 
+// Runtime
+export { setRuntime, getRuntime, hasRuntime } from './runtime';
+export type { Runtime, FileHandle, SpawnOptions, SpawnResult, ShellResult, ShellCommand, GlobOptions, DatabaseConnection, DatabaseStatement } from './runtime';
+
 // Agent
 export { AgentLoop } from './agent/loop';
 export { AgentContext } from './agent/context';
@@ -82,6 +86,9 @@ export * from './scheduler';
 
 // Jobs
 export * from './jobs';
+
+// Messages (Agent-to-Agent)
+export * from './messages';
 
 // Client
 export { EmbeddedClient } from './client';

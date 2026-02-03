@@ -1,0 +1,24 @@
+{
+  "name": "@hasna/runtime-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "fast-glob": "^3.3.3"
+  },
+  "peerDependencies": {
+    "@hasna/assistants-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.0.0",
+    "typescript": "^5"
+  }
+}

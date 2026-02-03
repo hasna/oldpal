@@ -1,5 +1,6 @@
 import type { Command, CommandContext, CommandResult } from './types';
 import type { CommandLoader } from './loader';
+import { getRuntime } from '../runtime';
 
 /**
  * CommandExecutor - executes slash commands
@@ -140,11 +141,12 @@ export class CommandExecutor {
    */
   private async executeShell(command: string, cwd: string): Promise<string> {
     try {
+      const runtime = getRuntime();
       const timeoutMs = 5000;
       const isWindows = process.platform === 'win32';
-      const shellBinary = isWindows ? 'cmd' : (Bun.which('bash') || 'sh');
+      const shellBinary = isWindows ? 'cmd' : (runtime.which('bash') || 'sh');
       const shellArgs = isWindows ? ['/c', command] : ['-lc', command];
-      const proc = Bun.spawn([shellBinary, ...shellArgs], {
+      const proc = runtime.spawn([shellBinary, ...shellArgs], {
         cwd,
         stdin: 'ignore',
         stdout: 'pipe',

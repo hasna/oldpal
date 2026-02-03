@@ -162,7 +162,6 @@ export class SessionStorage {
       if (!file.endsWith('.json')) continue;
       try {
         const filePath = join(sessionsDir, file);
-        const stat = Bun.file(filePath);
         const content = JSON.parse(readFileSync(filePath, 'utf-8')) as SessionData;
         sessions.push({
           id: file.replace('.json', ''),

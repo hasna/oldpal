@@ -1,8 +1,14 @@
 #!/usr/bin/env bun
+// Initialize Bun runtime before any core imports
+import { setRuntime } from '@hasna/assistants-core';
+import { bunRuntime } from '@hasna/runtime-bun';
+setRuntime(bunRuntime);
+
 import React from 'react';
 import { render } from 'ink';
 import { App } from './components/App';
 import { runHeadless } from './headless';
+import { sanitizeTerminalOutput } from './output/sanitize';
 
 // Version is embedded at build time via define in build.ts
 const VERSION = process.env.ASSISTANTS_VERSION || 'dev';
@@ -25,8 +31,9 @@ function enableSynchronizedOutput(): () => void {
 
   const flush = () => {
     if (buffer) {
+      const safe = sanitizeTerminalOutput(buffer);
       // Wrap the batched output in synchronized mode
-      originalWrite(SYNC_START + buffer + SYNC_END);
+      originalWrite(SYNC_START + safe + SYNC_END);
       buffer = '';
     }
     flushTimeout = null;
@@ -38,8 +45,8 @@ function enableSynchronizedOutput(): () => void {
     encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
     callback?: (err?: Error) => void
   ): boolean {
-    const str = typeof chunk === 'string' ? chunk : chunk.toString();
-    buffer += str;
+    const raw = typeof chunk === 'string' ? chunk : chunk.toString();
+    buffer += raw;
 
     // Debounce flushes to batch rapid updates
     if (flushTimeout) {
@@ -265,6 +272,8 @@ if (options.print !== null) {
   const { waitUntilExit } = render(<App cwd={options.cwd} version={VERSION} />, {
     // Patch console to route through our synced output
     patchConsole: true,
+    // Let the app decide how to handle Ctrl+C (clear input or stop processing).
+    exitOnCtrlC: false,
   });
 
   waitUntilExit().then(() => {

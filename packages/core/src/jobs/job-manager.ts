@@ -9,6 +9,8 @@ import {
   cleanupOldJobs,
 } from './job-store';
 import { ErrorCodes } from '../errors/codes';
+import { getRuntime } from '../runtime';
+import type { SpawnResult } from '../runtime';
 
 const DEFAULT_TIMEOUT_MS = 60_000; // 1 minute
 const DEFAULT_MAX_JOB_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -19,7 +21,7 @@ const DEFAULT_MAX_JOB_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 export class JobManager {
   private config: JobsConfig;
   private sessionId: string;
-  private runningJobs: Map<string, { proc: ReturnType<typeof Bun.spawn>; timer: ReturnType<typeof setTimeout> }> = new Map();
+  private runningJobs: Map<string, { proc: SpawnResult; timer: ReturnType<typeof setTimeout> }> = new Map();
   private timedOutJobs: Set<string> = new Set();
   private cancelledJobs: Set<string> = new Set();
   private completionCallbacks: JobCompletionCallback[] = [];
@@ -131,7 +133,8 @@ export class JobManager {
     }
 
     try {
-      const proc = Bun.spawn(cmdParts, {
+      const runtime = getRuntime();
+      const proc = runtime.spawn(cmdParts, {
         cwd,
         stdin: 'ignore',
         stdout: 'pipe',
@@ -230,7 +233,7 @@ export class JobManager {
   /**
    * Handle job timeout
    */
-  private async handleTimeout(jobId: string, proc: ReturnType<typeof Bun.spawn>): Promise<void> {
+  private async handleTimeout(jobId: string, proc: SpawnResult): Promise<void> {
     // Mark as timed out BEFORE killing (to prevent race condition)
     this.timedOutJobs.add(jobId);
 

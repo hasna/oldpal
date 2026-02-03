@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync } from 'fs';
 import { join, relative, basename, extname } from 'path';
 import { homedir } from 'os';
 import type { Command, CommandFrontmatter } from './types';
+import { getRuntime } from '../runtime';
 
 /**
  * CommandLoader - discovers and loads slash commands from disk
@@ -71,7 +72,8 @@ export class CommandLoader {
    */
   private async loadCommandFile(filePath: string, prefix: string): Promise<Command | null> {
     try {
-      const content = await Bun.file(filePath).text();
+      const runtime = getRuntime();
+      const content = await runtime.file(filePath).text();
       const { frontmatter, body } = this.parseFrontmatter(content);
 
       // Derive command name from filename or frontmatter

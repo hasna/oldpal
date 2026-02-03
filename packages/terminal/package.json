@@ -16,6 +16,7 @@
   "dependencies": {
     "@hasna/assistants-core": "workspace:*",
     "@hasna/assistants-shared": "workspace:*",
+    "@hasna/runtime-bun": "workspace:*",
     "chalk": "^5.3.0",
     "ink": "^6.0.0",
     "ink-scroll-view": "^0.3.5",

@@ -1,3 +1,11 @@
+// Initialize Node.js runtime before any core imports
+import { setRuntime, hasRuntime } from '@hasna/assistants-core';
+import { nodeRuntime } from '@hasna/runtime-node';
+
+if (!hasRuntime()) {
+  setRuntime(nodeRuntime);
+}
+
 import type { StreamChunk } from '@hasna/assistants-shared';
 import { EmbeddedClient } from '@hasna/assistants-core';
 

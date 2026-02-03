@@ -8,6 +8,10 @@
       "import": "./src/index.ts",
       "types": "./src/index.ts"
     },
+    "./runtime": {
+      "import": "./src/runtime/index.ts",
+      "types": "./src/runtime/index.ts"
+    },
     "./*": {
       "import": "./src/*.ts",
       "types": "./src/*.ts"
@@ -26,6 +30,7 @@
     "@aws-sdk/credential-providers": "^3.700.0",
     "@hasna/assistants-shared": "workspace:*",
     "ajv": "^8.17.1",
+    "fast-glob": "^3.3.3",
     "mailparser": "^3.7.1",
     "resend": "^4.0.0"
   },

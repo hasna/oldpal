@@ -2,8 +2,9 @@ import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import { join, resolve, dirname, sep } from 'path';
 import { homedir } from 'os';
+import { mkdir } from 'fs/promises';
 import { getProjectConfigDir } from '../config';
-import { Glob } from 'bun';
+import { getRuntime } from '../runtime';
 import { ErrorCodes, ToolExecutionError } from '../errors';
 import { validatePath } from '../validation/paths';
 import { exceedsFileReadLimit, getLimits } from '../validation/limits';
@@ -151,7 +152,8 @@ export class FilesystemTools {
         });
       }
 
-      const file = Bun.file(validated.resolved);
+      const runtime = getRuntime();
+      const file = runtime.file(validated.resolved);
       if (!(await file.exists())) {
         throw new ToolExecutionError(`File not found: ${path}`, {
           toolName: 'read',
@@ -315,9 +317,10 @@ export class FilesystemTools {
       }
 
       const dir = dirname(validated.resolved);
-      await Bun.$`mkdir -p ${dir}`.quiet();
+      await mkdir(dir, { recursive: true });
 
-      await Bun.write(validated.resolved, content);
+      const runtime = getRuntime();
+      await runtime.write(validated.resolved, content);
       return `Successfully wrote ${content.length} characters to ${validated.resolved}`;
     } catch (error) {
       if (error instanceof ToolExecutionError) throw error;
@@ -409,11 +412,11 @@ export class FilesystemTools {
         });
       }
 
-      const glob = new Glob(pattern);
+      const runtime = getRuntime();
       const matches: string[] = [];
 
       try {
-        for await (const file of glob.scan({ cwd: validated.resolved })) {
+        for await (const file of runtime.glob(pattern, { cwd: validated.resolved })) {
           // Skip system directories
           if (file.includes('.Trash') || file.includes('.Spotlight-V100') || file.includes('.fseventsd')) {
             continue;
@@ -541,10 +544,10 @@ export class FilesystemTools {
       const regex = new RegExp(pattern, flags);
       const results: string[] = [];
 
-      const glob = new Glob(globPattern);
+      const runtime = getRuntime();
 
       try {
-        for await (const file of glob.scan({ cwd: validated.resolved })) {
+        for await (const file of runtime.glob(globPattern, { cwd: validated.resolved })) {
           // Skip system directories
           if (file.includes('.Trash') || file.includes('.Spotlight-V100') || file.includes('.fseventsd')) {
             continue;
@@ -552,7 +555,7 @@ export class FilesystemTools {
           const filePath = join(validated.resolved, file);
 
           try {
-            const content = await Bun.file(filePath).text();
+            const content = await runtime.file(filePath).text();
             const lines = content.split('\n');
 
             for (let i = 0; i < lines.length; i++) {
@@ -659,7 +662,8 @@ export class FilesystemTools {
         });
       }
 
-      const file = Bun.file(validated.resolved);
+      const runtime = getRuntime();
+      const file = runtime.file(validated.resolved);
       if (!(await file.exists())) {
         throw new ToolExecutionError(`PDF file not found: ${path}`, {
           toolName: 'read_pdf',

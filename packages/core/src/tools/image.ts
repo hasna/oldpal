@@ -5,15 +5,17 @@ import { homedir } from 'os';
 import type { Tool } from '@hasna/assistants-shared';
 import type { ToolExecutor } from './registry';
 import { generateId } from '@hasna/assistants-shared';
+import { getRuntime } from '../runtime';
 
 /**
  * Check if viu is available
  */
 async function getViuPath(): Promise<string | null> {
+  const runtime = getRuntime();
   const explicitPath = process.env.ASSISTANTS_VIU_PATH || process.env.VIU_PATH;
   if (explicitPath) {
     try {
-      const result = await Bun.$`${explicitPath} --version`.quiet().nothrow();
+      const result = await runtime.shell`${explicitPath} --version`.quiet().nothrow();
       if (result.exitCode === 0) {
         return explicitPath;
       }
@@ -35,7 +37,7 @@ async function getViuPath(): Promise<string | null> {
 
   for (const path of locations) {
     try {
-      const result = await Bun.$`${path} --version`.quiet().nothrow();
+      const result = await runtime.shell`${path} --version`.quiet().nothrow();
       if (result.exitCode === 0) {
         return path;
       }
@@ -129,7 +131,8 @@ export class ImageDisplayTool {
       args.push(localPath);
 
       // Run viu to display the image
-      const result = await Bun.$`${viuPath} ${args}`.quiet().nothrow();
+      const runtime = getRuntime();
+      const result = await runtime.shell`${viuPath} ${args}`.quiet().nothrow();
 
       if (result.exitCode !== 0) {
         const stderr = result.stderr.toString().trim();

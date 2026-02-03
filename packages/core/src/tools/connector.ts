@@ -5,6 +5,7 @@ import { homedir } from 'os';
 import { join, delimiter, dirname, extname } from 'path';
 import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { ConnectorError, ErrorCodes } from '../errors';
+import { getRuntime } from '../runtime';
 
 type TimeoutResolve = (value: { exitCode: number }) => void;
 
@@ -305,7 +306,8 @@ export class ConnectorBridge {
         return;
       }
 
-      const result = await Promise.race([Bun.$`${whichCommand} ${cli}`.quiet().nothrow(), timeoutPromise]);
+      const runtime = getRuntime();
+      const result = await Promise.race([runtime.shell`${whichCommand} ${cli}`.quiet().nothrow(), timeoutPromise]);
 
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -339,7 +341,8 @@ export class ConnectorBridge {
         const timeoutPromise = new Promise<{ exitCode: number }>((resolve) => {
           timeoutId = setTimeout(resolveTimeout, 500, resolve);
         });
-        const result = await Promise.race([Bun.$`${whichCommand} ${candidate}`.quiet().nothrow(), timeoutPromise]);
+        const runtime = getRuntime();
+        const result = await Promise.race([runtime.shell`${whichCommand} ${candidate}`.quiet().nothrow(), timeoutPromise]);
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -362,8 +365,9 @@ export class ConnectorBridge {
    */
   private async discoverConnector(name: string, cli: string): Promise<Connector | null> {
     try {
+      const runtime = getRuntime();
       // Get help output
-      const helpResult = await Bun.$`${cli} --help`.quiet();
+      const helpResult = await runtime.shell`${cli} --help`.quiet();
       const helpText = helpResult.stdout.toString();
 
       // Parse commands from help output
@@ -374,7 +378,7 @@ export class ConnectorBridge {
       let description = `${name} connector`;
 
       try {
-        const manifest = await Bun.file(manifestPath).json();
+        const manifest = await runtime.file(manifestPath).json<{ description?: string }>();
         if (manifest.description) {
           description = manifest.description;
         }
@@ -539,15 +543,16 @@ export class ConnectorBridge {
         /(login|authorize|authorization|oauth|signin|sign-in|connect)/.test(combined);
       const runInBackground = options.background === true;
 
+      const runtime = getRuntime();
       if (isAuthLogin || runInBackground) {
         try {
-          const proc = Bun.spawn(cmdParts, {
+          const proc = runtime.spawn(cmdParts, {
             cwd,
             stdin: 'ignore',
             stdout: 'ignore',
             stderr: 'ignore',
           });
-          proc.unref?.();
+          // Note: unref is not available in the runtime interface
         } catch {
           // ignore spawn errors; fall through to error message below
         }
@@ -557,7 +562,7 @@ export class ConnectorBridge {
       }
 
       try {
-        const proc = Bun.spawn(cmdParts, {
+        const proc = runtime.spawn(cmdParts, {
           cwd,
           stdin: 'ignore',
           stdout: 'pipe',

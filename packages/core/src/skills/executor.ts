@@ -1,6 +1,7 @@
 import { dirname } from 'path';
 import type { Skill } from '@hasna/assistants-shared';
 import { substituteVariables } from '@hasna/assistants-shared';
+import { getRuntime } from '../runtime';
 
 /**
  * Skill executor - prepares and executes skills
@@ -43,6 +44,7 @@ export class SkillExecutor {
     // Get the skill's directory for relative command execution
     const skillDir = dirname(skillFilePath);
     let result = content;
+    const runtime = getRuntime();
 
     for (const match of matches) {
       const fullMatch = match[0];
@@ -53,7 +55,7 @@ export class SkillExecutor {
         // Use sh -c to properly run the command string
         // Quote skillDir to handle paths with spaces
         const fullCommand = `cd "${skillDir}" && ${command}`;
-        const output = await Bun.$`sh -c ${fullCommand}`.quiet().text();
+        const output = await runtime.shell`sh -c ${fullCommand}`.quiet().text();
         result = result.replace(fullMatch, output.trim());
       } catch (error) {
         // If command fails, include error message

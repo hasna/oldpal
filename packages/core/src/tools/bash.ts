@@ -4,6 +4,7 @@ import { ErrorCodes, ToolExecutionError } from '../errors';
 import { getSecurityLogger } from '../security/logger';
 import { validateBashCommand } from '../security/bash-validator';
 import { loadConfig } from '../config';
+import { getRuntime } from '../runtime';
 
 /**
  * Bash tool - execute shell commands (restricted to safe, read-only operations)
@@ -310,7 +311,8 @@ export class BashTool {
     }
 
     try {
-      const proc = Bun.spawn(['bash', '-c', commandForExec], {
+      const runtime = getRuntime();
+      const proc = runtime.spawn(['bash', '-c', commandForExec], {
         cwd,
         stdout: 'pipe',
         stderr: 'pipe',

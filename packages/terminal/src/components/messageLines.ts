@@ -51,6 +51,28 @@ function estimateToolPanelLines(
   return lines;
 }
 
+function estimateToolResultPanelLines(
+  toolResults: ToolResult[],
+  hasContent?: boolean,
+  maxWidth?: number
+): number {
+  if (!toolResults || toolResults.length === 0) return 0;
+  const innerWidth = maxWidth ? Math.max(1, maxWidth - 4) : undefined;
+  const resultWidth = innerWidth ? Math.max(1, innerWidth - 4) : undefined;
+
+  // Border top + header + border bottom.
+  let lines = 3;
+  if (hasContent) {
+    lines += 1;
+  }
+  for (const result of toolResults) {
+    // marginTop + title line + result line(s)
+    lines += 2;
+    lines += estimateToolResultLines(result, resultWidth);
+  }
+  return lines;
+}
+
 function estimateToolResultLines(result: ToolResult, maxWidth?: number, maxLines = 4): number {
   const content = truncateToolResult(result, maxLines, 400);
   if (!content) return 1;
@@ -77,8 +99,13 @@ export function estimateMessageLines(message: DisplayMessage, maxWidth?: number)
         : 0;
   let lines = hasContent ? Math.max(1, wrappedLines) : 0;
 
-  if (message.role === 'assistant' && message.toolCalls?.length) {
-    lines += estimateToolPanelLines(message.toolCalls, message.toolResults, hasContent, maxWidth);
+  const toolCalls = message.toolCalls ?? [];
+  const toolResults = message.toolResults ?? [];
+
+  if (toolCalls.length > 0) {
+    lines += estimateToolPanelLines(toolCalls, toolResults, hasContent, maxWidth);
+  } else if (toolResults.length > 0) {
+    lines += estimateToolResultPanelLines(toolResults, hasContent, maxWidth);
   }
 
   if (message.role === 'user' || message.role === 'assistant') {
@@ -167,6 +194,63 @@ export function estimateActivityLogLines(
   return entries.reduce((sum, entry) => sum + estimateActivityEntryLines(entry, wrapWidth, renderWidth), 0);
 }
 
+export function estimateDisplayMessagesLines(messages: DisplayMessage[], maxWidth?: number): number {
+  return messages.reduce((sum, message) => sum + estimateMessageLines(message, maxWidth), 0);
+}
+
+export function trimDisplayMessagesByLines(
+  messages: DisplayMessage[],
+  maxLines: number,
+  maxWidth?: number
+): { messages: DisplayMessage[]; trimmed: boolean } {
+  if (maxLines <= 0) {
+    return { messages: [], trimmed: messages.length > 0 };
+  }
+
+  const kept: DisplayMessage[] = [];
+  let remaining = maxLines;
+
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    const lineCount = estimateMessageLines(message, maxWidth);
+    if (lineCount <= remaining || kept.length === 0) {
+      kept.unshift(message);
+      remaining -= Math.max(0, lineCount);
+    } else {
+      break;
+    }
+  }
+
+  return { messages: kept, trimmed: kept.length < messages.length };
+}
+
+export function trimActivityLogByLines<T extends ActivityEntryLike>(
+  entries: T[],
+  wrapWidth: number,
+  renderWidth: number | undefined,
+  maxLines: number
+): { entries: T[]; trimmed: boolean } {
+  if (maxLines <= 0) {
+    return { entries: [], trimmed: entries.length > 0 };
+  }
+
+  const kept: T[] = [];
+  let remaining = maxLines;
+
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i];
+    const lineCount = estimateActivityEntryLines(entry, wrapWidth, renderWidth);
+    if (lineCount <= remaining || kept.length === 0) {
+      kept.unshift(entry);
+      remaining -= Math.max(0, lineCount);
+    } else {
+      break;
+    }
+  }
+
+  return { entries: kept, trimmed: kept.length < entries.length };
+}
+
 function isContinuationChunk(id: string): boolean {
   const match = id.match(/::chunk-(\d+)$/);
   if (!match) return false;
@@ -215,6 +299,9 @@ export const __test__ = {
   estimateMessageLines,
   estimateActivityEntryLines,
   estimateActivityLogLines,
+  estimateDisplayMessagesLines,
   estimateToolPanelLines,
   estimateToolResultLines,
+  trimDisplayMessagesByLines,
+  trimActivityLogByLines,
 };

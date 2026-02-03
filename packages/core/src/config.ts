@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { homedir } from 'os';
 import type { AssistantsConfig, HookConfig } from '@hasna/assistants-shared';
+import { getRuntime, hasRuntime } from './runtime';
 
 /**
  * Default system prompt - used when no ASSISTANTS.md files are found
@@ -118,6 +119,18 @@ const DEFAULT_CONFIG: AssistantsConfig = {
     defaultTimeoutMs: 60_000, // 1 minute
     maxJobAgeMs: 24 * 60 * 60 * 1000, // 24 hours
     connectors: {},
+  },
+  messages: {
+    enabled: false,
+    injection: {
+      enabled: true,
+      maxPerTurn: 5,
+      minPriority: 'low',
+    },
+    storage: {
+      maxMessages: 1000,
+      maxAgeDays: 90,
+    },
   },
 };
 
@@ -250,6 +263,18 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
         ...(override.jobs?.connectors || {}),
       },
     },
+    messages: {
+      ...(base.messages || {}),
+      ...(override.messages || {}),
+      injection: {
+        ...(base.messages?.injection || {}),
+        ...(override.messages?.injection || {}),
+      },
+      storage: {
+        ...(base.messages?.storage || {}),
+        ...(override.messages?.storage || {}),
+      },
+    },
   };
 }
 
@@ -347,7 +372,19 @@ function mergeHooks(target: HookConfig, source: HookConfig): void {
  */
 async function loadJsonFile<T>(path: string): Promise<T | null> {
   try {
-    const file = Bun.file(path);
+    if (!hasRuntime()) {
+      // Fallback to fs/promises if runtime not initialized
+      const { readFile, access } = await import('fs/promises');
+      try {
+        await access(path);
+      } catch {
+        return null;
+      }
+      const content = await readFile(path, 'utf-8');
+      return JSON.parse(content) as T;
+    }
+    const runtime = getRuntime();
+    const file = runtime.file(path);
     if (!(await file.exists())) {
       return null;
     }
@@ -425,7 +462,18 @@ export async function loadSystemPrompt(cwd: string = process.cwd()): Promise<str
  */
 async function loadTextFile(path: string): Promise<string | null> {
   try {
-    const file = Bun.file(path);
+    if (!hasRuntime()) {
+      // Fallback to fs/promises if runtime not initialized
+      const { readFile, access } = await import('fs/promises');
+      try {
+        await access(path);
+      } catch {
+        return null;
+      }
+      return await readFile(path, 'utf-8');
+    }
+    const runtime = getRuntime();
+    const file = runtime.file(path);
     if (!(await file.exists())) {
       return null;
     }
