@@ -27,10 +27,9 @@ const pathToBreadcrumb: Record<string, { parent?: string; parentPath?: string; l
   '/chat': { label: 'Chat' },
   '/sessions': { parent: 'Chat', parentPath: '/chat', label: 'Sessions' },
   '/agents': { label: 'Agents' },
-  '/agents/new': { parent: 'Agents', parentPath: '/agents', label: 'Create Agent' },
   '/messages': { label: 'Messages' },
+  '/billing': { label: 'Billing' },
   '/settings': { label: 'Settings' },
-  '/settings/api-keys': { parent: 'Settings', parentPath: '/settings', label: 'API Keys' },
   '/admin/users': { parent: 'Admin', label: 'Users' },
   '/admin/stats': { parent: 'Admin', label: 'Stats' },
 };

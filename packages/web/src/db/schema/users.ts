@@ -12,6 +12,7 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   role: userRoleEnum('role').default('user').notNull(),
   googleId: varchar('google_id', { length: 255 }).unique(),
+  stripeCustomerId: varchar('stripe_customer_id', { length: 255 }).unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

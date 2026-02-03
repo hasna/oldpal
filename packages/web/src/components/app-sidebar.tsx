@@ -5,6 +5,7 @@ import {
   Bot,
   Clock,
   Command,
+  CreditCard,
   Inbox,
   LifeBuoy,
   MessageSquare,
@@ -76,6 +77,21 @@ const data = {
         {
           title: "All Schedules",
           url: "/schedules",
+        },
+      ],
+    },
+    {
+      title: "Billing",
+      url: "/billing",
+      icon: CreditCard,
+      items: [
+        {
+          title: "Subscription",
+          url: "/billing",
+        },
+        {
+          title: "Pricing",
+          url: "/pricing",
         },
       ],
     },
