@@ -818,15 +818,22 @@ describe('BuiltinCommands', () => {
       const cmd = loader.getCommand('connectors');
       expect(cmd).toBeDefined();
 
-      const originalDollar = (Bun as any).$;
-      (Bun as any).$ = () => ({
-        quiet: () => ({
-          nothrow: async () => ({
-            exitCode: 0,
-            stdout: { toString: () => JSON.stringify({ authenticated: true, user: 'test' }) },
+      const runtime = getRuntime();
+      const originalSpawn = runtime.spawn;
+      runtime.spawn = () =>
+        ({
+          stdout: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(JSON.stringify({ authenticated: true, user: 'test' })));
+              controller.close();
+            },
           }),
-        }),
-      });
+          stderr: null,
+          stdin: null,
+          pid: 1,
+          exited: Promise.resolve(0),
+          kill: () => {},
+        }) as any;
 
       const contextWithConnector = {
         ...mockContext,
@@ -847,7 +854,7 @@ describe('BuiltinCommands', () => {
           expect(emittedContent.some(c => c.includes('Demo'))).toBe(true);
         }
       } finally {
-        (Bun as any).$ = originalDollar;
+        runtime.spawn = originalSpawn;
       }
     });
 
@@ -855,15 +862,22 @@ describe('BuiltinCommands', () => {
       const cmd = loader.getCommand('connectors');
       expect(cmd).toBeDefined();
 
-      const originalDollar = (Bun as any).$;
-      (Bun as any).$ = () => ({
-        quiet: () => ({
-          nothrow: async () => ({
-            exitCode: 0,
-            stdout: { toString: () => JSON.stringify({ authenticated: true }) },
+      const runtime = getRuntime();
+      const originalSpawn = runtime.spawn;
+      runtime.spawn = () =>
+        ({
+          stdout: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(JSON.stringify({ authenticated: true })));
+              controller.close();
+            },
           }),
-        }),
-      });
+          stderr: null,
+          stdin: null,
+          pid: 1,
+          exited: Promise.resolve(0),
+          kill: () => {},
+        }) as any;
 
       const contextWithConnector = {
         ...mockContext,
@@ -885,7 +899,7 @@ describe('BuiltinCommands', () => {
           expect(emittedContent.some(c => c.includes('demo'))).toBe(true);
         }
       } finally {
-        (Bun as any).$ = originalDollar;
+        runtime.spawn = originalSpawn;
       }
     });
 
@@ -893,14 +907,21 @@ describe('BuiltinCommands', () => {
       const cmd = loader.getCommand('connectors');
       expect(cmd).toBeDefined();
 
-      const originalDollar = (Bun as any).$;
+      const runtime = getRuntime();
+      const originalSpawn = runtime.spawn;
       const originalSetTimeout = globalThis.setTimeout;
 
-      (Bun as any).$ = () => ({
-        quiet: () => ({
-          nothrow: () => new Promise(() => {}),
-        }),
-      });
+      runtime.spawn = () =>
+        ({
+          stdout: new ReadableStream<Uint8Array>({
+            start() {},
+          }),
+          stderr: null,
+          stdin: null,
+          pid: 1,
+          exited: new Promise(() => {}),
+          kill: () => {},
+        }) as any;
       globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
         fn(...args);
         return 0 as unknown as ReturnType<typeof setTimeout>;
@@ -927,7 +948,7 @@ describe('BuiltinCommands', () => {
         }
       } finally {
         globalThis.setTimeout = originalSetTimeout;
-        (Bun as any).$ = originalDollar;
+        runtime.spawn = originalSpawn;
       }
     });
   });

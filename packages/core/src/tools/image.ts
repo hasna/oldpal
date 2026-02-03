@@ -130,9 +130,12 @@ export class ImageDisplayTool {
       }
       args.push(localPath);
 
+      const escapeShellArg = (value: string): string => `"${value.replace(/(["\\])/g, '\\$1')}"`;
+      const argString = args.map(escapeShellArg).join(' ');
+
       // Run viu to display the image
       const runtime = getRuntime();
-      const result = await runtime.shell`${viuPath} ${args}`.quiet().nothrow();
+      const result = await runtime.shell`${viuPath} ${argString}`.quiet().nothrow();
 
       if (result.exitCode !== 0) {
         const stderr = result.stderr.toString().trim();

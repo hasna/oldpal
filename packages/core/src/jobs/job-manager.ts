@@ -10,6 +10,7 @@ import {
 } from './job-store';
 import { ErrorCodes } from '../errors/codes';
 import { getRuntime } from '../runtime';
+import { buildCommandArgs, splitCommandLine } from '../utils/command-line';
 import type { SpawnResult } from '../runtime';
 
 const DEFAULT_TIMEOUT_MS = 60_000; // 1 minute
@@ -120,7 +121,7 @@ export class JobManager {
     const cwd = typeof job.input.cwd === 'string' ? job.input.cwd : process.cwd();
 
     // Build command parts
-    const cmdParts = [cli, ...job.command.split(' '), ...args];
+    const cmdParts = buildCommandArgs(cli, [...splitCommandLine(job.command), ...args]);
 
     // Add options
     for (const [key, value] of Object.entries(options)) {
@@ -150,8 +151,8 @@ export class JobManager {
 
       // Wait for completion
       const [stdout, stderr] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
+        proc.stdout ? new Response(proc.stdout).text() : '',
+        proc.stderr ? new Response(proc.stderr).text() : '',
       ]);
       const exitCode = await proc.exited;
 

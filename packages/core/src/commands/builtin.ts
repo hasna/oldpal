@@ -3,6 +3,7 @@ import type { CommandLoader } from './loader';
 import { join } from 'path';
 import { homedir, platform, release, arch } from 'os';
 import { getRuntime } from '../runtime';
+import { buildCommandArgs } from '../utils/command-line';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
 import { generateId } from '@hasna/assistants-shared';
@@ -3549,10 +3550,20 @@ Keep it concise but comprehensive.`,
             });
 
             const runtime = getRuntime();
-            const result = await Promise.race([
-              runtime.shell`${connector.cli} auth status --format json`.quiet().nothrow(),
-              timeoutPromise,
-            ]);
+            const cli = connector.cli || `connect-${connector.name}`;
+            const execPromise = (async () => {
+              const cmdParts = buildCommandArgs(cli, ['auth', 'status', '--format', 'json']);
+              const proc = runtime.spawn(cmdParts, {
+                cwd: process.cwd(),
+                stdin: 'ignore',
+                stdout: 'pipe',
+                stderr: 'ignore',
+              });
+              const stdout = proc.stdout ? await new Response(proc.stdout).text() : '';
+              const exitCode = await proc.exited;
+              return { exitCode, stdout: { toString: () => stdout } };
+            })();
+            const result = await Promise.race([execPromise, timeoutPromise]);
 
             if (timeoutId) {
               clearTimeout(timeoutId);
@@ -3610,10 +3621,19 @@ Keep it concise but comprehensive.`,
               });
 
               const runtime = getRuntime();
-              const result = await Promise.race([
-                runtime.shell`${cli} auth status --format json`.quiet().nothrow(),
-                timeoutPromise,
-              ]);
+              const execPromise = (async () => {
+                const cmdParts = buildCommandArgs(cli, ['auth', 'status', '--format', 'json']);
+                const proc = runtime.spawn(cmdParts, {
+                  cwd: process.cwd(),
+                  stdin: 'ignore',
+                  stdout: 'pipe',
+                  stderr: 'ignore',
+                });
+                const stdout = proc.stdout ? await new Response(proc.stdout).text() : '';
+                const exitCode = await proc.exited;
+                return { exitCode, stdout: { toString: () => stdout } };
+              })();
+              const result = await Promise.race([execPromise, timeoutPromise]);
 
               if (result.exitCode === 0) {
                 try {

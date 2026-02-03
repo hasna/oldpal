@@ -52,10 +52,7 @@ export class SkillExecutor {
 
       try {
         // Execute the command in the skill's directory
-        // Use sh -c to properly run the command string
-        // Quote skillDir to handle paths with spaces
-        const fullCommand = `cd "${skillDir}" && ${command}`;
-        const output = await runtime.shell`sh -c ${fullCommand}`.quiet().text();
+        const output = await runtime.shell`${command}`.cwd(skillDir).quiet().text();
         result = result.replace(fullMatch, output.trim());
       } catch (error) {
         // If command fails, include error message

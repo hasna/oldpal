@@ -137,7 +137,10 @@ export class HookExecutor {
       const runtime = getRuntime();
       // Run the command with input on stdin
       const cwd = input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd();
-      const proc = runtime.spawn(['bash', '-c', hook.command], {
+      const isWindows = process.platform === 'win32';
+      const shellBinary = isWindows ? 'cmd' : (runtime.which('bash') || 'sh');
+      const shellArgs = isWindows ? ['/c', hook.command] : ['-lc', hook.command];
+      const proc = runtime.spawn([shellBinary, ...shellArgs], {
         cwd,
         stdin: 'pipe',
         stdout: 'pipe',
@@ -166,8 +169,8 @@ export class HookExecutor {
       const timeoutId = setTimeout(killSpawnedProcess, timeout, proc);
 
       const [stdout, stderr] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
+        proc.stdout ? new Response(proc.stdout).text() : '',
+        proc.stderr ? new Response(proc.stderr).text() : '',
       ]);
 
       clearTimeout(timeoutId);

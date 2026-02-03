@@ -1,4 +1,5 @@
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import { getConfigDir } from '../config';
 import { getRuntime } from '../runtime';
 import type { DatabaseConnection } from '../runtime';
@@ -16,6 +17,10 @@ export class SessionManager {
     const path = dbPath || (assistantId
       ? join(baseDir, 'assistants', assistantId, 'memory.db')
       : join(baseDir, 'memory.db'));
+    const dir = dirname(path);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
     const runtime = getRuntime();
     this.db = runtime.openDatabase(path);
     this.initialize();

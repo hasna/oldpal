@@ -160,8 +160,8 @@ export class CommandExecutor {
       }, timeoutMs);
 
       const [stdout, stderr] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
+        proc.stdout ? new Response(proc.stdout).text() : '',
+        proc.stderr ? new Response(proc.stderr).text() : '',
       ]);
 
       const exitCode = await proc.exited;

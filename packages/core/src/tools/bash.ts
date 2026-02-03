@@ -312,7 +312,10 @@ export class BashTool {
 
     try {
       const runtime = getRuntime();
-      const proc = runtime.spawn(['bash', '-c', commandForExec], {
+      const isWindows = process.platform === 'win32';
+      const shellBinary = isWindows ? 'cmd' : (runtime.which('bash') || 'sh');
+      const shellArgs = isWindows ? ['/c', commandForExec] : ['-lc', commandForExec];
+      const proc = runtime.spawn([shellBinary, ...shellArgs], {
         cwd,
         stdout: 'pipe',
         stderr: 'pipe',
@@ -322,8 +325,8 @@ export class BashTool {
       const timeoutId = setTimeout(killProcess, timeout, proc);
 
       const [stdout, stderr] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
+        proc.stdout ? new Response(proc.stdout).text() : '',
+        proc.stderr ? new Response(proc.stderr).text() : '',
       ]);
 
       clearTimeout(timeoutId);

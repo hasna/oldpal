@@ -6,6 +6,7 @@ import { join, delimiter, dirname, extname } from 'path';
 import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { ConnectorError, ErrorCodes } from '../errors';
 import { getRuntime } from '../runtime';
+import { buildCommandArgs, splitCommandLine } from '../utils/command-line';
 
 type TimeoutResolve = (value: { exitCode: number }) => void;
 
@@ -307,7 +308,10 @@ export class ConnectorBridge {
       }
 
       const runtime = getRuntime();
-      const result = await Promise.race([runtime.shell`${whichCommand} ${cli}`.quiet().nothrow(), timeoutPromise]);
+      const shouldSkipWhich = cli.includes('/') || cli.includes('\\');
+      const result = shouldSkipWhich
+        ? ({ exitCode: 0 } as { exitCode: number })
+        : await Promise.race([runtime.shell`${whichCommand} ${cli}`.quiet().nothrow(), timeoutPromise]);
 
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -342,11 +346,22 @@ export class ConnectorBridge {
           timeoutId = setTimeout(resolveTimeout, 500, resolve);
         });
         const runtime = getRuntime();
-        const result = await Promise.race([runtime.shell`${whichCommand} ${candidate}`.quiet().nothrow(), timeoutPromise]);
+        const result = await Promise.race([
+          runtime.shell`${whichCommand} ${candidate}`.quiet().nothrow(),
+          timeoutPromise,
+        ]);
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
         if (result.exitCode === 0) {
+          if ('stdout' in result) {
+            const resolved = result.stdout
+              .toString()
+              .split(/\r?\n/)
+              .find((line: string) => line.trim())
+              ?.trim();
+            return resolved && resolved.length > 0 ? resolved : candidate;
+          }
           return candidate;
         }
       } catch {
@@ -366,9 +381,15 @@ export class ConnectorBridge {
   private async discoverConnector(name: string, cli: string): Promise<Connector | null> {
     try {
       const runtime = getRuntime();
-      // Get help output
-      const helpResult = await runtime.shell`${cli} --help`.quiet();
-      const helpText = helpResult.stdout.toString();
+      const cmdParts = buildCommandArgs(cli, ['--help']);
+      const proc = runtime.spawn(cmdParts, {
+        cwd: this.cwd || process.cwd(),
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const helpText = proc.stdout ? await new Response(proc.stdout).text() : '';
+      await proc.exited;
 
       // Parse commands from help output
       const commands = this.parseHelpOutput(helpText, name);
@@ -523,7 +544,7 @@ export class ConnectorBridge {
       }
 
       // Build the command
-      const cmdParts = [connector.cli, ...command.split(' '), ...args];
+      const cmdParts = buildCommandArgs(connector.cli, [...splitCommandLine(command), ...args]);
 
       // Add options
       for (const [key, value] of Object.entries(options)) {
@@ -575,8 +596,8 @@ export class ConnectorBridge {
         }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 15000);
 
         const [stdout, stderr] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
+          proc.stdout ? new Response(proc.stdout).text() : '',
+          proc.stderr ? new Response(proc.stderr).text() : '',
         ]);
         const exitCode = await proc.exited;
         clearTimeout(timer);

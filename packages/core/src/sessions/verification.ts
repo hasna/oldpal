@@ -1,7 +1,7 @@
 import type { VerificationSession, VerificationResult } from '@hasna/assistants-shared';
 import { generateId } from '@hasna/assistants-shared';
 import { join } from 'path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
 
 /**
  * Storage for verification sessions
@@ -10,10 +10,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 
 export class VerificationSessionStore {
   private basePath: string;
   private maxSessions: number;
+  private lastTimestamp: number;
 
   constructor(basePath: string, maxSessions: number = 100) {
     this.basePath = join(basePath, 'verifications');
     this.maxSessions = maxSessions;
+    this.lastTimestamp = 0;
     this.ensureDirectory();
   }
 
@@ -31,6 +33,12 @@ export class VerificationSessionStore {
     goals: string[],
     verificationResult: VerificationResult
   ): VerificationSession {
+    let timestamp = Date.now();
+    if (timestamp <= this.lastTimestamp) {
+      timestamp = this.lastTimestamp + 1;
+    }
+    this.lastTimestamp = timestamp;
+
     const session: VerificationSession = {
       id: generateId(),
       parentSessionId,
@@ -40,7 +48,7 @@ export class VerificationSessionStore {
       reason: verificationResult.reason,
       suggestions: verificationResult.suggestions,
       verificationResult,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(timestamp).toISOString(),
     };
 
     this.save(session);
@@ -172,7 +180,6 @@ export class VerificationSessionStore {
 
     for (const item of toRemove) {
       try {
-        const { unlinkSync } = require('fs');
         unlinkSync(join(this.basePath, item.file));
       } catch {
         continue;
@@ -187,7 +194,6 @@ export class VerificationSessionStore {
     const files = this.listFiles();
     for (const file of files) {
       try {
-        const { unlinkSync } = require('fs');
         unlinkSync(join(this.basePath, file));
       } catch {
         continue;
