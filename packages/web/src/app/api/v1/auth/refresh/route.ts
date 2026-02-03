@@ -1,5 +1,4 @@
-import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, refreshTokens } from '@/db/schema';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
@@ -9,19 +8,25 @@ import {
   verifyRefreshToken,
   getRefreshTokenExpiry,
 } from '@/lib/auth/jwt';
-import { successResponse, errorResponse } from '@/lib/api/response';
+import { errorResponse } from '@/lib/api/response';
 import { UnauthorizedError } from '@/lib/api/errors';
+import { getRefreshTokenFromCookie, setRefreshTokenCookie } from '@/lib/auth/cookies';
+import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { eq, and, isNull, gt } from 'drizzle-orm';
-import { randomUUID } from 'crypto';
-
-const refreshSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
-});
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 60 refresh attempts per minute per IP (normal API rate)
+  // This is more lenient since refresh is called automatically on page load
+  const rateLimitResponse = checkRateLimit(request, 'auth/refresh', RateLimitPresets.api);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
-    const body = await request.json();
-    const { refreshToken } = refreshSchema.parse(body);
+    // Read refresh token from httpOnly cookie
+    const refreshToken = await getRefreshTokenFromCookie();
+
+    if (!refreshToken) {
+      return errorResponse(new UnauthorizedError('No refresh token'));
+    }
 
     // Verify the refresh token
     const payload = await verifyRefreshToken(refreshToken);
@@ -94,10 +99,16 @@ export async function POST(request: NextRequest) {
       expiresAt: getRefreshTokenExpiry(),
     });
 
-    return successResponse({
-      accessToken,
-      refreshToken: newRefreshToken,
+    // Set new refresh token as httpOnly cookie (token rotation)
+    // Access token is returned in body for in-memory storage only
+    const response = NextResponse.json({
+      success: true,
+      data: {
+        accessToken,
+      },
     });
+
+    return setRefreshTokenCookie(response, newRefreshToken);
   } catch (error) {
     return errorResponse(error);
   }

@@ -14,41 +14,95 @@ const MAX_MESSAGE_LENGTH = 100_000;
 // Max WebSocket payload size: 1MB (allows for JSON overhead)
 const MAX_PAYLOAD_SIZE = 1_000_000;
 
-// Get allowed origins for WebSocket connections
-function getAllowedOrigins(): string[] {
-  const origins: string[] = [];
+/**
+ * Safely parse a URL and extract its origin.
+ * Returns null if the URL is invalid.
+ */
+function safeParseOrigin(urlString: string): string | null {
+  try {
+    return new URL(urlString).origin;
+  } catch {
+    return null;
+  }
+}
 
-  // Add NEXT_PUBLIC_URL if set
-  if (process.env.NEXT_PUBLIC_URL) {
-    origins.push(new URL(process.env.NEXT_PUBLIC_URL).origin);
+/**
+ * Get allowed origins for WebSocket connections.
+ * Sources (in order of priority):
+ * 1. WS_ALLOWED_ORIGINS env var (comma-separated list of origins)
+ * 2. NEXT_PUBLIC_URL env var (single URL to extract origin from)
+ * 3. Development defaults (localhost ports)
+ */
+function getAllowedOrigins(): string[] {
+  const origins: Set<string> = new Set();
+
+  // Support explicit comma-separated allowlist via WS_ALLOWED_ORIGINS
+  const allowedOriginsEnv = process.env.WS_ALLOWED_ORIGINS;
+  if (allowedOriginsEnv) {
+    for (const entry of allowedOriginsEnv.split(',')) {
+      const trimmed = entry.trim();
+      if (trimmed) {
+        // Each entry should be an origin (e.g., "https://example.com")
+        // Validate it's a valid URL-like format
+        const parsed = safeParseOrigin(trimmed);
+        if (parsed) {
+          origins.add(parsed);
+        } else if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+          // If it looks like an origin but failed parsing, try adding a path
+          const withPath = safeParseOrigin(`${trimmed}/`);
+          if (withPath) origins.add(withPath);
+        }
+      }
+    }
   }
 
-  // Add common development origins
+  // Add NEXT_PUBLIC_URL if set (with safe parsing)
+  if (process.env.NEXT_PUBLIC_URL) {
+    const origin = safeParseOrigin(process.env.NEXT_PUBLIC_URL);
+    if (origin) {
+      origins.add(origin);
+    }
+  }
+
+  // Add common development origins only in development mode
   if (process.env.NODE_ENV === 'development') {
     // Support various localhost ports commonly used in development
     const devPorts = ['3000', '3001', '7010', '7011', '8080'];
     for (const port of devPorts) {
-      origins.push(`http://localhost:${port}`);
-      origins.push(`http://127.0.0.1:${port}`);
+      origins.add(`http://localhost:${port}`);
+      origins.add(`http://127.0.0.1:${port}`);
     }
   }
 
-  return origins;
+  return Array.from(origins);
 }
 
 function isOriginAllowed(origin: string | undefined): boolean {
-  // In development with no NEXT_PUBLIC_URL, allow all origins for convenience
-  if (process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_URL) {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // In development with no NEXT_PUBLIC_URL or WS_ALLOWED_ORIGINS, allow all origins for convenience
+  if (!isProduction && !process.env.NEXT_PUBLIC_URL && !process.env.WS_ALLOWED_ORIGINS) {
     return true;
   }
 
   if (!origin) {
-    // Some WebSocket clients don't send Origin; reject in production
-    return process.env.NODE_ENV === 'development';
+    // Some WebSocket clients don't send Origin; reject in production, allow in development
+    return !isProduction;
   }
 
   const allowedOrigins = getAllowedOrigins();
-  return allowedOrigins.length === 0 || allowedOrigins.includes(origin);
+
+  // SECURITY: In production, deny by default when allowlist is empty
+  if (isProduction && allowedOrigins.length === 0) {
+    return false;
+  }
+
+  // In development with empty allowlist, allow all (handled above for total absence of env vars)
+  if (!isProduction && allowedOrigins.length === 0) {
+    return true;
+  }
+
+  return allowedOrigins.includes(origin);
 }
 
 const sessionOwners = new Map<string, { ownerKey: string; count: number }>();
@@ -141,6 +195,7 @@ export default function handler(_req: any, res: any) {
 
       let sessionId: string | undefined;
       let activeMessageId: string | undefined;
+      let isStreamingResponse = false; // Guard against concurrent sends that would clobber messageId
       let unsubscribe: (() => void) | null = null;
       const connectionKey = `conn:${randomUUID()}`;
       const url = new URL(req?.url || '/', 'http://localhost');
@@ -215,12 +270,27 @@ export default function handler(_req: any, res: any) {
             columns: { userId: true },
           });
 
-          // Session must exist and belong to the authenticated user
           if (!session) {
-            sendMessage(ws, { type: 'error', message: 'Session not found' });
-            return false;
-          }
-          if (session.userId !== authenticatedUserId) {
+            // Session doesn't exist - create it for the authenticated user
+            // This allows WS clients to bootstrap sessions without pre-creating via REST API
+            try {
+              await db.insert(sessions).values({
+                id: nextSessionId,
+                userId: authenticatedUserId,
+                label: `Chat ${new Date().toLocaleDateString()}`,
+              });
+            } catch (error) {
+              // Handle race conditions where session was created between check and insert
+              const retrySession = await db.query.sessions.findFirst({
+                where: eq(sessions.id, nextSessionId),
+                columns: { userId: true },
+              });
+              if (!retrySession || retrySession.userId !== authenticatedUserId) {
+                sendMessage(ws, { type: 'error', message: 'Failed to create session' });
+                return false;
+              }
+            }
+          } else if (session.userId !== authenticatedUserId) {
             sendMessage(ws, { type: 'error', message: 'Access denied for session' });
             return false;
           }
@@ -265,6 +335,7 @@ export default function handler(_req: any, res: any) {
                 }
                 resetAssistantState();
                 activeMessageId = undefined;
+                isStreamingResponse = false;
               }
             }
           },
@@ -276,6 +347,7 @@ export default function handler(_req: any, res: any) {
             }
             resetAssistantState();
             activeMessageId = undefined;
+            isStreamingResponse = false;
           }
         );
         return true;
@@ -289,6 +361,7 @@ export default function handler(_req: any, res: any) {
         const rawData = String(data);
         if (rawData.length > MAX_PAYLOAD_SIZE) {
           sendMessage(ws, { type: 'error', message: 'Payload too large' });
+          ws.close(1009, 'Message too big'); // RFC 6455 close code for oversized payload
           return;
         }
 
@@ -297,6 +370,19 @@ export default function handler(_req: any, res: any) {
           message = JSON.parse(rawData);
         } catch {
           sendMessage(ws, { type: 'error', message: 'Invalid JSON' });
+          ws.close(1003, 'Unsupported data'); // RFC 6455 close code for unprocessable data
+          return;
+        }
+
+        // Handle auth message - allows authentication without putting token in URL
+        if (message.type === 'auth' && 'token' in message) {
+          const authResult = await verifyAccessToken(String(message.token));
+          if (authResult?.userId) {
+            authenticatedUserId = authResult.userId;
+            ownerKey = `user:${authResult.userId}`;
+          } else {
+            sendMessage(ws, { type: 'error', message: 'Invalid auth token' });
+          }
           return;
         }
 
@@ -309,10 +395,19 @@ export default function handler(_req: any, res: any) {
           if (sessionId) {
             await stopSession(sessionId);
           }
+          // Clear streaming state since user canceled
+          isStreamingResponse = false;
+          activeMessageId = undefined;
           return;
         }
 
         if (message.type === 'message') {
+          // Guard against concurrent sends - prevent messageId clobbering
+          if (isStreamingResponse) {
+            sendMessage(ws, { type: 'error', message: 'Please wait for the current response to complete' });
+            return;
+          }
+
           const nextSessionId = message.sessionId ?? sessionId;
           if (!nextSessionId) {
             sendMessage(ws, { type: 'error', message: 'Missing sessionId' });
@@ -324,11 +419,18 @@ export default function handler(_req: any, res: any) {
             sendMessage(ws, { type: 'error', message: `Message must be at most ${MAX_MESSAGE_LENGTH} characters` });
             return;
           }
+
+          // Mark as streaming before processing to prevent concurrent sends
+          isStreamingResponse = true;
           if (message.messageId) {
             activeMessageId = message.messageId;
           }
           const subscribed = await ensureSubscribed(nextSessionId);
-          if (!subscribed) return;
+          if (!subscribed) {
+            isStreamingResponse = false;
+            activeMessageId = undefined;
+            return;
+          }
 
           // Persist user message for authenticated users
           if (authenticatedUserId) {
@@ -353,7 +455,11 @@ export default function handler(_req: any, res: any) {
         }
       });
 
-      ws.on('close', () => {
+      ws.on('close', async () => {
+        // Stop the session first so the agent stops processing
+        if (sessionId) {
+          await stopSession(sessionId);
+        }
         if (unsubscribe) unsubscribe();
         if (sessionId && ownerKey) {
           releaseSessionOwner(sessionId, ownerKey);

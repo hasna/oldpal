@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
 import { users, refreshTokens } from '@/db/schema';
@@ -8,8 +8,10 @@ import {
   createRefreshToken,
   getRefreshTokenExpiry,
 } from '@/lib/auth/jwt';
-import { successResponse, errorResponse } from '@/lib/api/response';
+import { errorResponse } from '@/lib/api/response';
 import { UnauthorizedError } from '@/lib/api/errors';
+import { setRefreshTokenCookie } from '@/lib/auth/cookies';
+import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 
@@ -19,6 +21,10 @@ const loginSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 10 login attempts per 15 minutes per IP
+  const rateLimitResponse = checkRateLimit(request, 'auth/login', RateLimitPresets.login);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
     const { email, password } = loginSchema.parse(body);
@@ -60,17 +66,23 @@ export async function POST(request: NextRequest) {
       expiresAt: getRefreshTokenExpiry(),
     });
 
-    return successResponse({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        avatarUrl: user.avatarUrl,
+    // Set refresh token as httpOnly cookie (not accessible via JavaScript)
+    // Access token is returned in body for in-memory storage only
+    const response = NextResponse.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          avatarUrl: user.avatarUrl,
+        },
+        accessToken,
       },
-      accessToken,
-      refreshToken,
     });
+
+    return setRefreshTokenCookie(response, refreshToken);
   } catch (error) {
     return errorResponse(error);
   }

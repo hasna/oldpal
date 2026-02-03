@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
 import { users, refreshTokens } from '@/db/schema';
@@ -8,8 +8,10 @@ import {
   createRefreshToken,
   getRefreshTokenExpiry,
 } from '@/lib/auth/jwt';
-import { successResponse, errorResponse } from '@/lib/api/response';
+import { errorResponse } from '@/lib/api/response';
 import { ConflictError } from '@/lib/api/errors';
+import { setRefreshTokenCookie } from '@/lib/auth/cookies';
+import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 
@@ -20,6 +22,10 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 5 registration attempts per minute per IP
+  const rateLimitResponse = checkRateLimit(request, 'auth/register', RateLimitPresets.auth);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
     const { email, password, name } = registerSchema.parse(body);
@@ -68,20 +74,26 @@ export async function POST(request: NextRequest) {
       expiresAt: getRefreshTokenExpiry(),
     });
 
-    return successResponse(
+    // Set refresh token as httpOnly cookie (not accessible via JavaScript)
+    // Access token is returned in body for in-memory storage only
+    const response = NextResponse.json(
       {
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          name: newUser.name,
-          role: newUser.role,
-          avatarUrl: newUser.avatarUrl,
+        success: true,
+        data: {
+          user: {
+            id: newUser.id,
+            email: newUser.email,
+            name: newUser.name,
+            role: newUser.role,
+            avatarUrl: newUser.avatarUrl,
+          },
+          accessToken,
         },
-        accessToken,
-        refreshToken,
       },
-      201
+      { status: 201 }
     );
+
+    return setRefreshTokenCookie(response, refreshToken);
   } catch (error) {
     return errorResponse(error);
   }

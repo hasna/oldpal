@@ -8,8 +8,7 @@ import {
   createRefreshToken,
   getRefreshTokenExpiry,
 } from '@/lib/auth/jwt';
-import { errorResponse } from '@/lib/api/response';
-import { BadRequestError, UnauthorizedError } from '@/lib/api/errors';
+import { setRefreshTokenCookie } from '@/lib/auth/cookies';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 
@@ -36,8 +35,14 @@ export async function GET(request: NextRequest) {
       return redirectWithError('Invalid state parameter');
     }
 
-    // Exchange code for user info
-    const googleUser = await getGoogleUserInfo(code);
+    // Get PKCE code_verifier from cookie
+    const codeVerifier = request.cookies.get('oauth_code_verifier')?.value;
+    if (!codeVerifier) {
+      return redirectWithError('Missing PKCE code verifier');
+    }
+
+    // Exchange code for user info with PKCE code_verifier
+    const googleUser = await getGoogleUserInfo(code, codeVerifier);
 
     // Find or create user
     let user = await db.query.users.findFirst({
@@ -52,11 +57,12 @@ export async function GET(request: NextRequest) {
 
       if (user) {
         // Link Google account to existing user
+        // Only set emailVerified to true if Google reports the email as verified
         [user] = await db
           .update(users)
           .set({
             googleId: googleUser.id,
-            emailVerified: true,
+            emailVerified: googleUser.verified_email || user.emailVerified,
             avatarUrl: user.avatarUrl || googleUser.picture,
             updatedAt: new Date(),
           })
@@ -100,16 +106,29 @@ export async function GET(request: NextRequest) {
       expiresAt: getRefreshTokenExpiry(),
     });
 
-    // Redirect with tokens
+    // Redirect with tokens in HTTP-only cookies (not URL query params for security)
     const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3001';
     const redirectUrl = new URL('/auth/callback', baseUrl);
-    redirectUrl.searchParams.set('accessToken', accessToken);
-    redirectUrl.searchParams.set('refreshToken', refreshToken);
 
-    const response = NextResponse.redirect(redirectUrl);
+    let response = NextResponse.redirect(redirectUrl);
 
-    // Clear state cookie
+    // Set refresh token using standard httpOnly cookie helper (persistent)
+    response = setRefreshTokenCookie(response, refreshToken);
+
+    // Set access token in a temporary cookie for callback page to read
+    // This is short-lived and only used for the callback page to get the token into memory
+    const isProduction = process.env.NODE_ENV === 'production';
+    response.cookies.set('oauth_access_token', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax' as const,
+      path: '/',
+      maxAge: 60, // Short-lived: 60 seconds, just enough for callback page to read
+    });
+
+    // Clear OAuth cookies
     response.cookies.delete('oauth_state');
+    response.cookies.delete('oauth_code_verifier');
 
     return response;
   } catch (error) {
@@ -122,5 +141,10 @@ function redirectWithError(message: string): NextResponse {
   const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3001';
   const redirectUrl = new URL('/login', baseUrl);
   redirectUrl.searchParams.set('error', message);
-  return NextResponse.redirect(redirectUrl);
+  const response = NextResponse.redirect(redirectUrl);
+  // Clear OAuth cookies on error to prevent stale state
+  response.cookies.delete('oauth_state');
+  response.cookies.delete('oauth_code_verifier');
+  response.cookies.delete('oauth_access_token');
+  return response;
 }

@@ -9,6 +9,7 @@ import { subscribeToSession, sendSessionMessage, stopSession } from '@/lib/serve
 import type { ServerMessage } from '@/lib/protocol';
 import { errorResponse } from '@/lib/api/response';
 import { UnauthorizedError, NotFoundError, ForbiddenError } from '@/lib/api/errors';
+import { checkRateLimit, RateLimitPresets, createUserRateLimiter } from '@/lib/rate-limit';
 import { eq } from 'drizzle-orm';
 
 // Max message length: 100KB to prevent DoS
@@ -48,11 +49,19 @@ function chunkToServerMessage(chunk: StreamChunk): ServerMessage | null {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit by IP first (before auth check to catch unauthenticated abuse)
+  const ipRateLimitResponse = checkRateLimit(request, 'chat', RateLimitPresets.chat);
+  if (ipRateLimitResponse) return ipRateLimitResponse;
+
   // Authenticate user
   const user = await getAuthUser(request);
   if (!user) {
     return errorResponse(new UnauthorizedError());
   }
+
+  // Additional per-user rate limit (30 messages per minute)
+  const userRateLimitResponse = createUserRateLimiter(user.userId, 'chat', RateLimitPresets.chat);
+  if (userRateLimitResponse) return userRateLimitResponse;
 
   try {
     const body = await request.json();

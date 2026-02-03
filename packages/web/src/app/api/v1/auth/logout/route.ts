@@ -1,26 +1,34 @@
-import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { refreshTokens } from '@/db/schema';
 import { verifyRefreshToken } from '@/lib/auth/jwt';
-import { verifyPassword } from '@/lib/auth/password';
-import { successResponse, errorResponse } from '@/lib/api/response';
-import { UnauthorizedError } from '@/lib/api/errors';
+import { errorResponse } from '@/lib/api/response';
+import { getRefreshTokenFromCookie, clearRefreshTokenCookie } from '@/lib/auth/cookies';
 import { eq, and, isNull } from 'drizzle-orm';
-
-const logoutSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
-});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { refreshToken } = logoutSchema.parse(body);
+    // Read refresh token from httpOnly cookie
+    const refreshToken = await getRefreshTokenFromCookie();
+
+    // If no token, still clear cookie and return success
+    if (!refreshToken) {
+      const response = NextResponse.json({
+        success: true,
+        data: { message: 'Logged out successfully' },
+      });
+      return clearRefreshTokenCookie(response);
+    }
 
     // Verify the refresh token
     const payload = await verifyRefreshToken(refreshToken);
     if (!payload) {
-      return errorResponse(new UnauthorizedError('Invalid refresh token'));
+      // Invalid token, still clear cookie
+      const response = NextResponse.json({
+        success: true,
+        data: { message: 'Logged out successfully' },
+      });
+      return clearRefreshTokenCookie(response);
     }
 
     // Find and revoke all tokens in this family
@@ -39,7 +47,12 @@ export async function POST(request: NextRequest) {
         .where(eq(refreshTokens.family, payload.family));
     }
 
-    return successResponse({ message: 'Logged out successfully' });
+    // Clear refresh token cookie
+    const response = NextResponse.json({
+      success: true,
+      data: { message: 'Logged out successfully' },
+    });
+    return clearRefreshTokenCookie(response);
   } catch (error) {
     return errorResponse(error);
   }
