@@ -14,6 +14,39 @@ const MAX_MESSAGE_LENGTH = 100_000;
 // Max WebSocket payload size: 1MB (allows for JSON overhead)
 const MAX_PAYLOAD_SIZE = 1_000_000;
 
+// Get allowed origins for WebSocket connections
+function getAllowedOrigins(): string[] {
+  const origins: string[] = [];
+
+  // Add NEXT_PUBLIC_URL if set
+  if (process.env.NEXT_PUBLIC_URL) {
+    origins.push(new URL(process.env.NEXT_PUBLIC_URL).origin);
+  }
+
+  // Add common development origins
+  if (process.env.NODE_ENV === 'development') {
+    origins.push('http://localhost:3000');
+    origins.push('http://127.0.0.1:3000');
+  }
+
+  return origins;
+}
+
+function isOriginAllowed(origin: string | undefined): boolean {
+  // In development with no NEXT_PUBLIC_URL, allow all origins for convenience
+  if (process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_URL) {
+    return true;
+  }
+
+  if (!origin) {
+    // Some WebSocket clients don't send Origin; reject in production
+    return process.env.NODE_ENV === 'development';
+  }
+
+  const allowedOrigins = getAllowedOrigins();
+  return allowedOrigins.length === 0 || allowedOrigins.includes(origin);
+}
+
 const sessionOwners = new Map<string, { ownerKey: string; count: number }>();
 
 function claimSessionOwner(sessionId: string, ownerKey: string): boolean {
@@ -95,6 +128,13 @@ export default function handler(_req: any, res: any) {
     res.socket.server.wss = wss;
 
     wss.on('connection', (ws: any, req: any) => {
+      // Validate Origin header to prevent cross-site WebSocket hijacking
+      const origin = req?.headers?.origin;
+      if (!isOriginAllowed(origin)) {
+        ws.close(1008, 'Origin not allowed');
+        return;
+      }
+
       let sessionId: string | undefined;
       let activeMessageId: string | undefined;
       let unsubscribe: (() => void) | null = null;
