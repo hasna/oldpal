@@ -18,7 +18,11 @@ function LoginContent() {
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-md bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400"
+        >
           {error}
         </div>
       )}

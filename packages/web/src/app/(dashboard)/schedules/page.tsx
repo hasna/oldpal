@@ -484,7 +484,7 @@ export default function SchedulesPage() {
                       {schedule.status}
                     </Badge>
                     {schedule.lastResult && (
-                      <Badge variant={schedule.lastResult.ok ? 'default' : 'destructive'}>
+                      <Badge variant={schedule.lastResult.ok ? 'default' : 'error'}>
                         {schedule.lastResult.ok ? 'Last run: OK' : 'Last run: Error'}
                       </Badge>
                     )}

@@ -41,6 +41,7 @@ export default function SessionsPage() {
   const [error, setError] = useState('');
 
   const loadSessions = useCallback(async () => {
+    setError(''); // Clear any previous errors
     try {
       const response = await fetchWithAuth('/api/v1/sessions');
       const data = await response.json();

@@ -23,6 +23,7 @@ export default function MessagesPage() {
   const [filter, setFilter] = useState<'all' | 'unread' | 'archived'>('all');
 
   const loadMessages = useCallback(async () => {
+    setError(''); // Clear any previous errors
     try {
       const params = new URLSearchParams();
       if (filter === 'unread') params.set('status', 'unread');

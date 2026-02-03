@@ -4,6 +4,7 @@ import { Inter, Sora, JetBrains_Mono } from 'next/font/google';
 import { ServiceWorker } from '@/components/shared/ServiceWorker';
 import { AuthProvider } from '@/components/auth/auth-provider';
 import { Toaster } from '@/components/ui/toaster';
+import { WebVitals } from '@/components/shared/WebVitals';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const sora = Sora({ subsets: ['latin'], variable: '--font-sora' });
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${sora.variable} ${jetbrains.variable}`}>
       <body className="min-h-screen bg-white font-body text-gray-900">
+        <WebVitals />
         <ServiceWorker />
         <AuthProvider>
           <div className="relative min-h-screen">{children}</div>

@@ -50,6 +50,7 @@ export default function AgentsPage() {
   const [newAgentDescription, setNewAgentDescription] = useState('');
 
   const loadAgents = useCallback(async () => {
+    setError(''); // Clear any previous errors
     try {
       const response = await fetchWithAuth('/api/v1/agents');
       const data = await response.json();

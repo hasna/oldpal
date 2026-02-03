@@ -5,11 +5,19 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ToolCallCard } from '@/components/chat/ToolCallCard';
+import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
+
+interface ToolCallWithMeta extends ToolCall {
+  result?: ToolResult;
+  startedAt?: number;
+}
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  toolCalls?: ToolCallWithMeta[];
 }
 
 export default function ChatPage() {
@@ -23,6 +31,18 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
+  const streamAbortRef = useRef<AbortController | null>(null);
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Abort any ongoing stream when unmounting
+      streamAbortRef.current?.abort();
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -35,7 +55,17 @@ export default function ChatPage() {
   const requestedSession = safeSearchParams.get('session');
 
   useEffect(() => {
-    if (!requestedSession || requestedSession === sessionId) return;
+    // When navigating to /chat without a session param, reset to start fresh
+    if (!requestedSession) {
+      if (sessionId !== null) {
+        setSessionId(null);
+        setMessages([]);
+        setLoadError('');
+      }
+      return;
+    }
+
+    if (requestedSession === sessionId) return;
 
     let isActive = true;
     const controller = new AbortController();
@@ -86,6 +116,11 @@ export default function ChatPage() {
     e.preventDefault();
     if (!input.trim() || isStreaming) return;
 
+    // Abort any previous streaming request
+    streamAbortRef.current?.abort();
+    const abortController = new AbortController();
+    streamAbortRef.current = abortController;
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -113,7 +148,11 @@ export default function ChatPage() {
           message: input,
           sessionId,
         }),
+        signal: abortController.signal,
       });
+
+      // Check if unmounted after fetch
+      if (!isMountedRef.current) return;
 
       // Get session ID from header
       const newSessionId = response.headers.get('X-Session-Id');
@@ -127,6 +166,7 @@ export default function ChatPage() {
       if (!response.ok) {
         const data = await response.json().catch(() => null);
         const errorMessage = data?.error?.message || 'Failed to send message';
+        if (!isMountedRef.current) return;
         setMessages((prev) => {
           const updated = [...prev];
           const lastMessage = updated[updated.length - 1];
@@ -140,6 +180,7 @@ export default function ChatPage() {
 
       const reader = response.body?.getReader();
       if (!reader) {
+        if (!isMountedRef.current) return;
         setMessages((prev) => {
           const updated = [...prev];
           const lastMessage = updated[updated.length - 1];
@@ -155,8 +196,17 @@ export default function ChatPage() {
       let buffer = '';
 
       while (true) {
+        // Check if unmounted or aborted before each read
+        if (!isMountedRef.current || abortController.signal.aborted) {
+          reader.cancel().catch(() => {});
+          break;
+        }
+
         const { done, value } = await reader.read();
         if (done) break;
+
+        // Check again after async read
+        if (!isMountedRef.current) break;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -167,6 +217,7 @@ export default function ChatPage() {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.type === 'text_delta') {
+                if (!isMountedRef.current) break;
                 setMessages((prev) => {
                   const updated = [...prev];
                   const lastMessage = updated[updated.length - 1];
@@ -175,7 +226,47 @@ export default function ChatPage() {
                   }
                   return updated;
                 });
+              } else if (data.type === 'tool_call') {
+                if (!isMountedRef.current) break;
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastMessage = updated[updated.length - 1];
+                  if (lastMessage.role === 'assistant') {
+                    const toolCall: ToolCallWithMeta = {
+                      id: data.id,
+                      name: data.name,
+                      input: data.input as Record<string, unknown>,
+                      startedAt: Date.now(),
+                    };
+                    lastMessage.toolCalls = [...(lastMessage.toolCalls || []), toolCall];
+                  }
+                  return updated;
+                });
+              } else if (data.type === 'tool_result') {
+                if (!isMountedRef.current) break;
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastMessage = updated[updated.length - 1];
+                  if (lastMessage.role === 'assistant' && lastMessage.toolCalls) {
+                    const callIndex = lastMessage.toolCalls.findIndex((c) => c.id === data.id);
+                    if (callIndex >= 0) {
+                      lastMessage.toolCalls[callIndex] = {
+                        ...lastMessage.toolCalls[callIndex],
+                        result: {
+                          toolCallId: data.id,
+                          content: data.output,
+                          isError: data.isError,
+                        },
+                      };
+                    }
+                  }
+                  return updated;
+                });
+              } else if (data.type === 'message_complete') {
+                // Message complete - streaming is done for this message
+                // Nothing special to do here since finally block handles setIsStreaming(false)
               } else if (data.type === 'error') {
+                if (!isMountedRef.current) break;
                 setMessages((prev) => {
                   const updated = [...prev];
                   const lastMessage = updated[updated.length - 1];
@@ -192,6 +283,11 @@ export default function ChatPage() {
         }
       }
     } catch (error) {
+      // Ignore abort errors (expected when unmounting or starting new request)
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+      if (!isMountedRef.current) return;
       setMessages((prev) => {
         const updated = [...prev];
         const lastMessage = updated[updated.length - 1];
@@ -201,7 +297,13 @@ export default function ChatPage() {
         return updated;
       });
     } finally {
-      setIsStreaming(false);
+      if (isMountedRef.current) {
+        setIsStreaming(false);
+      }
+      // Clear the ref if this was our controller
+      if (streamAbortRef.current === abortController) {
+        streamAbortRef.current = null;
+      }
     }
   };
 
@@ -234,7 +336,10 @@ export default function ChatPage() {
                     : 'bg-gray-100 text-gray-900'
                 }`}
               >
-                <p className="whitespace-pre-wrap">{message.content || '...'}</p>
+                <p className="whitespace-pre-wrap">{message.content || (message.toolCalls?.length ? '' : '...')}</p>
+                {message.toolCalls?.map((call) => (
+                  <ToolCallCard key={call.id} call={call} result={call.result} />
+                ))}
               </div>
             </div>
           ))
@@ -246,6 +351,8 @@ export default function ChatPage() {
       <div className="border-t border-gray-200 p-4">
         <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto">
           <Input
+            id="chat-message-input"
+            aria-label="Chat message"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."

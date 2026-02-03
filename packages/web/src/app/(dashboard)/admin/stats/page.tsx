@@ -55,6 +55,7 @@ export default function AdminStatsPage() {
   }, [user, router]);
 
   const loadStats = useCallback(async () => {
+    setError(''); // Clear any previous errors
     try {
       const response = await fetchWithAuth('/api/v1/admin/stats');
       const data = await response.json();
@@ -71,8 +72,11 @@ export default function AdminStatsPage() {
   }, [fetchWithAuth]);
 
   useEffect(() => {
-    loadStats();
-  }, [loadStats]);
+    // Only load stats if the current user is an admin
+    if (user?.role === 'admin') {
+      loadStats();
+    }
+  }, [loadStats, user?.role]);
 
   if (user?.role !== 'admin') {
     return null;

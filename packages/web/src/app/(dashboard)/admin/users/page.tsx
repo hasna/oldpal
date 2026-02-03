@@ -67,8 +67,11 @@ export default function AdminUsersPage() {
   }, [fetchWithAuth, page, search]);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    // Only load users if the current user is an admin
+    if (user?.role === 'admin') {
+      loadUsers();
+    }
+  }, [loadUsers, user?.role]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
