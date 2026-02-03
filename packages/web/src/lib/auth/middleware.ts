@@ -7,20 +7,21 @@ export interface AuthenticatedRequest extends NextRequest {
   user: TokenPayload;
 }
 
-type RouteContext = { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RouteContext = { params?: any };
 
-type AuthedHandler<T = unknown> = (
+type AuthedHandler<T = unknown, C = RouteContext> = (
   request: AuthenticatedRequest,
-  context?: RouteContext
+  context: C
 ) => Promise<NextResponse<ApiResponse<T>>>;
 
-type RouteHandler<T = unknown> = (
+type RouteHandler<T = unknown, C = RouteContext> = (
   request: NextRequest,
-  context?: RouteContext
+  context: C
 ) => Promise<NextResponse<ApiResponse<T>>>;
 
-export function withAuth<T = unknown>(handler: AuthedHandler<T>): RouteHandler<T> {
-  return async (request: NextRequest, context) => {
+export function withAuth<T = unknown, C = RouteContext>(handler: AuthedHandler<T, C>): RouteHandler<T, C> {
+  return async (request: NextRequest, context: C) => {
     const authHeader = request.headers.get('authorization');
 
     if (!authHeader?.startsWith('Bearer ')) {
@@ -39,8 +40,8 @@ export function withAuth<T = unknown>(handler: AuthedHandler<T>): RouteHandler<T
   };
 }
 
-export function withAdminAuth<T = unknown>(handler: AuthedHandler<T>): RouteHandler<T> {
-  return withAuth(async (request: AuthenticatedRequest, context) => {
+export function withAdminAuth<T = unknown, C = RouteContext>(handler: AuthedHandler<T, C>): RouteHandler<T, C> {
+  return withAuth<T, C>(async (request: AuthenticatedRequest, context: C) => {
     if (request.user.role !== 'admin') {
       return errorResponse(new ForbiddenError('Admin access required'));
     }

@@ -1,4 +1,5 @@
 export type ClientMessage =
+  | { type: 'auth'; token: string }
   | { type: 'message'; content: string; sessionId?: string; messageId?: string }
   | { type: 'cancel'; sessionId?: string }
   | { type: 'session'; sessionId: string };

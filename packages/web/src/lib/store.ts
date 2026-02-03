@@ -12,6 +12,8 @@ interface ChatState {
   sessionId: string | null;
   sessions: Array<{ id: string; label: string; createdAt: number }>;
   sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCallWithMeta[]; streamMessageId: string | null; isStreaming: boolean }>;
+  /** Buffer for tool results that arrive before their corresponding tool_call */
+  pendingToolResults: Map<string, ToolResult>;
 
   setSessionId: (sessionId: string) => void;
   createSession: (label?: string) => string;
@@ -35,6 +37,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sessionId: null,
   sessions: [],
   sessionSnapshots: {},
+  pendingToolResults: new Map(),
 
   setSessionId: (sessionId) => set({ sessionId }),
 
@@ -109,28 +112,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
   appendMessageContent: (id, content) =>
     set((state) => {
       const messages = [...state.messages];
-      let updated = false;
       let streamId: string | null = null;
+
+      // If messageId is provided, try to find that specific message
       if (id) {
         let matchIndex = -1;
         for (let i = messages.length - 1; i >= 0; i -= 1) {
-          if (matchIndex === -1 && messages[i].id === id && messages[i].role === 'assistant') {
+          if (messages[i].id === id && messages[i].role === 'assistant') {
             matchIndex = i;
+            break;
           }
         }
         if (matchIndex >= 0) {
+          // Found the message, append to it
           messages[matchIndex] = { ...messages[matchIndex], content: messages[matchIndex].content + content };
-          updated = true;
+          streamId = id;
+        } else {
+          // messageId was provided but not found - create a placeholder with that ID
+          // rather than falling back to a different message which would corrupt ordering
+          messages.push({
+            id,
+            role: 'assistant',
+            content,
+            timestamp: now(),
+          });
           streamId = id;
         }
-      }
-      if (!updated) {
+      } else {
+        // No messageId provided - fall back to last assistant message or create new
         const lastMessage = messages[messages.length - 1];
         if (lastMessage && lastMessage.role === 'assistant') {
           messages[messages.length - 1] = { ...lastMessage, content: lastMessage.content + content };
           streamId = lastMessage.id;
         } else {
-          const newId = id ?? generateId();
+          const newId = generateId();
           messages.push({
             id: newId,
             role: 'assistant',
@@ -164,7 +179,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ? {
             ...state.sessionSnapshots,
             [state.sessionId]: {
-              ...state.sessionSnapshots[state.sessionId],
+              // Ensure all fields are set even if snapshot didn't exist
+              messages: state.sessionSnapshots[state.sessionId]?.messages ?? state.messages,
+              toolCalls: state.sessionSnapshots[state.sessionId]?.toolCalls ?? state.currentToolCalls,
+              streamMessageId: state.sessionSnapshots[state.sessionId]?.streamMessageId ?? state.currentStreamMessageId,
               isStreaming: streaming,
             },
           }
@@ -199,6 +217,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       const shouldReset = targetMessageId && targetMessageId !== state.currentStreamMessageId;
       const callWithMeta: ToolCallWithMeta = { ...call, startedAt: Date.now() };
+
+      // Check if we have a buffered result for this tool call (arrived out of order)
+      const pendingResult = state.pendingToolResults.get(call.id);
+      if (pendingResult) {
+        callWithMeta.result = pendingResult;
+        // Remove from pending buffer
+        const newPending = new Map(state.pendingToolResults);
+        newPending.delete(call.id);
+        const nextCalls = shouldReset ? [callWithMeta] : [...state.currentToolCalls, callWithMeta];
+        return {
+          messages,
+          currentToolCalls: nextCalls,
+          currentStreamMessageId: targetMessageId ?? state.currentStreamMessageId,
+          pendingToolResults: newPending,
+          sessionSnapshots: state.sessionId
+            ? {
+                ...state.sessionSnapshots,
+                [state.sessionId]: {
+                  messages,
+                  toolCalls: nextCalls,
+                  streamMessageId: targetMessageId ?? state.currentStreamMessageId,
+                  isStreaming: state.isStreaming,
+                },
+              }
+            : state.sessionSnapshots,
+        };
+      }
+
       const nextCalls = shouldReset ? [callWithMeta] : [...state.currentToolCalls, callWithMeta];
       return {
         messages,
@@ -219,24 +265,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
 
   updateToolResult: (id, result) =>
-    set((state) => ({
-      currentToolCalls: state.currentToolCalls.map((call) =>
-        call.id === id ? { ...call, result } : call
-      ),
-      sessionSnapshots: state.sessionId
-        ? {
-            ...state.sessionSnapshots,
-            [state.sessionId]: {
-              messages: state.messages,
-              toolCalls: state.currentToolCalls.map((call) =>
-                call.id === id ? { ...call, result } : call
-              ),
-              streamMessageId: state.currentStreamMessageId,
-              isStreaming: state.isStreaming,
-            },
-          }
-        : state.sessionSnapshots,
-    })),
+    set((state) => {
+      // Check if the tool call exists
+      const callExists = state.currentToolCalls.some((call) => call.id === id);
+
+      // If tool call doesn't exist yet, buffer the result for later
+      if (!callExists) {
+        const newPending = new Map(state.pendingToolResults);
+        newPending.set(id, result);
+        return {
+          pendingToolResults: newPending,
+        };
+      }
+
+      // Tool call exists, update it directly
+      return {
+        currentToolCalls: state.currentToolCalls.map((call) =>
+          call.id === id ? { ...call, result } : call
+        ),
+        sessionSnapshots: state.sessionId
+          ? {
+              ...state.sessionSnapshots,
+              [state.sessionId]: {
+                messages: state.messages,
+                toolCalls: state.currentToolCalls.map((call) =>
+                  call.id === id ? { ...call, result } : call
+                ),
+                streamMessageId: state.currentStreamMessageId,
+                isStreaming: state.isStreaming,
+              },
+            }
+          : state.sessionSnapshots,
+      };
+    }),
 
   finalizeToolCalls: (messageId) =>
     set((state) => {
@@ -313,6 +374,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       currentToolCalls: [],
       currentStreamMessageId: null,
+      pendingToolResults: new Map(),
       sessionSnapshots: state.sessionId
         ? {
             ...state.sessionSnapshots,
@@ -332,6 +394,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [],
       currentToolCalls: [],
       currentStreamMessageId: null,
+      pendingToolResults: new Map(),
       sessionSnapshots: state.sessionId
         ? {
             ...state.sessionSnapshots,
@@ -354,5 +417,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sessionId: null,
       sessions: [],
       sessionSnapshots: {},
+      pendingToolResults: new Map(),
     }),
 }));

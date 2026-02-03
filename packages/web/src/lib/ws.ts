@@ -6,11 +6,30 @@ class ChatWebSocket {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private url = '';
+  private token: string | null = null;
   private pending: ClientMessage[] = [];
   private shouldReconnect = true;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  // Track the active session to guard against late messages from previous sessions
+  private activeSessionId: string | null = null;
 
-  connect(url: string): void {
+  connect(url: string, token?: string | null): void {
+    this.token = token ?? null;
+    // Close existing connection to avoid duplicate streams
+    if (this.ws) {
+      // Temporarily disable reconnect for the old socket
+      const oldWs = this.ws;
+      oldWs.onclose = null;
+      oldWs.onerror = null;
+      oldWs.onmessage = null;
+      oldWs.close();
+      this.ws = null;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     this.shouldReconnect = true;
     this.url = url;
     this.ws = new WebSocket(url);
@@ -20,6 +39,10 @@ class ChatWebSocket {
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
+      }
+      // Send auth message first (if token available) to authenticate without URL exposure
+      if (this.token) {
+        this.ws?.send(JSON.stringify({ type: 'auth', token: this.token }));
       }
       const store = useChatStore.getState();
       const currentSessionId = store.sessionId || store.createSession('Session 1');
@@ -63,6 +86,18 @@ class ChatWebSocket {
   }
 
   send(message: ClientMessage): void {
+    // Track session changes to guard against late messages from previous sessions
+    if (message.type === 'session') {
+      // Session changed - clear any pending messages for the old session
+      // to prevent wrong-session ordering on reconnect
+      if (this.activeSessionId && this.activeSessionId !== message.sessionId) {
+        this.pending = this.pending.filter((m) => m.type === 'auth');
+      }
+      this.activeSessionId = message.sessionId;
+    } else if (message.type === 'message' && message.sessionId) {
+      this.activeSessionId = message.sessionId;
+    }
+
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
       return;
@@ -82,10 +117,19 @@ class ChatWebSocket {
     this.ws?.close();
     this.ws = null;
     this.pending = [];
+    this.activeSessionId = null;
   }
 
   private handleMessage(message: ServerMessage): void {
     const store = useChatStore.getState();
+
+    // Guard against late messages from previous sessions
+    // If the store's sessionId doesn't match the active session we're streaming for,
+    // drop the message to prevent cross-session contamination
+    if (this.activeSessionId && store.sessionId && store.sessionId !== this.activeSessionId) {
+      // Session changed, drop this late message
+      return;
+    }
 
     switch (message.type) {
       case 'text_delta':

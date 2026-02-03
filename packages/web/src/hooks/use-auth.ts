@@ -1,8 +1,10 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { useChatStore } from '@/lib/store';
+
+// Module-level refresh lock to prevent concurrent refresh races
+let refreshPromise: Promise<{ accessToken: string }> | null = null;
 
 export interface AuthUser {
   id: string;
@@ -14,70 +16,52 @@ export interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null;
+  // Access token kept in memory only (not persisted to localStorage)
+  // This prevents XSS attacks from stealing tokens
   accessToken: string | null;
-  refreshToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
 
-  setAuth: (user: AuthUser, accessToken: string, refreshToken: string) => void;
-  setTokens: (accessToken: string, refreshToken: string) => void;
+  setAuth: (user: AuthUser, accessToken: string) => void;
+  setAccessToken: (accessToken: string) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
+// Using plain zustand without persist - tokens are kept in memory only
+// Refresh token is stored in httpOnly cookie (managed by server)
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: null,
+  accessToken: null,
+  isLoading: true,
+  isAuthenticated: false,
+
+  setAuth: (user, accessToken) =>
+    set({
+      user,
+      accessToken,
+      isAuthenticated: true,
+      isLoading: false,
+    }),
+
+  setAccessToken: (accessToken) =>
+    set({
+      accessToken,
+      // Ensure isAuthenticated stays true when tokens are refreshed
+      isAuthenticated: true,
+      isLoading: false,
+    }),
+
+  logout: () =>
+    set({
       user: null,
       accessToken: null,
-      refreshToken: null,
-      isLoading: true,
       isAuthenticated: false,
-
-      setAuth: (user, accessToken, refreshToken) =>
-        set({
-          user,
-          accessToken,
-          refreshToken,
-          isAuthenticated: true,
-          isLoading: false,
-        }),
-
-      setTokens: (accessToken, refreshToken) =>
-        set({ accessToken, refreshToken }),
-
-      logout: () =>
-        set({
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-          isLoading: false,
-        }),
-
-      setLoading: (loading) => set({ isLoading: loading }),
+      isLoading: false,
     }),
-    {
-      name: 'auth-storage',
-      partialize: (state) => ({
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
-      onRehydrateStorage: () => (state) => {
-        // After rehydration, set isLoading to false
-        if (state) {
-          state.isLoading = false;
-          // Ensure isAuthenticated is set based on tokens
-          if (state.accessToken && state.user) {
-            state.isAuthenticated = true;
-          }
-        }
-      },
-    }
-  )
-);
+
+  setLoading: (loading) => set({ isLoading: loading }),
+}));
 
 export function useAuth() {
   const store = useAuthStore();
@@ -87,6 +71,7 @@ export function useAuth() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
+      credentials: 'include', // Include cookies in request/response
     });
 
     const data = await response.json();
@@ -95,7 +80,9 @@ export function useAuth() {
       throw new Error(data.error?.message || 'Login failed');
     }
 
-    store.setAuth(data.data.user, data.data.accessToken, data.data.refreshToken);
+    // Refresh token is set as httpOnly cookie by server
+    // Only access token is returned in response body
+    store.setAuth(data.data.user, data.data.accessToken);
     return data.data;
   };
 
@@ -104,6 +91,7 @@ export function useAuth() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, name }),
+      credentials: 'include', // Include cookies in request/response
     });
 
     const data = await response.json();
@@ -112,21 +100,20 @@ export function useAuth() {
       throw new Error(data.error?.message || 'Registration failed');
     }
 
-    store.setAuth(data.data.user, data.data.accessToken, data.data.refreshToken);
+    // Refresh token is set as httpOnly cookie by server
+    // Only access token is returned in response body
+    store.setAuth(data.data.user, data.data.accessToken);
     return data.data;
   };
 
   const logout = async () => {
-    if (store.refreshToken) {
-      try {
-        await fetch('/api/v1/auth/logout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: store.refreshToken }),
-        });
-      } catch {
-        // Ignore logout errors
-      }
+    try {
+      await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include', // Send refresh token cookie
+      });
+    } catch {
+      // Ignore logout errors
     }
     // Clear chat state on logout to prevent data leakage
     useChatStore.getState().clearAll();
@@ -134,25 +121,37 @@ export function useAuth() {
   };
 
   const refreshAccessToken = async () => {
-    if (!store.refreshToken) {
-      throw new Error('No refresh token');
+    // If a refresh is already in progress, reuse it to prevent race conditions
+    if (refreshPromise) {
+      return refreshPromise;
     }
 
-    const response = await fetch('/api/v1/auth/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: store.refreshToken }),
-    });
+    // Create a new refresh promise and store it
+    refreshPromise = (async () => {
+      try {
+        const response = await fetch('/api/v1/auth/refresh', {
+          method: 'POST',
+          credentials: 'include', // Send refresh token cookie
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (!data.success) {
-      store.logout();
-      throw new Error(data.error?.message || 'Token refresh failed');
-    }
+        if (!data.success) {
+          store.logout();
+          throw new Error(data.error?.message || 'Token refresh failed');
+        }
 
-    store.setTokens(data.data.accessToken, data.data.refreshToken);
-    return data.data;
+        // New refresh token is set as httpOnly cookie by server
+        // Only access token is returned in response body
+        store.setAccessToken(data.data.accessToken);
+        return data.data;
+      } finally {
+        // Clear the promise when done (success or failure)
+        refreshPromise = null;
+      }
+    })();
+
+    return refreshPromise;
   };
 
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
@@ -162,14 +161,26 @@ export function useAuth() {
 
     const response = await fetch(url, {
       ...options,
+      credentials: 'include', // Include cookies
       headers: {
         ...options.headers,
         Authorization: `Bearer ${store.accessToken}`,
       },
     });
 
-    // If unauthorized, try to refresh token
-    if (response.status === 401 && store.refreshToken) {
+    // If unauthorized, try to refresh token (refresh token is in httpOnly cookie)
+    if (response.status === 401) {
+      // Only retry if body is repeatable (string, undefined, or null)
+      // Non-repeatable bodies (streams, FormData, Blob) can't be re-sent
+      const isBodyRepeatable = options.body === undefined ||
+        options.body === null ||
+        typeof options.body === 'string';
+
+      if (!isBodyRepeatable) {
+        // Can't retry with non-repeatable body, let the 401 propagate
+        return response;
+      }
+
       try {
         await refreshAccessToken();
         const freshToken = useAuthStore.getState().accessToken;
@@ -179,6 +190,7 @@ export function useAuth() {
         // Retry request with new token
         return fetch(url, {
           ...options,
+          credentials: 'include',
           headers: {
             ...options.headers,
             Authorization: `Bearer ${freshToken}`,
