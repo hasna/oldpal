@@ -40,7 +40,44 @@ class MockContext {
   }
 }
 
+class TruncatingContext {
+  private messages: Message[] = [];
+
+  addUserMessage(content: string) {
+    this.messages.push({
+      id: `u-${this.messages.length + 1}`,
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+    });
+  }
+
+  addAssistantMessage(content: string) {
+    this.messages.push({
+      id: `a-${this.messages.length + 1}`,
+      role: 'assistant',
+      content,
+      timestamp: Date.now(),
+    });
+  }
+
+  prune(limit: number) {
+    if (this.messages.length > limit) {
+      this.messages = this.messages.slice(-limit);
+    }
+  }
+
+  getMessages(): Message[] {
+    return [...this.messages];
+  }
+
+  clear() {
+    this.messages = [];
+  }
+}
+
 let lastOptions: any;
+let shutdownCalled = false;
 
 class MockAgentLoop {
   private context = new MockContext();
@@ -67,6 +104,63 @@ class MockAgentLoop {
     const toolCall = { id: 't1', name: 'bash', input: { command: 'ls' } };
     lastOptions?.onToolStart?.(toolCall);
     lastOptions?.onToolEnd?.(toolCall, { toolCallId: 't1', content: 'ok', isError: false });
+    lastOptions?.onChunk?.({ type: 'text', content: 'ok' } as StreamChunk);
+    lastOptions?.onChunk?.({ type: 'done' } as StreamChunk);
+    this.processing = false;
+  }
+
+  getContext() {
+    return this.context;
+  }
+
+  getTools(): Tool[] {
+    return [{ name: 'tool', description: 't', parameters: { type: 'object', properties: {} } }];
+  }
+
+  getSkills(): Skill[] {
+    return [{ name: 'skill', description: 's' }];
+  }
+
+  getCommands(): Command[] {
+    return [{ name: 'cmd', description: 'c', content: '', builtin: true }];
+  }
+
+  getTokenUsage() {
+    return { inputTokens: 1, outputTokens: 2, totalTokens: 3, maxContextTokens: 10 };
+  }
+
+  stop() {
+    this.processing = false;
+  }
+
+  isProcessing() {
+    return this.processing;
+  }
+
+  clearConversation() {
+    this.context.clear();
+  }
+
+  shutdown() {
+    shutdownCalled = true;
+  }
+}
+
+class TruncatingAgentLoop {
+  private context = new TruncatingContext();
+  private processing = false;
+
+  constructor(options: any) {
+    lastOptions = options;
+  }
+
+  async initialize() {}
+
+  async process(message: string) {
+    this.processing = true;
+    this.context.addUserMessage(message);
+    this.context.addAssistantMessage('ok');
+    this.context.prune(2);
     lastOptions?.onChunk?.({ type: 'text', content: 'ok' } as StreamChunk);
     lastOptions?.onChunk?.({ type: 'done' } as StreamChunk);
     this.processing = false;
@@ -188,6 +282,16 @@ afterEach(() => {
 });
 
 describe('EmbeddedClient', () => {
+  test('disconnect calls shutdown when available', async () => {
+    shutdownCalled = false;
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => new MockAgentLoop(options) as any,
+    });
+    await client.initialize();
+    client.disconnect();
+    expect(shutdownCalled).toBe(true);
+  });
   test('uses default agent factory when none provided', () => {
     const client = new EmbeddedClient(tempDir, { sessionId: 'sess-default' });
     expect(client.getSessionId()).toBe('sess-default');
@@ -225,6 +329,19 @@ describe('EmbeddedClient', () => {
     const messages = client.getMessages();
     expect(messages.at(-1)?.role).toBe('assistant');
     expect(messages.at(-1)?.content).toBe('ok');
+  });
+
+  test('retains full history even if context prunes', async () => {
+    const client = new EmbeddedClient(tempDir, {
+      sessionId: 'sess',
+      agentFactory: (options) => new TruncatingAgentLoop(options) as any,
+    });
+
+    await client.send('one');
+    await client.send('two');
+
+    const messages = client.getMessages();
+    expect(messages.map((m) => m.content)).toEqual(['one', 'ok', 'two', 'ok']);
   });
 
   test('clearConversation resets messages', async () => {

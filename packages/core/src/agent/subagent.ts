@@ -1,5 +1,6 @@
 import type { HookHandler, HookInput, StreamChunk } from '@hasna/assistants-shared';
 import { generateId, sleep } from '@hasna/assistants-shared';
+import type { LLMClient } from '../llm/client';
 import { AgentLoop } from './loop';
 
 const DEFAULT_HOOK_TOOLS = ['read', 'glob', 'grep'];
@@ -10,16 +11,18 @@ export interface HookAgentOptions {
   timeout: number;
   cwd: string;
   allowedTools?: string[];
+  llmClient?: LLMClient;
 }
 
 export async function runHookAgent(options: HookAgentOptions): Promise<string> {
-  const { hook, input, timeout, cwd, allowedTools } = options;
+  const { hook, input, timeout, cwd, allowedTools, llmClient } = options;
   let response = '';
 
   const agent = new AgentLoop({
     cwd,
     sessionId: `hook-${generateId()}`,
     allowedTools: allowedTools ?? DEFAULT_HOOK_TOOLS,
+    llmClient,
     extraSystemPrompt: `You are a hook agent evaluating whether to allow an action.
 Task: ${hook.prompt}
 

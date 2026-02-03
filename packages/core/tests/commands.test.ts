@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { listSchedules } from '../src/scheduler/store';
+import { getRuntime } from '../src/runtime';
 
 describe('CommandLoader', () => {
   let loader: CommandLoader;
@@ -1020,10 +1021,11 @@ describe('BuiltinCommands', () => {
       const cmd = loader.getCommand('feedback');
       expect(cmd).toBeDefined();
 
-      const originalDollar = (Bun as any).$;
-      (Bun as any).$ = () => ({
+      const runtime = getRuntime();
+      const originalShell = runtime.shell;
+      runtime.shell = () => ({
         quiet: async () => {},
-      });
+      }) as any;
 
       try {
         if (cmd?.handler) {
@@ -1032,7 +1034,7 @@ describe('BuiltinCommands', () => {
           expect(emittedContent.some(c => c.includes('Opening GitHub'))).toBe(true);
         }
       } finally {
-        (Bun as any).$ = originalDollar;
+        runtime.shell = originalShell;
       }
     });
 
@@ -1040,12 +1042,13 @@ describe('BuiltinCommands', () => {
       const cmd = loader.getCommand('feedback');
       expect(cmd).toBeDefined();
 
-      const originalDollar = (Bun as any).$;
-      (Bun as any).$ = () => ({
+      const runtime = getRuntime();
+      const originalShell = runtime.shell;
+      runtime.shell = () => ({
         quiet: async () => {
           throw new Error('fail');
         },
-      });
+      }) as any;
 
       try {
         if (cmd?.handler) {
@@ -1054,7 +1057,7 @@ describe('BuiltinCommands', () => {
           expect(emittedContent.some(c => c.includes('Submit Feedback'))).toBe(true);
         }
       } finally {
-        (Bun as any).$ = originalDollar;
+        runtime.shell = originalShell;
       }
     });
 
@@ -1062,10 +1065,11 @@ describe('BuiltinCommands', () => {
       const cmd = loader.getCommand('feedback');
       expect(cmd).toBeDefined();
 
-      const originalDollar = (Bun as any).$;
-      (Bun as any).$ = () => ({
+      const runtime = getRuntime();
+      const originalShell = runtime.shell;
+      runtime.shell = () => ({
         quiet: async () => {},
-      });
+      }) as any;
 
       try {
         if (cmd?.handler) {
@@ -1074,7 +1078,7 @@ describe('BuiltinCommands', () => {
           expect(emittedContent.some(c => c.includes('Opening GitHub'))).toBe(true);
         }
       } finally {
-        (Bun as any).$ = originalDollar;
+        runtime.shell = originalShell;
       }
     });
   });

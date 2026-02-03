@@ -153,4 +153,46 @@ describe('message line estimation', () => {
     const resultLines = __test__.estimateToolResultLines(toolResults[0] as any, 10, 2);
     expect(resultLines).toBeGreaterThan(0);
   });
+
+  test('estimates tool result-only panels for user messages', () => {
+    const msg: Message = {
+      id: 'user-1',
+      role: 'user',
+      content: 'tool output',
+      timestamp: 0,
+      toolResults: [{ toolCallId: 'tool-1', toolName: 'bash', content: 'ok', isError: false }],
+    };
+    expect(__test__.estimateMessageLines(msg, 80)).toBeGreaterThan(0);
+  });
+
+  test('trims display messages by line budget', () => {
+    const messages = [
+      { id: 'a', role: 'assistant', content: 'one', timestamp: 0, __lineCount: 1 },
+      { id: 'b', role: 'assistant', content: 'two', timestamp: 0, __lineCount: 1 },
+      { id: 'c', role: 'assistant', content: 'three', timestamp: 0, __lineCount: 1 },
+    ];
+    const result = __test__.trimDisplayMessagesByLines(messages as any, 6, 80);
+    expect(result.trimmed).toBe(true);
+    expect(result.messages.map((msg: any) => msg.id)).toEqual(['b', 'c']);
+  });
+
+  test('trims to empty when maxLines is zero', () => {
+    const messages = [
+      { id: 'a', role: 'assistant', content: 'one', timestamp: 0, __lineCount: 1 },
+    ];
+    const result = __test__.trimDisplayMessagesByLines(messages as any, 0, 80);
+    expect(result.messages.length).toBe(0);
+    expect(result.trimmed).toBe(true);
+  });
+
+  test('trims activity log entries by line budget', () => {
+    const entries = [
+      { type: 'text' as const, content: 'one' },
+      { type: 'text' as const, content: 'two' },
+      { type: 'text' as const, content: 'three' },
+    ];
+    const result = __test__.trimActivityLogByLines(entries as any, 80, 80, 4);
+    expect(result.trimmed).toBe(true);
+    expect(result.entries.length).toBe(1);
+  });
 });

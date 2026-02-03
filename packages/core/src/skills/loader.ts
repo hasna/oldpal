@@ -1,6 +1,7 @@
 import { join, basename, dirname } from 'path';
 import { homedir } from 'os';
-import { Glob } from 'bun';
+import { readFile, stat } from 'fs/promises';
+import fg from 'fast-glob';
 import type { Skill, SkillFrontmatter } from '@hasna/assistants-shared';
 import { parseFrontmatter } from '@hasna/assistants-shared';
 
@@ -30,8 +31,8 @@ export class SkillLoader {
     await this.loadFromDirectory(projectSkillsDir, { includeContent });
 
     // Also check nested .assistants/skills in monorepo
-    const nestedGlob = new Glob('**/.assistants/skills/*/SKILL.md');
-    for await (const file of nestedGlob.scan({ cwd: projectDir, dot: true })) {
+    const nestedFiles = await fg('**/.assistants/skills/*/SKILL.md', { cwd: projectDir, dot: true });
+    for (const file of nestedFiles) {
       await this.loadSkillFile(join(projectDir, file), { includeContent });
     }
   }
@@ -43,8 +44,7 @@ export class SkillLoader {
   async loadFromDirectory(dir: string, options: SkillLoadOptions = {}): Promise<void> {
     const includeContent = options.includeContent ?? true;
     try {
-      // Check if directory exists using native fs
-      const { stat } = await import('fs/promises');
+      // Check if directory exists
       try {
         const stats = await stat(dir);
         if (!stats.isDirectory()) return;
@@ -56,14 +56,14 @@ export class SkillLoader {
       const filesToLoad: string[] = [];
 
       // Load skills from skill-* directories (preferred convention)
-      const skillPrefixGlob = new Glob('skill-*/SKILL.md');
-      for await (const file of skillPrefixGlob.scan({ cwd: dir })) {
+      const skillPrefixFiles = await fg('skill-*/SKILL.md', { cwd: dir });
+      for (const file of skillPrefixFiles) {
         filesToLoad.push(join(dir, file));
       }
 
       // Also load from regular directories (for backwards compatibility)
-      const regularGlob = new Glob('*/SKILL.md');
-      for await (const file of regularGlob.scan({ cwd: dir })) {
+      const regularFiles = await fg('*/SKILL.md', { cwd: dir });
+      for (const file of regularFiles) {
         // Skip if already loaded via skill- prefix
         const dirName = file.split(/[\\/]/)[0];
         if (!dirName.startsWith('skill-')) {
@@ -87,7 +87,7 @@ export class SkillLoader {
    */
   async loadSkillFile(filePath: string, options: SkillLoadOptions = {}): Promise<Skill | null> {
     try {
-      const content = await Bun.file(filePath).text();
+      const content = await readFile(filePath, 'utf-8');
       const { frontmatter, content: markdownContent } = parseFrontmatter<SkillFrontmatter>(content);
       const includeContent = options.includeContent ?? true;
 

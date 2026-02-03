@@ -50,11 +50,13 @@ export function validateToolInput(
 }
 
 function getValidator(toolName: string, schema: object): ValidateFunction {
-  const cached = validatorCache.get(toolName);
+  const schemaKey = safeSchemaKey(schema);
+  const cacheKey = schemaKey ? `${toolName}:${schemaKey}` : toolName;
+  const cached = validatorCache.get(cacheKey);
   if (cached) return cached;
 
   const validator = ajv.compile(schema);
-  validatorCache.set(toolName, validator);
+  validatorCache.set(cacheKey, validator);
   return validator;
 }
 
@@ -63,6 +65,14 @@ function normalizeInput(input: unknown): Record<string, unknown> {
     return structuredClone(input as Record<string, unknown>);
   }
   return {};
+}
+
+function safeSchemaKey(schema: object): string | null {
+  try {
+    return JSON.stringify(schema);
+  } catch {
+    return null;
+  }
 }
 
 function formatAjvError(error: { instancePath?: string; message?: string; params?: Record<string, unknown> }): string {

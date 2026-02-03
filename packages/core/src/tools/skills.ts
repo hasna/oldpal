@@ -49,7 +49,7 @@ export class SkillTool {
           description: 'Skill body content (markdown).',
         },
         allowed_tools: {
-          type: 'array',
+          type: ['array', 'string'],
           description: 'Allowed tools for the skill (array or comma-separated string).',
           items: { type: 'string', description: 'Tool name' },
         },

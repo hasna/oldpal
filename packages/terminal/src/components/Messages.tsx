@@ -234,13 +234,25 @@ function MessageBubble({ message, queuedMessageIds, verboseTools }: MessageBubbl
   }
 
   if (isUser) {
+    const toolResults = message.toolResults || [];
+    const showToolResultsOnly = toolResults.length > 0 && !isContinuation;
+    const hasContent = Boolean((message.content ?? '').trim());
     return (
-      <Box marginY={isContinuation ? 0 : 1}>
-        <Text dimColor>{isContinuation ? '  ' : '❯ '} </Text>
-        {isQueued && !isContinuation ? (
-          <Text dimColor>⏳ {message.content ?? ''}</Text>
-        ) : (
-          <Text>{message.content ?? ''}</Text>
+      <Box marginY={isContinuation ? 0 : 1} flexDirection="column">
+        {hasContent && (
+          <Box>
+            <Text dimColor>{isContinuation ? '  ' : '❯ '} </Text>
+            {isQueued && !isContinuation ? (
+              <Text dimColor>⏳ {message.content ?? ''}</Text>
+            ) : (
+              <Text>{message.content ?? ''}</Text>
+            )}
+          </Box>
+        )}
+        {showToolResultsOnly && (
+          <Box marginTop={hasContent ? 1 : 0}>
+            <ToolResultPanel toolResults={toolResults} verboseTools={verboseTools} />
+          </Box>
         )}
       </Box>
     );
@@ -250,6 +262,7 @@ function MessageBubble({ message, queuedMessageIds, verboseTools }: MessageBubbl
   const toolCalls = message.toolCalls || [];
   const toolResults = message.toolResults || [];
   const hasContent = content && content.trim();
+  const showToolResultsOnly = toolCalls.length === 0 && toolResults.length > 0;
 
   return (
     <Box marginY={isContinuation ? 0 : 1} flexDirection="column">
@@ -264,6 +277,11 @@ function MessageBubble({ message, queuedMessageIds, verboseTools }: MessageBubbl
       {toolCalls.length > 0 && (
         <Box marginTop={hasContent ? 1 : 0}>
           <ToolCallPanel toolCalls={toolCalls} toolResults={toolResults} verboseTools={verboseTools} />
+        </Box>
+      )}
+      {showToolResultsOnly && (
+        <Box marginTop={hasContent ? 1 : 0}>
+          <ToolResultPanel toolResults={toolResults} verboseTools={verboseTools} />
         </Box>
       )}
     </Box>
@@ -355,6 +373,63 @@ function ToolCallPanel({
               </Box>
             )}
             {result && !verboseTools && result.truncated && (
+              <Box marginLeft={2}>
+                <Text dimColor>↳ (truncated · Ctrl+O for full output)</Text>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+function ToolResultPanel({
+  toolResults,
+  verboseTools,
+}: {
+  toolResults: ToolResult[];
+  verboseTools?: boolean;
+}) {
+  if (toolResults.length === 0) return null;
+
+  const { stdout } = useStdout();
+  const columns = stdout?.columns ?? 80;
+  const panelWidth = Math.max(1, columns - 2);
+  const innerWidth = Math.max(1, panelWidth - 4);
+
+  const hasError = toolResults.some((result) => result.isError);
+  const borderColor = hasError ? 'red' : 'green';
+
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={borderColor}
+      paddingX={1}
+      width={panelWidth}
+    >
+      <Box justifyContent="space-between">
+        <Text color={borderColor} bold>Tool Results</Text>
+        <Text dimColor>{toolResults.length}</Text>
+      </Box>
+      {toolResults.map((result, index) => {
+        const statusIcon = result.isError ? '✗' : '✓';
+        const statusColor = result.isError ? 'red' : 'green';
+        const title = result.toolName ? `${result.toolName}` : `Result ${index + 1}`;
+        const maxLine = Math.max(1, innerWidth - 2);
+        const summaryLine = truncate(title, maxLine);
+        const resultText = indentMultiline(truncateToolResult(result, 4, 400, { verbose: verboseTools }), '  ');
+        return (
+          <Box key={`${result.toolCallId}-${index}`} flexDirection="column" marginTop={1}>
+            <Box>
+              <Text color={statusColor}>{statusIcon} </Text>
+              <Text color={statusColor} bold>{summaryLine}</Text>
+            </Box>
+            <Box marginLeft={2}>
+              <Text dimColor>↳ {resultText}</Text>
+            </Box>
+            {!verboseTools && result.truncated && (
               <Box marginLeft={2}>
                 <Text dimColor>↳ (truncated · Ctrl+O for full output)</Text>
               </Box>

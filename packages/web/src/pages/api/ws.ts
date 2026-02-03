@@ -1,36 +1,14 @@
-import type { NextApiRequest } from 'next';
-import type { Server as HTTPServer } from 'http';
-import { WebSocketServer } from 'ws';
 import type { StreamChunk } from '@hasna/assistants-shared';
-import { randomUUID } from 'crypto';
 import type { ClientMessage, ServerMessage } from '@/lib/protocol';
-import { subscribeToSession, sendSessionMessage, stopSession } from '@/lib/server/agent-pool';
+import { subscribeToSession, sendSessionMessage, stopSession, closeSession } from '@/lib/server/agent-pool';
+import { WebSocketServer } from 'ws';
 
-type NextApiResponseWithSocket = {
-  socket: {
-    server: HTTPServer & { wss?: WebSocketServer };
-  };
-  end: () => void;
-};
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-function chunkToServerMessage(chunk: StreamChunk, messageId?: string | null): ServerMessage | null {
+function chunkToServerMessage(chunk: StreamChunk): ServerMessage | null {
   if (chunk.type === 'text' && chunk.content) {
-    return { type: 'text_delta', content: chunk.content, messageId: messageId ?? undefined };
+    return { type: 'text_delta', content: chunk.content };
   }
   if (chunk.type === 'tool_use' && chunk.toolCall) {
-    return {
-      type: 'tool_call',
-      id: chunk.toolCall.id,
-      name: chunk.toolCall.name,
-      input: chunk.toolCall.input,
-      messageId: messageId ?? undefined,
-    };
+    return { type: 'tool_call', id: chunk.toolCall.id, name: chunk.toolCall.name, input: chunk.toolCall.input };
   }
   if (chunk.type === 'tool_result' && chunk.toolResult) {
     return {
@@ -38,144 +16,88 @@ function chunkToServerMessage(chunk: StreamChunk, messageId?: string | null): Se
       id: chunk.toolResult.toolCallId,
       output: chunk.toolResult.content,
       isError: !!chunk.toolResult.isError,
-      messageId: messageId ?? undefined,
     };
   }
   if (chunk.type === 'done') {
-    return { type: 'message_complete', messageId: messageId ?? undefined };
+    return { type: 'message_complete' };
   }
   if (chunk.type === 'error' && chunk.error) {
-    return { type: 'error', message: chunk.error, messageId: messageId ?? undefined };
+    return { type: 'error', message: chunk.error };
   }
   return null;
 }
 
-export default function handler(req: NextApiRequest, res: NextApiResponseWithSocket) {
+function sendMessage(ws: { send: (payload: string) => void }, message: ServerMessage) {
+  ws.send(JSON.stringify(message));
+}
+
+export default function handler(_req: any, res: any) {
+  if (!res?.socket?.server) {
+    res?.end?.();
+    return;
+  }
+
   if (!res.socket.server.wss) {
-    const wss = new WebSocketServer({ server: res.socket.server, path: '/api/ws' });
+    const wss = new WebSocketServer({ server: res.socket.server });
     res.socket.server.wss = wss;
 
-    wss.on('connection', (ws) => {
-      let sessionId: string = randomUUID();
+    wss.on('connection', (ws: any) => {
+      let sessionId: string | undefined;
       let unsubscribe: (() => void) | null = null;
-      const pendingMessageIds: string[] = [];
-      let currentMessageId: string | null = null;
-      let suppressNextDone = false;
 
-      const attachListener = async () => {
+      const ensureSubscribed = async (nextSessionId: string) => {
+        if (sessionId === nextSessionId && unsubscribe) return;
         if (unsubscribe) unsubscribe();
+        sessionId = nextSessionId;
         unsubscribe = await subscribeToSession(
           sessionId,
           (chunk) => {
-            if (suppressNextDone && chunk.type !== 'done' && chunk.type !== 'error') {
-              suppressNextDone = false;
-            }
-            const suppressMapping =
-              suppressNextDone && (chunk.type === 'done' || chunk.type === 'error');
-            if (!suppressMapping && !currentMessageId && pendingMessageIds.length > 0) {
-              currentMessageId = pendingMessageIds[0];
-            }
-            const message = chunkToServerMessage(chunk, suppressMapping ? null : currentMessageId);
-            if (message) {
-              ws.send(JSON.stringify(message));
-            }
-            if (chunk.type === 'done' || chunk.type === 'error') {
-              if (!suppressMapping && pendingMessageIds.length > 0) {
-                pendingMessageIds.shift();
-              }
-              currentMessageId = null;
-              if (suppressMapping) {
-                suppressNextDone = false;
-              }
+            const serverMessage = chunkToServerMessage(chunk);
+            if (serverMessage) {
+              sendMessage(ws, serverMessage);
             }
           },
           (error) => {
-            const suppressMapping = suppressNextDone;
-            const messageId = currentMessageId ?? undefined;
-            if (!suppressMapping) {
-              if (currentMessageId) {
-                const idx = pendingMessageIds.indexOf(currentMessageId);
-                if (idx >= 0) {
-                  pendingMessageIds.splice(idx, 1);
-                }
-                currentMessageId = null;
-              } else if (pendingMessageIds.length > 0) {
-                pendingMessageIds.shift();
-              }
-            } else {
-              suppressNextDone = false;
-            }
-            ws.send(JSON.stringify({ type: 'error', message: error.message, messageId }));
+            sendMessage(ws, { type: 'error', message: error.message });
           }
         );
       };
 
-      const switchSession = async (nextSessionId: string) => {
-        if (!nextSessionId || nextSessionId === sessionId) return;
-        sessionId = nextSessionId;
-        pendingMessageIds.length = 0;
-        currentMessageId = null;
-        suppressNextDone = false;
-        await attachListener();
-      };
-
-      attachListener().catch(() => {});
-
-      ws.on('message', async (raw) => {
+      ws.on('message', async (data: any) => {
+        let message: ClientMessage;
         try {
-          const message = JSON.parse(String(raw)) as ClientMessage;
-          if (message.type === 'session' && message.sessionId) {
-            await switchSession(message.sessionId);
+          message = JSON.parse(String(data));
+        } catch {
+          sendMessage(ws, { type: 'error', message: 'Invalid JSON' });
+          return;
+        }
+
+        if (message.type === 'session' && message.sessionId) {
+          await ensureSubscribed(message.sessionId);
+          return;
+        }
+
+        if (message.type === 'cancel') {
+          if (sessionId) {
+            await stopSession(sessionId);
+          }
+          return;
+        }
+
+        if (message.type === 'message') {
+          const nextSessionId = message.sessionId ?? sessionId;
+          if (!nextSessionId) {
+            sendMessage(ws, { type: 'error', message: 'Missing sessionId' });
             return;
           }
-
-          if (message.type === 'message') {
-            if (message.sessionId && message.sessionId !== sessionId) {
-              await switchSession(message.sessionId);
-            }
-            if (message.messageId) {
-              pendingMessageIds.push(message.messageId);
-            }
-            sendSessionMessage(sessionId, message.content).catch((error) => {
-              if (message.messageId) {
-                const idx = pendingMessageIds.indexOf(message.messageId);
-                if (idx >= 0) {
-                  pendingMessageIds.splice(idx, 1);
-                }
-                if (currentMessageId === message.messageId) {
-                  currentMessageId = null;
-                }
-              }
-              ws.send(JSON.stringify({
-                type: 'error',
-                message: error.message,
-                messageId: message.messageId ?? currentMessageId ?? undefined,
-              }));
-            });
-          }
-
-          if (message.type === 'cancel') {
-            if (currentMessageId) {
-              const idx = pendingMessageIds.indexOf(currentMessageId);
-              if (idx >= 0) {
-                pendingMessageIds.splice(idx, 1);
-              }
-              currentMessageId = null;
-              suppressNextDone = true;
-            } else if (pendingMessageIds.length > 0) {
-              pendingMessageIds.shift();
-            }
-            stopSession(sessionId).catch(() => {});
-          }
-        } catch (error) {
-          ws.send(JSON.stringify({ type: 'error', message: error instanceof Error ? error.message : 'Invalid message' }));
+          await ensureSubscribed(nextSessionId);
+          await sendSessionMessage(nextSessionId, message.content);
         }
       });
 
       ws.on('close', () => {
-        if (unsubscribe) {
-          unsubscribe();
-        }
+        if (unsubscribe) unsubscribe();
+        if (sessionId) closeSession(sessionId);
       });
     });
   }

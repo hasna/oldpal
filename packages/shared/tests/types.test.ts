@@ -117,9 +117,15 @@ describe('Tool types', () => {
         description: 'An array',
         items: { type: 'string', description: 'Item' },
       },
+      unionProp: {
+        type: ['array', 'string'],
+        description: 'Array or comma-separated string',
+        items: { type: 'string', description: 'Item' },
+      },
       enumProp: { type: 'string', description: 'Enum', enum: ['a', 'b', 'c'] },
     };
     expect(properties.stringProp.type).toBe('string');
+    expect(Array.isArray(properties.unionProp.type)).toBe(true);
     expect(properties.enumProp.enum).toContain('b');
   });
 });

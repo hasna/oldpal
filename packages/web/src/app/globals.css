@@ -24,15 +24,29 @@
   --input: 215 27% 20%;
   --ring: 199 89% 48%;
   --radius: 0.75rem;
-}
+  --chart-1: 199 89% 48%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
 
-body {
-  @apply bg-slate-950 text-slate-100;
+  /* Dark sidebar to match the app theme */
+  --sidebar-background: 222 47% 8%;
+  --sidebar-foreground: 210 40% 96%;
+  --sidebar-primary: 199 89% 48%;
+  --sidebar-primary-foreground: 222 47% 11%;
+  --sidebar-accent: 215 28% 14%;
+  --sidebar-accent-foreground: 210 40% 96%;
+  --sidebar-border: 215 27% 16%;
+  --sidebar-ring: 199 89% 48%;
 }
 
 @layer base {
   * {
-    @apply border-slate-800;
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }
 

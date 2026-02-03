@@ -58,8 +58,10 @@ export function ProcessingIndicator({
 
   const parts: string[] = [];
   parts.push('esc to interrupt');
-  parts.push(formatTime(elapsed));
-  parts.push(`↓ ${formatTokens(tokenCount)} tokens`);
+  if (startTime) {
+    parts.push(formatTime(elapsed));
+    parts.push(`↓ ${formatTokens(tokenCount)} tokens`);
+  }
   if (isThinking) {
     parts.push('thinking');
   }

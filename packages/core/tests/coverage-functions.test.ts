@@ -6,6 +6,7 @@ import { __test__ as builtinTest } from '../src/commands/builtin';
 import { __test__ as fsTest } from '../src/tools/filesystem';
 import { __test__ as imageTest } from '../src/tools/image';
 import { __test__ as webTest, setDnsLookupForTests } from '../src/tools/web';
+import { getRuntime } from '../src/runtime';
 
 
 describe('Function coverage helpers', () => {
@@ -53,18 +54,19 @@ describe('Function coverage helpers', () => {
   });
 
   test('image getViuPath handles missing viu', async () => {
-    const originalDollar = (Bun as any).$;
-    (Bun as any).$ = () => ({
+    const runtime = getRuntime();
+    const originalShell = runtime.shell;
+    runtime.shell = () => ({
       quiet: () => ({
         nothrow: async () => ({ exitCode: 1 }),
       }),
-    });
+    }) as any;
 
     try {
       const result = await imageTest.getViuPath();
       expect(result).toBeNull();
     } finally {
-      (Bun as any).$ = originalDollar;
+      runtime.shell = originalShell;
     }
   });
 

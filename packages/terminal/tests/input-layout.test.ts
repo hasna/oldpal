@@ -40,6 +40,19 @@ describe('input layout', () => {
     expect(layout.cursorCol).toBe(0);
   });
 
+  test('maps cursor at end of line to that line', () => {
+    const layout = buildLayout('abc\ndef', 3, 10);
+    expect(layout.cursorRow).toBe(0);
+    expect(layout.cursorCol).toBe(3);
+  });
+
+  test('maps cursor at wrapped segment boundary to next segment', () => {
+    const layout = buildLayout('abcdef', 4, 2);
+    expect(layout.displayLines.map((line) => line.text)).toEqual(['ab', 'cd', 'ef']);
+    expect(layout.cursorRow).toBe(2);
+    expect(layout.cursorCol).toBe(0);
+  });
+
   test('falls back to last line when cursor at end', () => {
     const layout = buildLayout('one', 3, 10);
     expect(layout.cursorRow).toBe(0);

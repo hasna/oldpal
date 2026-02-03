@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { randomUUID } from 'crypto';
 import { db } from '@/db';
 import { agentMessages, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
@@ -94,16 +93,16 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     // Generate thread ID if not provided
-    const threadId = data.threadId || randomUUID();
+    const threadId = data.threadId || crypto.randomUUID();
 
     const [newMessage] = await db
       .insert(agentMessages)
       .values({
         threadId,
-        parentId: data.parentId,
-        fromAgentId: data.fromAgentId,
+        parentId: data.parentId || null,
+        fromAgentId: data.fromAgentId || null,
         toAgentId: data.toAgentId,
-        subject: data.subject,
+        subject: data.subject || null,
         body: data.body,
         priority: data.priority,
       })

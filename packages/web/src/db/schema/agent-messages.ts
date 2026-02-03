@@ -1,4 +1,5 @@
 import { pgTable, uuid, varchar, text, timestamp, pgEnum } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 import { agents } from './agents';
 
 export const messagePriorityEnum = pgEnum('message_priority', ['low', 'normal', 'high', 'urgent']);
@@ -18,6 +19,19 @@ export const agentMessages = pgTable('agent_messages', {
   injectedAt: timestamp('injected_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+export const agentMessagesRelations = relations(agentMessages, ({ one }) => ({
+  fromAgent: one(agents, {
+    fields: [agentMessages.fromAgentId],
+    references: [agents.id],
+    relationName: 'fromAgent',
+  }),
+  toAgent: one(agents, {
+    fields: [agentMessages.toAgentId],
+    references: [agents.id],
+    relationName: 'toAgent',
+  }),
+}));
 
 export type AgentMessage = typeof agentMessages.$inferSelect;
 export type NewAgentMessage = typeof agentMessages.$inferInsert;

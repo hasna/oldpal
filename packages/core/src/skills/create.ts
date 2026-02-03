@@ -28,7 +28,7 @@ function slugify(input: string): string {
   return input
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9\s-_]/g, '')
+    .replace(/[^a-z0-9\s_-]/g, '')
     .replace(/[\s_]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
@@ -39,7 +39,8 @@ function normalizeName(rawName: string): { skillName: string; dirName: string } 
   if (!trimmed) {
     throw new Error('Skill name is required.');
   }
-  const withoutPrefix = trimmed.startsWith('skill-') ? trimmed.slice('skill-'.length) : trimmed;
+  const prefixMatch = trimmed.match(/^skill-/i);
+  const withoutPrefix = prefixMatch ? trimmed.slice(prefixMatch[0].length) : trimmed;
   if (/skill/i.test(withoutPrefix)) {
     throw new Error('Skill name should not include the word "skill".');
   }

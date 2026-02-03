@@ -62,6 +62,7 @@ import { createInboxManager, registerInboxTools, type InboxManager } from '../in
 import { createWalletManager, registerWalletTools, type WalletManager } from '../wallet';
 import { createSecretsManager, registerSecretsTools, type SecretsManager } from '../secrets';
 import { JobManager, createJobTools } from '../jobs';
+import { createMessagesManager, registerMessagesTools, type MessagesManager } from '../messages';
 
 export interface AgentLoopOptions {
   config?: AssistantsConfig;
@@ -89,7 +90,7 @@ export class AgentLoop {
   private heartbeatRecovery: RecoveryManager | null = null;
   private lastUserMessage: string | null = null;
   private lastToolName: string | null = null;
-  private pendingToolCalls: string[] = [];
+  private pendingToolCalls: Map<string, string> = new Map();
   private energyManager: EnergyManager | null = null;
   private energyEffects: EnergyEffects | null = null;
   private lastEnergyLevel: EnergyEffects['level'] | null = null;
@@ -125,6 +126,8 @@ export class AgentLoop {
   private walletManager: WalletManager | null = null;
   private secretsManager: SecretsManager | null = null;
   private jobManager: JobManager | null = null;
+  private messagesManager: MessagesManager | null = null;
+  private pendingMessagesContext: string | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
   private activeProjectId: string | null = null;
@@ -285,6 +288,16 @@ export class AgentLoop {
       registerSecretsTools(this.toolRegistry, () => this.secretsManager);
     }
 
+    // Initialize messages if enabled
+    if (this.config?.messages?.enabled) {
+      const assistant = this.assistantManager?.getActive();
+      const agentId = assistant?.id || this.sessionId;
+      const agentName = assistant?.name || 'assistant';
+      this.messagesManager = createMessagesManager(agentId, agentName, this.config.messages);
+      await this.messagesManager.initialize();
+      registerMessagesTools(this.toolRegistry, () => this.messagesManager);
+    }
+
     // Initialize jobs system if enabled
     if (this.config?.jobs?.enabled !== false) {
       this.jobManager = new JobManager(this.config?.jobs || {}, this.sessionId);
@@ -364,6 +377,10 @@ export class AgentLoop {
     if (this.isRunning) {
       throw new Error('Agent is already processing a message');
     }
+
+    // Inject pending messages before processing
+    await this.injectPendingMessages();
+
     await this.runMessage(userMessage, 'user');
   }
 
@@ -820,7 +837,7 @@ export class AgentLoop {
       this.consumeEnergy('toolCall');
       this.recordHeartbeatActivity('tool');
       this.lastToolName = toolCall.name;
-      this.pendingToolCalls.push(toolCall.name);
+      this.pendingToolCalls.set(toolCall.id, toolCall.name);
       this.onToolStart?.(toolCall);
 
       // Execute the tool
@@ -848,7 +865,7 @@ export class AgentLoop {
 
       results.push(result);
 
-      this.pendingToolCalls = this.pendingToolCalls.filter((name) => name !== toolCall.name);
+      this.pendingToolCalls.delete(toolCall.id);
     }
 
     return results;
@@ -911,6 +928,7 @@ export class AgentLoop {
       getInboxManager: () => this.inboxManager,
       getWalletManager: () => this.walletManager,
       getSecretsManager: () => this.secretsManager,
+      getMessagesManager: () => this.messagesManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
           this.identityContext = await this.identityManager.buildSystemPromptContext();
@@ -1069,6 +1087,21 @@ export class AgentLoop {
   stop(): void {
     this.shouldStop = true;
     this.setHeartbeatState('stopped');
+  }
+
+  /**
+   * Shutdown background systems and timers
+   */
+  shutdown(): void {
+    this.shouldStop = true;
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    this.heartbeatManager?.stop();
+    this.energyManager?.stop();
+    this.voiceManager?.stopSpeaking();
+    this.voiceManager?.stopListening();
   }
 
   /**
@@ -1275,7 +1308,7 @@ export class AgentLoop {
         cwd: this.cwd,
         lastMessage: this.lastUserMessage || undefined,
         lastTool: this.lastToolName || undefined,
-        pendingToolCalls: this.pendingToolCalls.length > 0 ? [...this.pendingToolCalls] : undefined,
+        pendingToolCalls: this.pendingToolCalls.size > 0 ? Array.from(this.pendingToolCalls.values()) : undefined,
       },
       timestamp: new Date().toISOString(),
     });
@@ -1334,6 +1367,41 @@ export class AgentLoop {
     if (!systemPrompt) return systemPrompt;
     if (!this.energyEffects) return systemPrompt;
     return applyPersonality(systemPrompt, this.energyEffects);
+  }
+
+  /**
+   * Inject pending messages into context at turn start
+   */
+  private async injectPendingMessages(): Promise<void> {
+    if (!this.messagesManager) return;
+
+    try {
+      if (this.pendingMessagesContext) {
+        const previous = this.pendingMessagesContext.trim();
+        this.context.removeSystemMessages((content) => content.trim() === previous);
+        this.pendingMessagesContext = null;
+      }
+
+      const pending = await this.messagesManager.getUnreadForInjection();
+      if (pending.length === 0) {
+        return;
+      }
+
+      // Build and store context string
+      this.pendingMessagesContext = this.messagesManager.buildInjectionContext(pending);
+
+      // Add as system message so it appears in context
+      if (this.pendingMessagesContext) {
+        this.context.addSystemMessage(this.pendingMessagesContext);
+      }
+
+      // Mark messages as injected
+      await this.messagesManager.markInjected(pending.map((m) => m.id));
+    } catch (error) {
+      // Log but don't fail - messages are non-critical
+      console.error('Failed to inject pending messages:', error);
+      this.pendingMessagesContext = null;
+    }
   }
 
   private startHeartbeat(): void {

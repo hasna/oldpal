@@ -144,12 +144,22 @@ export class HookExecutor {
         stderr: 'pipe',
       });
 
-      // Write input as JSON to stdin
+      // Write input as JSON to stdin (handle Web streams and Bun FileSink)
       const inputData = new TextEncoder().encode(JSON.stringify(input));
-      const writer = proc.stdin?.getWriter();
-      if (writer) {
+      const stdin = proc.stdin as unknown as {
+        getWriter?: () => { write: (chunk: Uint8Array) => Promise<void> | void; close: () => Promise<void> | void };
+        write?: (chunk: Uint8Array) => Promise<void> | void;
+        end?: () => Promise<void> | void;
+      } | null;
+      if (stdin?.getWriter) {
+        const writer = stdin.getWriter();
         await writer.write(inputData);
         await writer.close();
+      } else if (stdin?.write) {
+        await stdin.write(inputData);
+        if (stdin.end) {
+          await stdin.end();
+        }
       }
 
       // Set up timeout

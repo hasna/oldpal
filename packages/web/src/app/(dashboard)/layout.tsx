@@ -1,17 +1,44 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { AppSidebar } from '@/components/app-sidebar';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import { Separator } from '@/components/ui/separator';
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
+const pathToBreadcrumb: Record<string, { parent?: string; label: string }> = {
+  '/chat': { label: 'Chat' },
+  '/sessions': { parent: 'Chat', label: 'Sessions' },
+  '/agents': { label: 'Agents' },
+  '/agents/new': { parent: 'Agents', label: 'Create Agent' },
+  '/messages': { label: 'Messages' },
+  '/settings': { label: 'Settings' },
+  '/settings/api-keys': { parent: 'Settings', label: 'API Keys' },
+  '/admin/users': { parent: 'Admin', label: 'Users' },
+  '/admin/stats': { parent: 'Admin', label: 'Stats' },
+};
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
-  const { isAuthenticated, isLoading, user, logout } = useAuth();
+  const pathname = usePathname();
+  const { isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -21,8 +48,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-400"></div>
+      <div className="min-h-screen flex items-center justify-center bg-sidebar">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -31,72 +58,39 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return null;
   }
 
-  return (
-    <div className="min-h-screen bg-slate-950">
-      {/* Top Navigation */}
-      <header className="border-b border-slate-800 bg-slate-900/50">
-        <div className="flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-6">
-            <Link href="/chat" className="text-lg font-semibold text-slate-100">
-              Assistants
-            </Link>
-            <nav className="flex items-center gap-4">
-              <Link
-                href="/chat"
-                className="text-sm text-slate-400 hover:text-slate-100 transition-colors"
-              >
-                Chat
-              </Link>
-              <Link
-                href="/sessions"
-                className="text-sm text-slate-400 hover:text-slate-100 transition-colors"
-              >
-                Sessions
-              </Link>
-              <Link
-                href="/agents"
-                className="text-sm text-slate-400 hover:text-slate-100 transition-colors"
-              >
-                Agents
-              </Link>
-              <Link
-                href="/messages"
-                className="text-sm text-slate-400 hover:text-slate-100 transition-colors"
-              >
-                Messages
-              </Link>
-              {user?.role === 'admin' && (
-                <Link
-                  href="/admin/users"
-                  className="text-sm text-slate-400 hover:text-slate-100 transition-colors"
-                >
-                  Admin
-                </Link>
-              )}
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/settings"
-              className="text-sm text-slate-400 hover:text-slate-100 transition-colors"
-            >
-              Settings
-            </Link>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-400">{user?.name || user?.email}</span>
-              <button
-                onClick={() => logout()}
-                className="text-sm text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                Sign out
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+  const currentPath = pathToBreadcrumb[pathname] || { label: 'Dashboard' };
 
-      {/* Main Content */}
-      <main className="flex-1">{children}</main>
-    </div>
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2">
+          <div className="flex items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                {currentPath.parent && (
+                  <>
+                    <BreadcrumbItem className="hidden md:block">
+                      <BreadcrumbLink href="#">
+                        {currentPath.parent}
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator className="hidden md:block" />
+                  </>
+                )}
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{currentPath.label}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          {children}
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

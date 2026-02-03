@@ -47,7 +47,22 @@ export function buildLayout(text: string, position: number, width: number): Inpu
   let matched = false;
   for (let i = 0; i < displayLines.length; i += 1) {
     const line = displayLines[i];
+    if (line.end === line.start && clampedPos === line.start) {
+      cursorRow = i;
+      cursorCol = 0;
+      matched = true;
+      break;
+    }
     if (clampedPos >= line.start && clampedPos < line.end) {
+      cursorRow = i;
+      cursorCol = clampedPos - line.start;
+      matched = true;
+      break;
+    }
+    if (
+      clampedPos === line.end &&
+      (i === displayLines.length - 1 || displayLines[i + 1].start !== line.end)
+    ) {
       cursorRow = i;
       cursorCol = clampedPos - line.start;
       matched = true;

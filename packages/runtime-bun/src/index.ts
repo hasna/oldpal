@@ -89,7 +89,7 @@ class BunShellCommand implements ShellCommand {
     // This is necessary because Bun.$ template literals escape interpolations
     const proc = Bun.spawn(['sh', '-c', this.command], {
       cwd: this._cwd,
-      env: this._env ? { ...process.env, ...this._env } : undefined,
+      env: { ...process.env, ...(this._env ?? {}) },
       stdout: 'pipe',
       stderr: 'pipe',
     });

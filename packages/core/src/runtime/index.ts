@@ -9,6 +9,15 @@ import type { Runtime } from './types';
 
 let currentRuntime: Runtime | null = null;
 
+if (typeof (globalThis as { Bun?: unknown }).Bun !== 'undefined') {
+  try {
+    const { bunRuntime } = await import('@hasna/runtime-bun');
+    currentRuntime = bunRuntime as Runtime;
+  } catch {
+    // Ignore and fall through to explicit error below.
+  }
+}
+
 /**
  * Set the runtime implementation to use.
  * Must be called before any code that uses getRuntime().

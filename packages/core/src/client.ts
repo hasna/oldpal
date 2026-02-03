@@ -16,6 +16,7 @@ export class EmbeddedClient implements AssistantClient {
   private logger: Logger;
   private session: SessionStorage;
   private messages: Message[] = [];
+  private messageIds: Set<string> = new Set();
   private cwd: string;
   private startedAt: string;
   private initialMessages: Message[] | null = null;
@@ -94,12 +95,14 @@ export class EmbeddedClient implements AssistantClient {
       }
     }
     if (this.initialMessages && this.initialMessages.length > 0) {
+      const contextSeed = this.selectContextSeed(this.initialMessages);
       if (typeof (this.agent as any).importContext === 'function') {
-        (this.agent as any).importContext(this.initialMessages);
+        (this.agent as any).importContext(contextSeed);
       } else {
-        this.agent.getContext().import(this.initialMessages);
+        this.agent.getContext().import(contextSeed);
       }
       this.messages = [...this.initialMessages];
+      this.messageIds = new Set(this.initialMessages.map((msg) => msg.id));
     }
     this.initialized = true;
     this.logger.info('Agent initialized', {
@@ -143,7 +146,7 @@ export class EmbeddedClient implements AssistantClient {
       const context = this.agent.getContext();
       const contextMessages = context.getMessages();
       if (contextMessages.length > 0) {
-        this.messages = contextMessages;
+        this.mergeMessages(contextMessages);
         const lastMessage = contextMessages.slice(-1)[0];
         if (lastMessage?.role === 'assistant') {
           this.logger.info('Assistant response', {
@@ -251,6 +254,9 @@ export class EmbeddedClient implements AssistantClient {
    */
   disconnect(): void {
     this.logger.info('Session ended');
+    if (typeof (this.agent as any).shutdown === 'function') {
+      (this.agent as any).shutdown();
+    }
     this.saveSession();
   }
 
@@ -331,6 +337,7 @@ export class EmbeddedClient implements AssistantClient {
   clearConversation(): void {
     this.agent.clearConversation();
     this.messages = [];
+    this.messageIds.clear();
     this.logger.info('Conversation cleared');
   }
 
@@ -368,5 +375,34 @@ export class EmbeddedClient implements AssistantClient {
   clearQueue(): void {
     this.messageQueue = [];
     this.logger.info('Message queue cleared');
+  }
+
+  private mergeMessages(contextMessages: Message[]): void {
+    if (contextMessages.length === 0) return;
+    if (this.messages.length === 0 && this.messageIds.size === 0) {
+      this.messages = [...contextMessages];
+      this.messageIds = new Set(contextMessages.map((msg) => msg.id));
+      return;
+    }
+    for (const msg of contextMessages) {
+      if (!this.messageIds.has(msg.id)) {
+        this.messages.push(msg);
+        this.messageIds.add(msg.id);
+      }
+    }
+  }
+
+  private selectContextSeed(messages: Message[]): Message[] {
+    if (messages.length === 0) return [];
+    const contextInfo = typeof (this.agent as any).getContextInfo === 'function'
+      ? (this.agent as any).getContextInfo()
+      : null;
+    const maxMessages = contextInfo?.config?.maxMessages ?? 100;
+    if (messages.length <= maxMessages) return messages;
+    let startIndex = messages.length - maxMessages;
+    if (startIndex > 0 && messages[startIndex]?.toolResults && messages[startIndex - 1]) {
+      startIndex -= 1;
+    }
+    return messages.slice(Math.max(0, startIndex));
   }
 }

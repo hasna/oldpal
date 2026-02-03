@@ -6,6 +6,7 @@ import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
 import { buildDisplayMessages } from './messageRender';
+import { estimateDisplayMessagesLines, trimActivityLogByLines, trimDisplayMessagesByLines } from './messageLines';
 import { Status } from './Status';
 import { Spinner } from './Spinner';
 import { ProcessingIndicator } from './ProcessingIndicator';
@@ -118,14 +119,20 @@ export function App({ cwd, version }: AppProps) {
   const isProcessingRef = useRef(isProcessing);
   const processingStartTimeRef = useRef<number | undefined>(processingStartTime);
   const pendingSendsRef = useRef<Array<{ id: string; sessionId: string; mode: 'inline' | 'queued' }>>([]);
-  const askUserStateRef = useRef<AskUserState | null>(null);
+  const askUserStateRef = useRef<Map<string, AskUserState>>(new Map());
+  const clearPendingSend = useCallback((id: string, sessionId: string) => {
+    pendingSendsRef.current = pendingSendsRef.current.filter(
+      (entry) => entry.id !== id || entry.sessionId !== sessionId
+    );
+    setInlinePending((prev) => prev.filter((msg) => msg.id !== id));
+  }, []);
 
   // Native terminal scrolling is used - no manual scroll tracking needed
 
   const beginAskUser = useCallback((sessionId: string, request: AskUserRequest) => {
     return new Promise<AskUserResponse>((resolve, reject) => {
-      if (askUserStateRef.current) {
-        reject(new Error('Another interview is already in progress.'));
+      if (askUserStateRef.current.has(sessionId)) {
+        reject(new Error('Another interview is already in progress for this session.'));
         return;
       }
       const state: AskUserState = {
@@ -136,18 +143,24 @@ export function App({ cwd, version }: AppProps) {
         resolve,
         reject,
       };
-      askUserStateRef.current = state;
-      setAskUserState(state);
+      askUserStateRef.current.set(sessionId, state);
+      if (sessionId === activeSessionId) {
+        setAskUserState(state);
+      }
     });
-  }, []);
+  }, [activeSessionId]);
 
-  const cancelAskUser = useCallback((reason: string) => {
-    const current = askUserStateRef.current;
+  const cancelAskUser = useCallback((reason: string, sessionId?: string | null) => {
+    const activeId = sessionId ?? activeSessionId;
+    if (!activeId) return;
+    const current = askUserStateRef.current.get(activeId);
     if (!current) return;
-    askUserStateRef.current = null;
-    setAskUserState(null);
+    askUserStateRef.current.delete(activeId);
+    if (activeId === activeSessionId) {
+      setAskUserState(null);
+    }
     current.reject(new Error(reason));
-  }, []);
+  }, [activeSessionId]);
 
   const submitAskAnswer = useCallback((answer: string) => {
     setAskUserState((prev) => {
@@ -156,7 +169,7 @@ export function App({ cwd, version }: AppProps) {
       const answers = { ...prev.answers, [question.id]: answer };
       const nextIndex = prev.index + 1;
       if (nextIndex >= prev.request.questions.length) {
-        askUserStateRef.current = null;
+        askUserStateRef.current.delete(prev.sessionId);
         prev.resolve({ answers });
         return null;
       }
@@ -165,7 +178,7 @@ export function App({ cwd, version }: AppProps) {
         index: nextIndex,
         answers,
       };
-      askUserStateRef.current = nextState;
+      askUserStateRef.current.set(prev.sessionId, nextState);
       return nextState;
     });
   }, []);
@@ -262,7 +275,7 @@ export function App({ cwd, version }: AppProps) {
       content = content ? `${content}\n\n[error]` : '[error]';
     }
 
-    if ((status === 'stopped' || status === 'interrupted') && processingStartTimeRef.current) {
+    if (processingStartTimeRef.current) {
       const workedFor = formatElapsedDuration(Date.now() - processingStartTimeRef.current);
       content = content ? `${content}\n\n✻ Worked for ${workedFor}` : `✻ Worked for ${workedFor}`;
     }
@@ -317,6 +330,7 @@ export function App({ cwd, version }: AppProps) {
   // Load session UI state
   const loadSessionState = useCallback((sessionId: string) => {
     const state = sessionUIStates.current.get(sessionId);
+    const askState = askUserStateRef.current.get(sessionId) || null;
     if (state) {
       setMessages(state.messages);
       setCurrentResponse(state.currentResponse);
@@ -333,6 +347,7 @@ export function App({ cwd, version }: AppProps) {
       setProcessingStartTime(state.processingStartTime);
       setCurrentTurnTokens(state.currentTurnTokens);
       setError(state.error);
+      setAskUserState(askState);
     } else {
       // New session - reset state
       setMessages([]);
@@ -350,6 +365,7 @@ export function App({ cwd, version }: AppProps) {
       setProcessingStartTime(undefined);
       setCurrentTurnTokens(0);
       setError(null);
+      setAskUserState(askState);
     }
   }, []);
 
@@ -410,17 +426,22 @@ export function App({ cwd, version }: AppProps) {
       if (!isProcessingRef.current) {
         setMessages((prev) => {
           if (prev.length === 0) return prev;
-          const last = prev[prev.length - 1];
-          if (last.role !== 'assistant') return prev;
-          const existing = last.toolResults || [];
-          if (existing.some((r) => r.toolCallId === chunk.toolResult!.toolCallId)) {
-            return prev;
+          const toolCallId = chunk.toolResult!.toolCallId;
+          for (let i = prev.length - 1; i >= 0; i -= 1) {
+            const msg = prev[i];
+            if (msg.role !== 'assistant' || !msg.toolCalls) continue;
+            if (!msg.toolCalls.some((call) => call.id === toolCallId)) continue;
+            const existing = msg.toolResults || [];
+            if (existing.some((r) => r.toolCallId === toolCallId)) {
+              return prev;
+            }
+            const updated: Message = {
+              ...msg,
+              toolResults: [...existing, chunk.toolResult!],
+            };
+            return [...prev.slice(0, i), updated, ...prev.slice(i + 1)];
           }
-          const updated: Message = {
-            ...last,
-            toolResults: [...existing, chunk.toolResult!],
-          };
-          return [...prev.slice(0, -1), updated];
+          return prev;
         });
         return;
       }
@@ -586,8 +607,16 @@ export function App({ cwd, version }: AppProps) {
     isProcessingRef.current = true;
 
     registryRef.current.setProcessing(activeSession.id, true);
-    await activeSession.client.send(nextMessage.content);
-  }, [activeSessionId]);
+    try {
+      await activeSession.client.send(nextMessage.content);
+    } catch (err) {
+      clearPendingSend(nextMessage.id, activeSessionId);
+      setError(err instanceof Error ? err.message : String(err));
+      setIsProcessing(false);
+      isProcessingRef.current = false;
+      registryRef.current.setProcessing(activeSession.id, false);
+    }
+  }, [activeSessionId, clearPendingSend]);
 
   const activeQueue = activeSessionId
     ? messageQueue.filter((msg) => msg.sessionId === activeSessionId)
@@ -609,7 +638,9 @@ export function App({ cwd, version }: AppProps) {
 
   const MAX_QUEUED_PREVIEW = 3;
   const inlineCount = activeInline.length;
-  const activeAskQuestion = askUserState?.request.questions[askUserState.index];
+  const activeAskQuestion = askUserState && askUserState.sessionId === activeSessionId
+    ? askUserState.request.questions[askUserState.index]
+    : undefined;
   const askPlaceholder = activeAskQuestion?.placeholder || activeAskQuestion?.question || 'Answer the question...';
   const hasPendingTools = useMemo(() => {
     const toolResultIds = new Set<string>();
@@ -639,16 +670,33 @@ export function App({ cwd, version }: AppProps) {
     () => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth }),
     [messages, wrapChars, renderWidth]
   );
-  const streamingMessages = useMemo(() => {
-    if (!isProcessing || !currentResponse.trim()) return [];
+
+  const reservedLines = 12;
+  const dynamicBudget = Math.max(6, rows - reservedLines);
+
+  const streamingTrim = useMemo(() => {
+    if (!isProcessing || !currentResponse.trim()) {
+      return { messages: [], trimmed: false };
+    }
     const streamingMessage: Message = {
       id: 'streaming-response',
       role: 'assistant',
       content: currentResponse,
       timestamp: now(),
     };
-    return buildDisplayMessages([streamingMessage], MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth });
-  }, [currentResponse, isProcessing, wrapChars, renderWidth]);
+    const display = buildDisplayMessages([streamingMessage], MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth });
+    return trimDisplayMessagesByLines(display, dynamicBudget, renderWidth);
+  }, [currentResponse, isProcessing, wrapChars, renderWidth, dynamicBudget]);
+  const streamingMessages = streamingTrim.messages;
+  const streamingTrimmed = streamingTrim.trimmed;
+  const streamingLineCount = useMemo(
+    () => estimateDisplayMessagesLines(streamingMessages, renderWidth),
+    [streamingMessages, renderWidth]
+  );
+  const activityTrim = useMemo(() => {
+    const activityBudget = Math.max(4, dynamicBudget - streamingLineCount);
+    return trimActivityLogByLines(activityLog, wrapChars, renderWidth, activityBudget);
+  }, [activityLog, wrapChars, renderWidth, dynamicBudget, streamingLineCount]);
 
   // Process queue when not processing
   useEffect(() => {
@@ -733,8 +781,9 @@ export function App({ cwd, version }: AppProps) {
 
     // Ctrl+C: stop processing (input handles clearing when idle)
     if (key.ctrl && input === 'c') {
-      if (askUserStateRef.current) {
-        cancelAskUser('Cancelled by user');
+      const hasAsk = activeSessionId ? askUserStateRef.current.has(activeSessionId) : false;
+      if (hasAsk) {
+        cancelAskUser('Cancelled by user', activeSessionId);
       }
       if ((isProcessing || hasPendingTools) && activeSession) {
         activeSession.client.stop();
@@ -746,8 +795,11 @@ export function App({ cwd, version }: AppProps) {
         registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
         isProcessingRef.current = false;
+        return;
       }
-      return;
+      if (hasAsk) {
+        return;
+      }
     }
     // Ctrl+O: toggle full tool output
     if (key.ctrl && input === 'o') {
@@ -756,8 +808,8 @@ export function App({ cwd, version }: AppProps) {
     }
     // Escape: stop processing or close session selector
     if (key.escape) {
-      if (askUserStateRef.current) {
-        cancelAskUser('Cancelled by user');
+      if (activeSessionId && askUserStateRef.current.has(activeSessionId)) {
+        cancelAskUser('Cancelled by user', activeSessionId);
       }
       if ((isProcessing || hasPendingTools) && activeSession) {
         activeSession.client.stop();
@@ -779,7 +831,7 @@ export function App({ cwd, version }: AppProps) {
   // Handle message submission
   const handleSubmit = useCallback(
     async (input: string, mode: 'normal' | 'interrupt' | 'queue' | 'inline' = 'normal') => {
-      if (askUserStateRef.current) {
+      if (activeSessionId && askUserStateRef.current.has(activeSessionId)) {
         submitAskAnswer(input.trim());
         return;
       }
@@ -812,6 +864,21 @@ export function App({ cwd, version }: AppProps) {
         // No arg or invalid - show session list
         setShowSessionSelector(true);
         return;
+      }
+
+      const isClearCommand = trimmedInput === '/clear' || trimmedInput === '/new';
+
+      if (isClearCommand && isProcessing) {
+        activeSession.client.stop();
+        const finalized = finalizeResponse('interrupted');
+        if (finalized) {
+          skipNextDoneRef.current = true;
+        }
+        resetTurnState();
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        registry.setProcessing(activeSession.id, false);
+        await new Promise((r) => setTimeout(r, 100));
       }
 
       // Queue mode: add to queue for later
@@ -864,7 +931,12 @@ export function App({ cwd, version }: AppProps) {
           },
         ]);
         pendingSendsRef.current.push({ id: inlineId, sessionId: activeSessionId, mode: 'inline' });
-        await activeSession.client.send(trimmedInput);
+        try {
+          await activeSession.client.send(trimmedInput);
+        } catch (err) {
+          clearPendingSend(inlineId, activeSessionId);
+          setError(err instanceof Error ? err.message : String(err));
+        }
         return;
       }
 
@@ -884,19 +956,45 @@ export function App({ cwd, version }: AppProps) {
         await new Promise((r) => setTimeout(r, 100));
       }
 
-      // Add user message
-      const userMessage: Message = {
-        id: generateId(),
-        role: 'user',
-        content: trimmedInput,
-        timestamp: now(),
-      };
-      setMessages((prev) => {
-        if (prev.some((msg) => msg.id === userMessage.id)) {
-          return prev;
-        }
-        return [...prev, userMessage];
-      });
+      if (isClearCommand) {
+        // Reset UI state for this session before executing clear on the agent.
+        setMessages([]);
+        setMessageQueue((prev) => prev.filter((msg) => msg.sessionId !== activeSession.id));
+        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== activeSession.id));
+        pendingSendsRef.current = pendingSendsRef.current.filter(
+          (entry) => entry.sessionId !== activeSession.id
+        );
+        setActivityLog([]);
+        activityLogRef.current = [];
+        sessionUIStates.current.set(activeSession.id, {
+          messages: [],
+          currentResponse: '',
+          activityLog: [],
+          toolCalls: [],
+          toolResults: [],
+          tokenUsage,
+          energyState,
+          voiceState,
+          identityInfo,
+          processingStartTime: undefined,
+          currentTurnTokens: 0,
+          error: null,
+        });
+      } else {
+        // Add user message
+        const userMessage: Message = {
+          id: generateId(),
+          role: 'user',
+          content: trimmedInput,
+          timestamp: now(),
+        };
+        setMessages((prev) => {
+          if (prev.some((msg) => msg.id === userMessage.id)) {
+            return prev;
+          }
+          return [...prev, userMessage];
+        });
+      }
 
       // Reset state
       skipNextDoneRef.current = false;
@@ -917,7 +1015,14 @@ export function App({ cwd, version }: AppProps) {
       registry.setProcessing(activeSession.id, true);
 
       // Send to agent
-      await activeSession.client.send(trimmedInput);
+      try {
+        await activeSession.client.send(trimmedInput);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        registry.setProcessing(activeSession.id, false);
+      }
     },
     [
       activeSession,
@@ -930,6 +1035,7 @@ export function App({ cwd, version }: AppProps) {
       resetTurnState,
       activeSessionId,
       submitAskAnswer,
+      clearPendingSend,
     ]
   );
 
@@ -1008,17 +1114,29 @@ export function App({ cwd, version }: AppProps) {
 
       {/* Current streaming content and activity - rendered dynamically */}
       {isProcessing && (
-        <Messages
-          key="streaming"
-          messages={[]}
-          currentResponse={undefined}
-          streamingMessages={streamingMessages}
-          currentToolCall={undefined}
-          lastToolResult={undefined}
-          activityLog={activityLog}
-          queuedMessageIds={queuedMessageIds}
-          verboseTools={verboseTools}
-        />
+        <>
+          {streamingTrimmed && (
+            <Box marginBottom={1}>
+              <Text dimColor>⋯ showing latest output</Text>
+            </Box>
+          )}
+          {activityTrim.trimmed && (
+            <Box marginBottom={1}>
+              <Text dimColor>⋯ showing latest activity</Text>
+            </Box>
+          )}
+          <Messages
+            key="streaming"
+            messages={[]}
+            currentResponse={undefined}
+            streamingMessages={streamingMessages}
+            currentToolCall={undefined}
+            lastToolResult={undefined}
+            activityLog={activityTrim.entries}
+            queuedMessageIds={queuedMessageIds}
+            verboseTools={verboseTools}
+          />
+        </>
       )}
 
       {/* Queue indicator */}
