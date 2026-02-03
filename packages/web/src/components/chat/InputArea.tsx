@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/textarea';
 import { useChatStore } from '@/lib/store';
 import { chatWs } from '@/lib/ws';
 import { now, generateId } from '@hasna/assistants-shared';
@@ -51,9 +51,9 @@ export function InputArea() {
   }, [isStreaming, sessionId, setStreaming]);
 
   return (
-    <div className="flex items-center gap-3 border-t border-gray-200 bg-white px-6 py-4">
+    <div className="flex items-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
       <div className="flex-1">
-        <Input
+        <Textarea
           placeholder="Ask Assistants anything..."
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -63,6 +63,8 @@ export function InputArea() {
               sendMessage();
             }
           }}
+          className="min-h-[44px] max-h-[200px] resize-none"
+          rows={1}
         />
       </div>
       {isStreaming && sessionId && (

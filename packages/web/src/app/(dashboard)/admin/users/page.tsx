@@ -2,9 +2,21 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface User {
   id: string;
@@ -69,8 +81,38 @@ export default function AdminUsersPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-400"></div>
+      <div className="p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <Skeleton className="h-8 w-24" />
+            <div className="flex gap-2">
+              <Skeleton className="h-10 w-64" />
+              <Skeleton className="h-10 w-20" />
+            </div>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Verified</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     );
   }
@@ -92,53 +134,44 @@ export default function AdminUsersPage() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-md bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
-            {error}
-          </div>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Email</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Name</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Role</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Verified</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm text-gray-900">{user.email}</td>
-                  <td className="py-3 px-4 text-sm text-gray-700">{user.name || '-'}</td>
-                  <td className="py-3 px-4 text-sm">
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs ${
-                        user.role === 'admin'
-                          ? 'bg-purple-100 text-purple-600'
-                          : 'bg-gray-200 text-gray-500'
-                      }`}
-                    >
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-sm">
-                    {user.emailVerified ? (
-                      <span className="text-green-600">Yes</span>
-                    ) : (
-                      <span className="text-gray-400">No</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-500">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Email</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Verified</TableHead>
+              <TableHead>Created</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((u) => (
+              <TableRow key={u.id}>
+                <TableCell className="font-medium">{u.email}</TableCell>
+                <TableCell>{u.name || '-'}</TableCell>
+                <TableCell>
+                  <Badge variant={u.role === 'admin' ? 'secondary' : 'default'}>
+                    {u.role}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={u.emailVerified ? 'success' : 'default'}>
+                    {u.emailVerified ? 'Yes' : 'No'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {new Date(u.createdAt).toLocaleDateString()}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
 
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-2 mt-6">

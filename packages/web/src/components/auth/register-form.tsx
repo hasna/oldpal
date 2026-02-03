@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/use-auth';
 
 export function RegisterForm() {
@@ -47,9 +49,10 @@ export function RegisterForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
-          {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <div className="space-y-2">
