@@ -262,14 +262,16 @@ export function Input({
       moveCursorTo(line.start + line.text.length, false);
       return;
     }
-    // Handle backspace - check both key.backspace and raw character codes
-    // Some terminals send \x7f (DEL) or \x08 (BS) instead of setting key.backspace
-    if (key.backspace || input === '\x7f' || input === '\x08') {
+    // Handle backspace - Ink 6.x sets key.delete (not key.backspace) for \x7f (DEL)
+    // which is what macOS/Linux terminals send for the Backspace key.
+    // The actual Delete/Forward-Delete key sends \x1b[3~ escape sequence.
+    if (key.backspace || key.delete) {
       deleteBackward();
       return;
     }
-    // Handle delete key
-    if (key.delete || input === '\x1b[3~') {
+    // Handle forward delete key (Fn+Backspace on Mac, Delete on full keyboards)
+    // This key sends the \x1b[3~ escape sequence, not \x7f
+    if (input === '\x1b[3~') {
       deleteForward();
       return;
     }

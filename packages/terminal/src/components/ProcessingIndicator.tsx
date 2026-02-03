@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text } from 'ink';
 import InkSpinner from 'ink-spinner';
+import { getRandomLoadingWord } from '@hasna/assistants-shared';
 
 interface ProcessingIndicatorProps {
   isProcessing: boolean;
@@ -16,6 +17,8 @@ export function ProcessingIndicator({
   isThinking = false,
 }: ProcessingIndicatorProps) {
   const [elapsed, setElapsed] = useState(0);
+  // Pick a random loading word when processing starts, keep it stable during the session
+  const loadingWord = useMemo(() => getRandomLoadingWord(), [isProcessing]);
 
   // Update elapsed time every second
   useEffect(() => {
@@ -66,7 +69,7 @@ export function ProcessingIndicator({
     parts.push('thinking');
   }
 
-  const label = isThinking ? 'Metamorphosing' : 'Working';
+  const label = loadingWord;
 
   return (
     <Box marginY={1}>
