@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq } from 'drizzle-orm';
 
 const updateAgentSchema = z.object({
@@ -38,6 +38,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     if (!id) {
       return errorResponse(new BadRequestError('Missing agent id'));
     }
+    validateUUID(id, 'agent id');
 
     const agent = await db.query.agents.findFirst({
       where: eq(agents.id, id),
@@ -65,6 +66,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
     if (!id) {
       return errorResponse(new BadRequestError('Missing agent id'));
     }
+    validateUUID(id, 'agent id');
 
     const body = await request.json();
     const data = updateAgentSchema.parse(body);
@@ -105,6 +107,7 @@ export const DELETE = withAuth(async (request: AuthenticatedRequest, context?: {
     if (!id) {
       return errorResponse(new BadRequestError('Missing agent id'));
     }
+    validateUUID(id, 'agent id');
 
     // Check ownership
     const existingAgent = await db.query.agents.findFirst({

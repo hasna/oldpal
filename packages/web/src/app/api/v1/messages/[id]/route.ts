@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { agentMessages, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq, or } from 'drizzle-orm';
 
 const updateMessageSchema = z.object({
@@ -27,6 +27,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     if (!id) {
       return errorResponse(new BadRequestError('Missing message id'));
     }
+    validateUUID(id, 'message id');
 
     const message = await db.query.agentMessages.findFirst({
       where: eq(agentMessages.id, id),
@@ -65,9 +66,15 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
     if (!id) {
       return errorResponse(new BadRequestError('Missing message id'));
     }
+    validateUUID(id, 'message id');
 
     const body = await request.json();
     const data = updateMessageSchema.parse(body);
+
+    // Reject empty updates
+    if (!data.status) {
+      return errorResponse(new BadRequestError('No updatable fields provided'));
+    }
 
     const message = await db.query.agentMessages.findFirst({
       where: eq(agentMessages.id, id),
@@ -77,15 +84,19 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
       return errorResponse(new NotFoundError('Message not found'));
     }
 
-    // Verify user owns the recipient agent
-    if (message.toAgentId) {
-      const recipientAgent = await db.query.agents.findFirst({
-        where: eq(agents.id, message.toAgentId),
-      });
+    // Verify user owns either the sender or recipient agent
+    const userAgents = await db.query.agents.findMany({
+      where: eq(agents.userId, request.user.userId),
+      columns: { id: true },
+    });
 
-      if (!recipientAgent || recipientAgent.userId !== request.user.userId) {
-        return errorResponse(new ForbiddenError('Access denied'));
-      }
+    const agentIds = userAgents.map((a) => a.id);
+    const hasAccess =
+      (message.fromAgentId && agentIds.includes(message.fromAgentId)) ||
+      (message.toAgentId && agentIds.includes(message.toAgentId));
+
+    if (!hasAccess) {
+      return errorResponse(new ForbiddenError('Access denied'));
     }
 
     const updateData: Record<string, unknown> = {};

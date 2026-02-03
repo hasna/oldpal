@@ -2,8 +2,17 @@ import type { StreamChunk } from '@hasna/assistants-shared';
 import type { ClientMessage, ServerMessage } from '@/lib/protocol';
 import { subscribeToSession, sendSessionMessage, stopSession } from '@/lib/server/agent-pool';
 import { verifyAccessToken } from '@/lib/auth/jwt';
+import { db } from '@/db';
+import { sessions } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { isValidUUID } from '@/lib/api/errors';
 import { randomUUID } from 'crypto';
 import { WebSocketServer } from 'ws';
+
+// Max message content length for chat messages: 100KB
+const MAX_MESSAGE_LENGTH = 100_000;
+// Max WebSocket payload size: 1MB (allows for JSON overhead)
+const MAX_PAYLOAD_SIZE = 1_000_000;
 
 const sessionOwners = new Map<string, { ownerKey: string; count: number }>();
 
@@ -79,7 +88,10 @@ export default function handler(_req: any, res: any) {
   }
 
   if (!res.socket.server.wss) {
-    const wss = new WebSocketServer({ server: res.socket.server });
+    const wss = new WebSocketServer({
+      server: res.socket.server,
+      maxPayload: MAX_PAYLOAD_SIZE,
+    });
     res.socket.server.wss = wss;
 
     wss.on('connection', (ws: any, req: any) => {
@@ -91,6 +103,7 @@ export default function handler(_req: any, res: any) {
       const token = url.searchParams.get('token');
       const authPromise = token ? verifyAccessToken(token) : Promise.resolve(null);
       let ownerKey: string | null = null;
+      let authenticatedUserId: string | null = null;
 
       const resolveOwnerKey = async () => {
         if (ownerKey) return ownerKey;
@@ -100,7 +113,12 @@ export default function handler(_req: any, res: any) {
           ws.close(1008);
           return null;
         }
-        ownerKey = auth?.userId ? `user:${auth.userId}` : connectionKey;
+        if (auth?.userId) {
+          authenticatedUserId = auth.userId;
+          ownerKey = `user:${auth.userId}`;
+        } else {
+          ownerKey = connectionKey;
+        }
         return ownerKey;
       };
 
@@ -108,6 +126,31 @@ export default function handler(_req: any, res: any) {
         if (sessionId === nextSessionId && unsubscribe) return true;
         const resolvedOwner = await resolveOwnerKey();
         if (!resolvedOwner) return false;
+
+        // Validate session ID format to prevent injection
+        if (!isValidUUID(nextSessionId)) {
+          sendMessage(ws, { type: 'error', message: 'Invalid session ID format' });
+          return false;
+        }
+
+        // If user is authenticated, verify they own the session in the database
+        if (authenticatedUserId) {
+          const session = await db.query.sessions.findFirst({
+            where: eq(sessions.id, nextSessionId),
+            columns: { userId: true },
+          });
+
+          // Session must exist and belong to the authenticated user
+          if (!session) {
+            sendMessage(ws, { type: 'error', message: 'Session not found' });
+            return false;
+          }
+          if (session.userId !== authenticatedUserId) {
+            sendMessage(ws, { type: 'error', message: 'Access denied for session' });
+            return false;
+          }
+        }
+
         if (!claimSessionOwner(nextSessionId, resolvedOwner)) {
           sendMessage(ws, { type: 'error', message: 'Access denied for session' });
           return false;
@@ -139,9 +182,17 @@ export default function handler(_req: any, res: any) {
       ws.on('message', async (data: any) => {
         const resolvedOwner = await resolveOwnerKey();
         if (!resolvedOwner) return;
+
+        // Check payload size before parsing (defense in depth - maxPayload also enforces this)
+        const rawData = String(data);
+        if (rawData.length > MAX_PAYLOAD_SIZE) {
+          sendMessage(ws, { type: 'error', message: 'Payload too large' });
+          return;
+        }
+
         let message: ClientMessage;
         try {
-          message = JSON.parse(String(data));
+          message = JSON.parse(rawData);
         } catch {
           sendMessage(ws, { type: 'error', message: 'Invalid JSON' });
           return;
@@ -165,12 +216,18 @@ export default function handler(_req: any, res: any) {
             sendMessage(ws, { type: 'error', message: 'Missing sessionId' });
             return;
           }
+          // Validate message length to prevent DoS
+          const content = String(message.content || '');
+          if (content.length > MAX_MESSAGE_LENGTH) {
+            sendMessage(ws, { type: 'error', message: `Message must be at most ${MAX_MESSAGE_LENGTH} characters` });
+            return;
+          }
           if (message.messageId) {
             activeMessageId = message.messageId;
           }
           const subscribed = await ensureSubscribed(nextSessionId);
           if (!subscribed) return;
-          await sendSessionMessage(nextSessionId, message.content);
+          await sendSessionMessage(nextSessionId, content);
         }
       });
 

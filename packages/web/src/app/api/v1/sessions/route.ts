@@ -4,6 +4,8 @@ import { db } from '@/db';
 import { sessions } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
+import { ForbiddenError, NotFoundError } from '@/lib/api/errors';
+import { agents } from '@/db/schema';
 import { eq, desc, count } from 'drizzle-orm';
 
 const createSessionSchema = z.object({
@@ -54,6 +56,21 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
     const data = createSessionSchema.parse(body);
+
+    // Verify agent ownership if agentId is provided
+    if (data.agentId) {
+      const agent = await db.query.agents.findFirst({
+        where: eq(agents.id, data.agentId),
+      });
+
+      if (!agent) {
+        return errorResponse(new NotFoundError('Agent not found'));
+      }
+
+      if (agent.userId !== request.user.userId) {
+        return errorResponse(new ForbiddenError('You do not own this agent'));
+      }
+    }
 
     const [newSession] = await db
       .insert(sessions)

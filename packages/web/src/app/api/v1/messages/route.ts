@@ -4,18 +4,25 @@ import { db } from '@/db';
 import { agentMessages, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError, isValidUUID } from '@/lib/api/errors';
 import { eq, desc, count, and, or, isNull } from 'drizzle-orm';
+
+// Max body length: 50KB to prevent DB abuse
+const MAX_BODY_LENGTH = 50_000;
 
 const createMessageSchema = z.object({
   toAgentId: z.string().uuid(),
   fromAgentId: z.string().uuid().optional(),
   subject: z.string().max(500).optional(),
-  body: z.string().min(1),
+  body: z.string().min(1).max(MAX_BODY_LENGTH, `Body must be at most ${MAX_BODY_LENGTH} characters`),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
   threadId: z.string().uuid().optional(),
   parentId: z.string().uuid().optional(),
 });
+
+// Valid status values for messages
+const VALID_STATUSES = ['unread', 'read', 'archived', 'injected'] as const;
+type MessageStatus = (typeof VALID_STATUSES)[number];
 
 // GET /api/v1/messages - List agent messages (inbox)
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
@@ -27,8 +34,22 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       100
     );
     const offset = (page - 1) * limit;
-    const status = searchParams.get('status') as 'unread' | 'read' | 'archived' | null;
+    const statusParam = searchParams.get('status');
     const agentId = searchParams.get('agentId');
+
+    // Validate status if provided
+    let status: MessageStatus | null = null;
+    if (statusParam) {
+      if (!VALID_STATUSES.includes(statusParam as MessageStatus)) {
+        return errorResponse(new BadRequestError(`Invalid status: must be one of ${VALID_STATUSES.join(', ')}`));
+      }
+      status = statusParam as MessageStatus;
+    }
+
+    // Validate agentId as UUID if provided
+    if (agentId && !isValidUUID(agentId)) {
+      return errorResponse(new BadRequestError('Invalid agentId: must be a valid UUID'));
+    }
 
     // Get user's agents
     const userAgents = await db.query.agents.findMany({
@@ -86,7 +107,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       }
     }
 
-    // Verify recipient agent exists
+    // Verify recipient agent exists and user owns it
     const toAgent = await db.query.agents.findFirst({
       where: eq(agents.id, data.toAgentId),
     });
@@ -95,8 +116,65 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       return errorResponse(new NotFoundError('Recipient agent not found'));
     }
 
+    if (toAgent.userId !== request.user.userId) {
+      return errorResponse(new ForbiddenError('You do not own the recipient agent'));
+    }
+
+    // Get all user's agents for ownership checks
+    const userAgents = await db.query.agents.findMany({
+      where: eq(agents.userId, request.user.userId),
+      columns: { id: true },
+    });
+    const agentIds = userAgents.map((a) => a.id);
+
+    // Validate parentId ownership if provided
+    if (data.parentId) {
+      const parentMessage = await db.query.agentMessages.findFirst({
+        where: eq(agentMessages.id, data.parentId),
+      });
+
+      if (!parentMessage) {
+        return errorResponse(new NotFoundError('Parent message not found'));
+      }
+
+      // Verify user owns either sender or recipient of parent message
+      const hasParentAccess =
+        (parentMessage.fromAgentId && agentIds.includes(parentMessage.fromAgentId)) ||
+        (parentMessage.toAgentId && agentIds.includes(parentMessage.toAgentId));
+
+      if (!hasParentAccess) {
+        return errorResponse(new ForbiddenError('Access denied to parent message'));
+      }
+
+      // If threadId is also provided, verify it matches the parent's threadId
+      if (data.threadId && data.threadId !== parentMessage.threadId) {
+        return errorResponse(new BadRequestError('Thread ID does not match parent message thread'));
+      }
+    }
+
+    // Validate threadId ownership if provided (and no parentId)
+    if (data.threadId && !data.parentId) {
+      const existingThreadMessage = await db.query.agentMessages.findFirst({
+        where: eq(agentMessages.threadId, data.threadId),
+      });
+
+      if (existingThreadMessage) {
+        // Thread exists - verify user owns at least one agent in the thread
+        const hasThreadAccess =
+          (existingThreadMessage.fromAgentId && agentIds.includes(existingThreadMessage.fromAgentId)) ||
+          (existingThreadMessage.toAgentId && agentIds.includes(existingThreadMessage.toAgentId));
+
+        if (!hasThreadAccess) {
+          return errorResponse(new ForbiddenError('Access denied to thread'));
+        }
+      }
+      // If thread doesn't exist yet, it's OK to create a new one with the provided threadId
+    }
+
     // Generate thread ID if not provided
-    const threadId = data.threadId || crypto.randomUUID();
+    const threadId = data.threadId || (data.parentId
+      ? (await db.query.agentMessages.findFirst({ where: eq(agentMessages.id, data.parentId) }))?.threadId
+      : null) || crypto.randomUUID();
 
     const [newMessage] = await db
       .insert(agentMessages)

@@ -17,17 +17,17 @@ export const GET = withAdminAuth(async (request: AuthenticatedRequest) => {
     const offset = (page - 1) * limit;
     const search = searchParams.get('search');
 
-    let whereClause;
-    if (search) {
-      whereClause = or(
-        ilike(users.email, `%${search}%`),
-        ilike(users.name, `%${search}%`)
-      );
-    }
+    const whereClause = search
+      ? or(
+          ilike(users.email, `%${search}%`),
+          ilike(users.name, `%${search}%`)
+        )
+      : undefined;
 
+    // Build queries - only apply where clause if search is provided
     const [userList, [{ total }]] = await Promise.all([
       db.query.users.findMany({
-        where: whereClause,
+        ...(whereClause && { where: whereClause }),
         orderBy: [desc(users.createdAt)],
         limit,
         offset,
@@ -41,7 +41,9 @@ export const GET = withAdminAuth(async (request: AuthenticatedRequest) => {
           createdAt: true,
         },
       }),
-      db.select({ total: count() }).from(users).where(whereClause),
+      whereClause
+        ? db.select({ total: count() }).from(users).where(whereClause)
+        : db.select({ total: count() }).from(users),
     ]);
 
     return paginatedResponse(userList, total, page, limit);

@@ -11,8 +11,11 @@ import { errorResponse } from '@/lib/api/response';
 import { UnauthorizedError, NotFoundError, ForbiddenError } from '@/lib/api/errors';
 import { eq } from 'drizzle-orm';
 
+// Max message length: 100KB to prevent DoS
+const MAX_MESSAGE_LENGTH = 100_000;
+
 const chatSchema = z.object({
-  message: z.string().min(1, 'Message is required'),
+  message: z.string().min(1, 'Message is required').max(MAX_MESSAGE_LENGTH, `Message must be at most ${MAX_MESSAGE_LENGTH} characters`),
   sessionId: z.string().uuid().optional(),
 });
 

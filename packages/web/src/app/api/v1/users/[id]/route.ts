@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { users } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq } from 'drizzle-orm';
 
 const updateUserSchema = z.object({
@@ -28,6 +28,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     if (!id) {
       return errorResponse(new BadRequestError('Missing user id'));
     }
+    validateUUID(id, 'user id');
 
     // Users can only view their own profile (unless admin)
     if (id !== request.user.userId && request.user.role !== 'admin') {
@@ -65,6 +66,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
     if (!id) {
       return errorResponse(new BadRequestError('Missing user id'));
     }
+    validateUUID(id, 'user id');
 
     // Users can only update their own profile
     if (id !== request.user.userId) {

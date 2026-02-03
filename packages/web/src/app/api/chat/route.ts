@@ -31,6 +31,9 @@ function chunkToServerMessage(chunk: StreamChunk): ServerMessage | null {
   return null;
 }
 
+// Max message length: 100KB to prevent DoS
+const MAX_MESSAGE_LENGTH = 100_000;
+
 export async function POST(request: Request) {
   const body = await request.json();
   const message = String(body?.message || '').trim();
@@ -38,6 +41,10 @@ export async function POST(request: Request) {
 
   if (!message) {
     return new Response('Missing message', { status: 400 });
+  }
+
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return new Response(`Message must be at most ${MAX_MESSAGE_LENGTH} characters`, { status: 413 });
   }
 
   let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;

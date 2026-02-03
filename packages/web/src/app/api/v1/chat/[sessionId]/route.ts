@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { sessions, messages } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq, asc, count, and } from 'drizzle-orm';
 
 async function resolveParams(
@@ -22,6 +22,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     if (!sessionId) {
       return errorResponse(new BadRequestError('Missing session id'));
     }
+    validateUUID(sessionId, 'session id');
 
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);

@@ -4,7 +4,8 @@ import { db } from '@/db';
 import { sessions } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
+import { stopSession, closeSession } from '@/lib/server/agent-pool';
 import { eq, and } from 'drizzle-orm';
 
 const updateSessionSchema = z.object({
@@ -28,6 +29,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     if (!id) {
       return errorResponse(new BadRequestError('Missing session id'));
     }
+    validateUUID(id, 'session id');
 
     const session = await db.query.sessions.findFirst({
       where: eq(sessions.id, id),
@@ -58,6 +60,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
     if (!id) {
       return errorResponse(new BadRequestError('Missing session id'));
     }
+    validateUUID(id, 'session id');
 
     const body = await request.json();
     const data = updateSessionSchema.parse(body);
@@ -98,6 +101,7 @@ export const DELETE = withAuth(async (request: AuthenticatedRequest, context?: {
     if (!id) {
       return errorResponse(new BadRequestError('Missing session id'));
     }
+    validateUUID(id, 'session id');
 
     // Check ownership
     const existingSession = await db.query.sessions.findFirst({
@@ -111,6 +115,10 @@ export const DELETE = withAuth(async (request: AuthenticatedRequest, context?: {
     if (existingSession.userId !== request.user.userId) {
       return errorResponse(new ForbiddenError('Access denied'));
     }
+
+    // Stop and close any active in-memory session before deleting from DB
+    await stopSession(id);
+    closeSession(id);
 
     await db.delete(sessions).where(eq(sessions.id, id));
 

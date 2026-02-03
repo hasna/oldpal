@@ -23,14 +23,14 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
-const pathToBreadcrumb: Record<string, { parent?: string; label: string }> = {
+const pathToBreadcrumb: Record<string, { parent?: string; parentPath?: string; label: string }> = {
   '/chat': { label: 'Chat' },
-  '/sessions': { parent: 'Chat', label: 'Sessions' },
+  '/sessions': { parent: 'Chat', parentPath: '/chat', label: 'Sessions' },
   '/agents': { label: 'Agents' },
-  '/agents/new': { parent: 'Agents', label: 'Create Agent' },
+  '/agents/new': { parent: 'Agents', parentPath: '/agents', label: 'Create Agent' },
   '/messages': { label: 'Messages' },
   '/settings': { label: 'Settings' },
-  '/settings/api-keys': { parent: 'Settings', label: 'API Keys' },
+  '/settings/api-keys': { parent: 'Settings', parentPath: '/settings', label: 'API Keys' },
   '/admin/users': { parent: 'Admin', label: 'Users' },
   '/admin/stats': { parent: 'Admin', label: 'Stats' },
 };
@@ -73,9 +73,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 {currentPath.parent && (
                   <>
                     <BreadcrumbItem className="hidden md:block">
-                      <BreadcrumbLink href="#">
-                        {currentPath.parent}
-                      </BreadcrumbLink>
+                      {currentPath.parentPath ? (
+                        <BreadcrumbLink href={currentPath.parentPath}>
+                          {currentPath.parent}
+                        </BreadcrumbLink>
+                      ) : (
+                        <span className="text-muted-foreground">{currentPath.parent}</span>
+                      )}
                     </BreadcrumbItem>
                     <BreadcrumbSeparator className="hidden md:block" />
                   </>

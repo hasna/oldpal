@@ -96,8 +96,11 @@ export async function sendSessionMessage(sessionId: string, message: string): Pr
 }
 
 export async function stopSession(sessionId: string): Promise<void> {
-  const record = await getSession(sessionId);
-  record.client.stop();
+  // Only stop if session is already active - don't create a new session just to stop it
+  const record = sessions.get(sessionId);
+  if (record) {
+    record.client.stop();
+  }
 }
 
 export function closeSession(sessionId: string): void {

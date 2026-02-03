@@ -156,28 +156,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   addToolCall: (call, messageId) =>
     set((state) => {
-      let targetMessageId = messageId ?? state.currentStreamMessageId;
+      let targetMessageId: string | null = messageId ?? state.currentStreamMessageId;
+      let messages = state.messages;
       if (!targetMessageId) {
-        let fallbackId: string | undefined;
+        let fallbackId: string | null = null;
         for (let i = state.messages.length - 1; i >= 0; i -= 1) {
           const message = state.messages[i];
           if (!fallbackId && message.role === 'assistant') {
             fallbackId = message.id;
           }
         }
-        targetMessageId = fallbackId ?? targetMessageId;
+        targetMessageId = fallbackId;
+      }
+      // If no assistant message exists (tool-only response), create a placeholder
+      if (!targetMessageId) {
+        const newId = generateId();
+        const placeholderMessage: Message = {
+          id: newId,
+          role: 'assistant',
+          content: '',
+          timestamp: now(),
+        };
+        messages = [...state.messages, placeholderMessage];
+        targetMessageId = newId;
       }
       const shouldReset = targetMessageId && targetMessageId !== state.currentStreamMessageId;
       const callWithMeta: ToolCallWithMeta = { ...call, startedAt: Date.now() };
       const nextCalls = shouldReset ? [callWithMeta] : [...state.currentToolCalls, callWithMeta];
       return {
+        messages,
         currentToolCalls: nextCalls,
         currentStreamMessageId: targetMessageId ?? state.currentStreamMessageId,
         sessionSnapshots: state.sessionId
           ? {
               ...state.sessionSnapshots,
               [state.sessionId]: {
-                messages: state.messages,
+                messages,
                 toolCalls: nextCalls,
                 streamMessageId: targetMessageId ?? state.currentStreamMessageId,
               },
@@ -226,6 +240,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const messages = [...state.messages];
       const targetMessageId = messageId ?? state.currentStreamMessageId;
+      let foundMessage = false;
       for (let i = messages.length - 1; i >= 0; i -= 1) {
         if (messages[i].role === 'assistant' && (!targetMessageId || messages[i].id === targetMessageId)) {
           const toolResults = (state.currentToolCalls as Array<ToolCall & { result?: ToolResult }>)
@@ -236,8 +251,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
             toolCalls: state.currentToolCalls,
             toolResults: toolResults.length > 0 ? toolResults : undefined,
           };
+          foundMessage = true;
           break;
         }
+      }
+
+      // If no assistant message was found (tool-only response), create a placeholder
+      if (!foundMessage) {
+        const toolResults = (state.currentToolCalls as Array<ToolCall & { result?: ToolResult }>)
+          .map((call) => call.result)
+          .filter((result): result is ToolResult => Boolean(result));
+        const newId = targetMessageId ?? generateId();
+        messages.push({
+          id: newId,
+          role: 'assistant',
+          content: '',
+          timestamp: now(),
+          toolCalls: state.currentToolCalls,
+          toolResults: toolResults.length > 0 ? toolResults : undefined,
+        });
       }
 
       return {

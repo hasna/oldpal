@@ -53,3 +53,24 @@ export class InternalServerError extends ApiError {
     super(500, 'INTERNAL_SERVER_ERROR', message);
   }
 }
+
+/**
+ * UUID regex pattern
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Check if a string is a valid UUID
+ */
+export function isValidUUID(id: string): boolean {
+  return typeof id === 'string' && UUID_REGEX.test(id);
+}
+
+/**
+ * Validate that a parameter is a valid UUID, throw BadRequestError if not
+ */
+export function validateUUID(id: string, paramName = 'id'): void {
+  if (!isValidUUID(id)) {
+    throw new BadRequestError(`Invalid ${paramName}: must be a valid UUID`);
+  }
+}

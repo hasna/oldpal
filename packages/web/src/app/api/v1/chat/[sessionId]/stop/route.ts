@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { sessions } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { stopSession } from '@/lib/server/agent-pool';
 import { eq } from 'drizzle-orm';
 
@@ -23,6 +23,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest, context?: { p
     if (!sessionId) {
       return errorResponse(new BadRequestError('Missing session id'));
     }
+    validateUUID(sessionId, 'session id');
 
     // Verify session ownership
     const session = await db.query.sessions.findFirst({

@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { agentMessages, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { ForbiddenError, BadRequestError } from '@/lib/api/errors';
+import { ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq, asc, or } from 'drizzle-orm';
 
 async function resolveParams(
@@ -22,6 +22,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     if (!threadId) {
       return errorResponse(new BadRequestError('Missing thread id'));
     }
+    validateUUID(threadId, 'thread id');
 
     // Get user's agents
     const userAgents = await db.query.agents.findMany({
@@ -35,28 +36,29 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
       return errorResponse(new ForbiddenError('Access denied'));
     }
 
-    // Get all messages in the thread
-    const threadMessages = await db.query.agentMessages.findMany({
+    // Get all messages in the thread that belong to user's agents
+    const allThreadMessages = await db.query.agentMessages.findMany({
       where: eq(agentMessages.threadId, threadId),
       orderBy: [asc(agentMessages.createdAt)],
     });
 
-    // Verify user has access to at least one message in the thread
-    const hasAccess = threadMessages.some((msg) => {
+    // Filter to only messages where user owns sender or recipient
+    const accessibleMessages = allThreadMessages.filter((msg) => {
       return (
         (msg.fromAgentId && agentIds.includes(msg.fromAgentId)) ||
         (msg.toAgentId && agentIds.includes(msg.toAgentId))
       );
     });
 
-    if (!hasAccess && threadMessages.length > 0) {
+    // Verify user has access to at least one message in the thread
+    if (accessibleMessages.length === 0 && allThreadMessages.length > 0) {
       return errorResponse(new ForbiddenError('Access denied'));
     }
 
     return successResponse({
       threadId,
-      messages: threadMessages,
-      count: threadMessages.length,
+      messages: accessibleMessages,
+      count: accessibleMessages.length,
     });
   } catch (error) {
     return errorResponse(error);
