@@ -42,7 +42,7 @@ export function AskUserPanel({
       )}
       {question.multiline && (
         <Box marginTop={1}>
-          <Text dimColor>Multi-line answer allowed. Paste text and press Enter.</Text>
+          <Text dimColor>Multi-line answer allowed. Use Alt+Enter to insert newlines.</Text>
         </Box>
       )}
       <Box marginTop={1}>

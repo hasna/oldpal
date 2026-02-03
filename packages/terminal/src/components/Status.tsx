@@ -93,7 +93,7 @@ export function Status({
 
   return (
     <Box marginTop={1} justifyContent="space-between">
-      <Text dimColor>/help{sessionCount && sessionCount > 1 ? ' · Ctrl+S' : ''}</Text>
+      <Text dimColor>/help{sessionCount && sessionCount > 1 ? ' · Ctrl+]' : ''}</Text>
       <Box>
         {voiceIcon && <Text dimColor>{voiceIcon} </Text>}
         {isProcessing && <Text dimColor>esc · </Text>}

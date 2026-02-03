@@ -9,6 +9,7 @@ import { render } from 'ink';
 import { App } from './components/App';
 import { runHeadless } from './headless';
 import { sanitizeTerminalOutput } from './output/sanitize';
+import { parseArgs, main } from './cli/main';
 
 // Version is embedded at build time via define in build.ts
 const VERSION = process.env.ASSISTANTS_VERSION || 'dev';
@@ -74,113 +75,8 @@ function enableSynchronizedOutput(): () => void {
   };
 }
 
-// Parse CLI arguments
-function parseArgs(argv: string[]) {
-  const args = argv.slice(2);
-  const options: {
-    cwd: string;
-    version: boolean;
-    help: boolean;
-    print: string | null;
-    outputFormat: 'text' | 'json' | 'stream-json';
-    allowedTools: string[];
-    systemPrompt: string | null;
-    jsonSchema: string | null;
-    continue: boolean;
-    resume: string | null;
-    cwdProvided: boolean;
-  } = {
-    cwd: process.cwd(),
-    version: false,
-    help: false,
-    print: null,
-    outputFormat: 'text',
-    allowedTools: [],
-    systemPrompt: null,
-    jsonSchema: null,
-    continue: false,
-    resume: null,
-    cwdProvided: false,
-  };
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-
-    // Version
-    if (arg === '--version' || arg === '-v') {
-      options.version = true;
-      continue;
-    }
-
-    // Help
-    if (arg === '--help' || arg === '-h') {
-      options.help = true;
-      continue;
-    }
-
-    // Print (headless mode)
-    if (arg === '--print' || arg === '-p') {
-      options.print = args[++i] || '';
-      continue;
-    }
-
-    // Output format
-    if (arg === '--output-format') {
-      const format = args[++i];
-      if (format === 'text' || format === 'json' || format === 'stream-json') {
-        options.outputFormat = format;
-      }
-      continue;
-    }
-
-    // Allowed tools
-    if (arg === '--allowed-tools' || arg === '--allowedTools') {
-      const tools = args[++i];
-      if (tools) {
-        options.allowedTools = tools.split(',').map(t => t.trim());
-      }
-      continue;
-    }
-
-    // System prompt
-    if (arg === '--system-prompt') {
-      options.systemPrompt = args[++i] || null;
-      continue;
-    }
-
-    // JSON schema
-    if (arg === '--json-schema') {
-      options.jsonSchema = args[++i] || null;
-      continue;
-    }
-
-    // Continue last session
-    if (arg === '--continue' || arg === '-c') {
-      options.continue = true;
-      continue;
-    }
-
-    // Resume specific session
-    if (arg === '--resume' || arg === '-r') {
-      options.resume = args[++i] || null;
-      continue;
-    }
-
-    // Working directory
-    if (arg === '--cwd') {
-      options.cwd = args[++i] || process.cwd();
-      options.cwdProvided = true;
-      continue;
-    }
-
-    // Positional argument after -p could be the prompt
-    if (options.print === '' && !arg.startsWith('-')) {
-      options.print = arg;
-    }
-  }
-
-  return options;
-}
+// Re-export parseArgs and main for testing
+export { parseArgs, main };
 
 const options = parseArgs(process.argv);
 
@@ -236,7 +132,7 @@ Interactive Mode:
   - Type your message and press Enter to send
   - Use $skill-name to invoke a skill
   - Use /command for built-in commands
-  - Press Ctrl+S to switch sessions
+  - Press Ctrl+] to switch sessions
   - Press Ctrl+C to exit
 `);
   process.exit(0);

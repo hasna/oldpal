@@ -814,8 +814,8 @@ export function App({ cwd, version }: AppProps) {
 
   // Handle keyboard shortcuts (inactive when session selector is shown)
   useInput((input, key) => {
-    // Ctrl+S: show session selector
-    if (key.ctrl && input === 's') {
+    // Ctrl+]: show session selector (avoiding Ctrl+S which conflicts with terminal XOFF)
+    if (key.ctrl && input === ']') {
       if (sessions.length > 0) {
         setShowSessionSelector(true);
       }
@@ -1135,7 +1135,7 @@ export function App({ cwd, version }: AppProps) {
       {backgroundProcessingCount > 0 && (
         <Box marginBottom={1}>
           <Text color="yellow">
-            {backgroundProcessingCount} session{backgroundProcessingCount > 1 ? 's' : ''} processing in background (Ctrl+S to switch)
+            {backgroundProcessingCount} session{backgroundProcessingCount > 1 ? 's' : ''} processing in background (Ctrl+] to switch)
           </Text>
         </Box>
       )}

@@ -7,7 +7,7 @@ const COMMANDS = [
   { name: '/help', description: 'show available commands' },
   { name: '/clear', description: 'clear the conversation' },
   { name: '/new', description: 'start a new conversation' },
-  { name: '/session', description: 'list/switch sessions (Ctrl+S)' },
+  { name: '/session', description: 'list/switch sessions (Ctrl+])' },
   { name: '/status', description: 'show session status' },
   { name: '/tokens', description: 'show token usage' },
   { name: '/cost', description: 'show estimated API cost' },
@@ -337,6 +337,13 @@ export function Input({
     // This key sends the \x1b[3~ escape sequence, not \x7f
     if (input === '\x1b[3~') {
       deleteForward();
+      return;
+    }
+
+    // Alt+Enter sends ESC + carriage return in most terminals
+    // Handle this before the return key check to insert newline
+    if (input === '\x1b\r' || input === '\x1b\n') {
+      insertText('\n');
       return;
     }
 
