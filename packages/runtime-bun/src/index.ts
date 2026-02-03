@@ -85,31 +85,34 @@ class BunShellCommand implements ShellCommand {
   }
 
   private async execute(): Promise<ShellResult> {
-    // Use Bun.$ for shell execution
-    let cmd = Bun.$`${this.command}`;
+    // Use Bun.spawn with sh -c to execute the command string
+    // This is necessary because Bun.$ template literals escape interpolations
+    const proc = Bun.spawn(['sh', '-c', this.command], {
+      cwd: this._cwd,
+      env: this._env ? { ...process.env, ...this._env } : undefined,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
 
-    if (this._cwd) {
-      cmd = cmd.cwd(this._cwd);
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+
+    const exitCode = await proc.exited;
+
+    if (!this._nothrow && exitCode !== 0) {
+      const error = new Error(`Shell command failed with exit code ${exitCode}: ${stderr}`);
+      (error as Error & { exitCode: number; stdout: string; stderr: string }).exitCode = exitCode;
+      (error as Error & { exitCode: number; stdout: string; stderr: string }).stdout = stdout;
+      (error as Error & { exitCode: number; stdout: string; stderr: string }).stderr = stderr;
+      throw error;
     }
-
-    if (this._env) {
-      cmd = cmd.env(this._env);
-    }
-
-    if (this._quiet) {
-      cmd = cmd.quiet();
-    }
-
-    if (this._nothrow) {
-      cmd = cmd.nothrow();
-    }
-
-    const result = await cmd;
 
     return {
-      stdout: result.stdout.toString(),
-      stderr: result.stderr.toString(),
-      exitCode: result.exitCode,
+      stdout,
+      stderr,
+      exitCode,
     };
   }
 
