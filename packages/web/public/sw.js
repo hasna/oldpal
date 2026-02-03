@@ -1,5 +1,5 @@
-const CACHE_NAME = 'assistants-web-v1';
-const CORE_ASSETS = ['/', '/manifest.json', '/icon.svg'];
+const CACHE_NAME = 'assistants-web-v2';
+const CORE_ASSETS = ['/', '/manifest.json', '/icon.svg', '/offline.html'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -24,7 +24,13 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/'))
+      fetch(request).catch(async () => {
+        // First try to match the exact request path from cache
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        // Fall back to offline page instead of cached home page
+        return caches.match('/offline.html');
+      })
     );
     return;
   }
