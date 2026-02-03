@@ -11,7 +11,7 @@ interface ChatState {
   currentStreamMessageId: string | null;
   sessionId: string | null;
   sessions: Array<{ id: string; label: string; createdAt: number }>;
-  sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCallWithMeta[]; streamMessageId: string | null }>;
+  sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCallWithMeta[]; streamMessageId: string | null; isStreaming: boolean }>;
 
   setSessionId: (sessionId: string) => void;
   createSession: (label?: string) => string;
@@ -24,6 +24,7 @@ interface ChatState {
   finalizeToolCalls: (messageId?: string) => void;
   clearToolCalls: () => void;
   clearMessages: () => void;
+  clearAll: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -56,10 +57,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 messages: state.messages,
                 toolCalls: state.currentToolCalls,
                 streamMessageId: state.currentStreamMessageId,
+                isStreaming: state.isStreaming,
               },
             }
           : {}),
-        [id]: { messages: [], toolCalls: [], streamMessageId: null },
+        [id]: { messages: [], toolCalls: [], streamMessageId: null, isStreaming: false },
       },
     }));
     return id;
@@ -73,12 +75,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messages: state.messages,
           toolCalls: state.currentToolCalls,
           streamMessageId: state.currentStreamMessageId,
+          isStreaming: state.isStreaming,
         };
       }
-      const snapshot = snapshots[sessionId] || { messages: [], toolCalls: [], streamMessageId: null };
+      const snapshot = snapshots[sessionId] || { messages: [], toolCalls: [], streamMessageId: null, isStreaming: false };
       return {
         sessionId,
-        isStreaming: false,
+        isStreaming: snapshot.isStreaming,
         messages: snapshot.messages,
         currentToolCalls: snapshot.toolCalls,
         currentStreamMessageId: snapshot.streamMessageId ?? null,
@@ -97,6 +100,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               messages: [...state.messages, message],
               toolCalls: state.currentToolCalls,
               streamMessageId: state.currentStreamMessageId,
+              isStreaming: state.isStreaming,
             },
           }
         : state.sessionSnapshots,
@@ -146,13 +150,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 messages,
                 toolCalls: state.currentToolCalls,
                 streamMessageId: streamId ?? state.currentStreamMessageId,
+                isStreaming: state.isStreaming,
               },
             }
           : state.sessionSnapshots,
       };
     }),
 
-  setStreaming: (streaming) => set({ isStreaming: streaming }),
+  setStreaming: (streaming) =>
+    set((state) => ({
+      isStreaming: streaming,
+      sessionSnapshots: state.sessionId
+        ? {
+            ...state.sessionSnapshots,
+            [state.sessionId]: {
+              ...state.sessionSnapshots[state.sessionId],
+              isStreaming: streaming,
+            },
+          }
+        : state.sessionSnapshots,
+    })),
 
   addToolCall: (call, messageId) =>
     set((state) => {
@@ -194,6 +211,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 messages,
                 toolCalls: nextCalls,
                 streamMessageId: targetMessageId ?? state.currentStreamMessageId,
+                isStreaming: state.isStreaming,
               },
             }
           : state.sessionSnapshots,
@@ -214,6 +232,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 call.id === id ? { ...call, result } : call
               ),
               streamMessageId: state.currentStreamMessageId,
+              isStreaming: state.isStreaming,
             },
           }
         : state.sessionSnapshots,
@@ -232,6 +251,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   messages: state.messages,
                   toolCalls: state.currentToolCalls,
                   streamMessageId: null,
+                  isStreaming: state.isStreaming,
                 },
               }
             : state.sessionSnapshots,
@@ -282,6 +302,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 messages,
                 toolCalls: state.currentToolCalls,
                 streamMessageId: null,
+                isStreaming: state.isStreaming,
               },
             }
           : state.sessionSnapshots,
@@ -299,6 +320,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               messages: state.messages,
               toolCalls: [],
               streamMessageId: null,
+              isStreaming: state.isStreaming,
             },
           }
         : state.sessionSnapshots,
@@ -317,8 +339,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
               messages: [],
               toolCalls: [],
               streamMessageId: null,
+              isStreaming: false,
             },
           }
         : state.sessionSnapshots,
     })),
+
+  clearAll: () =>
+    set({
+      messages: [],
+      isStreaming: false,
+      currentToolCalls: [],
+      currentStreamMessageId: null,
+      sessionId: null,
+      sessions: [],
+      sessionSnapshots: {},
+    }),
 }));

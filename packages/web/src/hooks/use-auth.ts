@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useChatStore } from '@/lib/store';
 
 export interface AuthUser {
   id: string;
@@ -127,6 +128,8 @@ export function useAuth() {
         // Ignore logout errors
       }
     }
+    // Clear chat state on logout to prevent data leakage
+    useChatStore.getState().clearAll();
     store.logout();
   };
 

@@ -3,7 +3,7 @@ import type { ClientMessage, ServerMessage } from '@/lib/protocol';
 import { subscribeToSession, sendSessionMessage, stopSession } from '@/lib/server/agent-pool';
 import { verifyAccessToken } from '@/lib/auth/jwt';
 import { db } from '@/db';
-import { sessions } from '@/db/schema';
+import { sessions, messages } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/lib/api/errors';
 import { randomUUID } from 'crypto';
@@ -25,8 +25,12 @@ function getAllowedOrigins(): string[] {
 
   // Add common development origins
   if (process.env.NODE_ENV === 'development') {
-    origins.push('http://localhost:3000');
-    origins.push('http://127.0.0.1:3000');
+    // Support various localhost ports commonly used in development
+    const devPorts = ['3000', '3001', '7010', '7011', '8080'];
+    for (const port of devPorts) {
+      origins.push(`http://localhost:${port}`);
+      origins.push(`http://127.0.0.1:${port}`);
+    }
   }
 
   return origins;
@@ -145,6 +149,37 @@ export default function handler(_req: any, res: any) {
       let ownerKey: string | null = null;
       let authenticatedUserId: string | null = null;
 
+      // Track assistant response for persistence
+      let assistantContent = '';
+      let toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+      let toolResults: Array<{ toolCallId: string; content: string; isError?: boolean }> = [];
+      let assistantSaved = false;
+
+      const resetAssistantState = () => {
+        assistantContent = '';
+        toolCalls = [];
+        toolResults = [];
+        assistantSaved = false;
+      };
+
+      const saveAssistantMessage = async (sid: string, userId: string) => {
+        if (assistantSaved) return;
+        if (assistantContent || toolCalls.length > 0) {
+          try {
+            await db.insert(messages).values({
+              sessionId: sid,
+              role: 'assistant',
+              content: assistantContent,
+              toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+              toolResults: toolResults.length > 0 ? toolResults : undefined,
+            });
+            assistantSaved = true;
+          } catch {
+            // Ignore persistence errors to not break WebSocket flow
+          }
+        }
+      };
+
       const resolveOwnerKey = async () => {
         if (ownerKey) return ownerKey;
         const auth = await authPromise;
@@ -200,19 +235,46 @@ export default function handler(_req: any, res: any) {
           releaseSessionOwner(sessionId, resolvedOwner);
         }
         sessionId = nextSessionId;
+        // Reset assistant state when subscribing to a new session
+        resetAssistantState();
         unsubscribe = await subscribeToSession(
           sessionId,
-          (chunk) => {
+          async (chunk) => {
+            // Collect content for persistence (only for authenticated users)
+            if (chunk.type === 'text' && chunk.content) {
+              assistantContent += chunk.content;
+            }
+            if (chunk.type === 'tool_use' && chunk.toolCall) {
+              toolCalls.push(chunk.toolCall);
+            }
+            if (chunk.type === 'tool_result' && chunk.toolResult) {
+              toolResults.push({
+                toolCallId: chunk.toolResult.toolCallId,
+                content: chunk.toolResult.content,
+                isError: chunk.toolResult.isError,
+              });
+            }
+
             const serverMessage = chunkToServerMessage(chunk, activeMessageId);
             if (serverMessage) {
               sendMessage(ws, serverMessage);
               if (chunk.type === 'done' || chunk.type === 'error') {
+                // Save assistant message for authenticated users
+                if (authenticatedUserId && sessionId) {
+                  await saveAssistantMessage(sessionId, authenticatedUserId);
+                }
+                resetAssistantState();
                 activeMessageId = undefined;
               }
             }
           },
-          (error) => {
+          async (error) => {
             sendMessage(ws, { type: 'error', message: error.message, messageId: activeMessageId });
+            // Save assistant message on error for authenticated users
+            if (authenticatedUserId && sessionId) {
+              await saveAssistantMessage(sessionId, authenticatedUserId);
+            }
+            resetAssistantState();
             activeMessageId = undefined;
           }
         );
@@ -267,6 +329,26 @@ export default function handler(_req: any, res: any) {
           }
           const subscribed = await ensureSubscribed(nextSessionId);
           if (!subscribed) return;
+
+          // Persist user message for authenticated users
+          if (authenticatedUserId) {
+            try {
+              await db.insert(messages).values({
+                sessionId: nextSessionId,
+                userId: authenticatedUserId,
+                role: 'user',
+                content,
+              });
+              // Update session timestamp
+              await db
+                .update(sessions)
+                .set({ updatedAt: new Date() })
+                .where(eq(sessions.id, nextSessionId));
+            } catch {
+              // Ignore persistence errors to not break WebSocket flow
+            }
+          }
+
           await sendSessionMessage(nextSessionId, content);
         }
       });

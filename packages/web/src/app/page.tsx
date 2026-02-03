@@ -1,19 +1,27 @@
-import { ChatContainer } from '@/components/chat/ChatContainer';
-import { Header } from '@/components/shared/Header';
-import { Sidebar } from '@/components/shared/Sidebar';
-import { CommandPalette } from '@/components/shared/CommandPalette';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function HomePage() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading) {
+      if (isAuthenticated) {
+        router.replace('/chat');
+      } else {
+        router.replace('/login');
+      }
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  // Show loading while determining auth state
   return (
-    <div className="flex h-screen flex-col">
-      <Header />
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <Sidebar />
-        <main className="flex min-h-0 flex-1">
-          <ChatContainer />
-        </main>
-      </div>
-      <CommandPalette />
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
     </div>
   );
 }

@@ -1,61 +1,28 @@
-import { AppSidebar } from "@/components/app-sidebar"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Card, CardContent } from "@/components/ui/Card"
-import { Separator } from "@/components/ui/Separator"
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar"
+'use client';
 
-export default function Page() {
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading) {
+      if (isAuthenticated) {
+        // Redirect to chat as the main dashboard experience
+        router.replace('/chat');
+      } else {
+        router.replace('/login');
+      }
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  // Show loading while determining auth state
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    Building Your Application
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <Card className="aspect-video">
-              <CardContent className="h-full bg-muted/50" />
-            </Card>
-            <Card className="aspect-video">
-              <CardContent className="h-full bg-muted/50" />
-            </Card>
-            <Card className="aspect-video">
-              <CardContent className="h-full bg-muted/50" />
-            </Card>
-          </div>
-          <Card className="min-h-[100vh] flex-1 md:min-h-min">
-            <CardContent className="h-full bg-muted/50" />
-          </Card>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
-  )
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
+    </div>
+  );
 }
