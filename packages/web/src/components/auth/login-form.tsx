@@ -69,9 +69,9 @@ export function LoginForm() {
         {isLoading ? 'Signing in...' : 'Sign in'}
       </Button>
 
-      <p className="text-center text-sm text-slate-400">
+      <p className="text-center text-sm text-gray-500">
         Don&apos;t have an account?{' '}
-        <Link href="/register" className="text-sky-400 hover:text-sky-300">
+        <Link href="/register" className="text-sky-500 hover:text-sky-600">
           Sign up
         </Link>
       </p>

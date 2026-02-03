@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -24,11 +24,7 @@ export default function AgentsPage() {
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentDescription, setNewAgentDescription] = useState('');
 
-  useEffect(() => {
-    loadAgents();
-  }, []);
-
-  const loadAgents = async () => {
+  const loadAgents = useCallback(async () => {
     try {
       const response = await fetchWithAuth('/api/v1/agents');
       const data = await response.json();
@@ -42,7 +38,11 @@ export default function AgentsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchWithAuth]);
+
+  useEffect(() => {
+    loadAgents();
+  }, [loadAgents]);
 
   const createAgent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,7 +116,7 @@ export default function AgentsPage() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-semibold text-slate-100 mb-6">Agents</h1>
+      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Agents</h1>
 
       {error && (
         <div className="mb-4 rounded-md bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
@@ -125,8 +125,8 @@ export default function AgentsPage() {
       )}
 
       {/* Create Agent Form */}
-      <form onSubmit={createAgent} className="mb-8 p-4 rounded-lg border border-slate-800 bg-slate-900/50">
-        <h2 className="text-lg font-medium text-slate-200 mb-4">Create New Agent</h2>
+      <form onSubmit={createAgent} className="mb-8 p-4 rounded-lg border border-gray-200 bg-white">
+        <h2 className="text-lg font-medium text-gray-800 mb-4">Create New Agent</h2>
         <div className="space-y-4">
           <div>
             <Label htmlFor="name">Name</Label>
@@ -156,29 +156,29 @@ export default function AgentsPage() {
       {/* Agents List */}
       {agents.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-400">No agents yet</p>
-          <p className="text-slate-500 text-sm mt-1">Create your first agent above</p>
+          <p className="text-gray-500">No agents yet</p>
+          <p className="text-gray-400 text-sm mt-1">Create your first agent above</p>
         </div>
       ) : (
         <div className="space-y-3">
           {agents.map((agent) => (
             <div
               key={agent.id}
-              className="flex items-center justify-between p-4 rounded-lg border border-slate-800 bg-slate-900/50"
+              className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-white"
             >
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-100 font-medium">{agent.name}</span>
+                  <span className="text-gray-900 font-medium">{agent.name}</span>
                   {!agent.isActive && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-400">
+                    <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-500">
                       Inactive
                     </span>
                   )}
                 </div>
                 {agent.description && (
-                  <p className="text-sm text-slate-400 mt-1">{agent.description}</p>
+                  <p className="text-sm text-gray-500 mt-1">{agent.description}</p>
                 )}
-                <p className="text-xs text-slate-500 mt-1">Model: {agent.model}</p>
+                <p className="text-xs text-gray-400 mt-1">Model: {agent.model}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Button

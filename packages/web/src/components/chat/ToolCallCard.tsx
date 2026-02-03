@@ -14,6 +14,10 @@ interface ToolCallCardProps {
 
 export function ToolCallCard({ call, result }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const startedAt = !result && 'startedAt' in call
+    ? Number((call as { startedAt?: number }).startedAt)
+    : null;
+  const isRunning = Number.isFinite(startedAt);
   const [elapsed, setElapsed] = useState(0);
   const isError = result?.isError;
   const accentClass = isError
@@ -24,60 +28,57 @@ export function ToolCallCard({ call, result }: ToolCallCardProps) {
     : '';
 
   useEffect(() => {
-    if (result || !('startedAt' in call)) {
-      setElapsed(0);
-      return;
-    }
-    const startedAt = Number((call as { startedAt?: number }).startedAt);
-    if (!Number.isFinite(startedAt)) {
-      setElapsed(0);
+    if (!isRunning || startedAt === null) {
       return;
     }
     const tick = () => {
       setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
     };
-    tick();
+    const timeout = setTimeout(tick, 0);
     const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [call, result]);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
+  }, [isRunning, startedAt]);
 
   return (
     <Card className={cn('mt-3 overflow-hidden border-l-4', accentClass)}>
       <CardHeader
-        className="cursor-pointer justify-between gap-4 bg-gradient-to-r from-slate-950/60 via-slate-900/80 to-slate-950/40 text-sm"
+        className="cursor-pointer justify-between gap-4 bg-gray-50 text-sm"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-sky-500/20 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-sky-100">
+          <span className="rounded-full bg-sky-500/20 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-sky-700">
             {call.name}
           </span>
           {isError && <Badge variant="error">Error</Badge>}
-          {!result && elapsed > 0 && (
-            <span className="text-[11px] uppercase tracking-wide text-slate-400">
+          {isRunning && elapsed > 0 && (
+            <span className="text-[11px] uppercase tracking-wide text-gray-500">
               {elapsed}s
             </span>
           )}
         </div>
-        <span className="text-xs text-slate-400">{expanded ? 'Hide' : 'Show'}</span>
+        <span className="text-xs text-gray-500">{expanded ? 'Hide' : 'Show'}</span>
       </CardHeader>
       {expanded && (
-        <CardContent className="space-y-3 text-xs text-slate-200">
+        <CardContent className="space-y-3 text-xs text-gray-800">
           <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-400">Input</p>
-            <pre className="mt-2 overflow-auto rounded-lg bg-slate-950/60 p-3">
+            <p className="text-[11px] uppercase tracking-wide text-gray-500">Input</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-gray-100 p-3">
               {JSON.stringify(call.input, null, 2)}
             </pre>
           </div>
           {result && (
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Output</p>
+              <p className="text-[11px] uppercase tracking-wide text-gray-500">Output</p>
               {call.name === 'read' && filePath && !isError ? (
                 <FilePreview path={filePath} content={result.content} />
               ) : (
                 <pre
                   className={cn(
                     'mt-2 overflow-auto rounded-lg p-3',
-                    isError ? 'bg-rose-500/10 text-rose-100' : 'bg-slate-950/60'
+                    isError ? 'bg-rose-100 text-rose-800' : 'bg-gray-100'
                   )}
                 >
                   {result.content}

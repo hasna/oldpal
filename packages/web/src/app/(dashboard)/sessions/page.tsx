@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
@@ -23,11 +23,7 @@ export default function SessionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadSessions();
-  }, []);
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       const response = await fetchWithAuth('/api/v1/sessions');
       const data = await response.json();
@@ -41,7 +37,11 @@ export default function SessionsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchWithAuth]);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const deleteSession = async (id: string) => {
     if (!confirm('Are you sure you want to delete this session?')) return;
@@ -69,7 +69,7 @@ export default function SessionsPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-slate-100">Sessions</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Sessions</h1>
         <Link href="/chat">
           <Button>New Session</Button>
         </Link>
@@ -83,8 +83,8 @@ export default function SessionsPage() {
 
       {sessions.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-400">No sessions yet</p>
-          <Link href="/chat" className="text-sky-400 hover:text-sky-300 mt-2 inline-block">
+          <p className="text-gray-500">No sessions yet</p>
+          <Link href="/chat" className="text-sky-500 hover:text-sky-600 mt-2 inline-block">
             Start a new conversation
           </Link>
         </div>
@@ -93,20 +93,20 @@ export default function SessionsPage() {
           {sessions.map((session) => (
             <div
               key={session.id}
-              className="flex items-center justify-between p-4 rounded-lg border border-slate-800 bg-slate-900/50"
+              className="flex items-center justify-between p-4 rounded-lg border border-gray-200 bg-white"
             >
               <div className="flex-1">
                 <Link
                   href={`/chat?session=${session.id}`}
-                  className="text-slate-100 hover:text-sky-400 transition-colors font-medium"
+                  className="text-gray-900 hover:text-sky-500 transition-colors font-medium"
                 >
                   {session.label || 'Untitled Session'}
                 </Link>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-sm text-gray-400 mt-1">
                   {new Date(session.updatedAt).toLocaleDateString()} at{' '}
                   {new Date(session.updatedAt).toLocaleTimeString()}
                   {session.agent && (
-                    <span className="ml-2 text-slate-400">
+                    <span className="ml-2 text-gray-500">
                       Agent: {session.agent.name}
                     </span>
                   )}

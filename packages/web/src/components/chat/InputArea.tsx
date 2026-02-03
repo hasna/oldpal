@@ -51,7 +51,7 @@ export function InputArea() {
   }, [isStreaming, sessionId, setStreaming]);
 
   return (
-    <div className="flex items-center gap-3 border-t border-slate-800 bg-slate-950/80 px-6 py-4">
+    <div className="flex items-center gap-3 border-t border-gray-200 bg-white px-6 py-4">
       <div className="flex-1">
         <Input
           placeholder="Ask Assistants anything..."
@@ -78,7 +78,7 @@ export function InputArea() {
       )}
       <Button onClick={sendMessage}>Send</Button>
       {sessionId && (
-        <span className="text-xs text-slate-500">id {sessionId}</span>
+        <span className="text-xs text-gray-500">id {sessionId}</span>
       )}
     </div>
   );

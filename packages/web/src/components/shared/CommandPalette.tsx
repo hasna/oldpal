@@ -31,14 +31,14 @@ export function CommandPalette() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-glow">
-        <div className="text-xs uppercase tracking-[0.3em] text-slate-500">Commands</div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+        <div className="text-xs uppercase tracking-[0.3em] text-gray-500">Commands</div>
         <div className="mt-4 space-y-2">
           {commands.map((command) => (
             <button
               key={command.id}
-              className="flex w-full items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 hover:border-slate-600"
+              className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 hover:border-gray-400"
               onClick={() => {
                 if (command.action === 'new') {
                   if (isStreaming && sessionId) {
@@ -54,11 +54,11 @@ export function CommandPalette() {
               }}
             >
               <span>{command.label}</span>
-              <span className="text-xs text-slate-500">Enter</span>
+              <span className="text-xs text-gray-500">Enter</span>
             </button>
           ))}
         </div>
-        <p className="mt-4 text-xs text-slate-500">Tip: Press Esc to close.</p>
+        <p className="mt-4 text-xs text-gray-500">Tip: Press Esc to close.</p>
       </div>
     </div>
   );

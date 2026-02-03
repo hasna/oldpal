@@ -41,7 +41,7 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-semibold text-slate-100 mb-6">Settings</h1>
+      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Settings</h1>
 
       {message && (
         <div className="mb-4 rounded-md bg-green-500/10 border border-green-500/20 p-3 text-sm text-green-400">
@@ -57,8 +57,8 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         {/* Profile Section */}
-        <section className="p-4 rounded-lg border border-slate-800 bg-slate-900/50">
-          <h2 className="text-lg font-medium text-slate-200 mb-4">Profile</h2>
+        <section className="p-4 rounded-lg border border-gray-200 bg-white">
+          <h2 className="text-lg font-medium text-gray-800 mb-4">Profile</h2>
           <form onSubmit={handleSave} className="space-y-4">
             <div>
               <Label htmlFor="email">Email</Label>
@@ -67,9 +67,9 @@ export default function SettingsPage() {
                 type="email"
                 value={user?.email || ''}
                 disabled
-                className="bg-slate-800/50"
+                className="bg-gray-100"
               />
-              <p className="text-xs text-slate-500 mt-1">Email cannot be changed</p>
+              <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
             </div>
             <div>
               <Label htmlFor="name">Name</Label>
@@ -87,12 +87,12 @@ export default function SettingsPage() {
         </section>
 
         {/* Account Section */}
-        <section className="p-4 rounded-lg border border-slate-800 bg-slate-900/50">
-          <h2 className="text-lg font-medium text-slate-200 mb-4">Account</h2>
+        <section className="p-4 rounded-lg border border-gray-200 bg-white">
+          <h2 className="text-lg font-medium text-gray-800 mb-4">Account</h2>
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-slate-400">Account Type</p>
-              <p className="text-slate-100 capitalize">{user?.role || 'user'}</p>
+              <p className="text-sm text-gray-500">Account Type</p>
+              <p className="text-gray-900 capitalize">{user?.role || 'user'}</p>
             </div>
             <div>
               <Button
@@ -110,9 +110,9 @@ export default function SettingsPage() {
         </section>
 
         {/* Danger Zone */}
-        <section className="p-4 rounded-lg border border-red-500/20 bg-red-500/5">
-          <h2 className="text-lg font-medium text-red-400 mb-4">Danger Zone</h2>
-          <p className="text-sm text-slate-400 mb-4">
+        <section className="p-4 rounded-lg border border-red-200 bg-red-50">
+          <h2 className="text-lg font-medium text-red-600 mb-4">Danger Zone</h2>
+          <p className="text-sm text-gray-600 mb-4">
             Once you delete your account, there is no going back. Please be certain.
           </p>
           <Button

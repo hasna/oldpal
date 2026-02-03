@@ -16,16 +16,16 @@ export function MessageBubble({ message, isStreaming, toolResults }: MessageBubb
   return (
     <div className={cn('flex w-full gap-4', isUser ? 'justify-end' : 'justify-start')}>
       {!isUser && (
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-500/20 text-sm font-semibold text-sky-200">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-500/20 text-sm font-semibold text-sky-600">
           OP
         </div>
       )}
       <div
         className={cn(
-          'max-w-[80%] rounded-2xl border px-5 py-4 text-sm shadow-glow',
+          'max-w-[80%] rounded-2xl border px-5 py-4 text-sm shadow-sm',
           isUser
-            ? 'border-sky-400/30 bg-sky-500/20 text-slate-100'
-            : 'border-slate-800 bg-slate-900/70 text-slate-100'
+            ? 'border-sky-400/30 bg-sky-500 text-white'
+            : 'border-gray-200 bg-gray-100 text-gray-900'
         )}
       >
         <MarkdownRenderer content={message.content} />

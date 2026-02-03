@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
 
@@ -22,11 +22,7 @@ export default function MessagesPage() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'unread' | 'archived'>('all');
 
-  useEffect(() => {
-    loadMessages();
-  }, [filter]);
-
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (filter === 'unread') params.set('status', 'unread');
@@ -44,7 +40,11 @@ export default function MessagesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchWithAuth, filter]);
+
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
 
   const markAsRead = async (id: string) => {
     try {
@@ -85,13 +85,13 @@ export default function MessagesPage() {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'urgent':
-        return 'text-red-400';
+        return 'text-red-600';
       case 'high':
-        return 'text-orange-400';
+        return 'text-orange-600';
       case 'low':
-        return 'text-slate-500';
+        return 'text-gray-400';
       default:
-        return 'text-slate-400';
+        return 'text-gray-500';
     }
   };
 
@@ -106,12 +106,12 @@ export default function MessagesPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-slate-100">Messages</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Messages</h1>
         <div className="flex gap-2">
           {(['all', 'unread', 'archived'] as const).map((f) => (
             <Button
               key={f}
-              variant={filter === f ? 'primary' : 'ghost'}
+              variant={filter === f ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setFilter(f)}
             >
@@ -129,8 +129,8 @@ export default function MessagesPage() {
 
       {messages.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-400">No messages</p>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-gray-500">No messages</p>
+          <p className="text-gray-400 text-sm mt-1">
             {filter === 'unread' ? 'All messages have been read' : 'Your inbox is empty'}
           </p>
         </div>
@@ -139,25 +139,25 @@ export default function MessagesPage() {
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`p-4 rounded-lg border bg-slate-900/50 ${
-                message.status === 'unread' ? 'border-sky-500/30' : 'border-slate-800'
+              className={`p-4 rounded-lg border bg-white ${
+                message.status === 'unread' ? 'border-sky-500/30' : 'border-gray-200'
               }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     {message.status === 'unread' && (
-                      <span className="w-2 h-2 rounded-full bg-sky-400"></span>
+                      <span className="w-2 h-2 rounded-full bg-sky-500"></span>
                     )}
-                    <span className="text-slate-100 font-medium">
+                    <span className="text-gray-900 font-medium">
                       {message.subject || 'No subject'}
                     </span>
                     <span className={`text-xs ${getPriorityColor(message.priority)}`}>
                       {message.priority}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-400 mt-2 line-clamp-2">{message.body}</p>
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="text-sm text-gray-500 mt-2 line-clamp-2">{message.body}</p>
+                  <p className="text-xs text-gray-400 mt-2">
                     {new Date(message.createdAt).toLocaleString()}
                   </p>
                 </div>

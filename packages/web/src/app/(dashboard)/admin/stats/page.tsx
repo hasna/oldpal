@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
@@ -33,10 +33,10 @@ function StatCard({
   subtitle?: string;
 }) {
   return (
-    <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/50">
-      <p className="text-sm text-slate-400">{title}</p>
-      <p className="text-3xl font-semibold text-slate-100 mt-1">{value.toLocaleString()}</p>
-      {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
+    <div className="p-4 rounded-lg border border-gray-200 bg-white">
+      <p className="text-sm text-gray-500">{title}</p>
+      <p className="text-3xl font-semibold text-gray-900 mt-1">{value.toLocaleString()}</p>
+      {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
     </div>
   );
 }
@@ -54,11 +54,7 @@ export default function AdminStatsPage() {
     }
   }, [user, router]);
 
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const response = await fetchWithAuth('/api/v1/admin/stats');
       const data = await response.json();
@@ -72,7 +68,11 @@ export default function AdminStatsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchWithAuth]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   if (user?.role !== 'admin') {
     return null;
@@ -90,7 +90,7 @@ export default function AdminStatsPage() {
     <div className="p-6">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-slate-100">Statistics</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Statistics</h1>
           <Button variant="ghost" onClick={loadStats}>
             Refresh
           </Button>
@@ -106,7 +106,7 @@ export default function AdminStatsPage() {
           <>
             {/* Totals */}
             <section className="mb-8">
-              <h2 className="text-lg font-medium text-slate-200 mb-4">Totals</h2>
+              <h2 className="text-lg font-medium text-gray-800 mb-4">Totals</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <StatCard title="Total Users" value={stats.totals.users} />
                 <StatCard title="Total Sessions" value={stats.totals.sessions} />
@@ -118,7 +118,7 @@ export default function AdminStatsPage() {
 
             {/* Recent Activity */}
             <section className="mb-8">
-              <h2 className="text-lg font-medium text-slate-200 mb-4">Recent Activity</h2>
+              <h2 className="text-lg font-medium text-gray-800 mb-4">Recent Activity</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <StatCard
                   title="New Users Today"
@@ -148,7 +148,7 @@ export default function AdminStatsPage() {
               </div>
             </section>
 
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-gray-400">
               Generated at: {new Date(stats.generated).toLocaleString()}
             </p>
           </>

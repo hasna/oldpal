@@ -7,12 +7,12 @@ export function Sidebar() {
   const { sessions, sessionId, switchSession, isStreaming } = useChatStore();
 
   return (
-    <aside className="glass flex h-full w-72 flex-col gap-6 border-r border-slate-800 px-6 py-6">
+    <aside className="glass flex h-full w-72 flex-col gap-6 border-r border-gray-200 px-6 py-6">
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Sessions</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Sessions</p>
         <div className="mt-4 flex flex-col gap-2">
           {sessions.length === 0 && (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs text-slate-500">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
               No sessions yet.
             </div>
           )}
@@ -21,8 +21,8 @@ export function Sidebar() {
               key={session.id}
               className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
                 sessionId === session.id
-                  ? 'border-sky-400/60 bg-sky-500/10 text-slate-100'
-                  : 'border-transparent bg-slate-900/40 text-slate-200 hover:border-slate-700'
+                  ? 'border-sky-400/60 bg-sky-50 text-gray-900'
+                  : 'border-transparent bg-gray-50 text-gray-700 hover:border-gray-300'
               }`}
               onClick={() => {
                 if (isStreaming && sessionId) {
@@ -37,7 +37,7 @@ export function Sidebar() {
           ))}
         </div>
       </div>
-      <div className="mt-auto rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-xs text-slate-400">
+      <div className="mt-auto rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500">
         Tip: Use /help inside chat to see available commands.
       </div>
     </aside>

@@ -11,8 +11,8 @@ export function Header() {
   return (
     <header className="glass flex items-center justify-between px-6 py-4">
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Assistants</p>
-        <h1 className="font-display text-xl text-slate-100">Operations Console</h1>
+        <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Assistants</p>
+        <h1 className="font-display text-xl text-gray-900">Operations Console</h1>
       </div>
       <div className="flex items-center gap-3">
         <Link href="/settings">
@@ -21,7 +21,7 @@ export function Header() {
           </Button>
         </Link>
         <Button
-          variant="primary"
+          variant="default"
           size="sm"
           onClick={() => {
             if (isStreaming && sessionId) {

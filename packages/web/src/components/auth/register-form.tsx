@@ -108,9 +108,9 @@ export function RegisterForm() {
         {isLoading ? 'Creating account...' : 'Create account'}
       </Button>
 
-      <p className="text-center text-sm text-slate-400">
+      <p className="text-center text-sm text-gray-500">
         Already have an account?{' '}
-        <Link href="/login" className="text-sky-400 hover:text-sky-300">
+        <Link href="/login" className="text-sky-500 hover:text-sky-600">
           Sign in
         </Link>
       </p>
