@@ -186,6 +186,7 @@ export function App({ cwd, version }: AppProps) {
   // Terminal resize is handled natively
   const turnIdRef = useRef(0);
   const initStateRef = useRef<'idle' | 'pending' | 'done'>('idle');
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     isProcessingRef.current = isProcessing;
@@ -569,13 +570,22 @@ export function App({ cwd, version }: AppProps) {
 
     initSession();
 
-    // Cleanup on unmount
+    // Cleanup - only set cancelled flag, don't close registry
+    // Registry cleanup happens in the mount/unmount effect below
     return () => {
       cancelled = true;
-      // Close registry when component is unmounting
-      registry.closeAll();
     };
   }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState, loadSessionMetadata, beginAskUser]);
+
+  // Separate effect for component mount/unmount lifecycle
+  // This ensures registry is only closed when component truly unmounts
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      registry.closeAll();
+    };
+  }, [registry]);
 
   // Process queued messages
   const processQueue = useCallback(async () => {
