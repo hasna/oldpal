@@ -262,11 +262,14 @@ export function Input({
       moveCursorTo(line.start + line.text.length, false);
       return;
     }
-    if (key.backspace) {
+    // Handle backspace - check both key.backspace and raw character codes
+    // Some terminals send \x7f (DEL) or \x08 (BS) instead of setting key.backspace
+    if (key.backspace || input === '\x7f' || input === '\x08') {
       deleteBackward();
       return;
     }
-    if (key.delete) {
+    // Handle delete key
+    if (key.delete || input === '\x1b[3~') {
       deleteForward();
       return;
     }
@@ -289,7 +292,9 @@ export function Input({
       return;
     }
 
-    if (input) {
+    // Insert printable characters only (filter out control characters and DEL)
+    const charCode = input?.charCodeAt(0) ?? 0;
+    if (input && charCode >= 32 && charCode !== 127) {
       insertText(input);
     }
   });
