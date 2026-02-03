@@ -16,65 +16,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
     initialized.current = true;
 
     const initialize = async () => {
-      const state = useAuthStore.getState();
-      const { accessToken, refreshToken } = state;
-
-      // If no access token, ensure we're logged out
-      if (!accessToken) {
-        useAuthStore.getState().setLoading(false);
-        return;
-      }
-
-      // Verify token and hydrate user data from /auth/me
+      // On page load, tokens are not in memory (only access token lives in memory)
+      // But refresh token might be in httpOnly cookie
+      // Try to get a new access token via refresh
       try {
-        const response = await fetch('/api/v1/auth/me', {
-          headers: { Authorization: `Bearer ${accessToken}` },
+        const refreshResponse = await fetch('/api/v1/auth/refresh', {
+          method: 'POST',
+          credentials: 'include', // Send refresh token cookie
         });
 
-        if (response.ok) {
-          // Token is valid, hydrate user data
-          const data = await response.json();
-          if (data.success && data.data) {
-            useAuthStore.getState().setAuth(data.data, accessToken, refreshToken || '');
-          }
-        } else if (response.status === 401 && refreshToken) {
-          // Token expired, try to refresh
-          try {
-            const refreshResponse = await fetch('/api/v1/auth/refresh', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refreshToken }),
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+
+          if (refreshData.success && refreshData.data?.accessToken) {
+            const newAccessToken = refreshData.data.accessToken;
+
+            // Fetch user data with new token
+            const meResponse = await fetch('/api/v1/auth/me', {
+              headers: { Authorization: `Bearer ${newAccessToken}` },
+              credentials: 'include',
             });
 
-            const refreshData = await refreshResponse.json();
-
-            if (refreshData.success) {
-              const { accessToken: newAccessToken, refreshToken: newRefreshToken } = refreshData.data;
-              useAuthStore.getState().setTokens(newAccessToken, newRefreshToken);
-
-              // Fetch user data with new token
-              const meResponse = await fetch('/api/v1/auth/me', {
-                headers: { Authorization: `Bearer ${newAccessToken}` },
-              });
-
-              if (meResponse.ok) {
-                const meData = await meResponse.json();
-                if (meData.success && meData.data) {
-                  useAuthStore.getState().setAuth(meData.data, newAccessToken, newRefreshToken);
-                }
+            if (meResponse.ok) {
+              const meData = await meResponse.json();
+              if (meData.success && meData.data) {
+                useAuthStore.getState().setAuth(meData.data, newAccessToken);
+                return;
               }
-            } else {
-              useAuthStore.getState().logout();
             }
-          } catch {
-            useAuthStore.getState().logout();
           }
-        } else {
-          // Token is invalid, log out
-          useAuthStore.getState().logout();
         }
+
+        // No valid session, ensure we're logged out
+        useAuthStore.getState().logout();
       } catch {
-        // Network error, keep existing state but stop loading
+        // Network error, assume not logged in
+        useAuthStore.getState().logout();
       }
 
       useAuthStore.getState().setLoading(false);

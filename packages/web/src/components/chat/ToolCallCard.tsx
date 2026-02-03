@@ -45,8 +45,18 @@ export function ToolCallCard({ call, result }: ToolCallCardProps) {
   return (
     <Card className={cn('mt-3 overflow-hidden border-l-4', accentClass)}>
       <CardHeader
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        aria-label={`Tool call: ${call.name}. ${expanded ? 'Collapse' : 'Expand'} details`}
         className="cursor-pointer justify-between gap-4 bg-gray-50 text-sm"
         onClick={() => setExpanded(!expanded)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setExpanded(!expanded);
+          }
+        }}
       >
         <div className="flex items-center gap-3">
           <span className="rounded-full bg-sky-500/20 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-sky-700">

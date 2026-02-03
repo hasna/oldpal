@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle } from 'lucide-react';
@@ -19,6 +19,14 @@ export function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  // Focus error banner when error changes
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.focus();
+    }
+  }, [error]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,9 +57,15 @@ export function RegisterForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+        <Alert
+          ref={errorRef}
+          variant="destructive"
+          role="alert"
+          aria-live="assertive"
+          tabIndex={-1}
+        >
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription id="register-error">{error}</AlertDescription>
         </Alert>
       )}
 
@@ -65,6 +79,8 @@ export function RegisterForm() {
           onChange={(e) => setName(e.target.value)}
           required
           autoComplete="name"
+          aria-invalid={!!error}
+          aria-describedby={error ? 'register-error' : undefined}
         />
       </div>
 
@@ -78,6 +94,8 @@ export function RegisterForm() {
           onChange={(e) => setEmail(e.target.value)}
           required
           autoComplete="email"
+          aria-invalid={!!error}
+          aria-describedby={error ? 'register-error' : undefined}
         />
       </div>
 
@@ -91,6 +109,8 @@ export function RegisterForm() {
           onChange={(e) => setPassword(e.target.value)}
           required
           autoComplete="new-password"
+          aria-invalid={!!error}
+          aria-describedby={error ? 'register-error' : undefined}
         />
       </div>
 
@@ -104,6 +124,8 @@ export function RegisterForm() {
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
           autoComplete="new-password"
+          aria-invalid={!!error}
+          aria-describedby={error ? 'register-error' : undefined}
         />
       </div>
 

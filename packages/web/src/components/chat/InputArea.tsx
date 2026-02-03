@@ -12,6 +12,8 @@ export function InputArea() {
   const { addMessage, setStreaming, sessionId, createSession, isStreaming, finalizeToolCalls, clearToolCalls } = useChatStore();
 
   const sendMessage = () => {
+    // Prevent concurrent sends while streaming to avoid corrupting tool-call state
+    if (isStreaming) return;
     const trimmed = value.trim();
     if (!trimmed) return;
 
@@ -86,7 +88,9 @@ export function InputArea() {
           Stop
         </Button>
       )}
-      <Button onClick={sendMessage}>Send</Button>
+      <Button onClick={sendMessage} disabled={isStreaming || !value.trim()}>
+        {isStreaming ? 'Streaming...' : 'Send'}
+      </Button>
     </div>
   );
 }

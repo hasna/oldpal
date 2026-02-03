@@ -15,11 +15,10 @@ export function ChatContainer() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const url = new URL(`${protocol}://${window.location.host}/api/ws`);
-      if (accessToken) {
-        url.searchParams.set('token', accessToken);
-      }
-      chatWs.connect(url.toString());
+      // Don't put token in URL - it gets logged by servers/proxies
+      // Token is sent as first message after connection instead
+      const url = `${protocol}://${window.location.host}/api/v1/ws`;
+      chatWs.connect(url, accessToken);
     }
     return () => {
       chatWs.disconnect();
