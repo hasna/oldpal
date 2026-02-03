@@ -9,7 +9,7 @@ import { now, generateId } from '@hasna/assistants-shared';
 
 export function InputArea() {
   const [value, setValue] = useState('');
-  const { addMessage, setStreaming, sessionId, createSession, isStreaming } = useChatStore();
+  const { addMessage, setStreaming, sessionId, createSession, isStreaming, finalizeToolCalls, clearToolCalls } = useChatStore();
 
   const sendMessage = () => {
     const trimmed = value.trim();
@@ -43,17 +43,22 @@ export function InputArea() {
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isStreaming && sessionId) {
         chatWs.send({ type: 'cancel', sessionId });
+        // Clean up tool call state since server may not send completion
+        finalizeToolCalls();
+        clearToolCalls();
         setStreaming(false);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isStreaming, sessionId, setStreaming]);
+  }, [isStreaming, sessionId, setStreaming, finalizeToolCalls, clearToolCalls]);
 
   return (
     <div className="flex items-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
       <div className="flex-1">
         <Textarea
+          id="chat-input"
+          aria-label="Message input"
           placeholder="Ask Assistants anything..."
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -72,6 +77,9 @@ export function InputArea() {
           variant="outline"
           onClick={() => {
             chatWs.send({ type: 'cancel', sessionId });
+            // Clean up tool call state since server may not send completion
+            finalizeToolCalls();
+            clearToolCalls();
             setStreaming(false);
           }}
         >
@@ -79,9 +87,6 @@ export function InputArea() {
         </Button>
       )}
       <Button onClick={sendMessage}>Send</Button>
-      {sessionId && (
-        <span className="text-xs text-gray-500">id {sessionId}</span>
-      )}
     </div>
   );
 }

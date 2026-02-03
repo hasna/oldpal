@@ -49,6 +49,12 @@ export function ChatContainer() {
         </div>
       </ScrollArea>
       <InputArea />
+      {/* Status bar - session info */}
+      {sessionId && (
+        <div className="border-t border-gray-100 bg-gray-50 px-4 py-1 text-[10px] text-gray-400">
+          Session: {sessionId}
+        </div>
+      )}
     </div>
   );
 }

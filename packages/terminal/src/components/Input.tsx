@@ -45,6 +45,7 @@ interface InputProps {
   skills?: SkillInfo[];
   isAskingUser?: boolean;
   askPlaceholder?: string;
+  allowBlankAnswer?: boolean;
 }
 
 export function Input({
@@ -55,9 +56,28 @@ export function Input({
   skills = [],
   isAskingUser = false,
   askPlaceholder,
+  allowBlankAnswer = false,
 }: InputProps) {
-  const [value, setValue] = useState('');
-  const [cursor, setCursor] = useState(0);
+  // Combined value+cursor state for atomic updates during rapid paste operations
+  // When text is pasted, it may arrive in multiple chunks; using a single state
+  // object ensures each chunk sees the correct previous state via functional updates
+  const [inputState, setInputState] = useState({ value: '', cursor: 0 });
+  const { value, cursor } = inputState;
+
+  // Helpers for setting value/cursor together (atomic) or separately
+  const setValue = (newValue: string | ((prev: string) => string)) => {
+    setInputState(prev => ({
+      ...prev,
+      value: typeof newValue === 'function' ? newValue(prev.value) : newValue,
+    }));
+  };
+  const setCursor = (newCursor: number | ((prev: number) => number)) => {
+    setInputState(prev => ({
+      ...prev,
+      cursor: typeof newCursor === 'function' ? newCursor(prev.cursor) : newCursor,
+    }));
+  };
+
   const [preferredColumn, setPreferredColumn] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { stdout } = useStdout();
@@ -88,7 +108,7 @@ export function Input({
       return 'command';
     }
     return null;
-  }, [value]);
+  }, [value, isAskingUser]);
 
   // Filter commands based on input
   const filteredCommands = useMemo(() => {
@@ -117,16 +137,16 @@ export function Input({
   }, [autocompleteItems.length]);
 
   const setValueAndCursor = (nextValue: string, nextCursor: number = nextValue.length) => {
-    setValue(nextValue);
     const clamped = Math.max(0, Math.min(nextCursor, nextValue.length));
-    setCursor(clamped);
+    setInputState({ value: nextValue, cursor: clamped });
     setPreferredColumn(null);
     setSelectedIndex(0);
   };
 
 
   const handleSubmit = (submittedValue: string) => {
-    if (!submittedValue.trim()) return;
+    // Allow blank submission only for optional ask-user questions
+    if (!submittedValue.trim() && !allowBlankAnswer) return;
 
     if (
       autocompleteMode === 'command' &&
@@ -170,26 +190,62 @@ export function Input({
 
   const insertText = (text: string) => {
     if (!text) return;
-    const next = value.slice(0, cursor) + text + value.slice(cursor);
-    setValue(next);
-    setCursor(cursor + text.length);
+    // Use functional update for atomic value+cursor change during rapid pastes
+    setInputState(prev => ({
+      value: prev.value.slice(0, prev.cursor) + text + prev.value.slice(prev.cursor),
+      cursor: prev.cursor + text.length,
+    }));
     setPreferredColumn(null);
     setSelectedIndex(0);
   };
 
   const deleteBackward = () => {
-    if (cursor === 0) return;
-    const next = value.slice(0, cursor - 1) + value.slice(cursor);
-    setValue(next);
-    setCursor(cursor - 1);
+    setInputState(prev => {
+      if (prev.cursor === 0) return prev;
+      return {
+        value: prev.value.slice(0, prev.cursor - 1) + prev.value.slice(prev.cursor),
+        cursor: prev.cursor - 1,
+      };
+    });
     setPreferredColumn(null);
     setSelectedIndex(0);
   };
 
   const deleteForward = () => {
-    if (cursor >= value.length) return;
-    const next = value.slice(0, cursor) + value.slice(cursor + 1);
-    setValue(next);
+    setInputState(prev => {
+      if (prev.cursor >= prev.value.length) return prev;
+      return {
+        value: prev.value.slice(0, prev.cursor) + prev.value.slice(prev.cursor + 1),
+        cursor: prev.cursor,
+      };
+    });
+    setPreferredColumn(null);
+    setSelectedIndex(0);
+  };
+
+  // Delete word backward (Ctrl+W) - standard terminal/readline behavior
+  const deleteWordBackward = () => {
+    setInputState(prev => {
+      if (prev.cursor === 0) return prev;
+
+      let start = prev.cursor - 1;
+
+      // Skip trailing spaces/whitespace
+      while (start >= 0 && /\s/.test(prev.value[start])) {
+        start--;
+      }
+
+      // Find start of word (stop at space or beginning)
+      while (start >= 0 && !/\s/.test(prev.value[start])) {
+        start--;
+      }
+
+      // start is now at the space before the word (or -1 if at beginning)
+      return {
+        value: prev.value.slice(0, start + 1) + prev.value.slice(prev.cursor),
+        cursor: start + 1,
+      };
+    });
     setPreferredColumn(null);
     setSelectedIndex(0);
   };
@@ -200,6 +256,12 @@ export function Input({
       if (value.length > 0) {
         setValueAndCursor('');
       }
+      return;
+    }
+
+    // Ctrl+W: delete word backward (standard readline behavior)
+    if (key.ctrl && input === 'w') {
+      deleteWordBackward();
       return;
     }
 
@@ -262,10 +324,12 @@ export function Input({
       moveCursorTo(line.start + line.text.length, false);
       return;
     }
-    // Handle backspace - Ink 6.x sets key.delete (not key.backspace) for \x7f (DEL)
-    // which is what macOS/Linux terminals send for the Backspace key.
-    // The actual Delete/Forward-Delete key sends \x1b[3~ escape sequence.
-    if (key.backspace || key.delete) {
+    // Handle backspace - multiple terminal variations:
+    // - \x7f (DEL, ASCII 127) - what most modern terminals send for Backspace
+    // - \x08 (BS, ASCII 8) - traditional backspace, some terminals still use this
+    // - Ink sets key.delete for \x7f on Mac/Linux, key.backspace varies by terminal
+    // We check raw codes first for cross-terminal reliability
+    if (input === '\x7f' || input === '\x08' || key.backspace || key.delete) {
       deleteBackward();
       return;
     }

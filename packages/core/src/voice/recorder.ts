@@ -17,6 +17,8 @@ interface RecorderCommand {
 
 export class AudioRecorder {
   private currentProcess: ReturnType<typeof spawn> | null = null;
+  private stoppedIntentionally = false;
+  private currentOutputPath: string | null = null;
 
   async record(options: RecordOptions = {}): Promise<ArrayBuffer> {
     if (this.currentProcess) {
@@ -27,6 +29,8 @@ export class AudioRecorder {
     const sampleRate = options.sampleRate ?? 16000;
     const channels = options.channels ?? 1;
     const output = join(tmpdir(), `assistants-record-${Date.now()}.wav`);
+    this.currentOutputPath = output;
+    this.stoppedIntentionally = false;
 
     const recorder = this.resolveRecorder(sampleRate, channels, duration, output);
     if (!recorder) {
@@ -37,7 +41,9 @@ export class AudioRecorder {
       this.currentProcess = spawn(recorder.command, recorder.args, { stdio: 'ignore' });
       this.currentProcess.on('close', (code) => {
         this.currentProcess = null;
-        if (code === 0) {
+        // Accept both normal completion (code 0) and intentional stop
+        // When we send SIGINT, sox/ffmpeg may exit with non-zero but still write valid data
+        if (code === 0 || this.stoppedIntentionally) {
           resolve();
         } else {
           reject(new Error('Audio recording failed.'));
@@ -51,13 +57,16 @@ export class AudioRecorder {
 
     const data = readFileSync(output);
     unlink(output, () => {});
+    this.currentOutputPath = null;
     return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
   }
 
   stop(): void {
     if (this.currentProcess) {
-      this.currentProcess.kill();
-      this.currentProcess = null;
+      this.stoppedIntentionally = true;
+      // Use SIGINT for graceful shutdown - allows recording tools to flush buffers
+      // This is more reliable than SIGTERM for audio tools like sox and ffmpeg
+      this.currentProcess.kill('SIGINT');
     }
   }
 

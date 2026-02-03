@@ -56,6 +56,7 @@ interface SessionUIState {
   processingStartTime: number | undefined;
   currentTurnTokens: number;
   error: string | null;
+  lastWorkedFor: string | undefined;
 }
 
 interface AskUserState {
@@ -105,6 +106,7 @@ export function App({ cwd, version }: AppProps) {
   const [askUserState, setAskUserState] = useState<AskUserState | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
+  const [lastWorkedFor, setLastWorkedFor] = useState<string | undefined>();
 
   // Available skills for autocomplete
   const [skills, setSkills] = useState<{ name: string; description: string; argumentHint?: string }[]>([]);
@@ -187,6 +189,7 @@ export function App({ cwd, version }: AppProps) {
   const turnIdRef = useRef(0);
   const initStateRef = useRef<'idle' | 'pending' | 'done'>('idle');
   const isMountedRef = useRef(true);
+  const handlersRegisteredRef = useRef(false);
 
   useEffect(() => {
     isProcessingRef.current = isProcessing;
@@ -277,9 +280,10 @@ export function App({ cwd, version }: AppProps) {
       content = content ? `${content}\n\n[error]` : '[error]';
     }
 
+    // Store worked duration for sticky display above input (instead of appending to each message)
     if (processingStartTimeRef.current) {
       const workedFor = formatElapsedDuration(Date.now() - processingStartTimeRef.current);
-      content = content ? `${content}\n\n✻ Worked for ${workedFor}` : `✻ Worked for ${workedFor}`;
+      setLastWorkedFor(workedFor);
     }
 
     setMessages((prev) => [
@@ -325,9 +329,10 @@ export function App({ cwd, version }: AppProps) {
         processingStartTime,
         currentTurnTokens,
         error,
+        lastWorkedFor,
       });
     }
-  }, [activeSessionId, messages, tokenUsage, energyState, voiceState, identityInfo, processingStartTime, currentTurnTokens, error]);
+  }, [activeSessionId, messages, tokenUsage, energyState, voiceState, identityInfo, processingStartTime, currentTurnTokens, error, lastWorkedFor]);
 
   // Load session UI state
   const loadSessionState = useCallback((sessionId: string) => {
@@ -349,6 +354,7 @@ export function App({ cwd, version }: AppProps) {
       setProcessingStartTime(state.processingStartTime);
       setCurrentTurnTokens(state.currentTurnTokens);
       setError(state.error);
+      setLastWorkedFor(state.lastWorkedFor);
       setAskUserState(askState);
     } else {
       // New session - reset state
@@ -367,6 +373,7 @@ export function App({ cwd, version }: AppProps) {
       setProcessingStartTime(undefined);
       setCurrentTurnTokens(0);
       setError(null);
+      setLastWorkedFor(undefined);
       setAskUserState(askState);
     }
   }, []);
@@ -525,9 +532,11 @@ export function App({ cwd, version }: AppProps) {
 
     const initSession = async () => {
       try {
-        // Register chunk handler (only once)
-        registry.onChunk(handleChunk);
-        registry.onError((err) => {
+        // Register chunk handler (only once, even on retry after error)
+        if (!handlersRegisteredRef.current) {
+          handlersRegisteredRef.current = true;
+          registry.onChunk(handleChunk);
+          registry.onError((err) => {
           const finalized = finalizeResponse('error');
           if (finalized) {
             skipNextDoneRef.current = true;
@@ -540,7 +549,8 @@ export function App({ cwd, version }: AppProps) {
           if (active) {
             registryRef.current.setProcessing(active.id, false);
           }
-        });
+          });
+        }
 
         // Create first session
         const session = await registry.createSession(cwd);
@@ -999,6 +1009,7 @@ export function App({ cwd, version }: AppProps) {
         );
         setActivityLog([]);
         activityLogRef.current = [];
+        setLastWorkedFor(undefined);
         sessionUIStates.current.set(activeSession.id, {
           messages: [],
           currentResponse: '',
@@ -1012,6 +1023,7 @@ export function App({ cwd, version }: AppProps) {
           processingStartTime: undefined,
           currentTurnTokens: 0,
           error: null,
+          lastWorkedFor: undefined,
         });
       } else {
         // Add user message
@@ -1200,6 +1212,13 @@ export function App({ cwd, version }: AppProps) {
         isThinking={isThinking}
       />
 
+      {/* Worked-for timer - shows only most recent, sticky above input */}
+      {!isProcessing && lastWorkedFor && (
+        <Box marginBottom={0} marginLeft={2}>
+          <Text color="gray">✻ Worked for {lastWorkedFor}</Text>
+        </Box>
+      )}
+
       {/* Input - always enabled, supports queue/interrupt */}
       <Input
         onSubmit={handleSubmit}
@@ -1209,6 +1228,7 @@ export function App({ cwd, version }: AppProps) {
         skills={skills}
         isAskingUser={Boolean(activeAskQuestion)}
         askPlaceholder={askPlaceholder}
+        allowBlankAnswer={activeAskQuestion?.required === false}
       />
 
       {/* Status bar */}

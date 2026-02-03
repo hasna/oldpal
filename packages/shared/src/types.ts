@@ -618,7 +618,12 @@ export interface ScheduledCommand {
   updatedAt: number;
   createdBy: 'user' | 'agent';
   sessionId?: string;
+  /** Type of action to perform when the schedule fires */
+  actionType?: 'command' | 'message';
+  /** Command to execute (used when actionType is 'command' or undefined for backwards compatibility) */
   command: string;
+  /** Custom message to inject into agent session (used when actionType is 'message') */
+  message?: string;
   description?: string;
   status: 'active' | 'paused' | 'completed' | 'error';
   schedule: {
