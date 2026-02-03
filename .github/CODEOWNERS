@@ -1,0 +1,35 @@
+# CODEOWNERS
+#
+# This file defines the code owners for this repository.
+# Code owners are automatically requested for review when PRs modify their files.
+#
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @hasna
+
+# Core package
+/packages/core/ @hasna
+
+# Terminal package
+/packages/terminal/ @hasna
+
+# Web package
+/packages/web/ @hasna
+
+# Shared package
+/packages/shared/ @hasna
+
+# Runtime packages
+/packages/runtime-bun/ @hasna
+/packages/runtime-node/ @hasna
+
+# Configuration files
+*.json @hasna
+*.yaml @hasna
+*.yml @hasna
+*.toml @hasna
+
+# Documentation
+*.md @hasna
+/docs/ @hasna

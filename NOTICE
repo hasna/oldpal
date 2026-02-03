@@ -1,0 +1,56 @@
+Assistants
+Copyright (c) 2024 Hasna
+
+This product includes software developed by Hasna.
+
+Licensed under the MIT License.
+See LICENSE file for details.
+
+---
+
+Third-Party Dependencies
+
+This project uses the following open source libraries:
+
+@anthropic-ai/sdk - Anthropic AI SDK
+License: MIT
+https://github.com/anthropics/anthropic-sdk-typescript
+
+Bun - JavaScript runtime
+License: MIT
+https://github.com/oven-sh/bun
+
+React - UI library
+License: MIT
+https://github.com/facebook/react
+
+Ink - React for CLI
+License: MIT
+https://github.com/vadimdemedes/ink
+
+Drizzle ORM - TypeScript ORM
+License: Apache-2.0
+https://github.com/drizzle-team/drizzle-orm
+
+Next.js - React framework
+License: MIT
+https://github.com/vercel/next.js
+
+Radix UI - UI primitives
+License: MIT
+https://github.com/radix-ui/primitives
+
+Tailwind CSS - CSS framework
+License: MIT
+https://github.com/tailwindlabs/tailwindcss
+
+Zustand - State management
+License: MIT
+https://github.com/pmndrs/zustand
+
+Zod - Schema validation
+License: MIT
+https://github.com/colinhacks/zod
+
+For a complete list of dependencies and their licenses, see package.json
+and the respective package documentation.
