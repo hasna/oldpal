@@ -38,7 +38,7 @@ describe('SchedulerTool', () => {
 
   test('create action validates inputs', async () => {
     expect(await SchedulerTool.executor({ action: 'create', command: '' })).toBe('Error: command is required.');
-    expect(await SchedulerTool.executor({ action: 'create', command: 'cmd' })).toBe('Error: provide either at (ISO time) or cron.');
+    expect(await SchedulerTool.executor({ action: 'create', command: 'cmd' })).toBe('Error: provide at (ISO time), cron, every (fixed interval), or minInterval+maxInterval for random scheduling.');
 
     expect(
       await SchedulerTool.executor({ action: 'create', command: 'cmd', at: '2026-02-01T10:00:00', timezone: 'Bad/Zone' })
@@ -47,6 +47,107 @@ describe('SchedulerTool', () => {
     const past = new Date(Date.now() - 1000).toISOString();
     const error = await SchedulerTool.executor({ action: 'create', command: 'cmd', at: past });
     expect(error).toBe('Error: unable to compute next run for schedule.');
+  });
+
+  test('create action validates random interval inputs', async () => {
+    // minInterval and maxInterval must be positive
+    expect(
+      await SchedulerTool.executor({ action: 'create', command: 'cmd', minInterval: 0, maxInterval: 10 })
+    ).toBe('Error: minInterval and maxInterval must be positive numbers.');
+    expect(
+      await SchedulerTool.executor({ action: 'create', command: 'cmd', minInterval: 5, maxInterval: -1 })
+    ).toBe('Error: minInterval and maxInterval must be positive numbers.');
+
+    // minInterval cannot be greater than maxInterval
+    expect(
+      await SchedulerTool.executor({ action: 'create', command: 'cmd', minInterval: 20, maxInterval: 5 })
+    ).toBe('Error: minInterval cannot be greater than maxInterval.');
+  });
+
+  test('create action validates fixed interval inputs', async () => {
+    // every must be positive
+    expect(
+      await SchedulerTool.executor({ action: 'create', command: 'cmd', every: 0 })
+    ).toBe('Error: every must be a positive number.');
+    expect(
+      await SchedulerTool.executor({ action: 'create', command: 'cmd', every: -5 })
+    ).toBe('Error: every must be a positive number.');
+  });
+
+  test('create action saves fixed interval schedule', async () => {
+    await withTempDir(async (dir) => {
+      const output = await SchedulerTool.executor({
+        action: 'create',
+        command: 'interval-cmd',
+        every: 15,
+        unit: 'seconds',
+        cwd: dir,
+      });
+      expect(output).toContain('Scheduled interval-cmd');
+      expect(output).toContain('every 15 seconds');
+
+      const match = output.match(/\(([^)]+)\)/);
+      expect(match).not.toBeNull();
+      const id = match?.[1];
+      const saved = id ? await readSchedule(dir, id) : null;
+      expect(saved?.command).toBe('interval-cmd');
+      expect(saved?.schedule.kind).toBe('interval');
+      expect(saved?.schedule.interval).toBe(15);
+      expect(saved?.schedule.unit).toBe('seconds');
+      expect(saved?.nextRunAt).toBeGreaterThan(Date.now());
+    });
+  });
+
+  test('create action saves sub-minute interval (1 second)', async () => {
+    await withTempDir(async (dir) => {
+      const output = await SchedulerTool.executor({
+        action: 'create',
+        command: 'fast-cmd',
+        every: 1,
+        unit: 'seconds',
+        cwd: dir,
+      });
+      expect(output).toContain('Scheduled fast-cmd');
+      expect(output).toContain('every 1 seconds');
+
+      const match = output.match(/\(([^)]+)\)/);
+      const id = match?.[1];
+      const saved = id ? await readSchedule(dir, id) : null;
+      expect(saved?.schedule.kind).toBe('interval');
+      expect(saved?.schedule.interval).toBe(1);
+      expect(saved?.schedule.unit).toBe('seconds');
+      // Next run should be about 1 second from now
+      const expectedMin = Date.now() + 900; // Allow some margin
+      const expectedMax = Date.now() + 1100;
+      expect(saved?.nextRunAt).toBeGreaterThanOrEqual(expectedMin);
+      expect(saved?.nextRunAt).toBeLessThanOrEqual(expectedMax);
+    });
+  });
+
+  test('create action saves random interval schedule', async () => {
+    await withTempDir(async (dir) => {
+      const output = await SchedulerTool.executor({
+        action: 'create',
+        command: 'random-cmd',
+        minInterval: 5,
+        maxInterval: 15,
+        unit: 'minutes',
+        cwd: dir,
+      });
+      expect(output).toContain('Scheduled random-cmd');
+      expect(output).toContain('randomly every 5-15 minutes');
+
+      const match = output.match(/\(([^)]+)\)/);
+      expect(match).not.toBeNull();
+      const id = match?.[1];
+      const saved = id ? await readSchedule(dir, id) : null;
+      expect(saved?.command).toBe('random-cmd');
+      expect(saved?.schedule.kind).toBe('random');
+      expect(saved?.schedule.minInterval).toBe(5);
+      expect(saved?.schedule.maxInterval).toBe(15);
+      expect(saved?.schedule.unit).toBe('minutes');
+      expect(saved?.nextRunAt).toBeGreaterThan(Date.now());
+    });
   });
 
   test('create action saves schedule', async () => {

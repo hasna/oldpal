@@ -627,10 +627,18 @@ export interface ScheduledCommand {
   description?: string;
   status: 'active' | 'paused' | 'completed' | 'error';
   schedule: {
-    kind: 'once' | 'cron';
+    kind: 'once' | 'cron' | 'random' | 'interval';
     at?: string;
     cron?: string;
     timezone?: string;
+    /** For random schedules: minimum interval */
+    minInterval?: number;
+    /** For random schedules: maximum interval */
+    maxInterval?: number;
+    /** For random and interval schedules: interval unit (supports sub-minute with 'seconds') */
+    unit?: 'seconds' | 'minutes' | 'hours';
+    /** For interval schedules: fixed interval value (minimum 1 second) */
+    interval?: number;
   };
   nextRunAt?: number;
   lastRunAt?: number;

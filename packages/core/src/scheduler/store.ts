@@ -87,7 +87,60 @@ export function computeNextRun(schedule: ScheduledCommand, fromTime: number): nu
     if (!schedule.schedule.cron) return undefined;
     return getNextCronRun(schedule.schedule.cron, fromTime, validTimezone);
   }
+  if (schedule.schedule.kind === 'random') {
+    return computeRandomNextRun(schedule.schedule, fromTime);
+  }
+  if (schedule.schedule.kind === 'interval') {
+    return computeIntervalNextRun(schedule.schedule, fromTime);
+  }
   return undefined;
+}
+
+/**
+ * Compute next run time for a random interval schedule.
+ * Calculates a random delay between minInterval and maxInterval.
+ */
+function computeRandomNextRun(
+  schedule: { minInterval?: number; maxInterval?: number; unit?: 'seconds' | 'minutes' | 'hours' },
+  fromTime: number
+): number | undefined {
+  const { minInterval, maxInterval, unit = 'minutes' } = schedule;
+  if (!minInterval || !maxInterval || minInterval <= 0 || maxInterval <= 0) {
+    return undefined;
+  }
+  if (minInterval > maxInterval) {
+    return undefined;
+  }
+
+  // Convert to milliseconds
+  const multiplier = unit === 'seconds' ? 1000 : unit === 'hours' ? 3600000 : 60000;
+  const minMs = minInterval * multiplier;
+  const maxMs = maxInterval * multiplier;
+
+  // Generate random delay within range
+  const randomDelay = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+
+  return fromTime + randomDelay;
+}
+
+/**
+ * Compute next run time for a fixed interval schedule.
+ * Supports sub-minute intervals down to 1 second.
+ */
+function computeIntervalNextRun(
+  schedule: { interval?: number; unit?: 'seconds' | 'minutes' | 'hours' },
+  fromTime: number
+): number | undefined {
+  const { interval, unit = 'minutes' } = schedule;
+  if (!interval || interval <= 0) {
+    return undefined;
+  }
+
+  // Convert to milliseconds
+  const multiplier = unit === 'seconds' ? 1000 : unit === 'hours' ? 3600000 : 60000;
+  const intervalMs = interval * multiplier;
+
+  return fromTime + intervalMs;
 }
 
 export async function getDueSchedules(cwd: string, nowTime: number): Promise<ScheduledCommand[]> {

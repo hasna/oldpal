@@ -3,15 +3,14 @@
 import * as React from "react"
 import {
   Bot,
+  Clock,
   Command,
   Inbox,
   LifeBuoy,
   MessageSquare,
   Send,
   Settings2,
-  SquareTerminal,
   History,
-  Users,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -56,10 +55,6 @@ const data = {
           title: "My Agents",
           url: "/agents",
         },
-        {
-          title: "Create Agent",
-          url: "/agents/new",
-        },
       ],
     },
     {
@@ -71,9 +66,16 @@ const data = {
           title: "Inbox",
           url: "/messages",
         },
+      ],
+    },
+    {
+      title: "Schedules",
+      url: "/schedules",
+      icon: Clock,
+      items: [
         {
-          title: "Sent",
-          url: "/messages?filter=sent",
+          title: "All Schedules",
+          url: "/schedules",
         },
       ],
     },
@@ -85,10 +87,6 @@ const data = {
         {
           title: "Profile",
           url: "/settings",
-        },
-        {
-          title: "API Keys",
-          url: "/settings/api-keys",
         },
       ],
     },
