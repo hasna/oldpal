@@ -1405,7 +1405,8 @@ export class AgentLoop {
   }
 
   private startHeartbeat(): void {
-    if (!this.config?.scheduler?.enabled) return;
+    if (!this.config) return;
+    if (this.config.scheduler?.enabled === false) return;
     const interval = this.config.scheduler?.heartbeatIntervalMs ?? 30000;
     if (this.heartbeatTimer) return;
     this.heartbeatTimer = setInterval(() => {

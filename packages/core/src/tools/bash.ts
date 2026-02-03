@@ -132,6 +132,8 @@ export class BashTool {
     'connect_',
     // Node/bun info
     'node --version', 'bun --version', 'npm --version', 'pnpm --version',
+    // JSON processing (read-only)
+    'jq',
   ];
 
   // Explicitly blocked commands
@@ -155,11 +157,13 @@ export class BashTool {
     /\bgit\s+remote\s+(add|set-url|remove|rm|rename)\b/,
     /\bgit\s+tag\s+(-d|--delete|-f)\b/,
     /\bgit\s+branch\s+(-d|-D|-m|--delete|--move)\b/,
-    // Dangerous pipes
+    // Dangerous pipes (piping to shell)
     /\|\s*(bash|sh|zsh|fish)\b/,
     /curl.*\|\s*(bash|sh)/, /wget.*\|\s*(bash|sh)/,
-    // Shell chaining/operators (enforce single command)
-    /[;&]/, /[|]/, /[\r\n]/,
+    // Semicolon chaining (sequential execution regardless of result)
+    /;/,
+    // Newlines (can hide commands)
+    /[\r\n]/,
     // File writing via redirection
     />\s*[^|]/, />>/,
     // Process control
@@ -175,6 +179,102 @@ export class BashTool {
     // Docker (can be dangerous)
     /\bdocker\s+(run|exec|build|push)\b/,
   ];
+
+  /**
+   * Check if a command part (single command without chaining) is allowed
+   */
+  private static isCommandPartAllowed(commandPart: string, allowlist: string[]): boolean {
+    const trimmed = commandPart.trim().toLowerCase();
+    for (const allowed of allowlist) {
+      if (trimmed.startsWith(allowed.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if all parts of a chained command are allowed.
+   * Supports && (and), || (or), and | (pipe) operators.
+   */
+  private static areAllCommandPartsAllowed(command: string, allowlist: string[]): boolean {
+    // Split by &&, ||, and | while respecting quotes
+    const parts = this.splitCommandByOperators(command);
+    if (parts.length === 0) return false;
+
+    for (const part of parts) {
+      if (!this.isCommandPartAllowed(part, allowlist)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Split a command string by operators (&&, ||, |) while respecting quotes
+   */
+  private static splitCommandByOperators(command: string): string[] {
+    const parts: string[] = [];
+    let current = '';
+    let quote: '"' | '\'' | null = null;
+    let escaped = false;
+    let i = 0;
+
+    while (i < command.length) {
+      const char = command[i];
+
+      // Handle escape in double quotes
+      if (quote === '"' && !escaped && char === '\\') {
+        escaped = true;
+        current += char;
+        i++;
+        continue;
+      }
+
+      // Handle quotes
+      if (!quote && (char === '"' || char === '\'')) {
+        quote = char;
+        current += char;
+        i++;
+        continue;
+      }
+
+      if (quote && !escaped && char === quote) {
+        quote = null;
+        current += char;
+        i++;
+        continue;
+      }
+
+      escaped = false;
+
+      // Check for operators (only outside quotes)
+      if (!quote) {
+        // Check for && or ||
+        if ((char === '&' && command[i + 1] === '&') ||
+            (char === '|' && command[i + 1] === '|')) {
+          if (current.trim()) parts.push(current.trim());
+          current = '';
+          i += 2;
+          continue;
+        }
+
+        // Check for single |
+        if (char === '|') {
+          if (current.trim()) parts.push(current.trim());
+          current = '';
+          i++;
+          continue;
+        }
+      }
+
+      current += char;
+      i++;
+    }
+
+    if (current.trim()) parts.push(current.trim());
+    return parts;
+  }
 
   static readonly executor: ToolExecutor = async (input) => {
     const command = input.command as string;
@@ -274,17 +374,11 @@ export class BashTool {
       );
     }
 
-    // Check if command starts with an allowed prefix
-    let isAllowed = false;
+    // Check if command (or all parts of a chained command) are in the allowlist
     const allowlist = allowEnv
       ? this.ALLOWED_COMMANDS
       : this.ALLOWED_COMMANDS.filter((allowed) => allowed !== 'env' && allowed !== 'printenv');
-    for (const allowed of allowlist) {
-      if (commandTrimmed.startsWith(allowed.toLowerCase())) {
-        isAllowed = true;
-        break;
-      }
-    }
+    const isAllowed = this.areAllCommandPartsAllowed(commandForChecks, allowlist);
 
     if (!isAllowed) {
       getSecurityLogger().log({
