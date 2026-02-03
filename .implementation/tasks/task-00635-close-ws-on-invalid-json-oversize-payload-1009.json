@@ -1,0 +1,8 @@
+{
+  "id": "635",
+  "subject": "Close WS on invalid JSON/oversize payload (1009)",
+  "description": "In packages/web/src/pages/api/ws.ts, close the socket with code 1009 on payload too large, and use an appropriate close code on repeated invalid JSON. This prevents abuse and frees server resources. Add unit tests in packages/web/tests/api-ws.test.ts.",
+  "status": "pending",
+  "created": "2026-02-03T20:05:41.588Z",
+  "updated": "2026-02-03T20:05:41.588Z"
+}

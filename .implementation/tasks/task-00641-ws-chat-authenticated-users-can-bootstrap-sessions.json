@@ -1,0 +1,8 @@
+{
+  "id": "641",
+  "subject": "WS chat: authenticated users can bootstrap sessions",
+  "description": "ChatContainer uses WS and generates a client sessionId, but ws.ts now enforces DB session ownership for authenticated users. This breaks WS chat when logged in. Fix by either creating a session via /api/v1/sessions before WS subscribe, or allowing ws.ts to auto-create a session for authenticated users when not found (with safe limits). Add tests for authenticated WS flow.",
+  "status": "pending",
+  "created": "2026-02-03T20:14:43.107Z",
+  "updated": "2026-02-03T20:14:43.107Z"
+}

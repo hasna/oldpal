@@ -4,6 +4,14 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 641 | WS chat: authenticated users can bootstr | pending | - | - |
+| 640 | Allow non-UUID email IDs in LocalInboxCa | pending | - | - |
+| 639 | Fix chat store sessionSnapshots isStream | pending | - | - |
+| 638 | Terminal Input: keep backspace compatibi | pending | - | - |
+| 637 | JWT secrets: add tests + explicit config | pending | - | - |
+| 636 | Settings page: guard missing user + clea | pending | - | - |
+| 635 | Close WS on invalid JSON/oversize payloa | pending | - | - |
+| 634 | Harden WS origin allowlist (prod deny by | pending | - | - |
 | 633 | Remove legacy app/api/ws dir (use only / | pending | - | - |
 | 632 | Remove /api/chat (non-v1) and update tes | pending | - | - |
 | 631 | API v1 alignment test (no /api/* without | pending | - | - |

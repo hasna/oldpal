@@ -1,0 +1,8 @@
+{
+  "id": "639",
+  "subject": "Fix chat store sessionSnapshots isStreaming persistence",
+  "description": "In packages/web/src/lib/store.ts, sessionSnapshots now includes isStreaming but most writes omit it. Update switchSession/addMessage/appendMessageContent/addToolCall/updateToolResult/finalizeToolCalls/clearToolCalls/clearMessages and setStreaming to persist isStreaming per session, and restore it when switching. Add tests to verify streaming state is preserved per session.",
+  "status": "pending",
+  "created": "2026-02-03T20:09:40.645Z",
+  "updated": "2026-02-03T20:09:40.645Z"
+}

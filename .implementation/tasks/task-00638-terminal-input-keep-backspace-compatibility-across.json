@@ -1,0 +1,8 @@
+{
+  "id": "638",
+  "subject": "Terminal Input: keep backspace compatibility across terminals",
+  "description": "Recent change in packages/terminal/src/components/Input.tsx relies on key.delete for backspace. Add fallback for raw input \\x7f/\\x08 when key.delete/backspace aren’t set, or add tests proving all supported terminals emit key.delete. Add a regression test for backspace and forward-delete handling.",
+  "status": "pending",
+  "created": "2026-02-03T20:08:10.266Z",
+  "updated": "2026-02-03T20:08:10.266Z"
+}

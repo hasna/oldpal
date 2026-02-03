@@ -1,0 +1,8 @@
+{
+  "id": "640",
+  "subject": "Allow non-UUID email IDs in LocalInboxCache (safe mapping)",
+  "description": "Current LocalInboxCache enforces /^[a-zA-Z0-9_-]+$/ for emailId, but S3/Message-ID values often include dots, plus, @, or angle brackets. Replace hard rejection with a safe mapping (e.g., base64url/hash) for filenames while preserving original ID in index. Add tests for IDs containing '.', '+', '@', and '<>'.",
+  "status": "pending",
+  "created": "2026-02-03T20:14:36.499Z",
+  "updated": "2026-02-03T20:14:36.499Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "634",
+  "subject": "Harden WS origin allowlist (prod deny by default + safe parsing)",
+  "description": "In packages/web/src/pages/api/ws.ts, make origin allowlist robust: safely parse NEXT_PUBLIC_URL (try/catch), support multiple allowed origins via env (e.g., comma-separated), and in production default to deny when allowlist is empty. Add tests for invalid NEXT_PUBLIC_URL and allowlist behavior.",
+  "status": "pending",
+  "created": "2026-02-03T20:05:34.016Z",
+  "updated": "2026-02-03T20:05:34.016Z"
+}

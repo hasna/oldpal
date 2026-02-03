@@ -1,0 +1,8 @@
+{
+  "id": "636",
+  "subject": "Settings page: guard missing user + clear error on edit",
+  "description": "In packages/web/src/app/(dashboard)/settings/page.tsx, avoid PATCH calls when user is null/undefined (disable form or show loading). Clear the top-level error when the name input changes so stale errors don’t persist. Add tests covering user-not-loaded and error-clearing behavior.",
+  "status": "pending",
+  "created": "2026-02-03T20:07:57.451Z",
+  "updated": "2026-02-03T20:07:57.451Z"
+}
