@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
     let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
     let unsubscribe: (() => void) | null = null;
     let closed = false;
+    let controllerClosed = false;
     let assistantContent = '';
     let toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
     let toolResults: Array<{ toolCallId: string; content: string; isError?: boolean }> = [];
@@ -113,7 +114,9 @@ export async function POST(request: NextRequest) {
       }
     };
 
+    let assistantSaved = false;
     const saveAssistantMessage = async () => {
+      if (assistantSaved) return;
       if (assistantContent || toolCalls.length > 0) {
         await db.insert(messages).values({
           sessionId: sessionId!,
@@ -122,6 +125,7 @@ export async function POST(request: NextRequest) {
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
           toolResults: toolResults.length > 0 ? toolResults : undefined,
         });
+        assistantSaved = true;
       }
     };
 
@@ -131,9 +135,30 @@ export async function POST(request: NextRequest) {
       },
       async cancel() {
         cleanup();
+        await saveAssistantMessage();
         await stopSession(sessionId!);
       },
     });
+
+    const enqueueSafe = (payload: Uint8Array) => {
+      if (!controllerRef || controllerClosed) return;
+      try {
+        controllerRef.enqueue(payload);
+      } catch {
+        controllerClosed = true;
+      }
+    };
+
+    const closeSafe = () => {
+      if (!controllerRef || controllerClosed) return;
+      try {
+        controllerRef.close();
+      } catch {
+        // ignore
+      } finally {
+        controllerClosed = true;
+      }
+    };
 
     unsubscribe = await subscribeToSession(
       sessionId,
@@ -154,30 +179,28 @@ export async function POST(request: NextRequest) {
         }
 
         const serverMessage = chunkToServerMessage(chunk);
-        if (serverMessage && controllerRef) {
-          controllerRef.enqueue(encode(serverMessage));
+        if (serverMessage) {
+          enqueueSafe(encode(serverMessage));
           if (serverMessage.type === 'message_complete') {
             await saveAssistantMessage();
             cleanup();
-            controllerRef.close();
+            closeSafe();
           }
         }
       },
       async (error) => {
-        if (controllerRef) {
-          controllerRef.enqueue(encode({ type: 'error', message: error.message }));
-          cleanup();
-          controllerRef.close();
-        }
+        enqueueSafe(encode({ type: 'error', message: error.message }));
+        await saveAssistantMessage();
+        cleanup();
+        closeSafe();
       }
     );
 
     sendSessionMessage(sessionId, message).catch(async (error) => {
-      if (controllerRef) {
-        controllerRef.enqueue(encode({ type: 'error', message: error.message }));
-        cleanup();
-        controllerRef.close();
-      }
+      enqueueSafe(encode({ type: 'error', message: error.message }));
+      await saveAssistantMessage();
+      cleanup();
+      closeSafe();
     });
 
     return new Response(stream, {

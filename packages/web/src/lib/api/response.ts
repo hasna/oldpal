@@ -22,7 +22,7 @@ export function successResponse<T>(data: T, status = 200): NextResponse<ApiRespo
   );
 }
 
-export function errorResponse(error: unknown): NextResponse<ApiResponse> {
+export function errorResponse<T = unknown>(error: unknown): NextResponse<ApiResponse<T>> {
   if (error instanceof ZodError) {
     const fieldErrors: Record<string, string[]> = {};
     for (const issue of error.issues) {

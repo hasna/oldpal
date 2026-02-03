@@ -3,12 +3,26 @@ import { db } from '@/db';
 import { agentMessages, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { ForbiddenError } from '@/lib/api/errors';
+import { ForbiddenError, BadRequestError } from '@/lib/api/errors';
 import { eq, asc, or } from 'drizzle-orm';
 
+async function resolveParams(
+  context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }
+): Promise<Record<string, string> | undefined> {
+  if (!context?.params) return undefined;
+  const params = await Promise.resolve(context.params as Record<string, string>);
+  return params;
+}
+
 // GET /api/v1/messages/threads/:threadId - Get all messages in a thread
-export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { params: { threadId: string } }) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const threadId = params?.threadId;
+    if (!threadId) {
+      return errorResponse(new BadRequestError('Missing thread id'));
+    }
+
     // Get user's agents
     const userAgents = await db.query.agents.findMany({
       where: eq(agents.userId, request.user.userId),
@@ -23,7 +37,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { 
 
     // Get all messages in the thread
     const threadMessages = await db.query.agentMessages.findMany({
-      where: eq(agentMessages.threadId, params.threadId),
+      where: eq(agentMessages.threadId, threadId),
       orderBy: [asc(agentMessages.createdAt)],
     });
 
@@ -40,7 +54,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { 
     }
 
     return successResponse({
-      threadId: params.threadId,
+      threadId,
       messages: threadMessages,
       count: threadMessages.length,
     });

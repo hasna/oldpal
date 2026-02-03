@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { sessions } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
 import { eq, and } from 'drizzle-orm';
 
 const updateSessionSchema = z.object({
@@ -12,11 +12,25 @@ const updateSessionSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+async function resolveParams(
+  context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }
+): Promise<Record<string, string> | undefined> {
+  if (!context?.params) return undefined;
+  const params = await Promise.resolve(context.params as Record<string, string>);
+  return params;
+}
+
 // GET /api/v1/sessions/:id - Get a single session
-export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const id = params?.id;
+    if (!id) {
+      return errorResponse(new BadRequestError('Missing session id'));
+    }
+
     const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, params.id),
+      where: eq(sessions.id, id),
       with: {
         agent: true,
       },
@@ -37,14 +51,20 @@ export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { 
 });
 
 // PATCH /api/v1/sessions/:id - Update a session
-export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const id = params?.id;
+    if (!id) {
+      return errorResponse(new BadRequestError('Missing session id'));
+    }
+
     const body = await request.json();
     const data = updateSessionSchema.parse(body);
 
     // Check ownership
     const existingSession = await db.query.sessions.findFirst({
-      where: eq(sessions.id, params.id),
+      where: eq(sessions.id, id),
     });
 
     if (!existingSession) {
@@ -61,7 +81,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(sessions.id, params.id))
+      .where(eq(sessions.id, id))
       .returning();
 
     return successResponse(updatedSession);
@@ -71,11 +91,17 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
 });
 
 // DELETE /api/v1/sessions/:id - Delete a session
-export const DELETE = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const DELETE = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const id = params?.id;
+    if (!id) {
+      return errorResponse(new BadRequestError('Missing session id'));
+    }
+
     // Check ownership
     const existingSession = await db.query.sessions.findFirst({
-      where: eq(sessions.id, params.id),
+      where: eq(sessions.id, id),
     });
 
     if (!existingSession) {
@@ -86,7 +112,7 @@ export const DELETE = withAuth(async (request: AuthenticatedRequest, { params }:
       return errorResponse(new ForbiddenError('Access denied'));
     }
 
-    await db.delete(sessions).where(eq(sessions.id, params.id));
+    await db.delete(sessions).where(eq(sessions.id, id));
 
     return successResponse({ message: 'Session deleted' });
   } catch (error) {

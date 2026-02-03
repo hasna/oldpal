@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
 import { eq } from 'drizzle-orm';
 
 const updateAgentSchema = z.object({
@@ -22,11 +22,25 @@ const updateAgentSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+async function resolveParams(
+  context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }
+): Promise<Record<string, string> | undefined> {
+  if (!context?.params) return undefined;
+  const params = await Promise.resolve(context.params as Record<string, string>);
+  return params;
+}
+
 // GET /api/v1/agents/:id - Get an agent
-export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const id = params?.id;
+    if (!id) {
+      return errorResponse(new BadRequestError('Missing agent id'));
+    }
+
     const agent = await db.query.agents.findFirst({
-      where: eq(agents.id, params.id),
+      where: eq(agents.id, id),
     });
 
     if (!agent) {
@@ -44,14 +58,20 @@ export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { 
 });
 
 // PATCH /api/v1/agents/:id - Update an agent
-export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const id = params?.id;
+    if (!id) {
+      return errorResponse(new BadRequestError('Missing agent id'));
+    }
+
     const body = await request.json();
     const data = updateAgentSchema.parse(body);
 
     // Check ownership
     const existingAgent = await db.query.agents.findFirst({
-      where: eq(agents.id, params.id),
+      where: eq(agents.id, id),
     });
 
     if (!existingAgent) {
@@ -68,7 +88,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(agents.id, params.id))
+      .where(eq(agents.id, id))
       .returning();
 
     return successResponse(updatedAgent);
@@ -78,11 +98,17 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
 });
 
 // DELETE /api/v1/agents/:id - Delete an agent
-export const DELETE = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const DELETE = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const id = params?.id;
+    if (!id) {
+      return errorResponse(new BadRequestError('Missing agent id'));
+    }
+
     // Check ownership
     const existingAgent = await db.query.agents.findFirst({
-      where: eq(agents.id, params.id),
+      where: eq(agents.id, id),
     });
 
     if (!existingAgent) {
@@ -93,7 +119,7 @@ export const DELETE = withAuth(async (request: AuthenticatedRequest, { params }:
       return errorResponse(new ForbiddenError('Access denied'));
     }
 
-    await db.delete(agents).where(eq(agents.id, params.id));
+    await db.delete(agents).where(eq(agents.id, id));
 
     return successResponse({ message: 'Agent deleted' });
   } catch (error) {

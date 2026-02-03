@@ -12,7 +12,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Separator } from '@/components/ui/separator';
+import { Separator } from '@/components/ui/Separator';
 import {
   SidebarInset,
   SidebarProvider,
@@ -58,7 +58,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return null;
   }
 
-  const currentPath = pathToBreadcrumb[pathname] || { label: 'Dashboard' };
+  const currentPath = pathToBreadcrumb[pathname ?? ''] || { label: 'Dashboard' };
 
   return (
     <SidebarProvider>

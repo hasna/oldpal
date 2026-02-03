@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken, type TokenPayload } from './jwt';
 import { ApiError, UnauthorizedError, ForbiddenError } from '../api/errors';
-import { errorResponse } from '../api/response';
+import { errorResponse, type ApiResponse } from '../api/response';
 
 export interface AuthenticatedRequest extends NextRequest {
   user: TokenPayload;
 }
 
-type RouteHandler<T = unknown> = (
-  request: AuthenticatedRequest,
-  context?: { params: Record<string, string> }
-) => Promise<NextResponse<T>>;
+type RouteContext = { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> };
 
-export function withAuth<T = unknown>(handler: RouteHandler<T>): RouteHandler<T> {
+type AuthedHandler<T = unknown> = (
+  request: AuthenticatedRequest,
+  context?: RouteContext
+) => Promise<NextResponse<ApiResponse<T>>>;
+
+type RouteHandler<T = unknown> = (
+  request: NextRequest,
+  context?: RouteContext
+) => Promise<NextResponse<ApiResponse<T>>>;
+
+export function withAuth<T = unknown>(handler: AuthedHandler<T>): RouteHandler<T> {
   return async (request: NextRequest, context) => {
     const authHeader = request.headers.get('authorization');
 
@@ -32,7 +39,7 @@ export function withAuth<T = unknown>(handler: RouteHandler<T>): RouteHandler<T>
   };
 }
 
-export function withAdminAuth<T = unknown>(handler: RouteHandler<T>): RouteHandler<T> {
+export function withAdminAuth<T = unknown>(handler: AuthedHandler<T>): RouteHandler<T> {
   return withAuth(async (request: AuthenticatedRequest, context) => {
     if (request.user.role !== 'admin') {
       return errorResponse(new ForbiddenError('Admin access required'));

@@ -8,7 +8,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const { accessToken, refreshAccessToken, setLoading, isAuthenticated } = useAuth();
+  const { accessToken, refreshAccessToken, setLoading } = useAuth();
 
   useEffect(() => {
     const initialize = async () => {
@@ -31,7 +31,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     initialize();
-  }, []);
+  }, [accessToken, refreshAccessToken, setLoading]);
 
   return <>{children}</>;
 }

@@ -169,12 +169,16 @@ export function useAuth() {
     if (response.status === 401 && store.refreshToken) {
       try {
         await refreshAccessToken();
+        const freshToken = useAuthStore.getState().accessToken;
+        if (!freshToken) {
+          throw new Error('Session expired');
+        }
         // Retry request with new token
         return fetch(url, {
           ...options,
           headers: {
             ...options.headers,
-            Authorization: `Bearer ${store.accessToken}`,
+            Authorization: `Bearer ${freshToken}`,
           },
         });
       } catch {

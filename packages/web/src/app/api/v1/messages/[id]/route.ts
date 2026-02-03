@@ -4,18 +4,32 @@ import { db } from '@/db';
 import { agentMessages, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
-import { NotFoundError, ForbiddenError } from '@/lib/api/errors';
+import { NotFoundError, ForbiddenError, BadRequestError } from '@/lib/api/errors';
 import { eq, or } from 'drizzle-orm';
 
 const updateMessageSchema = z.object({
   status: z.enum(['unread', 'read', 'archived', 'injected']).optional(),
 });
 
+async function resolveParams(
+  context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }
+): Promise<Record<string, string> | undefined> {
+  if (!context?.params) return undefined;
+  const params = await Promise.resolve(context.params as Record<string, string>);
+  return params;
+}
+
 // GET /api/v1/messages/:id - Get a message
-export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const id = params?.id;
+    if (!id) {
+      return errorResponse(new BadRequestError('Missing message id'));
+    }
+
     const message = await db.query.agentMessages.findFirst({
-      where: eq(agentMessages.id, params.id),
+      where: eq(agentMessages.id, id),
     });
 
     if (!message) {
@@ -44,13 +58,19 @@ export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { 
 });
 
 // PATCH /api/v1/messages/:id - Update message status
-export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
+    const params = await resolveParams(context);
+    const id = params?.id;
+    if (!id) {
+      return errorResponse(new BadRequestError('Missing message id'));
+    }
+
     const body = await request.json();
     const data = updateMessageSchema.parse(body);
 
     const message = await db.query.agentMessages.findFirst({
-      where: eq(agentMessages.id, params.id),
+      where: eq(agentMessages.id, id),
     });
 
     if (!message) {
@@ -83,7 +103,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
     const [updatedMessage] = await db
       .update(agentMessages)
       .set(updateData)
-      .where(eq(agentMessages.id, params.id))
+      .where(eq(agentMessages.id, id))
       .returning();
 
     return successResponse(updatedMessage);
