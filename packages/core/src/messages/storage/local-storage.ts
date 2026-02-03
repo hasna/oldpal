@@ -30,6 +30,11 @@ export function getMessagesBasePath(): string {
 }
 
 /**
+ * Pattern for safe IDs - only alphanumeric, hyphens, and underscores allowed
+ */
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
  * Local storage for agent messages using JSON files
  */
 export class LocalMessagesStorage {
@@ -37,6 +42,21 @@ export class LocalMessagesStorage {
 
   constructor(options: LocalStorageOptions = {}) {
     this.basePath = options.basePath || getMessagesBasePath();
+  }
+
+  /**
+   * Validate that an ID is safe to use in filesystem paths.
+   * Throws an error if the ID contains path separators or traversal sequences.
+   */
+  private validateSafeId(id: string, idType: string): void {
+    if (!id || typeof id !== 'string') {
+      throw new Error(`Invalid ${idType}: must be a non-empty string`);
+    }
+    if (!SAFE_ID_PATTERN.test(id)) {
+      throw new Error(
+        `Invalid ${idType}: "${id}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
+      );
+    }
   }
 
   /**
@@ -56,6 +76,7 @@ export class LocalMessagesStorage {
   // ============================================
 
   private getAgentPath(agentId: string): string {
+    this.validateSafeId(agentId, 'agentId');
     return join(this.basePath, agentId);
   }
 
@@ -64,10 +85,12 @@ export class LocalMessagesStorage {
   }
 
   private getMessagePath(agentId: string, messageId: string): string {
+    this.validateSafeId(messageId, 'messageId');
     return join(this.getAgentPath(agentId), 'messages', `${messageId}.json`);
   }
 
   private getThreadPath(agentId: string, threadId: string): string {
+    this.validateSafeId(threadId, 'threadId');
     return join(this.getAgentPath(agentId), 'threads', `${threadId}.json`);
   }
 

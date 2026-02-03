@@ -3,9 +3,44 @@
  * Stores parsed emails and attachments locally for fast access
  */
 
-import { join } from 'path';
+import { join, basename } from 'path';
 import { mkdir, readFile, writeFile, rm, readdir, stat } from 'fs/promises';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
+
+/**
+ * Pattern for safe IDs - only alphanumeric, hyphens, and underscores allowed
+ */
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * Validate that an ID is safe to use in filesystem paths.
+ * Returns true if valid, false otherwise.
+ */
+function isValidId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && SAFE_ID_PATTERN.test(id);
+}
+
+/**
+ * Validate and throw if ID is invalid
+ */
+function validateId(id: string, idType: string): void {
+  if (!isValidId(id)) {
+    throw new Error(
+      `Invalid ${idType}: "${id}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
+    );
+  }
+}
+
+/**
+ * Sanitize a filename to prevent path traversal.
+ * Extracts basename and removes any remaining path separators.
+ */
+function sanitizeFilename(filename: string): string {
+  // Get the basename to strip directory components
+  const base = basename(filename);
+  // Remove any remaining path separators that might have been in the original filename
+  return base.replace(/[/\\]/g, '_');
+}
 
 export interface LocalInboxCacheOptions {
   /** Agent ID for scoping */
@@ -50,6 +85,8 @@ export class LocalInboxCache {
   private index: CacheIndex | null = null;
 
   constructor(options: LocalInboxCacheOptions) {
+    // Validate agentId to prevent path traversal
+    validateId(options.agentId, 'agentId');
     this.agentId = options.agentId;
     this.basePath = options.basePath;
     this.cacheDir = join(this.basePath, this.agentId);
@@ -95,6 +132,8 @@ export class LocalInboxCache {
    * Save an email to the cache
    */
   async saveEmail(email: Email): Promise<void> {
+    // Validate email ID to prevent path traversal
+    validateId(email.id, 'emailId');
     await this.ensureDirectories();
 
     // Save email JSON
@@ -131,6 +170,10 @@ export class LocalInboxCache {
    * Load an email from the cache
    */
   async loadEmail(id: string): Promise<Email | null> {
+    // Validate ID to prevent path traversal
+    if (!isValidId(id)) {
+      return null;
+    }
     try {
       const emailPath = join(this.cacheDir, 'emails', `${id}.json`);
       const content = await readFile(emailPath, 'utf-8');
@@ -225,10 +268,18 @@ export class LocalInboxCache {
     filename: string,
     content: Buffer
   ): Promise<string> {
+    // Validate emailId to prevent path traversal
+    validateId(emailId, 'emailId');
+    // Sanitize filename to prevent path traversal
+    const safeFilename = sanitizeFilename(filename);
+    if (!safeFilename) {
+      throw new Error('Invalid attachment filename');
+    }
+
     const attachmentDir = join(this.cacheDir, 'attachments', emailId);
     await mkdir(attachmentDir, { recursive: true });
 
-    const attachmentPath = join(attachmentDir, filename);
+    const attachmentPath = join(attachmentDir, safeFilename);
     await writeFile(attachmentPath, content);
 
     return attachmentPath;
@@ -238,8 +289,18 @@ export class LocalInboxCache {
    * Get attachment path if downloaded
    */
   async getAttachmentPath(emailId: string, filename: string): Promise<string | null> {
+    // Validate emailId to prevent path traversal
+    if (!isValidId(emailId)) {
+      return null;
+    }
+    // Sanitize filename to prevent path traversal
+    const safeFilename = sanitizeFilename(filename);
+    if (!safeFilename) {
+      return null;
+    }
+
     try {
-      const attachmentPath = join(this.cacheDir, 'attachments', emailId, filename);
+      const attachmentPath = join(this.cacheDir, 'attachments', emailId, safeFilename);
       await stat(attachmentPath);
       return attachmentPath;
     } catch {
@@ -272,8 +333,9 @@ export class LocalInboxCache {
     const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
     const removed: string[] = [];
 
-    // Find old emails
+    // Find old emails (only consider entries with valid IDs)
     for (const entry of index.emails) {
+      if (!isValidId(entry.id)) continue; // Skip invalid IDs
       const cachedAt = new Date(entry.cachedAt).getTime();
       if (cachedAt < cutoff) {
         removed.push(entry.id);
@@ -282,6 +344,9 @@ export class LocalInboxCache {
 
     // Remove from index and delete files
     for (const id of removed) {
+      // Double-check ID is valid before rm (defense in depth)
+      if (!isValidId(id)) continue;
+
       index.emails = index.emails.filter((e) => e.id !== id);
 
       // Delete email file

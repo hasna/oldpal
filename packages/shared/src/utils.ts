@@ -145,3 +145,43 @@ export function formatDuration(ms: number): string {
   if (ms < 3600000) return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
   return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
 }
+
+/**
+ * Funny loading words for processing indicators
+ */
+const LOADING_WORDS = [
+  'Metamorphosing',
+  'Conjuring',
+  'Transmuting',
+  'Alchemizing',
+  'Manifesting',
+  'Brewing',
+  'Summoning',
+  'Cogitating',
+  'Ruminating',
+  'Percolating',
+  'Incubating',
+  'Gestating',
+  'Synthesizing',
+  'Crystallizing',
+  'Catalyzing',
+  'Distilling',
+  'Fermenting',
+  'Marinating',
+  'Simmering',
+  'Concocting',
+];
+
+/**
+ * Get a random loading word
+ */
+export function getRandomLoadingWord(): string {
+  return LOADING_WORDS[Math.floor(Math.random() * LOADING_WORDS.length)];
+}
+
+/**
+ * Get all loading words
+ */
+export function getLoadingWords(): readonly string[] {
+  return LOADING_WORDS;
+}

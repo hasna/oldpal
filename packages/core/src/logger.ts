@@ -2,6 +2,19 @@ import { existsSync, mkdirSync, appendFileSync, readdirSync, readFileSync, write
 import { join } from 'path';
 import { getConfigDir } from './config';
 
+/**
+ * Pattern for safe IDs - only alphanumeric, hyphens, and underscores allowed
+ */
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * Validate that an ID is safe to use in filesystem paths.
+ * Returns true if valid, false otherwise.
+ */
+function isValidId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && SAFE_ID_PATTERN.test(id);
+}
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogEntry {
@@ -80,10 +93,18 @@ export class SessionStorage {
   private sessionId: string;
 
   constructor(sessionId: string, basePath?: string, assistantId?: string | null) {
+    // Validate sessionId to prevent path traversal
+    if (!isValidId(sessionId)) {
+      throw new Error(
+        `Invalid sessionId: "${sessionId}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
+      );
+    }
     this.sessionId = sessionId;
     const root = basePath || getConfigDir();
-    this.sessionsDir = assistantId
-      ? join(root, 'assistants', assistantId, 'sessions')
+    // Validate assistantId to prevent path traversal - fall back to root sessions dir if invalid
+    const safeAssistantId = isValidId(assistantId) ? assistantId : null;
+    this.sessionsDir = safeAssistantId
+      ? join(root, 'assistants', safeAssistantId, 'sessions')
       : join(root, 'sessions');
     this.ensureDir(this.sessionsDir);
     this.sessionFile = join(this.sessionsDir, `${sessionId}.json`);
@@ -130,7 +151,12 @@ export class SessionStorage {
       if (!existsSync(activePath)) return null;
       const raw = readFileSync(activePath, 'utf-8');
       const data = JSON.parse(raw) as { id?: string };
-      return data.id || null;
+      const id = data.id || null;
+      // Validate ID to prevent path traversal from poisoned active.json
+      if (id && !isValidId(id)) {
+        return null;
+      }
+      return id;
     } catch {
       return null;
     }
@@ -138,8 +164,10 @@ export class SessionStorage {
 
   private static resolveSessionsDir(assistantId?: string | null): string {
     const root = getConfigDir();
-    const resolvedId = assistantId ?? SessionStorage.getActiveAssistantId();
-    if (resolvedId) {
+    // Validate assistantId parameter, fall back to getActiveAssistantId if invalid
+    const safeAssistantId = isValidId(assistantId) ? assistantId : null;
+    const resolvedId = safeAssistantId ?? SessionStorage.getActiveAssistantId();
+    if (resolvedId && isValidId(resolvedId)) {
       const assistantDir = join(root, 'assistants', resolvedId, 'sessions');
       if (existsSync(assistantDir)) {
         return assistantDir;
@@ -193,6 +221,10 @@ export class SessionStorage {
    * Load a session by ID
    */
   static loadSession(sessionId: string, assistantId?: string | null): SessionData | null {
+    // Validate sessionId to prevent path traversal
+    if (!isValidId(sessionId)) {
+      return null;
+    }
     const sessionsDir = SessionStorage.resolveSessionsDir(assistantId);
     const sessionFile = join(sessionsDir, `${sessionId}.json`);
 

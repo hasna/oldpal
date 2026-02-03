@@ -9,6 +9,30 @@ interface AssistantsIndex {
   assistants: string[];
 }
 
+/**
+ * Pattern for safe IDs - only alphanumeric, hyphens, and underscores allowed
+ */
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * Validate that an ID is safe to use in filesystem paths.
+ * Returns true if valid, false otherwise.
+ */
+function isValidId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && SAFE_ID_PATTERN.test(id);
+}
+
+/**
+ * Validate and throw if ID is invalid
+ */
+function validateId(id: string, idType: string): void {
+  if (!isValidId(id)) {
+    throw new Error(
+      `Invalid ${idType}: "${id}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
+    );
+  }
+}
+
 const DEFAULT_SETTINGS: AssistantSettings = {
   model: 'claude-opus-4-5',
 };
@@ -35,6 +59,7 @@ export class AssistantManager {
   }
 
   private assistantConfigPath(id: string): string {
+    validateId(id, 'assistantId');
     return join(this.assistantsRoot, id, 'config.json');
   }
 
@@ -93,6 +118,8 @@ export class AssistantManager {
   }
 
   async deleteAssistant(id: string): Promise<void> {
+    // Validate ID to prevent path traversal on rm
+    validateId(id, 'assistantId');
     if (!this.assistants.has(id)) {
       throw new Error(`Assistant ${id} not found`);
     }
@@ -141,7 +168,9 @@ export class AssistantManager {
     try {
       const raw = await readFile(this.indexPath, 'utf-8');
       const data = JSON.parse(raw) as AssistantsIndex;
-      return { assistants: Array.isArray(data.assistants) ? data.assistants : [] };
+      const assistants = Array.isArray(data.assistants) ? data.assistants : [];
+      // Filter out invalid IDs to prevent path traversal from poisoned index
+      return { assistants: assistants.filter(isValidId) };
     } catch {
       return { assistants: [] };
     }
@@ -173,6 +202,8 @@ export class AssistantManager {
   }
 
   private async persistAssistant(assistant: Assistant): Promise<void> {
+    // assistantConfigPath validates the ID, but also validate here for mkdir
+    validateId(assistant.id, 'assistantId');
     const dir = join(this.assistantsRoot, assistant.id);
     await mkdir(dir, { recursive: true });
     await writeFile(this.assistantConfigPath(assistant.id), JSON.stringify(assistant, null, 2));
@@ -183,7 +214,12 @@ export class AssistantManager {
     try {
       const raw = await readFile(this.activePath, 'utf-8');
       const data = JSON.parse(raw) as { id?: string };
-      return data.id || null;
+      const id = data.id || null;
+      // Validate ID to prevent path traversal from poisoned active.json
+      if (id && !isValidId(id)) {
+        return null;
+      }
+      return id;
     } catch {
       return null;
     }

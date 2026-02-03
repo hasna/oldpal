@@ -8,6 +8,30 @@ interface IdentityIndex {
   identities: string[];
 }
 
+/**
+ * Pattern for safe IDs - only alphanumeric, hyphens, and underscores allowed
+ */
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * Validate that an ID is safe to use in filesystem paths.
+ * Returns true if valid, false otherwise.
+ */
+function isValidId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && SAFE_ID_PATTERN.test(id);
+}
+
+/**
+ * Validate and throw if ID is invalid
+ */
+function validateId(id: string, idType: string): void {
+  if (!isValidId(id)) {
+    throw new Error(
+      `Invalid ${idType}: "${id}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
+    );
+  }
+}
+
 const DEFAULT_PROFILE: IdentityProfile = {
   displayName: 'Assistant',
   timezone: 'UTC',
@@ -36,6 +60,7 @@ export class IdentityManager {
   private activeId: string | null = null;
 
   constructor(assistantId: string, basePath: string) {
+    validateId(assistantId, 'assistantId');
     this.assistantId = assistantId;
     this.basePath = basePath;
   }
@@ -53,6 +78,7 @@ export class IdentityManager {
   }
 
   private identityPath(id: string): string {
+    validateId(id, 'identityId');
     return join(this.identitiesRoot, `${id}.json`);
   }
 
@@ -180,7 +206,9 @@ export class IdentityManager {
     try {
       const raw = await readFile(this.indexPath, 'utf-8');
       const data = JSON.parse(raw) as IdentityIndex;
-      return { identities: Array.isArray(data.identities) ? data.identities : [] };
+      const identities = Array.isArray(data.identities) ? data.identities : [];
+      // Filter out invalid IDs to prevent path traversal from poisoned index
+      return { identities: identities.filter(isValidId) };
     } catch {
       return { identities: [] };
     }
@@ -221,7 +249,12 @@ export class IdentityManager {
     try {
       const raw = await readFile(this.activePath, 'utf-8');
       const data = JSON.parse(raw) as { id?: string };
-      return data.id || null;
+      const id = data.id || null;
+      // Validate ID to prevent path traversal from poisoned active.json
+      if (id && !isValidId(id)) {
+        return null;
+      }
+      return id;
     } catch {
       return null;
     }
