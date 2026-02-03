@@ -7,6 +7,17 @@ import { Badge } from '../src/components/ui/Badge';
 import { Card, CardContent, CardHeader } from '../src/components/ui/Card';
 import { FilePreview } from '../src/components/chat/FilePreview';
 import { ToolCallCard } from '../src/components/chat/ToolCallCard';
+import { Separator } from '../src/components/ui/Separator';
+import { Input } from '../src/components/ui/Input';
+import { Label } from '../src/components/ui/Label';
+import { Avatar, AvatarFallback, AvatarImage } from '../src/components/ui/avatar';
+import { Skeleton } from '../src/components/ui/skeleton';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '../src/components/ui/breadcrumb';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../src/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../src/components/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../src/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetTrigger } from '../src/components/ui/sheet';
+import { SidebarProvider, Sidebar, SidebarContent, SidebarTrigger } from '../src/components/ui/sidebar';
 
 describe('UI components', () => {
   test('Button renders children', () => {
@@ -132,5 +143,105 @@ describe('UI components', () => {
 
     globalThis.setInterval = originalSetInterval;
     globalThis.clearInterval = originalClearInterval;
+  });
+
+  test('Separator renders with default orientation', () => {
+    const markup = renderToStaticMarkup(<Separator />);
+    expect(markup).toContain('data-orientation');
+  });
+
+  test('Input renders and accepts className', () => {
+    const markup = renderToStaticMarkup(<Input placeholder="Type here" className="custom" />);
+    expect(markup).toContain('Type here');
+    expect(markup).toContain('custom');
+  });
+
+  test('Label renders children', () => {
+    const markup = renderToStaticMarkup(<Label>Field Name</Label>);
+    expect(markup).toContain('Field Name');
+  });
+
+  test('Avatar renders fallback', () => {
+    const markup = renderToStaticMarkup(
+      <Avatar>
+        <AvatarImage src="" />
+        <AvatarFallback>AB</AvatarFallback>
+      </Avatar>
+    );
+    expect(markup).toContain('AB');
+  });
+
+  test('Skeleton renders with pulse animation class', () => {
+    const markup = renderToStaticMarkup(<Skeleton className="w-10 h-10" />);
+    expect(markup).toContain('animate-pulse');
+  });
+
+  test('Breadcrumb renders items', () => {
+    const markup = renderToStaticMarkup(
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbPage>Home</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+    );
+    expect(markup).toContain('Home');
+  });
+
+  test('Collapsible renders trigger and content', () => {
+    const markup = renderToStaticMarkup(
+      <Collapsible>
+        <CollapsibleTrigger>Toggle</CollapsibleTrigger>
+        <CollapsibleContent>Hidden content</CollapsibleContent>
+      </Collapsible>
+    );
+    expect(markup).toContain('Toggle');
+  });
+
+  test('Tooltip renders provider and trigger', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>Hover me</TooltipTrigger>
+          <TooltipContent>Tooltip text</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    expect(markup).toContain('Hover me');
+  });
+
+  test('DropdownMenu renders trigger', () => {
+    const markup = renderToStaticMarkup(
+      <DropdownMenu>
+        <DropdownMenuTrigger>Open Menu</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>Item 1</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+    expect(markup).toContain('Open Menu');
+  });
+
+  test('Sheet renders trigger', () => {
+    const markup = renderToStaticMarkup(
+      <Sheet>
+        <SheetTrigger>Open Sheet</SheetTrigger>
+        <SheetContent>Sheet content</SheetContent>
+      </Sheet>
+    );
+    expect(markup).toContain('Open Sheet');
+  });
+
+  test('Sidebar renders within provider', () => {
+    const markup = renderToStaticMarkup(
+      <SidebarProvider>
+        <Sidebar>
+          <SidebarContent>Sidebar items</SidebarContent>
+        </Sidebar>
+        <SidebarTrigger />
+      </SidebarProvider>
+    );
+    expect(markup).toContain('Sidebar items');
   });
 });

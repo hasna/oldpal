@@ -1,0 +1,465 @@
+import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { NextRequest, NextResponse } from 'next/server';
+
+// Mock state
+let mockUserAgents: any[] = [];
+let mockMessages: any[] = [];
+let mockMessageCount = 0;
+let mockFromAgent: any = null;
+let mockToAgent: any = null;
+let mockInsertedMessage: any = null;
+let insertValuesData: any = null;
+
+// Track which agent is being queried
+let agentQueryCount = 0;
+
+// Mock database
+mock.module('@/db', () => ({
+  db: {
+    query: {
+      agents: {
+        findMany: async () => mockUserAgents,
+        findFirst: async () => {
+          agentQueryCount++;
+          // First query is for fromAgent, second is for toAgent
+          if (agentQueryCount === 1) {
+            return mockFromAgent;
+          }
+          return mockToAgent;
+        },
+      },
+      agentMessages: {
+        findMany: async ({ limit, offset }: any) => {
+          const start = offset || 0;
+          const end = start + (limit || mockMessages.length);
+          return mockMessages.slice(start, end);
+        },
+      },
+    },
+    select: () => ({
+      from: () => ({
+        where: () => [{ total: mockMessageCount }],
+      }),
+    }),
+    insert: (table: any) => ({
+      values: (data: any) => {
+        insertValuesData = data;
+        return {
+          returning: () => [
+            mockInsertedMessage || {
+              id: 'new-msg-id',
+              ...data,
+              createdAt: new Date(),
+            },
+          ],
+        };
+      },
+    }),
+  },
+}));
+
+// Mock db schema
+mock.module('@/db/schema', () => ({
+  agentMessages: 'agentMessages',
+  agents: 'agents',
+}));
+
+// Mock auth middleware
+mock.module('@/lib/auth/middleware', () => ({
+  withAuth: (handler: any) => async (req: any) => {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
+        { status: 401 }
+      );
+    }
+    const token = authHeader.substring(7);
+    if (token === 'invalid') {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid token' } },
+        { status: 401 }
+      );
+    }
+    (req as any).user = { userId: 'user-123', email: 'test@example.com', role: 'user' };
+    return handler(req);
+  },
+}));
+
+// Mock drizzle-orm
+mock.module('drizzle-orm', () => ({
+  eq: (field: any, value: any) => ({ field, value }),
+  desc: (field: any) => ({ desc: field }),
+  count: () => 'count',
+  and: (...args: any[]) => ({ and: args }),
+  or: (...args: any[]) => ({ or: args }),
+  isNull: (field: any) => ({ isNull: field }),
+}));
+
+const { GET, POST } = await import('../src/app/api/v1/messages/route');
+
+function createGetRequest(
+  params: { page?: number; limit?: number; status?: string; agentId?: string } = {},
+  options: { token?: string } = {}
+): NextRequest {
+  const url = new URL('http://localhost:3001/api/v1/messages');
+  if (params.page) url.searchParams.set('page', params.page.toString());
+  if (params.limit) url.searchParams.set('limit', params.limit.toString());
+  if (params.status) url.searchParams.set('status', params.status);
+  if (params.agentId) url.searchParams.set('agentId', params.agentId);
+
+  const headers: Record<string, string> = {};
+  if (options.token !== undefined) {
+    headers['Authorization'] = `Bearer ${options.token}`;
+  } else {
+    headers['Authorization'] = 'Bearer valid-token';
+  }
+
+  return new NextRequest(url, { headers });
+}
+
+function createPostRequest(
+  body: Record<string, unknown>,
+  options: { token?: string } = {}
+): NextRequest {
+  const url = new URL('http://localhost:3001/api/v1/messages');
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (options.token !== undefined) {
+    headers['Authorization'] = `Bearer ${options.token}`;
+  } else {
+    headers['Authorization'] = 'Bearer valid-token';
+  }
+
+  return new NextRequest(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+describe('GET /api/v1/messages', () => {
+  beforeEach(() => {
+    mockUserAgents = [{ id: 'agent-1' }, { id: 'agent-2' }];
+    mockMessages = [
+      { id: 'msg-1', toAgentId: 'agent-1', subject: 'Test 1', status: 'unread' },
+      { id: 'msg-2', toAgentId: 'agent-2', subject: 'Test 2', status: 'read' },
+      { id: 'msg-3', toAgentId: 'agent-1', subject: 'Test 3', status: 'unread' },
+    ];
+    mockMessageCount = 3;
+    mockFromAgent = null;
+    mockToAgent = null;
+    mockInsertedMessage = null;
+    insertValuesData = null;
+    agentQueryCount = 0;
+  });
+
+  describe('authentication', () => {
+    test('returns 401 when no token provided', async () => {
+      const request = new NextRequest('http://localhost:3001/api/v1/messages');
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 401 for invalid token', async () => {
+      const request = createGetRequest({}, { token: 'invalid' });
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe('listing messages', () => {
+    test('returns paginated messages', async () => {
+      const request = createGetRequest();
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data.items).toHaveLength(3);
+      expect(data.data.total).toBe(3);
+    });
+
+    test('returns empty list when user has no agents', async () => {
+      mockUserAgents = [];
+      const request = createGetRequest();
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.items).toEqual([]);
+      expect(data.data.total).toBe(0);
+    });
+
+    test('includes pagination metadata', async () => {
+      const request = createGetRequest({ page: 1, limit: 10 });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.page).toBe(1);
+      expect(data.data.limit).toBe(10);
+      expect(data.data.totalPages).toBe(1);
+    });
+  });
+
+  describe('filtering', () => {
+    test('filters by status', async () => {
+      const request = createGetRequest({ status: 'unread' });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+    });
+
+    test('filters by agentId when user owns the agent', async () => {
+      const request = createGetRequest({ agentId: 'agent-1' });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+    });
+  });
+
+  describe('pagination', () => {
+    test('defaults to page 1 and limit 20', async () => {
+      const request = createGetRequest();
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.page).toBe(1);
+      expect(data.data.limit).toBe(20);
+    });
+
+    test('respects custom page and limit', async () => {
+      const request = createGetRequest({ page: 2, limit: 5 });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.page).toBe(2);
+      expect(data.data.limit).toBe(5);
+    });
+
+    test('enforces maximum limit of 100', async () => {
+      const request = createGetRequest({ limit: 200 });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.limit).toBe(100);
+    });
+  });
+});
+
+describe('POST /api/v1/messages', () => {
+  beforeEach(() => {
+    mockUserAgents = [{ id: 'agent-1' }, { id: 'agent-2' }];
+    mockMessages = [];
+    mockMessageCount = 0;
+    mockFromAgent = { id: 'agent-1', userId: 'user-123' };
+    mockToAgent = { id: 'agent-2', userId: 'other-user' };
+    mockInsertedMessage = null;
+    insertValuesData = null;
+    agentQueryCount = 0;
+  });
+
+  describe('authentication', () => {
+    test('returns 401 when no token provided', async () => {
+      const request = new NextRequest('http://localhost:3001/api/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toAgentId: 'agent-2',
+          body: 'Hello',
+        }),
+      });
+
+      const response = await POST(request);
+
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe('sending messages', () => {
+    test('creates message with required fields', async () => {
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        body: 'Hello, world!',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.success).toBe(true);
+      expect(insertValuesData.body).toBe('Hello, world!');
+    });
+
+    test('creates message with all optional fields', async () => {
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        fromAgentId: '550e8400-e29b-41d4-a716-446655440001',
+        subject: 'Test Subject',
+        body: 'Hello, world!',
+        priority: 'high',
+        threadId: '550e8400-e29b-41d4-a716-446655440002',
+        parentId: '550e8400-e29b-41d4-a716-446655440003',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(insertValuesData.subject).toBe('Test Subject');
+      expect(insertValuesData.priority).toBe('high');
+    });
+
+    test('generates threadId if not provided', async () => {
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        body: 'Hello',
+      });
+
+      await POST(request);
+
+      expect(insertValuesData.threadId).toBeDefined();
+    });
+
+    test('defaults priority to normal', async () => {
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        body: 'Hello',
+      });
+
+      await POST(request);
+
+      expect(insertValuesData.priority).toBe('normal');
+    });
+  });
+
+  describe('authorization', () => {
+    test('returns 403 when user does not own sender agent', async () => {
+      mockFromAgent = { id: 'agent-other', userId: 'different-user' };
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        fromAgentId: '550e8400-e29b-41d4-a716-446655440001',
+        body: 'Hello',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error.message).toContain('do not own the sender agent');
+    });
+
+    test('returns 403 when sender agent not found', async () => {
+      mockFromAgent = null;
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        fromAgentId: '550e8400-e29b-41d4-a716-446655440001',
+        body: 'Hello',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 404 when recipient agent not found', async () => {
+      mockFromAgent = null; // Skip fromAgent check
+      mockToAgent = null;
+      agentQueryCount = 0;
+
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        body: 'Hello',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(404);
+      expect(data.error.message).toContain('Recipient agent not found');
+    });
+  });
+
+  describe('validation', () => {
+    test('returns 422 for invalid toAgentId format', async () => {
+      const request = createPostRequest({
+        toAgentId: 'not-a-uuid',
+        body: 'Hello',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+      expect(data.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    test('returns 422 when body is empty', async () => {
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        body: '',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+    });
+
+    test('returns 422 when body is missing', async () => {
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+    });
+
+    test('returns 422 for invalid priority value', async () => {
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        body: 'Hello',
+        priority: 'invalid',
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+    });
+
+    test('returns 422 when subject exceeds 500 characters', async () => {
+      const request = createPostRequest({
+        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        body: 'Hello',
+        subject: 'a'.repeat(501),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+    });
+  });
+});
