@@ -7,6 +7,60 @@ function abortController(controller: AbortController): void {
   controller.abort();
 }
 
+// Maximum bytes to read from response to prevent memory exhaustion
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5MB
+
+/**
+ * Read response body with a byte limit to prevent memory exhaustion
+ */
+async function readResponseWithLimit(response: Response, maxBytes: number = MAX_RESPONSE_BYTES): Promise<{ text: string; truncated: boolean }> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return { text: '', truncated: false };
+  }
+
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const chunks: string[] = [];
+  let totalBytes = 0;
+  let truncated = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        // Only decode up to the limit
+        const excess = totalBytes - maxBytes;
+        const trimmed = value.slice(0, value.byteLength - excess);
+        chunks.push(decoder.decode(trimmed, { stream: false }));
+        truncated = true;
+        break;
+      }
+
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+
+    // Flush any remaining bytes in the decoder
+    if (!truncated) {
+      chunks.push(decoder.decode());
+    }
+  } finally {
+    reader.releaseLock();
+    // Cancel the rest of the stream if truncated
+    if (truncated && response.body) {
+      try {
+        await response.body.cancel();
+      } catch {
+        // Ignore cancel errors
+      }
+    }
+  }
+
+  return { text: chunks.join(''), truncated };
+}
+
 /**
  * WebFetch tool - fetch and extract content from URLs
  */
@@ -133,9 +187,21 @@ export class WebFetchTool {
 
       if (extractType === 'json') {
         try {
-          const json = await response.json();
+          // Read with byte limit to prevent memory exhaustion
+          const { text: jsonText, truncated } = await readResponseWithLimit(response);
+          if (truncated) {
+            throw new ToolExecutionError('JSON response exceeds size limit', {
+              toolName: 'web_fetch',
+              toolInput: input,
+              code: ErrorCodes.TOOL_EXECUTION_FAILED,
+              recoverable: false,
+              retryable: false,
+            });
+          }
+          const json = JSON.parse(jsonText);
           return JSON.stringify(json, null, 2);
-        } catch {
+        } catch (e) {
+          if (e instanceof ToolExecutionError) throw e;
           throw new ToolExecutionError('Response is not valid JSON', {
             toolName: 'web_fetch',
             toolInput: input,
@@ -146,13 +212,17 @@ export class WebFetchTool {
         }
       }
 
-      const html = await response.text();
+      // Read with byte limit to prevent memory exhaustion
+      const { text: html, truncated: htmlTruncated } = await readResponseWithLimit(response);
 
       if (extractType === 'html') {
-        // Truncate if too long
+        // Truncate if too long (character limit)
         const maxLength = 50000;
         if (html.length > maxLength) {
           return html.slice(0, maxLength) + '\n\n[Content truncated...]';
+        }
+        if (htmlTruncated) {
+          return html + '\n\n[Content truncated due to size limit...]';
         }
         return html;
       }
@@ -160,10 +230,13 @@ export class WebFetchTool {
       // Extract readable text from HTML
       const text = extractReadableText(html);
 
-      // Truncate if too long
+      // Truncate if too long (character limit)
       const maxLength = 30000;
       if (text.length > maxLength) {
         return text.slice(0, maxLength) + '\n\n[Content truncated...]';
+      }
+      if (htmlTruncated) {
+        return (text || 'No readable content found on page') + '\n\n[Content truncated due to size limit...]';
       }
 
       return text || 'No readable content found on page';
@@ -267,7 +340,8 @@ export class WebSearchTool {
         });
       }
 
-      const html = await response.text();
+      // Read with byte limit - search results shouldn't be huge but be safe
+      const { text: html } = await readResponseWithLimit(response, 2 * 1024 * 1024); // 2MB limit for search
 
       // Parse results from DuckDuckGo HTML
       const results = parseDuckDuckGoResults(html, maxResults);
@@ -527,26 +601,33 @@ export class CurlTool {
 
       const contentType = response.headers.get('content-type') || '';
       let responseBody: string;
+      let truncatedBySize = false;
+
+      // Read with byte limit to prevent memory exhaustion
+      const { text: rawBody, truncated } = await readResponseWithLimit(response);
+      truncatedBySize = truncated;
 
       if (contentType.includes('application/json')) {
         try {
-          const json = await response.json();
+          const json = JSON.parse(rawBody);
           responseBody = JSON.stringify(json, null, 2);
         } catch {
-          responseBody = await response.text();
+          responseBody = rawBody;
         }
       } else {
-        responseBody = await response.text();
+        responseBody = rawBody;
         // Extract readable text from HTML
         if (contentType.includes('text/html')) {
           responseBody = extractReadableText(responseBody);
         }
       }
 
-      // Truncate if too long
+      // Truncate if too long (character limit)
       const maxLength = 30000;
       if (responseBody.length > maxLength) {
         responseBody = responseBody.slice(0, maxLength) + '\n\n[Content truncated...]';
+      } else if (truncatedBySize) {
+        responseBody = responseBody + '\n\n[Content truncated due to size limit...]';
       }
 
       const statusLine = `HTTP ${response.status} ${response.statusText}`;
@@ -618,11 +699,12 @@ async function isPrivateHostOrResolved(hostname: string): Promise<boolean> {
         return true;
       }
     }
+    return false;
   } catch {
-    // If DNS lookup fails, do not block by default.
+    // SECURITY: Fail-closed on DNS errors to prevent SSRF bypass via DNS failures
+    // (e.g., attacker-controlled DNS returning SERVFAIL then resolving to internal IP)
+    return true;
   }
-
-  return false;
 }
 
 function isIpLiteral(hostname: string): boolean {

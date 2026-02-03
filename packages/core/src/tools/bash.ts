@@ -3,6 +3,7 @@ import type { ToolExecutor } from './registry';
 import { ErrorCodes, ToolExecutionError } from '../errors';
 import { getSecurityLogger } from '../security/logger';
 import { validateBashCommand } from '../security/bash-validator';
+import { isPrivateHostOrResolved } from '../security/network-validator';
 import { loadConfig } from '../config';
 import { getRuntime } from '../runtime';
 
@@ -211,6 +212,60 @@ export class BashTool {
   }
 
   /**
+   * Extract URLs from a curl command string
+   */
+  private static extractCurlUrls(command: string): string[] {
+    const urls: string[] = [];
+
+    // Match curl command and extract URL patterns
+    // curl supports URLs directly or via -u/--url flag
+    const curlMatch = command.match(/^curl\s+(.+)$/i);
+    if (!curlMatch) return urls;
+
+    const args = curlMatch[1];
+
+    // Match URLs (http:// or https://)
+    const urlMatches = args.match(/https?:\/\/[^\s'"]+/gi);
+    if (urlMatches) {
+      for (const url of urlMatches) {
+        // Clean up any trailing characters that might be part of shell syntax
+        const cleanUrl = url.replace(/[;|&<>]+$/, '');
+        if (cleanUrl) urls.push(cleanUrl);
+      }
+    }
+
+    return urls;
+  }
+
+  /**
+   * Validate that curl URLs don't target private/internal networks (SSRF protection)
+   */
+  private static async validateCurlSsrf(command: string): Promise<{ valid: boolean; blockedUrl?: string }> {
+    const trimmed = command.trim().toLowerCase();
+
+    // Only check if it's a curl command
+    if (!trimmed.startsWith('curl ')) {
+      return { valid: true };
+    }
+
+    const urls = this.extractCurlUrls(command.trim());
+
+    for (const urlStr of urls) {
+      try {
+        const url = new URL(urlStr);
+        if (await isPrivateHostOrResolved(url.hostname)) {
+          return { valid: false, blockedUrl: urlStr };
+        }
+      } catch {
+        // Invalid URL - curl will fail anyway, let it through
+        continue;
+      }
+    }
+
+    return { valid: true };
+  }
+
+  /**
    * Split a command string by operators (&&, ||, |) while respecting quotes
    */
   private static splitCommandByOperators(command: string): string[] {
@@ -400,6 +455,32 @@ export class BashTool {
           recoverable: false,
           retryable: false,
           suggestion: 'Use a permitted read-only command.',
+        }
+      );
+    }
+
+    // SSRF protection for curl commands
+    const ssrfCheck = await this.validateCurlSsrf(commandForChecks);
+    if (!ssrfCheck.valid) {
+      getSecurityLogger().log({
+        eventType: 'blocked_command',
+        severity: 'high',
+        details: {
+          tool: 'bash',
+          command,
+          reason: `SSRF protection: curl to private/internal network blocked (${ssrfCheck.blockedUrl})`,
+        },
+        sessionId: (input.sessionId as string) || 'unknown',
+      });
+      throw new ToolExecutionError(
+        `Cannot fetch from local/private network addresses for security reasons: ${ssrfCheck.blockedUrl}`,
+        {
+          toolName: 'bash',
+          toolInput: input,
+          code: ErrorCodes.TOOL_PERMISSION_DENIED,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'Use a public URL instead of localhost or internal network addresses.',
         }
       );
     }
