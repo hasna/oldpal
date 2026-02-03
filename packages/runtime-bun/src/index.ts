@@ -4,6 +4,8 @@
 
 import { Glob } from 'bun';
 import { Database } from 'bun:sqlite';
+import { mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import type {
   Runtime,
   FileHandle,
@@ -87,7 +89,10 @@ class BunShellCommand implements ShellCommand {
   private async execute(): Promise<ShellResult> {
     // Use Bun.spawn with sh -c to execute the command string
     // This is necessary because Bun.$ template literals escape interpolations
-    const proc = Bun.spawn(['sh', '-c', this.command], {
+    const isWindows = process.platform === 'win32';
+    const shellBinary = isWindows ? 'cmd' : (Bun.which('bash') || 'sh');
+    const shellArgs = isWindows ? ['/c', this.command] : ['-lc', this.command];
+    const proc = Bun.spawn([shellBinary, ...shellArgs], {
       cwd: this._cwd,
       env: { ...process.env, ...(this._env ?? {}) },
       stdout: 'pipe',
@@ -184,7 +189,7 @@ export const bunRuntime: Runtime = {
   },
 
   write(path: string, content: string | Uint8Array | Blob): Promise<number> {
-    return Bun.write(path, content);
+    return mkdir(dirname(path), { recursive: true }).then(() => Bun.write(path, content));
   },
 
   spawn(cmd: string[], options?: SpawnOptions): SpawnResult {
@@ -193,7 +198,7 @@ export const bunRuntime: Runtime = {
       stdin: options?.stdin,
       stdout: options?.stdout,
       stderr: options?.stderr,
-      env: options?.env,
+      env: options?.env ? { ...process.env, ...options.env } : process.env,
     });
 
     return {
@@ -221,7 +226,7 @@ export const bunRuntime: Runtime = {
       cwd: options?.cwd,
       dot: options?.dot,
       absolute: options?.absolute,
-      onlyFiles: options?.onlyFiles,
+      onlyFiles: options?.onlyFiles ?? true,
     })) {
       yield file;
     }

@@ -2,8 +2,9 @@
  * Node.js runtime implementation for @hasna/assistants-core
  */
 
-import { readFile, writeFile, access, stat, mkdir } from 'node:fs/promises';
-import { spawn, exec } from 'node:child_process';
+import { statSync } from 'node:fs';
+import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
+import { spawn, exec, execSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import fg from 'fast-glob';
@@ -23,6 +24,7 @@ import type {
 class NodeFileHandle implements FileHandle {
   private path: string;
   private _size: number = 0;
+  private sizeLoaded: boolean = false;
 
   constructor(path: string) {
     this.path = path;
@@ -30,7 +32,9 @@ class NodeFileHandle implements FileHandle {
 
   async exists(): Promise<boolean> {
     try {
-      await access(this.path);
+      const stats = await stat(this.path);
+      this._size = stats.size;
+      this.sizeLoaded = true;
       return true;
     } catch {
       return false;
@@ -38,22 +42,43 @@ class NodeFileHandle implements FileHandle {
   }
 
   text(): Promise<string> {
-    return readFile(this.path, 'utf-8');
+    return readFile(this.path, 'utf-8').then((content) => {
+      if (!this.sizeLoaded) {
+        this._size = Buffer.byteLength(content);
+        this.sizeLoaded = true;
+      }
+      return content;
+    });
   }
 
   async json<T = unknown>(): Promise<T> {
     const content = await readFile(this.path, 'utf-8');
+    if (!this.sizeLoaded) {
+      this._size = Buffer.byteLength(content);
+      this.sizeLoaded = true;
+    }
     return JSON.parse(content) as T;
   }
 
   async arrayBuffer(): Promise<ArrayBuffer> {
     const buffer = await readFile(this.path);
+    if (!this.sizeLoaded) {
+      this._size = buffer.length;
+      this.sizeLoaded = true;
+    }
     return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
   }
 
   get size(): number {
-    // Note: This is synchronous for interface compatibility
-    // In practice, call exists() first to ensure file exists
+    if (!this.sizeLoaded) {
+      try {
+        const stats = statSync(this.path);
+        this._size = stats.size;
+        this.sizeLoaded = true;
+      } catch {
+        this._size = 0;
+      }
+    }
     return this._size;
   }
 }
@@ -149,10 +174,13 @@ class NodeShellCommand implements ShellCommand {
           maxBuffer: 50 * 1024 * 1024, // 50MB
         },
         (error, stdout, stderr) => {
+          const rawCode = error ? (error as NodeJS.ErrnoException).code : undefined;
+          const exitCode = typeof rawCode === 'number' ? rawCode : error ? 1 : 0;
+
           const result: ShellResult = {
             stdout: stdout.toString(),
             stderr: stderr.toString(),
-            exitCode: error ? (error as NodeJS.ErrnoException).code ? 1 : error.code ?? 1 : 0,
+            exitCode,
           };
 
           if (error && !this._nothrow) {
@@ -283,8 +311,11 @@ export const nodeRuntime: Runtime = {
 
   which(binary: string): string | null {
     try {
-      const { execSync } = require('node:child_process');
-      const result = execSync(`which ${binary}`, { encoding: 'utf-8' }).trim();
+      const whichCommand = process.platform === 'win32' ? 'where' : 'which';
+      const result = execSync(`${whichCommand} ${binary}`, { encoding: 'utf-8' })
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)[0];
       return result || null;
     } catch {
       return null;
