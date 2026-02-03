@@ -5,30 +5,70 @@
 
 import { join, basename } from 'path';
 import { mkdir, readFile, writeFile, rm, readdir, stat } from 'fs/promises';
+import { createHash } from 'crypto';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
 
 /**
- * Pattern for safe IDs - only alphanumeric, hyphens, and underscores allowed
+ * Pattern for agent IDs - strict alphanumeric, hyphens, and underscores only.
+ * This is used for directory names where we control the ID format.
  */
-const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const STRICT_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /**
- * Validate that an ID is safe to use in filesystem paths.
- * Returns true if valid, false otherwise.
+ * Pattern for filesystem-safe filenames (after mapping).
  */
-function isValidId(id: unknown): id is string {
-  return typeof id === 'string' && id.length > 0 && SAFE_ID_PATTERN.test(id);
+const SAFE_FILENAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * Validate that an agent ID is safe to use in filesystem paths.
+ * Agent IDs should be tightly controlled (we generate them).
+ */
+function isValidAgentId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && STRICT_ID_PATTERN.test(id);
 }
 
 /**
- * Validate and throw if ID is invalid
+ * Validate and throw if agent ID is invalid
  */
-function validateId(id: string, idType: string): void {
-  if (!isValidId(id)) {
+function validateAgentId(id: string): void {
+  if (!isValidAgentId(id)) {
     throw new Error(
-      `Invalid ${idType}: "${id}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
+      `Invalid agentId: "${id}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
     );
   }
+}
+
+/**
+ * Map an email ID to a filesystem-safe filename.
+ * Email IDs (Message-IDs) can contain characters like <, >, @, ., +, etc.
+ * We create a deterministic, safe filename using base64url encoding.
+ *
+ * Short IDs that are already safe get passed through.
+ * Longer or unsafe IDs get hashed + truncated original for readability.
+ */
+function emailIdToFilename(emailId: string): string {
+  // If the ID is already safe and reasonably short, use it directly
+  if (SAFE_FILENAME_PATTERN.test(emailId) && emailId.length <= 100) {
+    return emailId;
+  }
+
+  // Create a deterministic hash of the full ID for uniqueness
+  const hash = createHash('sha256').update(emailId).digest('base64url').slice(0, 16);
+
+  // Extract a readable portion (alphanumeric only) for debuggability
+  const readable = emailId
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 20);
+
+  // Combine: readable prefix + hash for uniqueness
+  return readable ? `${readable}_${hash}` : hash;
+}
+
+/**
+ * Check if a mapped filename is valid (defense in depth).
+ */
+function isValidMappedFilename(filename: string): boolean {
+  return typeof filename === 'string' && filename.length > 0 && SAFE_FILENAME_PATTERN.test(filename);
 }
 
 /**
@@ -57,8 +97,10 @@ export interface CacheIndex {
 }
 
 export interface CachedEmailEntry {
-  /** Email ID */
+  /** Email ID (original, may contain special characters) */
   id: string;
+  /** Filesystem-safe filename derived from ID */
+  filename: string;
   /** Message-ID header */
   messageId: string;
   /** Formatted from address */
@@ -86,7 +128,7 @@ export class LocalInboxCache {
 
   constructor(options: LocalInboxCacheOptions) {
     // Validate agentId to prevent path traversal
-    validateId(options.agentId, 'agentId');
+    validateAgentId(options.agentId);
     this.agentId = options.agentId;
     this.basePath = options.basePath;
     this.cacheDir = join(this.basePath, this.agentId);
@@ -132,20 +174,25 @@ export class LocalInboxCache {
    * Save an email to the cache
    */
   async saveEmail(email: Email): Promise<void> {
-    // Validate email ID to prevent path traversal
-    validateId(email.id, 'emailId');
+    // Map email ID to a filesystem-safe filename
+    const filename = emailIdToFilename(email.id);
+    if (!isValidMappedFilename(filename)) {
+      throw new Error(`Failed to create safe filename for email ID: "${email.id}"`);
+    }
+
     await this.ensureDirectories();
 
-    // Save email JSON
-    const emailPath = join(this.cacheDir, 'emails', `${email.id}.json`);
+    // Save email JSON using the mapped filename
+    const emailPath = join(this.cacheDir, 'emails', `${filename}.json`);
     await writeFile(emailPath, JSON.stringify(email, null, 2));
 
-    // Update index
+    // Update index (stores original ID and mapped filename)
     const index = await this.loadIndex();
     const existingIdx = index.emails.findIndex((e) => e.id === email.id);
 
     const entry: CachedEmailEntry = {
       id: email.id,
+      filename,
       messageId: email.messageId,
       from: email.from.name || email.from.address,
       subject: email.subject,
@@ -156,8 +203,10 @@ export class LocalInboxCache {
     };
 
     if (existingIdx >= 0) {
-      // Preserve read status
+      // Preserve read status and use existing filename if available
       entry.isRead = index.emails[existingIdx].isRead;
+      // Keep existing filename for consistency (in case mapping algorithm changes)
+      entry.filename = index.emails[existingIdx].filename || filename;
       index.emails[existingIdx] = entry;
     } else {
       index.emails.unshift(entry);
@@ -170,12 +219,22 @@ export class LocalInboxCache {
    * Load an email from the cache
    */
   async loadEmail(id: string): Promise<Email | null> {
-    // Validate ID to prevent path traversal
-    if (!isValidId(id)) {
+    // Look up the filename from the index
+    const index = await this.loadIndex();
+    const entry = index.emails.find((e) => e.id === id);
+
+    if (!entry) {
       return null;
     }
+
+    // Use stored filename, or compute it for backwards compatibility
+    const filename = entry.filename || emailIdToFilename(id);
+    if (!isValidMappedFilename(filename)) {
+      return null;
+    }
+
     try {
-      const emailPath = join(this.cacheDir, 'emails', `${id}.json`);
+      const emailPath = join(this.cacheDir, 'emails', `${filename}.json`);
       const content = await readFile(emailPath, 'utf-8');
       return JSON.parse(content);
     } catch {
@@ -268,15 +327,19 @@ export class LocalInboxCache {
     filename: string,
     content: Buffer
   ): Promise<string> {
-    // Validate emailId to prevent path traversal
-    validateId(emailId, 'emailId');
-    // Sanitize filename to prevent path traversal
+    // Map emailId to a filesystem-safe directory name
+    const emailFilename = emailIdToFilename(emailId);
+    if (!isValidMappedFilename(emailFilename)) {
+      throw new Error(`Failed to create safe directory name for email ID: "${emailId}"`);
+    }
+
+    // Sanitize attachment filename to prevent path traversal
     const safeFilename = sanitizeFilename(filename);
     if (!safeFilename) {
       throw new Error('Invalid attachment filename');
     }
 
-    const attachmentDir = join(this.cacheDir, 'attachments', emailId);
+    const attachmentDir = join(this.cacheDir, 'attachments', emailFilename);
     await mkdir(attachmentDir, { recursive: true });
 
     const attachmentPath = join(attachmentDir, safeFilename);
@@ -289,10 +352,12 @@ export class LocalInboxCache {
    * Get attachment path if downloaded
    */
   async getAttachmentPath(emailId: string, filename: string): Promise<string | null> {
-    // Validate emailId to prevent path traversal
-    if (!isValidId(emailId)) {
+    // Map emailId to a filesystem-safe directory name
+    const emailFilename = emailIdToFilename(emailId);
+    if (!isValidMappedFilename(emailFilename)) {
       return null;
     }
+
     // Sanitize filename to prevent path traversal
     const safeFilename = sanitizeFilename(filename);
     if (!safeFilename) {
@@ -300,7 +365,7 @@ export class LocalInboxCache {
     }
 
     try {
-      const attachmentPath = join(this.cacheDir, 'attachments', emailId, safeFilename);
+      const attachmentPath = join(this.cacheDir, 'attachments', emailFilename, safeFilename);
       await stat(attachmentPath);
       return attachmentPath;
     } catch {
@@ -331,44 +396,44 @@ export class LocalInboxCache {
   async cleanup(maxAgeDays: number = 30): Promise<number> {
     const index = await this.loadIndex();
     const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
-    const removed: string[] = [];
+    const toRemove: Array<{ id: string; filename: string }> = [];
 
-    // Find old emails (only consider entries with valid IDs)
+    // Find old emails
     for (const entry of index.emails) {
-      if (!isValidId(entry.id)) continue; // Skip invalid IDs
       const cachedAt = new Date(entry.cachedAt).getTime();
       if (cachedAt < cutoff) {
-        removed.push(entry.id);
+        // Use stored filename or compute it for backwards compatibility
+        const filename = entry.filename || emailIdToFilename(entry.id);
+        if (isValidMappedFilename(filename)) {
+          toRemove.push({ id: entry.id, filename });
+        }
       }
     }
 
     // Remove from index and delete files
-    for (const id of removed) {
-      // Double-check ID is valid before rm (defense in depth)
-      if (!isValidId(id)) continue;
-
+    for (const { id, filename } of toRemove) {
       index.emails = index.emails.filter((e) => e.id !== id);
 
-      // Delete email file
+      // Delete email file using the mapped filename
       try {
-        await rm(join(this.cacheDir, 'emails', `${id}.json`));
+        await rm(join(this.cacheDir, 'emails', `${filename}.json`));
       } catch {
         // Ignore
       }
 
-      // Delete attachments directory
+      // Delete attachments directory using the mapped filename
       try {
-        await rm(join(this.cacheDir, 'attachments', id), { recursive: true });
+        await rm(join(this.cacheDir, 'attachments', filename), { recursive: true });
       } catch {
         // Ignore
       }
     }
 
-    if (removed.length > 0) {
+    if (toRemove.length > 0) {
       await this.saveIndex();
     }
 
-    return removed.length;
+    return toRemove.length;
   }
 
   /**
@@ -417,3 +482,11 @@ export class LocalInboxCache {
     this.index = { emails: [] };
   }
 }
+
+/** Exported for testing */
+export const __test__ = {
+  emailIdToFilename,
+  isValidMappedFilename,
+  isValidAgentId,
+  sanitizeFilename,
+};

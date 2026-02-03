@@ -1488,7 +1488,13 @@ export class AgentLoop {
         }
 
         try {
-          const result = await this.runMessage(current.command, 'schedule');
+          // Determine what content to run based on action type
+          // 'message' type injects custom message into agent session
+          // 'command' type (or undefined for backwards compatibility) runs the command
+          const contentToRun = current.actionType === 'message'
+            ? (current.message || current.command)
+            : current.command;
+          const result = await this.runMessage(contentToRun, 'schedule');
           const now = Date.now();
           await updateSchedule(this.cwd, schedule.id, (live) => {
             const updated: ScheduledCommand = {

@@ -1,6 +1,11 @@
 import type { Command, CommandContext, CommandResult } from './types';
 import type { CommandLoader } from './loader';
 import { getRuntime } from '../runtime';
+import { validateBashCommand } from '../security/bash-validator';
+import { getSecurityLogger } from '../security/logger';
+
+/** Maximum output length for shell commands (64KB) */
+const MAX_SHELL_OUTPUT_LENGTH = 64 * 1024;
 
 /**
  * CommandExecutor - executes slash commands
@@ -138,8 +143,25 @@ export class CommandExecutor {
 
   /**
    * Execute a shell command and return output
+   * Validates command against dangerous patterns before execution
    */
   private async executeShell(command: string, cwd: string): Promise<string> {
+    // Validate command before execution
+    const validation = validateBashCommand(command);
+    if (!validation.valid) {
+      getSecurityLogger().log({
+        eventType: 'blocked_command',
+        severity: validation.severity || 'high',
+        details: {
+          tool: 'custom_command',
+          command,
+          reason: validation.reason || 'Command blocked by security policy',
+        },
+        sessionId: 'custom-command',
+      });
+      return `Error: ${validation.reason || 'Command blocked by security policy'}`;
+    }
+
     try {
       const runtime = getRuntime();
       const timeoutMs = 5000;
@@ -172,10 +194,19 @@ export class CommandExecutor {
       }
 
       if (exitCode !== 0 && stderr) {
-        return `Error (exit ${exitCode}):\n${stderr}`;
+        const truncatedStderr = stderr.length > MAX_SHELL_OUTPUT_LENGTH
+          ? `${stderr.slice(0, MAX_SHELL_OUTPUT_LENGTH)}...(truncated)`
+          : stderr;
+        return `Error (exit ${exitCode}):\n${truncatedStderr}`;
       }
 
-      return stdout.trim() || '(no output)';
+      // Cap output length to prevent excessive content
+      const trimmedOutput = stdout.trim();
+      if (trimmedOutput.length > MAX_SHELL_OUTPUT_LENGTH) {
+        return `${trimmedOutput.slice(0, MAX_SHELL_OUTPUT_LENGTH)}...(output truncated at ${MAX_SHELL_OUTPUT_LENGTH} bytes)`;
+      }
+
+      return trimmedOutput || '(no output)';
     } catch (error) {
       return `Error: ${error instanceof Error ? error.message : String(error)}`;
     }
