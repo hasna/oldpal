@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AlertCircle, Power, PowerOff, Plus } from 'lucide-react';
+import { AlertCircle, Power, PowerOff, Plus, Pencil } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/Button';
@@ -50,6 +50,24 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/Card';
+import { Slider } from '@/components/ui/slider';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { AgentEditDialog } from '@/components/agents/AgentEditDialog';
+import {
+  ANTHROPIC_MODELS,
+  DEFAULT_MODEL,
+  DEFAULT_TEMPERATURE,
+  MIN_TEMPERATURE,
+  MAX_TEMPERATURE,
+  TEMPERATURE_STEP,
+  getModelDisplayName,
+} from '@hasna/assistants-shared';
 
 interface Agent {
   id: string;
@@ -57,6 +75,11 @@ interface Agent {
   description: string | null;
   avatar: string | null;
   model: string;
+  systemPrompt?: string | null;
+  settings?: {
+    temperature?: number;
+    maxTokens?: number;
+  } | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -76,7 +99,13 @@ export default function AgentsPage() {
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentDescription, setNewAgentDescription] = useState('');
   const [newAgentAvatar, setNewAgentAvatar] = useState<string | null>(null);
+  const [newAgentModel, setNewAgentModel] = useState(DEFAULT_MODEL);
+  const [newAgentTemperature, setNewAgentTemperature] = useState(DEFAULT_TEMPERATURE);
   const createFormRef = useRef<HTMLDivElement>(null);
+
+  // Edit dialog state
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Selection state for bulk actions
@@ -174,6 +203,10 @@ export default function AgentsPage() {
           name: newAgentName,
           description: newAgentDescription || undefined,
           avatar: newAgentAvatar || undefined,
+          model: newAgentModel,
+          settings: {
+            temperature: newAgentTemperature,
+          },
         }),
       });
       const data = await response.json();
@@ -182,6 +215,8 @@ export default function AgentsPage() {
         setNewAgentName('');
         setNewAgentDescription('');
         setNewAgentAvatar(null);
+        setNewAgentModel(DEFAULT_MODEL);
+        setNewAgentTemperature(DEFAULT_TEMPERATURE);
         toast({
           title: 'Agent created',
           description: `${data.data.name} has been created successfully.`,
@@ -194,6 +229,33 @@ export default function AgentsPage() {
     } finally {
       setIsCreating(false);
     }
+  };
+
+  // Update agent through edit dialog
+  const updateAgent = async (agentId: string, data: Partial<Agent>) => {
+    const response = await fetchWithAuth(`/api/v1/agents/${agentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (result.success) {
+      setAgents((prev) =>
+        prev.map((a) => (a.id === agentId ? { ...a, ...result.data } : a))
+      );
+      toast({
+        title: 'Agent updated',
+        description: `${result.data.name} has been updated successfully.`,
+      });
+    } else {
+      throw new Error(result.error?.message || 'Failed to update agent');
+    }
+  };
+
+  // Open edit dialog
+  const openEditDialog = (agent: Agent) => {
+    setEditingAgent(agent);
+    setIsEditDialogOpen(true);
   };
 
   const deleteAgent = async (id: string) => {
@@ -434,11 +496,46 @@ export default function AgentsPage() {
                     onChange={(e) => setNewAgentDescription(e.target.value)}
                     placeholder="A helpful assistant for..."
                     className="resize-none"
-                    rows={3}
+                    rows={2}
                   />
                 </div>
               </div>
             </div>
+
+            {/* Model and Temperature */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="model">Model</Label>
+                <Select value={newAgentModel} onValueChange={setNewAgentModel}>
+                  <SelectTrigger id="model">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ANTHROPIC_MODELS.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="temperature">Temperature</Label>
+                  <span className="text-sm text-muted-foreground">{newAgentTemperature.toFixed(1)}</span>
+                </div>
+                <Slider
+                  id="temperature"
+                  value={[newAgentTemperature]}
+                  min={MIN_TEMPERATURE}
+                  max={MAX_TEMPERATURE}
+                  step={TEMPERATURE_STEP}
+                  onValueChange={([value]) => setNewAgentTemperature(value)}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
             <Button type="submit" disabled={isCreating || !newAgentName.trim()}>
               {isCreating ? 'Creating...' : 'Create Agent'}
             </Button>
@@ -554,10 +651,21 @@ export default function AgentsPage() {
                       {agent.description && (
                         <p className="text-sm text-muted-foreground mt-1 truncate">{agent.description}</p>
                       )}
-                      <p className="text-xs text-muted-foreground mt-1">Model: {agent.model}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {getModelDisplayName(agent.model)}
+                        {agent.settings?.temperature !== undefined && ` | T: ${agent.settings.temperature.toFixed(1)}`}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEditDialog(agent)}
+                    >
+                      <Pencil className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -611,6 +719,14 @@ export default function AgentsPage() {
       )}
         </div>
       </div>
+
+      {/* Edit Dialog */}
+      <AgentEditDialog
+        agent={editingAgent}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSave={updateAgent}
+      />
     </div>
   );
 }
