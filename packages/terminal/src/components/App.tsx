@@ -112,6 +112,10 @@ export function App({ cwd, version }: AppProps) {
   const [skills, setSkills] = useState<{ name: string; description: string; argumentHint?: string }[]>([]);
   const [commands, setCommands] = useState<{ name: string; description: string }[]>([]);
 
+  // Track Ctrl+C for double-tap exit
+  const lastCtrlCRef = useRef<number>(0);
+  const [showExitHint, setShowExitHint] = useState(false);
+
   // Use ref to track response for the done callback
   const responseRef = useRef('');
   const toolCallsRef = useRef<ToolCall[]>([]);
@@ -822,7 +826,7 @@ export function App({ cwd, version }: AppProps) {
       return;
     }
 
-    // Ctrl+C: stop processing (input handles clearing when idle)
+    // Ctrl+C: stop processing, or double-tap to exit
     if (key.ctrl && input === 'c') {
       const hasAsk = activeSessionId ? askUserStateRef.current.has(activeSessionId) : false;
       if (hasAsk) {
@@ -838,11 +842,31 @@ export function App({ cwd, version }: AppProps) {
         registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
         isProcessingRef.current = false;
+        // Reset exit hint state when stopping processing
+        lastCtrlCRef.current = 0;
+        setShowExitHint(false);
         return;
       }
       if (hasAsk) {
         return;
       }
+
+      // Double Ctrl+C to exit (when not processing)
+      const now = Date.now();
+      const timeSinceLastCtrlC = now - lastCtrlCRef.current;
+      if (timeSinceLastCtrlC < 1500 && lastCtrlCRef.current > 0) {
+        // Double Ctrl+C - exit the app
+        registry.closeAll();
+        exit();
+        return;
+      }
+      // First Ctrl+C - show hint and record timestamp
+      lastCtrlCRef.current = now;
+      setShowExitHint(true);
+      // Hide hint after 2 seconds
+      setTimeout(() => {
+        setShowExitHint(false);
+      }, 2000);
     }
     // Ctrl+O: toggle full tool output
     if (key.ctrl && input === 'o') {
@@ -1216,6 +1240,13 @@ export function App({ cwd, version }: AppProps) {
       {!isProcessing && lastWorkedFor && (
         <Box marginBottom={0} marginLeft={2}>
           <Text color="gray">✻ Worked for {lastWorkedFor}</Text>
+        </Box>
+      )}
+
+      {/* Exit hint for double Ctrl+C */}
+      {showExitHint && (
+        <Box marginLeft={2} marginBottom={0}>
+          <Text color="yellow">(Press Ctrl+C again to exit)</Text>
         </Box>
       )}
 
