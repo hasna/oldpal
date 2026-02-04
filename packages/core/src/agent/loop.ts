@@ -380,9 +380,21 @@ export class AgentLoop {
       throw new Error('Agent is already processing a message');
     }
 
-    // Inject pending messages before processing
-    await this.injectPendingMessages();
+    // Set isRunning early to prevent race conditions with scheduled commands.
+    // The heartbeat timer checks isRunning before draining the scheduled queue,
+    // so we need to set it before any async operations to avoid concurrent runs.
+    this.isRunning = true;
 
+    try {
+      // Inject pending messages before processing
+      await this.injectPendingMessages();
+    } catch (error) {
+      // If injection fails, reset isRunning before re-throwing
+      this.isRunning = false;
+      throw error;
+    }
+
+    // runMessage handles its own isRunning state in its finally block
     await this.runMessage(userMessage, 'user');
   }
 
@@ -740,6 +752,11 @@ export class AgentLoop {
     const results: ToolResult[] = [];
 
     for (const toolCall of toolCalls) {
+      // Check if stop was requested - break early and return partial results
+      if (this.shouldStop) {
+        break;
+      }
+
       // Ensure tools receive the agent's cwd by default
       const toolInput = { ...(toolCall.input || {}) } as Record<string, unknown>;
       if (toolInput.cwd === undefined) {

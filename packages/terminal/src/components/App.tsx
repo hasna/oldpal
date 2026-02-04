@@ -131,6 +131,8 @@ export function App({ cwd, version }: AppProps) {
   const processingStartTimeRef = useRef<number | undefined>(processingStartTime);
   const pendingSendsRef = useRef<Array<{ id: string; sessionId: string; mode: 'inline' | 'queued' }>>([]);
   const askUserStateRef = useRef<Map<string, AskUserState>>(new Map());
+  // Trigger state update to force queue processing check after processing completes
+  const [queueFlushTrigger, setQueueFlushTrigger] = useState(0);
   const clearPendingSend = useCallback((id: string, sessionId: string) => {
     pendingSendsRef.current = pendingSendsRef.current.filter(
       (entry) => entry.id !== id || entry.sessionId !== sessionId
@@ -210,7 +212,9 @@ export function App({ cwd, version }: AppProps) {
 
   useEffect(() => {
     if (isProcessing && !processingStartTime) {
-      setProcessingStartTime(Date.now());
+      const now = Date.now();
+      setProcessingStartTime(now);
+      processingStartTimeRef.current = now; // Sync ref immediately for synchronous access
     }
   }, [isProcessing, processingStartTime]);
 
@@ -400,7 +404,9 @@ export function App({ cwd, version }: AppProps) {
         registryRef.current.setProcessing(active.id, true);
         setIsProcessing(true);
         isProcessingRef.current = true;
-        setProcessingStartTime(Date.now());
+        const startNow = Date.now();
+        setProcessingStartTime(startNow);
+        processingStartTimeRef.current = startNow; // Sync ref immediately for synchronous access
         const pendingIndex = pendingSendsRef.current.findIndex((entry) => entry.sessionId === active.id);
         if (pendingIndex !== -1) {
           const [started] = pendingSendsRef.current.splice(pendingIndex, 1);
@@ -487,6 +493,8 @@ export function App({ cwd, version }: AppProps) {
       if (active) {
         registryRef.current.setProcessing(active.id, false);
       }
+      // Trigger queue flush check after state settles
+      setQueueFlushTrigger((prev) => prev + 1);
     } else if (chunk.type === 'exit') {
       // Exit command was issued
       registry.closeAll();
@@ -514,6 +522,9 @@ export function App({ cwd, version }: AppProps) {
           resetTurnState();
         }
       });
+
+      // Trigger queue flush check after state settles
+      setQueueFlushTrigger((prev) => prev + 1);
 
       // Update token usage from client
       const activeSession = registry.getActiveSession();
@@ -545,6 +556,8 @@ export function App({ cwd, version }: AppProps) {
         if (active) {
           registryRef.current.setProcessing(active.id, false);
         }
+        // Trigger queue flush check after error
+        setQueueFlushTrigger((prev) => prev + 1);
       });
     }
 
@@ -715,7 +728,9 @@ export function App({ cwd, version }: AppProps) {
     setCurrentToolCall(undefined);
     setActivityLog([]);
     activityLogRef.current = [];
-    setProcessingStartTime(Date.now());
+    const queueStartNow = Date.now();
+    setProcessingStartTime(queueStartNow);
+    processingStartTimeRef.current = queueStartNow; // Sync ref immediately for synchronous access
     setCurrentTurnTokens(0);
     setIsProcessing(true);
     isProcessingRef.current = true;
@@ -813,11 +828,12 @@ export function App({ cwd, version }: AppProps) {
   }, [activityLog, wrapChars, renderWidth, dynamicBudget, streamingLineCount]);
 
   // Process queue when not processing
+  // queueFlushTrigger forces re-evaluation when processing completes (done/error)
   useEffect(() => {
     if (!isProcessing && activeQueue.length > 0 && activeInline.length === 0) {
       processQueue();
     }
-  }, [isProcessing, activeQueue.length, activeInline.length, processQueue]);
+  }, [isProcessing, activeQueue.length, activeInline.length, processQueue, queueFlushTrigger]);
 
   // Native terminal scrolling handles scroll position automatically
 
@@ -1142,7 +1158,9 @@ export function App({ cwd, version }: AppProps) {
       setCurrentToolCall(undefined);
       setActivityLog([]);
       activityLogRef.current = [];
-      setProcessingStartTime(Date.now());
+      const submitStartNow = Date.now();
+      setProcessingStartTime(submitStartNow);
+      processingStartTimeRef.current = submitStartNow; // Sync ref immediately for synchronous access
       setCurrentTurnTokens(0);
       setIsProcessing(true);
       isProcessingRef.current = true;
