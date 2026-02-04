@@ -14,7 +14,7 @@ export const ANTHROPIC_MODELS: ModelDefinition[] = [
     name: 'Claude Opus 4.5',
     description: 'Most capable, best for complex tasks',
     contextWindow: 200000,
-    maxOutputTokens: 32000,
+    maxOutputTokens: 64000,
   },
   {
     id: 'claude-sonnet-4-20250514',
@@ -39,7 +39,7 @@ export const ANTHROPIC_MODELS: ModelDefinition[] = [
   },
 ] as const;
 
-export const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+export const DEFAULT_MODEL = 'claude-opus-4-5-20251101';
 
 export const DEFAULT_TEMPERATURE = 1.0;
 export const MIN_TEMPERATURE = 0.0;
