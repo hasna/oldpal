@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach, mock } from 'bun:test';
 import type { ClientMessage } from '../src/lib/protocol';
-import { getMockClients, resetMockClients } from './helpers/mock-assistants-core';
+import { resetMockClients } from './helpers/mock-assistants-core';
 
 class MockWebSocketServer {
   public handlers: Record<string, any> = {};
@@ -8,14 +8,73 @@ class MockWebSocketServer {
   on(event: string, cb: any) {
     this.handlers[event] = cb;
   }
-  triggerConnection(ws: any) {
-    this.handlers.connection?.(ws);
+  triggerConnection(ws: any, req?: any) {
+    this.handlers.connection?.(ws, req || { headers: {}, url: '/' });
   }
 }
 
 mock.module('ws', () => ({
   WebSocketServer: MockWebSocketServer,
 }));
+
+// Mock database module
+mock.module('@/db', () => ({
+  db: {
+    query: {
+      users: {
+        findFirst: async () => ({ isActive: true }),
+      },
+      sessions: {
+        findFirst: async () => null, // Session doesn't exist, will be created
+      },
+    },
+    insert: () => ({
+      values: () => ({
+        returning: async () => [{}],
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: async () => {},
+      }),
+    }),
+  },
+}));
+
+mock.module('@/db/schema', () => ({
+  users: {},
+  sessions: {},
+  messages: {},
+}));
+
+// Mock agent-pool to avoid loading real database and core dependencies
+const mockAgentPool = {
+  subscribers: new Map<string, { onChunk: Function; onError?: Function }>(),
+  lastMessage: null as string | null,
+  stopped: new Set<string>(),
+
+  subscribeToSession: async (sessionId: string, onChunk: Function, onError?: Function) => {
+    mockAgentPool.subscribers.set(sessionId, { onChunk, onError });
+    return () => {
+      mockAgentPool.subscribers.delete(sessionId);
+    };
+  },
+
+  sendSessionMessage: async (sessionId: string, message: string) => {
+    mockAgentPool.lastMessage = message;
+    // Emit a text chunk to the subscriber
+    const sub = mockAgentPool.subscribers.get(sessionId);
+    if (sub) {
+      sub.onChunk({ type: 'text', content: 'response' });
+    }
+  },
+
+  stopSession: async (sessionId: string) => {
+    mockAgentPool.stopped.add(sessionId);
+  },
+};
+
+mock.module('@/lib/server/agent-pool', () => mockAgentPool);
 
 const handler = (await import('../src/pages/api/v1/ws')).default;
 
@@ -29,6 +88,10 @@ function createRes() {
 describe('pages api ws handler', () => {
   beforeEach(() => {
     resetMockClients();
+    // Reset mock agent pool state
+    mockAgentPool.lastMessage = null;
+    mockAgentPool.stopped.clear();
+    mockAgentPool.subscribers.clear();
   });
 
   test('initializes WebSocket server and handles messages', async () => {
@@ -49,9 +112,10 @@ describe('pages api ws handler', () => {
 
     const message: ClientMessage = { type: 'message', content: 'Hi', messageId: 'msg-1', sessionId: 'ws-test-1' };
     await ws.handlers.message(JSON.stringify(message));
-    expect(getMockClients().at(-1)!.sent[0]).toBe('Hi');
+    // Verify message was sent to the agent pool
+    expect(mockAgentPool.lastMessage).toBe('Hi');
 
-    getMockClients().at(-1)!.emitChunk({ type: 'text', content: 'hello' });
+    // The mock agent pool emits a text_delta when sendSessionMessage is called
     expect(sent.some((payload) => payload.includes('text_delta'))).toBe(true);
 
     await ws.handlers.message('not-json');
@@ -76,6 +140,7 @@ describe('pages api ws handler', () => {
 
     const cancel: ClientMessage = { type: 'cancel' };
     await ws.handlers.message(JSON.stringify(cancel));
-    expect(getMockClients().at(-1)!.stopped).toBe(true);
+    // Verify stopSession was called for the session
+    expect(mockAgentPool.stopped.has('ws-test-2')).toBe(true);
   });
 });
