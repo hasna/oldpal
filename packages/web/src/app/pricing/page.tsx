@@ -90,20 +90,20 @@ export default function PricingPage() {
   if (isLoading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-16 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background py-16 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-4xl font-bold text-foreground mb-4">
             Simple, transparent pricing
           </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Choose the plan that best fits your needs. Start free and scale as you grow.
           </p>
         </div>
@@ -120,7 +120,7 @@ export default function PricingPage() {
                 className={`relative flex flex-col ${
                   isPopular
                     ? 'border-2 border-blue-500 shadow-lg scale-105'
-                    : 'border border-gray-200'
+                    : 'border border-border'
                 }`}
               >
                 {isPopular && (
@@ -143,24 +143,24 @@ export default function PricingPage() {
                 <CardContent className="flex-1">
                   {/* Price */}
                   <div className="text-center mb-6">
-                    <span className="text-4xl font-bold text-gray-900">
+                    <span className="text-4xl font-bold text-foreground">
                       ${plan.priceMonthly / 100}
                     </span>
-                    <span className="text-gray-500">/month</span>
+                    <span className="text-muted-foreground">/month</span>
                   </div>
 
                   {/* Limits */}
-                  <div className="space-y-3 mb-6 pb-6 border-b border-gray-100">
+                  <div className="space-y-3 mb-6 pb-6 border-b border-border">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Agents</span>
+                      <span className="text-muted-foreground">Agents</span>
                       <span className="font-medium">{formatLimit(plan.maxAgents)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Messages/day</span>
+                      <span className="text-muted-foreground">Messages/day</span>
                       <span className="font-medium">{formatLimit(plan.maxMessagesPerDay)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Sessions</span>
+                      <span className="text-muted-foreground">Sessions</span>
                       <span className="font-medium">{formatLimit(plan.maxSessions)}</span>
                     </div>
                   </div>
@@ -170,7 +170,7 @@ export default function PricingPage() {
                     {plan.features.map((feature, index) => (
                       <li key={index} className="flex items-start gap-2">
                         <Check className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm text-gray-600">{feature}</span>
+                        <span className="text-sm text-muted-foreground">{feature}</span>
                       </li>
                     ))}
                   </ul>
@@ -202,7 +202,7 @@ export default function PricingPage() {
 
         {/* FAQ or additional info */}
         <div className="mt-16 text-center">
-          <p className="text-gray-500">
+          <p className="text-muted-foreground">
             All plans include a 14-day money-back guarantee.{' '}
             <a href="/contact" className="text-blue-500 hover:underline">
               Contact us

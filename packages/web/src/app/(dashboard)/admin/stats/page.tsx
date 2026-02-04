@@ -59,13 +59,13 @@ function StatCard({
   icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="p-4 rounded-lg border border-gray-200 bg-white">
+    <div className="p-4 rounded-lg border border-border bg-card">
       <div className="flex items-center gap-2">
         {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
-        <p className="text-sm text-gray-500">{title}</p>
+        <p className="text-sm text-muted-foreground">{title}</p>
       </div>
-      <p className="text-3xl font-semibold text-gray-900 mt-1">{value.toLocaleString()}</p>
-      {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+      <p className="text-3xl font-semibold text-foreground mt-1">{value.toLocaleString()}</p>
+      {subtitle && <p className="text-xs text-muted-foreground/70 mt-1">{subtitle}</p>}
     </div>
   );
 }
@@ -82,9 +82,9 @@ function HealthCard({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   const statusColors = {
-    healthy: 'bg-green-100 text-green-800 border-green-200',
-    warning: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    error: 'bg-red-100 text-red-800 border-red-200',
+    healthy: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800',
+    warning: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800',
+    error: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
   };
 
   const badgeVariants: Record<string, 'success' | 'default' | 'error'> = {
@@ -180,24 +180,37 @@ export default function AdminStatsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-400"></div>
+      <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+        {/* Page Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h1 className="text-lg font-semibold">Admin Dashboard</h1>
+          <Button variant="outline" size="sm" disabled>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-400"></div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-          <Button variant="ghost" onClick={handleRefresh} disabled={isRefreshing}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      {/* Page Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h1 className="text-lg font-semibold">Admin Dashboard</h1>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
 
-        {error && (
+      {/* Page Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          {error && (
           <div className="mb-4 rounded-md bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
             {error}
           </div>
@@ -206,7 +219,7 @@ export default function AdminStatsPage() {
         {/* System Health */}
         {health && (
           <section className="mb-8">
-            <h2 className="text-lg font-medium text-gray-800 mb-4">System Health</h2>
+            <h2 className="text-lg font-medium text-foreground mb-4">System Health</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <HealthCard
                 title="API Status"
@@ -244,7 +257,7 @@ export default function AdminStatsPage() {
           <>
             {/* Totals */}
             <section className="mb-8">
-              <h2 className="text-lg font-medium text-gray-800 mb-4">Totals</h2>
+              <h2 className="text-lg font-medium text-foreground mb-4">Totals</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <StatCard title="Total Users" value={stats.totals.users} icon={Users} />
                 <StatCard title="Total Sessions" value={stats.totals.sessions} icon={MessageSquare} />
@@ -256,7 +269,7 @@ export default function AdminStatsPage() {
 
             {/* Recent Activity */}
             <section className="mb-8">
-              <h2 className="text-lg font-medium text-gray-800 mb-4">Recent Activity</h2>
+              <h2 className="text-lg font-medium text-foreground mb-4">Recent Activity</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <StatCard
                   title="New Users Today"
@@ -291,11 +304,12 @@ export default function AdminStatsPage() {
               </div>
             </section>
 
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               Generated at: {new Date(stats.generated).toLocaleString()}
             </p>
           </>
         )}
+        </div>
       </div>
     </div>
   );

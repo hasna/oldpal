@@ -56,7 +56,7 @@ export function InputArea() {
   }, [isStreaming, sessionId, setStreaming, finalizeToolCalls, clearToolCalls]);
 
   return (
-    <div className="flex items-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
+    <div className="flex items-end gap-3 border-t border-border bg-background px-6 py-4" data-tour="chat-input">
       <div className="flex-1">
         <Textarea
           id="chat-input"

@@ -6,6 +6,11 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ToolCallCard } from '@/components/chat/ToolCallCard';
+import {
+  ChatSettingsDrawer,
+  ChatSettingsButton,
+  useChatSettings,
+} from '@/components/chat/ChatSettings';
 import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
 
 interface ToolCallWithMeta extends ToolCall {
@@ -30,9 +35,13 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
   const streamAbortRef = useRef<AbortController | null>(null);
+
+  // Chat settings
+  const { settings, updateSettings, resetSettings, loaded: settingsLoaded } = useChatSettings();
 
   // Track mounted state
   useEffect(() => {
@@ -147,6 +156,9 @@ export default function ChatPage() {
         body: JSON.stringify({
           message: input,
           sessionId,
+          model: settings.model,
+          temperature: settings.temperature,
+          maxTokens: settings.maxTokens,
         }),
         signal: abortController.signal,
       });
@@ -307,8 +319,42 @@ export default function ChatPage() {
     }
   };
 
+  const handleNewSession = () => {
+    // Clear current session and messages
+    setSessionId(null);
+    setMessages([]);
+    setLoadError('');
+    // Navigate to /chat without session param
+    router.replace('/chat');
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      {/* Page Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h1 className="text-lg font-semibold">Chat</h1>
+        <div className="flex items-center gap-2">
+          {settingsLoaded && (
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              {settings.model.split('-').slice(0, 2).join(' ')} | T: {settings.temperature}
+            </span>
+          )}
+          <ChatSettingsButton onClick={() => setSettingsOpen(true)} />
+          <Button variant="outline" size="sm" onClick={handleNewSession}>
+            New Session
+          </Button>
+        </div>
+      </div>
+
+      {/* Settings Drawer */}
+      <ChatSettingsDrawer
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onSettingsChange={updateSettings}
+        onReset={resetSettings}
+      />
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {loadError ? (
@@ -319,8 +365,8 @@ export default function ChatPage() {
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-gray-800">Start a conversation</h2>
-              <p className="mt-2 text-gray-500">Send a message to begin chatting with your assistant</p>
+              <h2 className="text-xl font-semibold text-foreground">Start a conversation</h2>
+              <p className="mt-2 text-muted-foreground">Send a message to begin chatting with your assistant</p>
             </div>
           </div>
         ) : (
@@ -333,7 +379,7 @@ export default function ChatPage() {
                 className={`max-w-2xl rounded-lg px-4 py-2 ${
                   message.role === 'user'
                     ? 'bg-sky-500 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    : 'bg-muted text-foreground'
                 }`}
               >
                 <p className="whitespace-pre-wrap">{message.content || (message.toolCalls?.length ? '' : '...')}</p>
@@ -348,7 +394,7 @@ export default function ChatPage() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-200 p-4">
+      <div className="border-t border-border p-4">
         <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto">
           <Input
             id="chat-message-input"

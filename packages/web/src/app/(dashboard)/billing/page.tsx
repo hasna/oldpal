@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { PaymentMethods } from '@/components/billing';
 
 interface Plan {
   id: string;
@@ -193,7 +194,7 @@ export default function BillingPage() {
       case 'active':
         return <Badge className="bg-green-100 text-green-800">Active</Badge>;
       case 'canceled':
-        return <Badge className="bg-gray-100 text-gray-800">Canceled</Badge>;
+        return <Badge className="bg-muted text-muted-foreground">Canceled</Badge>;
       case 'past_due':
         return <Badge className="bg-red-100 text-red-800">Past Due</Badge>;
       case 'trialing':
@@ -223,38 +224,75 @@ export default function BillingPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <Skeleton className="h-8 w-32 mb-6" />
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-40" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-40" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-            </CardContent>
-          </Card>
+      <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+        {/* Page Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h1 className="text-lg font-semibold">Billing</h1>
+          <Button size="sm" variant="outline" disabled>
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Manage Billing
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-6 mb-8">
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-6 w-40" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-6 w-40" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Billing</h1>
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      {/* Page Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h1 className="text-lg font-semibold">Billing</h1>
+        {billingData?.isFreeTier ? (
+          <Button size="sm" onClick={() => router.push('/pricing')}>
+            <ArrowRight className="h-4 w-4 mr-2" />
+            Upgrade Plan
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={openCustomerPortal}
+            disabled={portalLoading}
+          >
+            {portalLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <ExternalLink className="h-4 w-4 mr-2" />
+            )}
+            Manage Billing
+          </Button>
+        )}
+      </div>
 
-      {error && (
+      {/* Page Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-4xl mx-auto">
+          {error && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
@@ -281,18 +319,18 @@ export default function BillingPage() {
                 </span>
                 {billingData?.subscription && getStatusBadge(billingData.subscription.status)}
                 {billingData?.isFreeTier && (
-                  <Badge className="bg-gray-100 text-gray-800">Free Tier</Badge>
+                  <Badge className="bg-muted text-muted-foreground">Free Tier</Badge>
                 )}
               </div>
 
-              <div className="text-3xl font-bold text-gray-900">
+              <div className="text-3xl font-bold text-foreground">
                 {formatCurrency(billingData?.plan?.priceMonthly || 0)}
-                <span className="text-base font-normal text-gray-500">/month</span>
+                <span className="text-base font-normal text-muted-foreground">/month</span>
               </div>
 
               {billingData?.subscription && (
                 <>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-muted-foreground">
                     Current period: {formatDate(billingData.subscription.currentPeriodStart)} -{' '}
                     {formatDate(billingData.subscription.currentPeriodEnd)}
                   </div>
@@ -350,7 +388,7 @@ export default function BillingPage() {
             <div className="space-y-6">
               <div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Agents</span>
+                  <span className="text-muted-foreground">Agents</span>
                   <span className="font-medium">
                     {usageDisplay.agents.current} / {formatLimit(usageDisplay.agents.limit)}
                   </span>
@@ -367,7 +405,7 @@ export default function BillingPage() {
 
               <div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Messages Today</span>
+                  <span className="text-muted-foreground">Messages Today</span>
                   <span className="font-medium">
                     {usageDisplay.messages.current} / {formatLimit(usageDisplay.messages.limit)}
                   </span>
@@ -384,7 +422,7 @@ export default function BillingPage() {
 
               <div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Active Sessions</span>
+                  <span className="text-muted-foreground">Active Sessions</span>
                   <span className="font-medium">
                     {usageDisplay.sessions.current} / {formatLimit(usageDisplay.sessions.limit)}
                   </span>
@@ -414,12 +452,23 @@ export default function BillingPage() {
               {billingData.plan.features.map((feature, index) => (
                 <li key={index} className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-gray-600">{feature}</span>
+                  <span className="text-sm text-muted-foreground">{feature}</span>
                 </li>
               ))}
             </ul>
           </CardContent>
         </Card>
+      )}
+
+      {/* Payment Methods */}
+      {!billingData?.isFreeTier && (
+        <div className="mb-8">
+          <PaymentMethods
+            fetchWithAuth={fetchWithAuth}
+            onAddPaymentMethod={openCustomerPortal}
+            showAddButton={true}
+          />
+        </div>
       )}
 
       {/* Invoice History */}
@@ -473,23 +522,25 @@ export default function BillingPage() {
         </Card>
       )}
 
-      {/* Empty state for free tier */}
-      {billingData?.isFreeTier && (
-        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100">
-          <CardContent className="py-8 text-center">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Unlock more with a paid plan
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Get more agents, messages, and premium features to supercharge your workflow.
-            </p>
-            <Button onClick={() => router.push('/pricing')}>
-              View Plans
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+          {/* Empty state for free tier */}
+          {billingData?.isFreeTier && (
+            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-100 dark:border-blue-900">
+              <CardContent className="py-8 text-center">
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Unlock more with a paid plan
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Get more agents, messages, and premium features to supercharge your workflow.
+                </p>
+                <Button onClick={() => router.push('/pricing')}>
+                  View Plans
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

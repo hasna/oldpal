@@ -14,14 +14,14 @@ export default function Error({ error, reset }: ErrorProps) {
   }, [error]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900">Something went wrong</h1>
-        <p className="mt-4 text-gray-500">
+        <h1 className="text-4xl font-bold text-foreground">Something went wrong</h1>
+        <p className="mt-4 text-muted-foreground">
           An unexpected error occurred. Please try again.
         </p>
         {error.digest && (
-          <p className="mt-2 text-sm text-gray-400">Error ID: {error.digest}</p>
+          <p className="mt-2 text-sm text-muted-foreground/70">Error ID: {error.digest}</p>
         )}
         <div className="mt-6 space-x-4">
           <button
@@ -32,7 +32,7 @@ export default function Error({ error, reset }: ErrorProps) {
           </button>
           <a
             href="/"
-            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500"
+            className="inline-flex items-center px-4 py-2 border border-border text-sm font-medium rounded-md shadow-sm text-foreground bg-card hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500"
           >
             Go home
           </a>

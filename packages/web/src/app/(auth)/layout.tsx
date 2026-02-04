@@ -22,7 +22,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
   // Show loading state while checking auth
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
       </div>
     );
@@ -31,20 +31,20 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
   // Don't render auth forms if already authenticated (will redirect)
   if (isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Assistants</h1>
-          <p className="mt-2 text-gray-600">Your personal AI assistant</p>
+          <h1 className="text-2xl font-bold text-foreground">Assistants</h1>
+          <p className="mt-2 text-muted-foreground">Your personal AI assistant</p>
         </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
           {children}
         </div>
       </div>

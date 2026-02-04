@@ -13,8 +13,8 @@ function LoginContent() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-xl font-semibold text-gray-900">Welcome back</h2>
-        <p className="mt-1 text-sm text-gray-600">Sign in to your account</p>
+        <h2 className="text-xl font-semibold text-foreground">Welcome back</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Sign in to your account</p>
       </div>
 
       {error && (
@@ -34,7 +34,7 @@ function LoginContent() {
           <Separator />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 text-gray-500">Or continue with</span>
+          <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
         </div>
       </div>
 
