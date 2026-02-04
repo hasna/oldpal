@@ -71,12 +71,19 @@ interface BillingData {
   isFreeTier: boolean;
 }
 
+interface UsageData {
+  agents: number;
+  sessions: number;
+  messagestoday: number;
+}
+
 export default function BillingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
   const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -104,12 +111,23 @@ export default function BillingPage() {
   const loadBillingData = useCallback(async () => {
     setError('');
     try {
-      const response = await fetchWithAuth('/api/v1/billing/subscription');
-      const data = await response.json();
-      if (data.success) {
-        setBillingData(data.data);
+      // Fetch billing data and usage data in parallel
+      const [billingResponse, usageResponse] = await Promise.all([
+        fetchWithAuth('/api/v1/billing/subscription'),
+        fetchWithAuth('/api/v1/billing/usage'),
+      ]);
+
+      const billingResult = await billingResponse.json();
+      const usageResult = await usageResponse.json();
+
+      if (billingResult.success) {
+        setBillingData(billingResult.data);
       } else {
-        setError(data.error?.message || 'Failed to load billing data');
+        setError(billingResult.error?.message || 'Failed to load billing data');
+      }
+
+      if (usageResult.success) {
+        setUsageData(usageResult.data);
       }
     } catch {
       setError('Failed to load billing data');
@@ -187,11 +205,20 @@ export default function BillingPage() {
     }
   };
 
-  // Mock usage data - in production, fetch from usage_metrics
-  const usageData = {
-    agents: { current: 3, limit: billingData?.plan?.maxAgents || 5 },
-    messages: { current: 45, limit: billingData?.plan?.maxMessagesPerDay || 100 },
-    sessions: { current: 2, limit: billingData?.plan?.maxSessions || 10 },
+  // Compute usage display data from real API data
+  const usageDisplay = {
+    agents: {
+      current: usageData?.agents ?? 0,
+      limit: billingData?.plan?.maxAgents ?? 5,
+    },
+    messages: {
+      current: usageData?.messagestoday ?? 0,
+      limit: billingData?.plan?.maxMessagesPerDay ?? 100,
+    },
+    sessions: {
+      current: usageData?.sessions ?? 0,
+      limit: billingData?.plan?.maxSessions ?? 10,
+    },
   };
 
   if (isLoading) {
@@ -325,14 +352,14 @@ export default function BillingPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-600">Agents</span>
                   <span className="font-medium">
-                    {usageData.agents.current} / {formatLimit(usageData.agents.limit)}
+                    {usageDisplay.agents.current} / {formatLimit(usageDisplay.agents.limit)}
                   </span>
                 </div>
                 <Progress
                   value={
-                    usageData.agents.limit === -1
+                    usageDisplay.agents.limit === -1
                       ? 0
-                      : (usageData.agents.current / usageData.agents.limit) * 100
+                      : (usageDisplay.agents.current / usageDisplay.agents.limit) * 100
                   }
                   className="h-2"
                 />
@@ -342,14 +369,14 @@ export default function BillingPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-600">Messages Today</span>
                   <span className="font-medium">
-                    {usageData.messages.current} / {formatLimit(usageData.messages.limit)}
+                    {usageDisplay.messages.current} / {formatLimit(usageDisplay.messages.limit)}
                   </span>
                 </div>
                 <Progress
                   value={
-                    usageData.messages.limit === -1
+                    usageDisplay.messages.limit === -1
                       ? 0
-                      : (usageData.messages.current / usageData.messages.limit) * 100
+                      : (usageDisplay.messages.current / usageDisplay.messages.limit) * 100
                   }
                   className="h-2"
                 />
@@ -359,14 +386,14 @@ export default function BillingPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-600">Active Sessions</span>
                   <span className="font-medium">
-                    {usageData.sessions.current} / {formatLimit(usageData.sessions.limit)}
+                    {usageDisplay.sessions.current} / {formatLimit(usageDisplay.sessions.limit)}
                   </span>
                 </div>
                 <Progress
                   value={
-                    usageData.sessions.limit === -1
+                    usageDisplay.sessions.limit === -1
                       ? 0
-                      : (usageData.sessions.current / usageData.sessions.limit) * 100
+                      : (usageDisplay.sessions.current / usageDisplay.sessions.limit) * 100
                   }
                   className="h-2"
                 />
