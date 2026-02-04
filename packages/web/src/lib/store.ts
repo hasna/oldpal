@@ -11,6 +11,7 @@ interface ChatState {
   currentStreamMessageId: string | null;
   sessionId: string | null;
   sessions: Array<{ id: string; label: string; createdAt: number }>;
+  // Note: isStreaming is stored but always set to false when saving/restoring to prevent stuck sessions
   sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCallWithMeta[]; streamMessageId: string | null; isStreaming: boolean }>;
   /** Buffer for tool results that arrive before their corresponding tool_call */
   pendingToolResults: Map<string, ToolResult>;
@@ -78,13 +79,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messages: state.messages,
           toolCalls: state.currentToolCalls,
           streamMessageId: state.currentStreamMessageId,
-          isStreaming: state.isStreaming,
+          // Don't persist isStreaming - it's ephemeral and should not survive session switches
+          // This prevents sessions from getting stuck in streaming state after disconnects
+          isStreaming: false,
         };
       }
       const snapshot = snapshots[sessionId] || { messages: [], toolCalls: [], streamMessageId: null, isStreaming: false };
       return {
         sessionId,
-        isStreaming: snapshot.isStreaming,
+        // Always reset streaming state when switching sessions - streaming is per-connection, not per-session
+        isStreaming: false,
         messages: snapshot.messages,
         currentToolCalls: snapshot.toolCalls,
         currentStreamMessageId: snapshot.streamMessageId ?? null,
@@ -175,18 +179,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setStreaming: (streaming) =>
     set((state) => ({
       isStreaming: streaming,
-      sessionSnapshots: state.sessionId
-        ? {
-            ...state.sessionSnapshots,
-            [state.sessionId]: {
-              // Ensure all fields are set even if snapshot didn't exist
-              messages: state.sessionSnapshots[state.sessionId]?.messages ?? state.messages,
-              toolCalls: state.sessionSnapshots[state.sessionId]?.toolCalls ?? state.currentToolCalls,
-              streamMessageId: state.sessionSnapshots[state.sessionId]?.streamMessageId ?? state.currentStreamMessageId,
-              isStreaming: streaming,
-            },
-          }
-        : state.sessionSnapshots,
+      // Don't persist isStreaming to snapshots - it's ephemeral connection state
+      // Persisting it can cause sessions to get stuck in streaming mode after disconnects
     })),
 
   addToolCall: (call, messageId) =>
