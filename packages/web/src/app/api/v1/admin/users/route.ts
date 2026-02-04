@@ -38,6 +38,8 @@ export const GET = withAdminAuth(async (request: AuthenticatedRequest) => {
           role: true,
           emailVerified: true,
           avatarUrl: true,
+          isActive: true,
+          suspendedReason: true,
           createdAt: true,
         },
       }),

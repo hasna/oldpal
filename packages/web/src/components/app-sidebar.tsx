@@ -12,6 +12,10 @@ import {
   Send,
   Settings2,
   History,
+  Shield,
+  Users,
+  BarChart3,
+  FileText,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -126,6 +130,27 @@ const data = {
       icon: History,
     },
   ],
+  navAdmin: [
+    {
+      title: "Admin",
+      url: "/admin/stats",
+      icon: Shield,
+      items: [
+        {
+          title: "Stats",
+          url: "/admin/stats",
+        },
+        {
+          title: "Users",
+          url: "/admin/users",
+        },
+        {
+          title: "Audit Log",
+          url: "/admin/audit",
+        },
+      ],
+    },
+  ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -158,6 +183,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
+        {user?.role === 'admin' && <NavMain items={data.navAdmin} />}
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>

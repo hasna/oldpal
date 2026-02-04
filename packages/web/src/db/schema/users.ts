@@ -13,6 +13,9 @@ export const users = pgTable('users', {
   role: userRoleEnum('role').default('user').notNull(),
   googleId: varchar('google_id', { length: 255 }).unique(),
   stripeCustomerId: varchar('stripe_customer_id', { length: 255 }).unique(),
+  isActive: boolean('is_active').default(true).notNull(),
+  suspendedAt: timestamp('suspended_at'),
+  suspendedReason: text('suspended_reason'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

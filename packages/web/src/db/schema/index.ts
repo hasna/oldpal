@@ -9,3 +9,4 @@ export * from './subscription-plans';
 export * from './subscriptions';
 export * from './invoices';
 export * from './usage-metrics';
+export * from './admin-audit-logs';
