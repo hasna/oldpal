@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { MessageList } from './MessageList';
 import { InputArea } from './InputArea';
+import { ProcessingIndicator } from './ProcessingIndicator';
 import { useChatStore } from '@/lib/store';
 import { chatWs } from '@/lib/ws';
 import { useAuth } from '@/hooks/use-auth';
@@ -33,6 +34,8 @@ export function ChatContainer() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {/* Processing indicator - shows when agent is working */}
+      <ProcessingIndicator />
       <ScrollArea className="flex-1 min-h-0">
         <div className="px-6 py-8">
           {messages.length === 0 ? (

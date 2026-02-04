@@ -40,6 +40,7 @@ const data = {
       url: "/chat",
       icon: MessageSquare,
       isActive: true,
+      tourId: "chat-link",
       items: [
         {
           title: "New Chat",
@@ -55,6 +56,7 @@ const data = {
       title: "Agents",
       url: "/agents",
       icon: Bot,
+      tourId: "agents-link",
       items: [
         {
           title: "My Agents",
@@ -77,6 +79,7 @@ const data = {
       title: "Schedules",
       url: "/schedules",
       icon: Clock,
+      tourId: "schedules-link",
       items: [
         {
           title: "All Schedules",
@@ -103,6 +106,7 @@ const data = {
       title: "Settings",
       url: "/settings",
       icon: Settings2,
+      tourId: "settings-link",
       items: [
         {
           title: "Profile",
@@ -163,12 +167,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar variant="inset" aria-label="Main navigation" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="/chat">
+              <a href="/chat" aria-label="Assistants AI Platform - Go to chat">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                   <Command className="size-4" />
                 </div>

@@ -23,12 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { EmptyAuditLogsState } from '@/components/shared/EmptyState';
+import { TableSkeleton, SKELETON_COLUMNS } from '@/components/shared/DataTable';
 
 interface AuditLog {
   id: string;
@@ -117,6 +118,16 @@ export default function AdminAuditPage() {
     }
   }, [loadLogs, user?.role]);
 
+  const hasActiveFilters = actionFilter !== 'all' || targetTypeFilter !== 'all' || startDate !== '' || endDate !== '';
+
+  const clearFilters = () => {
+    setActionFilter('all');
+    setTargetTypeFilter('all');
+    setStartDate('');
+    setEndDate('');
+    setPage(1);
+  };
+
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows);
     if (newExpanded.has(id)) {
@@ -142,52 +153,42 @@ export default function AdminAuditPage() {
 
   if (isLoading && logs.length === 0) {
     return (
-      <div className="p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <Skeleton className="h-8 w-32" />
+      <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+        {/* Page Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h1 className="text-lg font-semibold">Audit Log</h1>
+          <Button variant="outline" size="sm" disabled>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-6xl mx-auto">
+            <TableSkeleton
+              columns={SKELETON_COLUMNS.adminAudit}
+              headers={['', 'Action', 'Admin', 'Target', 'IP Address', 'Date']}
+            />
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[30px]"></TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Admin</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>IP Address</TableHead>
-                <TableHead>Date</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-4 w-4" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900">Audit Log</h1>
-          <Button variant="ghost" size="sm" onClick={() => loadLogs()}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      {/* Page Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h1 className="text-lg font-semibold">Audit Log</h1>
+        <Button variant="outline" size="sm" onClick={() => loadLogs()}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
+      </div>
 
-        <div className="flex flex-wrap gap-4 mb-6">
+      {/* Page Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-wrap gap-4 mb-6">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Action:</span>
             <Select value={actionFilter} onValueChange={(v) => { setActionFilter(v); setPage(1); }}>
@@ -245,26 +246,26 @@ export default function AdminAuditPage() {
           </Alert>
         )}
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[30px]"></TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Admin</TableHead>
-              <TableHead>Target</TableHead>
-              <TableHead>IP Address</TableHead>
-              <TableHead>Date</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {logs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  No audit logs found
-                </TableCell>
-              </TableRow>
-            ) : (
-              logs.map((log) => {
+        {logs.length === 0 ? (
+          <EmptyAuditLogsState
+            hasFilters={hasActiveFilters}
+            onClearFilters={clearFilters}
+          />
+        ) : (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[30px]"></TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Admin</TableHead>
+                  <TableHead>Target</TableHead>
+                  <TableHead>IP Address</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => {
                 const hasDetails = log.changes || log.metadata;
                 const isExpanded = expandedRows.has(log.id);
 
@@ -345,34 +346,36 @@ export default function AdminAuditPage() {
                     </>
                   </Collapsible>
                 );
-              })
-            )}
-          </TableBody>
-        </Table>
+                })}
+              </TableBody>
+            </Table>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-6">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1 || isLoading}
-            >
-              Previous
-            </Button>
-            <span className="text-sm text-gray-500">
-              Page {page} of {totalPages}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages || isLoading}
-            >
-              Next
-            </Button>
-          </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-6">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1 || isLoading}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-500">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages || isLoading}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </>
         )}
+        </div>
       </div>
     </div>
   );

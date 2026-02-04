@@ -27,6 +27,7 @@ export function NavMain({
     url: string
     icon: LucideIcon
     isActive?: boolean
+    tourId?: string
     items?: {
       title: string
       url: string
@@ -41,7 +42,7 @@ export function NavMain({
           <Collapsible key={item.title} asChild defaultOpen={item.isActive}>
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip={item.title}>
-                <a href={item.url}>
+                <a href={item.url} data-tour={item.tourId}>
                   <item.icon />
                   <span>{item.title}</span>
                 </a>

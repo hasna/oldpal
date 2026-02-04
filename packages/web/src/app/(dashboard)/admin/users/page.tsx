@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, MoreHorizontal, Pencil, Eye, UserX, UserCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
@@ -23,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Skeleton } from '@/components/ui/skeleton';
 import { UserEditDialog, type UserForEdit } from '@/components/admin/UserEditDialog';
 import { UserDetailDialog } from '@/components/admin/UserDetailDialog';
 import {
@@ -36,6 +35,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  SearchBar,
+  SelectFilter,
+  useFilters,
+} from '@/components/shared/ListFilters';
+import {
+  SortableHeader,
+  PaginationControls,
+  useSorting,
+  usePagination,
+  TableSkeleton,
+  SKELETON_COLUMNS,
+} from '@/components/shared/DataTable';
 
 interface User {
   id: string;
@@ -49,15 +61,32 @@ interface User {
   createdAt: string;
 }
 
+type UserFilters = {
+  search: string | undefined;
+  role: string | undefined;
+  status: string | undefined;
+} & Record<string, string | undefined>;
+
 export default function AdminUsersPage() {
   const router = useRouter();
   const { user, fetchWithAuth } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sorting state
+  const { sortConfig, handleSort, getSortParams } = useSorting({ column: 'createdAt', direction: 'desc' });
+
+  // Pagination state
+  const { page, setPage, pageSize, setPageSize, totalItems, setTotalItems, totalPages, loaded: paginationLoaded } = usePagination(20);
+
+  // Filter state
+  const filters = useFilters<UserFilters>({
+    search: undefined,
+    role: undefined,
+    status: undefined,
+  });
 
   // Dialog states
   const [editUser, setEditUser] = useState<UserForEdit | null>(null);
@@ -78,14 +107,28 @@ export default function AdminUsersPage() {
     try {
       setIsLoading(true);
       setError('');
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (search) params.set('search', search);
+      const params = new URLSearchParams();
+
+      // Add filter params
+      const filterParams = filters.getFilterParams();
+      Object.entries(filterParams).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+
+      // Add sort params
+      const sortParams = getSortParams();
+      if (sortParams.sortBy) params.set('sortBy', sortParams.sortBy);
+      if (sortParams.sortDir) params.set('sortDir', sortParams.sortDir);
+
+      // Add pagination params
+      params.set('page', String(page));
+      params.set('limit', String(pageSize));
 
       const response = await fetchWithAuth(`/api/v1/admin/users?${params}`);
       const data = await response.json();
       if (data.success) {
         setUsers(data.data.items);
-        setTotalPages(data.data.totalPages);
+        setTotalItems(data.data.total || 0);
       } else {
         setError(data.error?.message || 'Failed to load users');
       }
@@ -94,18 +137,29 @@ export default function AdminUsersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchWithAuth, page, search]);
+  }, [fetchWithAuth, filters, getSortParams, page, pageSize, setTotalItems]);
 
+  // Load users when filters, sorting, or pagination change
   useEffect(() => {
-    if (user?.role === 'admin') {
-      loadUsers();
-    }
-  }, [loadUsers, user?.role]);
+    if (!paginationLoaded || user?.role !== 'admin') return;
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      loadUsers();
+    }, 300);
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [loadUsers, paginationLoaded, user?.role]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
     setPage(1);
-  };
+  }, [filters.values, sortConfig, setPage]);
 
   const handleEdit = (u: User) => {
     setEditUser({
@@ -182,58 +236,70 @@ export default function AdminUsersPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <Skeleton className="h-8 w-24" />
-            <div className="flex gap-2">
-              <Skeleton className="h-10 w-64" />
-              <Skeleton className="h-10 w-20" />
-            </div>
+      <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+        {/* Page Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h1 className="text-lg font-semibold">Users</h1>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-6xl mx-auto">
+            <TableSkeleton
+              columns={SKELETON_COLUMNS.adminUsers}
+              headers={['Email', 'Name', 'Role', 'Status', 'Created', 'Actions']}
+            />
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="w-[70px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-8 w-8" /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900">Users</h1>
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search users..."
-              className="w-64"
-            />
-            <Button type="submit">Search</Button>
-          </form>
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      {/* Page Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h1 className="text-lg font-semibold">Users</h1>
+      </div>
+
+      {/* Page Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          {/* Search and Filters */}
+        <div className="mb-6 space-y-4">
+          <SearchBar
+            value={filters.values.search || ''}
+            onChange={(value) => filters.updateFilter('search', value || undefined)}
+            placeholder="Search users by name or email..."
+          />
+
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex flex-wrap gap-3 items-center">
+              <SelectFilter
+                value={filters.values.role || 'all'}
+                onChange={(value) => filters.updateFilter('role', value === 'all' ? undefined : value)}
+                options={[
+                  { value: 'admin', label: 'Admin' },
+                  { value: 'user', label: 'User' },
+                ]}
+                placeholder="All Roles"
+              />
+
+              <SelectFilter
+                value={filters.values.status || 'all'}
+                onChange={(value) => filters.updateFilter('status', value === 'all' ? undefined : value)}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'suspended', label: 'Suspended' },
+                ]}
+                placeholder="All Status"
+              />
+
+              {filters.hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={filters.clearAllFilters}>
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
 
         {error && (
@@ -246,11 +312,39 @@ export default function AdminUsersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Email</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Role</TableHead>
+              <TableHead>
+                <SortableHeader
+                  column="email"
+                  label="Email"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  column="name"
+                  label="Name"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  column="role"
+                  label="Role"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+              </TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
+              <TableHead>
+                <SortableHeader
+                  column="createdAt"
+                  label="Created"
+                  sortConfig={sortConfig}
+                  onSort={handleSort}
+                />
+              </TableHead>
               <TableHead className="w-[70px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -320,29 +414,17 @@ export default function AdminUsersPage() {
           </TableBody>
         </Table>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-6">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            <span className="text-sm text-gray-500">
-              Page {page} of {totalPages}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-            >
-              Next
-            </Button>
-          </div>
-        )}
+          {totalPages > 1 && (
+            <PaginationControls
+              page={page}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          )}
+        </div>
       </div>
 
       <UserEditDialog
