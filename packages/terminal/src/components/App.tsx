@@ -1401,9 +1401,9 @@ export function App({ cwd, version }: AppProps) {
       }
     };
 
-    const handleAssistantUpdate = async (id: string, updates: { name?: string; description?: string; settings?: Record<string, unknown> }) => {
+    const handleAssistantUpdate = async (id: string, updates: Partial<{ name: string; description: string; settings: Record<string, unknown> }>) => {
       if (assistantManager) {
-        await assistantManager.updateAssistant(id, updates);
+        await assistantManager.updateAssistant(id, updates as any);
         // Refresh identity context after update
         await activeSession?.client.refreshIdentityContext?.();
         setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);

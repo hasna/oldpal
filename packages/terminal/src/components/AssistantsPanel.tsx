@@ -17,7 +17,7 @@ interface AssistantsPanelProps {
   activeAssistantId?: string;
   onSelect: (assistantId: string) => void;
   onCreate: (options: CreateAssistantOptions) => Promise<void>;
-  onUpdate: (id: string, updates: Partial<Assistant>) => Promise<void>;
+  onUpdate: (id: string, updates: Partial<{ name: string; description: string; settings: Record<string, unknown> }>) => Promise<void>;
   onDelete: (assistantId: string) => Promise<void>;
   onCancel: () => void;
 }
@@ -343,7 +343,7 @@ export function AssistantsPanel({
           ...editingAssistant.settings,
           model: ANTHROPIC_MODELS[selectedModelIndex].id,
           temperature,
-        },
+        } as Record<string, unknown>,
       });
       resetForm();
       setMode('list');

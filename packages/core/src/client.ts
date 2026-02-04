@@ -332,6 +332,25 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the assistant manager
+   */
+  getAssistantManager(): any {
+    if (typeof (this.agent as any).getAssistantManager === 'function') {
+      return (this.agent as any).getAssistantManager();
+    }
+    return null;
+  }
+
+  /**
+   * Refresh identity context after assistant/identity changes
+   */
+  async refreshIdentityContext(): Promise<void> {
+    if (typeof (this.agent as any).refreshIdentityContext === 'function') {
+      await (this.agent as any).refreshIdentityContext();
+    }
+  }
+
+  /**
    * Clear the conversation
    */
   clearConversation(): void {
