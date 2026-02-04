@@ -5,7 +5,7 @@ import { agentMessages, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, isValidUUID } from '@/lib/api/errors';
-import { eq, desc, count, and, or, isNull } from 'drizzle-orm';
+import { eq, desc, asc, count, and, or, isNull, ilike } from 'drizzle-orm';
 
 // Max body length: 50KB to prevent DB abuse
 const MAX_BODY_LENGTH = 50_000;
@@ -36,6 +36,17 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const offset = (page - 1) * limit;
     const statusParam = searchParams.get('status');
     const agentId = searchParams.get('agentId');
+    const priorityParam = searchParams.get('priority');
+    const search = searchParams.get('search')?.trim();
+
+    // Sorting parameters
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortDir = searchParams.get('sortDir') || 'desc';
+
+    // Validate sortBy to prevent SQL injection
+    const validSortColumns = ['subject', 'createdAt', 'priority', 'status'];
+    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'createdAt';
+    const sortDirection = sortDir === 'asc' ? asc : desc;
 
     // Validate status if provided
     let status: MessageStatus | null = null;
@@ -44,6 +55,14 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
         return errorResponse(new BadRequestError(`Invalid status: must be one of ${VALID_STATUSES.join(', ')}`));
       }
       status = statusParam as MessageStatus;
+    }
+
+    // Validate priority if provided
+    const validPriorities = ['low', 'normal', 'high', 'urgent'] as const;
+    type MessagePriority = (typeof validPriorities)[number];
+    let priority: MessagePriority | null = null;
+    if (priorityParam && validPriorities.includes(priorityParam as MessagePriority)) {
+      priority = priorityParam as MessagePriority;
     }
 
     // Validate agentId as UUID if provided
@@ -63,21 +82,54 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       return paginatedResponse([], 0, page, limit);
     }
 
-    // Build where clause
-    let whereClause = or(...agentIds.map((id) => eq(agentMessages.toAgentId, id)));
+    // Build where clause conditions
+    const conditions = [];
 
+    // Base filter: messages to user's agents
     if (agentId && agentIds.includes(agentId)) {
-      whereClause = eq(agentMessages.toAgentId, agentId);
+      conditions.push(eq(agentMessages.toAgentId, agentId));
+    } else {
+      conditions.push(or(...agentIds.map((id) => eq(agentMessages.toAgentId, id))));
     }
 
     if (status) {
-      whereClause = and(whereClause, eq(agentMessages.status, status));
+      conditions.push(eq(agentMessages.status, status));
     }
+
+    if (priority) {
+      conditions.push(eq(agentMessages.priority, priority));
+    }
+
+    if (search) {
+      conditions.push(
+        or(
+          ilike(agentMessages.subject, `%${search}%`),
+          ilike(agentMessages.body, `%${search}%`)
+        )
+      );
+    }
+
+    const whereClause = and(...conditions);
+
+    // Build order by based on sort column
+    const getOrderBy = () => {
+      switch (sortColumn) {
+        case 'subject':
+          return [sortDirection(agentMessages.subject)];
+        case 'priority':
+          return [sortDirection(agentMessages.priority)];
+        case 'status':
+          return [sortDirection(agentMessages.status)];
+        case 'createdAt':
+        default:
+          return [sortDirection(agentMessages.createdAt)];
+      }
+    };
 
     const [messagesList, [{ total }]] = await Promise.all([
       db.query.agentMessages.findMany({
         where: whereClause,
-        orderBy: [desc(agentMessages.createdAt)],
+        orderBy: getOrderBy(),
         limit,
         offset,
       }),

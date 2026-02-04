@@ -4,7 +4,7 @@ import { schedules, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
 import { ForbiddenError, NotFoundError } from '@/lib/api/errors';
-import { eq, desc, count, and } from 'drizzle-orm';
+import { eq, desc, asc, count, and, ilike } from 'drizzle-orm';
 
 const createScheduleSchema = z.object({
   command: z.string().min(1).max(1000),
@@ -63,10 +63,62 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     );
     const offset = (page - 1) * limit;
 
+    // Filter parameters
+    const search = searchParams.get('search')?.trim();
+    const status = searchParams.get('status');
+    const scheduleKind = searchParams.get('scheduleKind');
+
+    // Sorting parameters
+    const sortBy = searchParams.get('sortBy') || 'nextRunAt';
+    const sortDir = searchParams.get('sortDir') || 'desc';
+
+    // Validate sortBy to prevent SQL injection
+    const validSortColumns = ['description', 'command', 'nextRunAt', 'createdAt', 'status', 'scheduleKind'];
+    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'nextRunAt';
+    const sortDirection = sortDir === 'asc' ? asc : desc;
+
+    // Build filter conditions
+    const conditions = [eq(schedules.userId, request.user.userId)];
+
+    if (search) {
+      conditions.push(
+        ilike(schedules.command, `%${search}%`)
+      );
+    }
+
+    if (status && (status === 'active' || status === 'paused')) {
+      conditions.push(eq(schedules.status, status));
+    }
+
+    if (scheduleKind && ['once', 'cron', 'random', 'interval'].includes(scheduleKind)) {
+      conditions.push(eq(schedules.scheduleKind, scheduleKind as 'once' | 'cron' | 'random' | 'interval'));
+    }
+
+    const whereClause = and(...conditions);
+
+    // Build order by based on sort column
+    const getOrderBy = () => {
+      switch (sortColumn) {
+        case 'description':
+          return [sortDirection(schedules.description)];
+        case 'command':
+          return [sortDirection(schedules.command)];
+        case 'createdAt':
+          return [sortDirection(schedules.createdAt)];
+        case 'status':
+          return [sortDirection(schedules.status)];
+        case 'scheduleKind':
+          return [sortDirection(schedules.scheduleKind)];
+        case 'nextRunAt':
+        default:
+          return [sortDirection(schedules.nextRunAt)];
+      }
+    };
+
     const [userSchedules, [{ total }]] = await Promise.all([
       db.query.schedules.findMany({
-        where: eq(schedules.userId, request.user.userId),
-        orderBy: [desc(schedules.nextRunAt)],
+        where: whereClause,
+        orderBy: getOrderBy(),
         limit,
         offset,
         with: {
@@ -79,7 +131,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
           },
         },
       }),
-      db.select({ total: count() }).from(schedules).where(eq(schedules.userId, request.user.userId)),
+      db.select({ total: count() }).from(schedules).where(whereClause),
     ]);
 
     return paginatedResponse(userSchedules, total, page, limit);

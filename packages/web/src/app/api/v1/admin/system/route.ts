@@ -2,11 +2,15 @@ import { db } from '@/db';
 import { users, sessions } from '@/db/schema';
 import { withAdminAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
+import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { count, gte, and, eq } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 
 // GET /api/v1/admin/system - Get system health status
 export const GET = withAdminAuth(async (request: AuthenticatedRequest) => {
+  const rateLimitResponse = checkRateLimit(request, 'admin/system', RateLimitPresets.relaxed);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { searchParams } = new URL(request.url);
   const check = searchParams.get('check');
 

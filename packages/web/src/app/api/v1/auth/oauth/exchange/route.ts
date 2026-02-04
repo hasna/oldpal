@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
         role: true,
         emailVerified: true,
         avatarUrl: true,
+        passwordHash: true,
       },
     });
 
@@ -51,7 +52,15 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       data: {
-        user,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          avatarUrl: user.avatarUrl,
+          hasPassword: !!user.passwordHash,
+        },
         accessToken,
         // refreshToken is not returned - it's in httpOnly cookie
       },

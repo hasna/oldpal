@@ -23,6 +23,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       role: user.role,
       avatarUrl: user.avatarUrl,
       emailVerified: user.emailVerified,
+      hasPassword: !!user.passwordHash,
       createdAt: user.createdAt.toISOString(),
     });
   } catch (error) {

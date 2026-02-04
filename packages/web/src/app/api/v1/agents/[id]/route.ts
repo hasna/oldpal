@@ -7,10 +7,20 @@ import { successResponse, errorResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq } from 'drizzle-orm';
 
+// Allow URLs or relative paths starting with /uploads/
+const avatarSchema = z
+  .string()
+  .refine(
+    (val) => val.startsWith('/uploads/') || val.startsWith('http://') || val.startsWith('https://'),
+    { message: 'Avatar must be a valid URL or a relative upload path' }
+  )
+  .optional()
+  .nullable();
+
 const updateAgentSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional().nullable(),
-  avatar: z.string().url().optional().nullable(),
+  avatar: avatarSchema,
   model: z.string().max(100).optional(),
   systemPrompt: z.string().optional().nullable(),
   settings: z.object({

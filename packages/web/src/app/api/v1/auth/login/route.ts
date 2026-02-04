@@ -12,8 +12,23 @@ import { errorResponse } from '@/lib/api/response';
 import { UnauthorizedError } from '@/lib/api/errors';
 import { setRefreshTokenCookie } from '@/lib/auth/cookies';
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
+import { logLoginAttempt } from '@/lib/auth/login-logger';
+import { parseUserAgent } from '@/lib/auth/user-agent-parser';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
+
+function getClientIp(request: NextRequest): string | null {
+  // Check various headers for the client IP
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) {
+    return realIp;
+  }
+  return null;
+}
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -34,13 +49,34 @@ export async function POST(request: NextRequest) {
       where: eq(users.email, email.toLowerCase()),
     });
 
+    const ipAddress = getClientIp(request);
+    const userAgent = request.headers.get('user-agent');
+
     if (!user || !user.passwordHash) {
+      // Log failed attempt - user not found
+      if (user) {
+        await logLoginAttempt({
+          userId: user.id,
+          success: false,
+          ipAddress,
+          userAgent,
+          failureReason: 'user_not_found',
+        });
+      }
       return errorResponse(new UnauthorizedError('Invalid email or password'));
     }
 
     // Verify password
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
+      // Log failed attempt - wrong password
+      await logLoginAttempt({
+        userId: user.id,
+        success: false,
+        ipAddress,
+        userAgent,
+        failureReason: 'invalid_password',
+      });
       return errorResponse(new UnauthorizedError('Invalid email or password'));
     }
 
@@ -57,13 +93,27 @@ export async function POST(request: NextRequest) {
       family,
     });
 
-    // Store refresh token hash
+    // Store refresh token hash with device info
     const tokenHash = await hashPassword(refreshToken);
+    const parsedUA = parseUserAgent(userAgent);
     await db.insert(refreshTokens).values({
       userId: user.id,
       tokenHash,
       family,
       expiresAt: getRefreshTokenExpiry(),
+      ipAddress,
+      userAgent,
+      device: parsedUA.device,
+      browser: parsedUA.browser,
+      os: parsedUA.os,
+    });
+
+    // Log successful login
+    await logLoginAttempt({
+      userId: user.id,
+      success: true,
+      ipAddress,
+      userAgent,
     });
 
     // Set refresh token as httpOnly cookie (not accessible via JavaScript)
@@ -77,6 +127,7 @@ export async function POST(request: NextRequest) {
           name: user.name,
           role: user.role,
           avatarUrl: user.avatarUrl,
+          hasPassword: !!user.passwordHash,
         },
         accessToken,
       },

@@ -4,12 +4,22 @@ import { db } from '@/db';
 import { agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
-import { eq, desc, count, and } from 'drizzle-orm';
+import { eq, desc, asc, count, and, ilike } from 'drizzle-orm';
+
+// Allow URLs or relative paths starting with /uploads/
+const avatarSchema = z
+  .string()
+  .refine(
+    (val) => val.startsWith('/uploads/') || val.startsWith('http://') || val.startsWith('https://'),
+    { message: 'Avatar must be a valid URL or a relative upload path' }
+  )
+  .optional()
+  .nullable();
 
 const createAgentSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
-  avatar: z.string().url().optional(),
+  avatar: avatarSchema,
   model: z.string().max(100).default('claude-sonnet-4-20250514'),
   systemPrompt: z.string().optional(),
   settings: z.object({
@@ -30,16 +40,55 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       100
     );
     const offset = (page - 1) * limit;
-    const activeOnly = searchParams.get('active') === 'true';
 
-    const whereClause = activeOnly
-      ? and(eq(agents.userId, request.user.userId), eq(agents.isActive, true))
-      : eq(agents.userId, request.user.userId);
+    // Filter parameters
+    const activeOnly = searchParams.get('active') === 'true';
+    const search = searchParams.get('search')?.trim();
+    const status = searchParams.get('status'); // 'active' | 'inactive' | 'all'
+
+    // Sorting parameters
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortDir = searchParams.get('sortDir') || 'desc';
+
+    // Validate sortBy to prevent SQL injection
+    const validSortColumns = ['name', 'createdAt', 'updatedAt', 'model'];
+    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'createdAt';
+    const sortDirection = sortDir === 'asc' ? asc : desc;
+
+    // Build filter conditions
+    const conditions = [eq(agents.userId, request.user.userId)];
+
+    if (activeOnly || status === 'active') {
+      conditions.push(eq(agents.isActive, true));
+    } else if (status === 'inactive') {
+      conditions.push(eq(agents.isActive, false));
+    }
+
+    if (search) {
+      conditions.push(ilike(agents.name, `%${search}%`));
+    }
+
+    const whereClause = and(...conditions);
+
+    // Build order by based on sort column
+    const getOrderBy = () => {
+      switch (sortColumn) {
+        case 'name':
+          return [sortDirection(agents.name)];
+        case 'updatedAt':
+          return [sortDirection(agents.updatedAt)];
+        case 'model':
+          return [sortDirection(agents.model)];
+        case 'createdAt':
+        default:
+          return [sortDirection(agents.createdAt)];
+      }
+    };
 
     const [userAgents, [{ total }]] = await Promise.all([
       db.query.agents.findMany({
         where: whereClause,
-        orderBy: [desc(agents.updatedAt)],
+        orderBy: getOrderBy(),
         limit,
         offset,
       }),

@@ -2,11 +2,15 @@ import { db } from '@/db';
 import { adminAuditLogs, users } from '@/db/schema';
 import { withAdminAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { paginatedResponse, errorResponse } from '@/lib/api/response';
+import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { desc, count, eq, and, gte, lte, type SQL } from 'drizzle-orm';
 import { isValidUUID } from '@/lib/api/errors';
 
 // GET /api/v1/admin/audit - List audit logs with filtering
 export const GET = withAdminAuth(async (request: AuthenticatedRequest) => {
+  const rateLimitResponse = checkRateLimit(request, 'admin/audit', RateLimitPresets.api);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);

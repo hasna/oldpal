@@ -9,7 +9,15 @@ import { eq, inArray, or } from 'drizzle-orm';
 
 const updateUserSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  avatarUrl: z.string().url().optional().nullable(),
+  // Allow URLs (http/https) or relative paths starting with /uploads/
+  avatarUrl: z
+    .string()
+    .refine(
+      (val) => val.startsWith('/uploads/') || val.startsWith('http://') || val.startsWith('https://'),
+      { message: 'Avatar URL must be a valid URL or a relative upload path' }
+    )
+    .optional()
+    .nullable(),
 });
 
 async function resolveParams(

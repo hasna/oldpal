@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
             name: newUser.name,
             role: newUser.role,
             avatarUrl: newUser.avatarUrl,
+            hasPassword: true, // User registered with password
           },
           accessToken,
         },

@@ -2,6 +2,7 @@ import { db } from '@/db';
 import { users, subscriptions, subscriptionPlans, invoices } from '@/db/schema';
 import { withAdminAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
+import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { NotFoundError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
@@ -16,6 +17,9 @@ const overridePlanSchema = z.object({
 
 // GET /api/v1/admin/users/:id/billing - Get user's billing info
 export const GET = withAdminAuth(async (request: AuthenticatedRequest, context: RouteContext) => {
+  const rateLimitResponse = checkRateLimit(request, 'admin/users/billing', RateLimitPresets.api);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { id } = await context.params;
     validateUUID(id, 'user id');
@@ -95,6 +99,9 @@ export const GET = withAdminAuth(async (request: AuthenticatedRequest, context: 
 
 // POST /api/v1/admin/users/:id/billing/override - Override user's plan
 export const POST = withAdminAuth(async (request: AuthenticatedRequest, context: RouteContext) => {
+  const rateLimitResponse = checkRateLimit(request, 'admin/users/billing/override', RateLimitPresets.api);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { id } = await context.params;
     validateUUID(id, 'user id');

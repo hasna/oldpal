@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/db';
 import { users, sessions, agents } from '@/db/schema';
-import { withAdminAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
+import { withAdminAuth, type AuthenticatedRequest, invalidateUserStatusCache } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
+import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
 import { NotFoundError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq, count } from 'drizzle-orm';
 import { z } from 'zod';
@@ -20,6 +21,9 @@ const updateUserSchema = z.object({
 
 // GET /api/v1/admin/users/:id - Get user details with stats
 export const GET = withAdminAuth(async (request: AuthenticatedRequest, context: RouteContext) => {
+  const rateLimitResponse = checkRateLimit(request, 'admin/users/detail', RateLimitPresets.api);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { id } = await context.params;
     validateUUID(id, 'user id');
@@ -66,6 +70,9 @@ export const GET = withAdminAuth(async (request: AuthenticatedRequest, context: 
 
 // PATCH /api/v1/admin/users/:id - Update user
 export const PATCH = withAdminAuth(async (request: AuthenticatedRequest, context: RouteContext) => {
+  const rateLimitResponse = checkRateLimit(request, 'admin/users/update', RateLimitPresets.api);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { id } = await context.params;
     validateUUID(id, 'user id');
@@ -160,6 +167,11 @@ export const PATCH = withAdminAuth(async (request: AuthenticatedRequest, context
       });
     }
 
+    // Invalidate auth cache if role or status changed
+    if (validated.role !== undefined || validated.isActive !== undefined) {
+      invalidateUserStatusCache(id);
+    }
+
     return successResponse(updatedUser);
   } catch (error) {
     return errorResponse(error);
@@ -168,6 +180,9 @@ export const PATCH = withAdminAuth(async (request: AuthenticatedRequest, context
 
 // DELETE /api/v1/admin/users/:id - Soft-delete user (set inactive)
 export const DELETE = withAdminAuth(async (request: AuthenticatedRequest, context: RouteContext) => {
+  const rateLimitResponse = checkRateLimit(request, 'admin/users/delete', RateLimitPresets.api);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { id } = await context.params;
     validateUUID(id, 'user id');
@@ -220,6 +235,9 @@ export const DELETE = withAdminAuth(async (request: AuthenticatedRequest, contex
       },
       request,
     });
+
+    // Invalidate auth cache for deleted user
+    invalidateUserStatusCache(id);
 
     return successResponse({ deleted: true });
   } catch (error) {
