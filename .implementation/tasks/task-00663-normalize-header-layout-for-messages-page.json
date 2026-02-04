@@ -1,0 +1,14 @@
+{
+  "id": "663",
+  "subject": "Normalize header/layout for messages page",
+  "description": "packages/web/src/app/(dashboard)/messages/page.tsx: Add breadcrumb + title header; remove description copy. Place primary action (New message/compose) on same row, right-aligned. Replace filters/search with shared FilterBar + DataTable, including empty/error states.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:53:01.467Z",
+  "updated": "2026-02-04T08:53:01.467Z"
+}

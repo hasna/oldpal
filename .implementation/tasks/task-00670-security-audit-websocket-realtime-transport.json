@@ -1,0 +1,14 @@
+{
+  "id": "670",
+  "subject": "Security audit: websocket + realtime transport",
+  "description": "Review WS endpoints for auth, origin allowlist, payload size limits, message validation, and session ownership checks. Add tests and hardening where needed.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "websocket",
+    "backend"
+  ],
+  "created": "2026-02-04T08:55:05.591Z",
+  "updated": "2026-02-04T08:55:05.591Z"
+}

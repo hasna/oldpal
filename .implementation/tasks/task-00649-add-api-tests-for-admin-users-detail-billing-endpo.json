@@ -1,0 +1,14 @@
+{
+  "id": "649",
+  "subject": "Add API tests for admin users detail/billing endpoints",
+  "description": "Missing tests for /api/v1/admin/users/:id (GET/PATCH/DELETE) and /api/v1/admin/users/:id/billing (GET/POST). Cover self-demotion/suspension prevention, last-admin guard, suspension fields, soft delete, and billing actions.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "tests",
+    "api",
+    "admin"
+  ],
+  "created": "2026-02-04T08:41:59.645Z",
+  "updated": "2026-02-04T08:41:59.645Z"
+}

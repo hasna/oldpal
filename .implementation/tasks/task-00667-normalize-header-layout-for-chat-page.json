@@ -1,0 +1,14 @@
+{
+  "id": "667",
+  "subject": "Normalize header/layout for chat page",
+  "description": "packages/web/src/app/(dashboard)/chat/page.tsx: Add breadcrumb + page title header inside content area; remove any description copy. Align primary action (New session/Reset) to the right of title. Keep consistent header layout.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:53:32.496Z",
+  "updated": "2026-02-04T08:53:32.496Z"
+}

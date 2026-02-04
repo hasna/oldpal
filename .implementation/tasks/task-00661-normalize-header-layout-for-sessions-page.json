@@ -1,0 +1,14 @@
+{
+  "id": "661",
+  "subject": "Normalize header/layout for sessions page",
+  "description": "packages/web/src/app/(dashboard)/sessions/page.tsx: Add breadcrumb + title header; remove description copy. Place primary action (New session) on same row, right-aligned. Replace filters/search with shared FilterBar + DataTable, including empty/error states.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:52:41.939Z",
+  "updated": "2026-02-04T08:52:41.939Z"
+}

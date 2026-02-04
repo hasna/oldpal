@@ -1,0 +1,14 @@
+{
+  "id": "652",
+  "subject": "Update docs for admin dashboard and API",
+  "description": "Docs missing for new admin features: user management (suspend/activate), audit log viewer, system health endpoint, and billing management. Update README and/or add docs/ADMIN.md with endpoints + permissions; include new user fields (isActive, suspendedAt, suspendedReason) and audit log schema.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "docs",
+    "admin",
+    "api"
+  ],
+  "created": "2026-02-04T08:42:25.067Z",
+  "updated": "2026-02-04T08:42:25.067Z"
+}

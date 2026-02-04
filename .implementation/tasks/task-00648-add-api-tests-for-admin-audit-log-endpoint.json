@@ -1,0 +1,14 @@
+{
+  "id": "648",
+  "subject": "Add API tests for admin audit log endpoint",
+  "description": "Missing tests for GET /api/v1/admin/audit. Add coverage for admin auth, filtering (action/adminId/targetType/date range), pagination, and join to admin user info.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "tests",
+    "api",
+    "admin"
+  ],
+  "created": "2026-02-04T08:41:52.237Z",
+  "updated": "2026-02-04T08:41:52.237Z"
+}

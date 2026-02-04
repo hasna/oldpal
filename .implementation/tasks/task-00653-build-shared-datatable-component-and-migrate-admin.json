@@ -1,0 +1,15 @@
+{
+  "id": "653",
+  "subject": "Build shared DataTable component and migrate admin/billing tables",
+  "description": "Web UI: current pages use ad-hoc <Table> markup + hooks. Create a reusable DataTable component (columns, sortable headers, pagination controls, empty/loading states) and migrate admin/users, admin/audit, and billing invoices to it for consistency and scalability.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "components",
+    "refactor"
+  ],
+  "created": "2026-02-04T08:49:56.142Z",
+  "updated": "2026-02-04T08:49:56.142Z"
+}

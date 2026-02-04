@@ -1,0 +1,14 @@
+{
+  "id": "660",
+  "subject": "Normalize header/layout for agents page",
+  "description": "packages/web/src/app/(dashboard)/agents/page.tsx: Add breadcrumb + title header; remove description copy. Place primary action (Create agent) on same row, right-aligned. Replace filters/search with shared FilterBar + DataTable, including empty/error states.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:52:32.524Z",
+  "updated": "2026-02-04T08:52:32.524Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "656",
+  "subject": "Create filter/search bar component for list pages",
+  "description": "Missing component: filter/search UI is duplicated across list pages (admin users, audit, sessions, schedules, etc.). Create a shared FilterBar component that supports search, select filters, date range, and reset; ensure URL sync and accessibility.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "ui",
+    "components"
+  ],
+  "created": "2026-02-04T08:50:19.336Z",
+  "updated": "2026-02-04T08:50:19.336Z"
+}

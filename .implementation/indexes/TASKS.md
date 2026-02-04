@@ -4,6 +4,36 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 671 | Security audit: terminal command handlin | pending | - | - |
+| 670 | Security audit: websocket + realtime tra | pending | - | - |
+| 669 | Security audit: web API auth + rate limi | pending | - | - |
+| 668 | Audit terminal /commands for missing fun | pending | - | - |
+| 667 | Normalize header/layout for chat page | pending | - | - |
+| 666 | Normalize header/layout for dashboard ov | pending | - | - |
+| 665 | Normalize header/layout for settings pag | pending | - | - |
+| 664 | Normalize header/layout for billing page | pending | - | - |
+| 663 | Normalize header/layout for messages pag | pending | - | - |
+| 662 | Normalize header/layout for schedules pa | pending | - | - |
+| 661 | Normalize header/layout for sessions pag | pending | - | - |
+| 660 | Normalize header/layout for agents page | pending | - | - |
+| 659 | Normalize header/layout for admin stats  | pending | - | - |
+| 658 | Normalize header/layout for admin users  | pending | - | - |
+| 657 | Normalize header/layout for admin audit  | pending | - | - |
+| 656 | Create filter/search bar component for l | pending | - | - |
+| 655 | Introduce TableSkeleton/RowSkeleton shar | pending | - | - |
+| 654 | Add empty/error states for admin audit + | pending | - | - |
+| 653 | Build shared DataTable component and mig | pending | - | - |
+| 652 | Update docs for admin dashboard and API | pending | - | - |
+| 651 | Add component tests for admin user dialo | pending | - | - |
+| 650 | Add API tests for admin system health en | pending | - | - |
+| 649 | Add API tests for admin users detail/bil | pending | - | - |
+| 648 | Add API tests for admin audit log endpoi | pending | - | - |
+| 647 | Enforce suspended users/role changes in  | pending | - | - |
+| 646 | Debug queued messages not working at all | pending | - | - |
+| 645 | Investigate stop during tool-call: ensur | pending | - | - |
+| 644 | Fix terminal 'Worked for' duration alway | pending | - | - |
+| 643 | Add regression tests for terminal queue  | pending | - | - |
+| 642 | Fix terminal tab-queued messages not sen | pending | - | - |
 | 641 | WS chat: authenticated users can bootstr | pending | - | - |
 | 640 | Allow non-UUID email IDs in LocalInboxCa | pending | - | - |
 | 639 | Fix chat store sessionSnapshots isStream | pending | - | - |

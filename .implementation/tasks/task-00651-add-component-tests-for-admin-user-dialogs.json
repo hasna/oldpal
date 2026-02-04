@@ -1,0 +1,14 @@
+{
+  "id": "651",
+  "subject": "Add component tests for admin user dialogs",
+  "description": "Missing UI tests for new admin components UserEditDialog and UserDetailDialog (packages/web/src/components/admin). Add coverage for suspend/activate state, validation of fields, and rendering of billing/suspension info.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "tests",
+    "ui",
+    "admin"
+  ],
+  "created": "2026-02-04T08:42:18.499Z",
+  "updated": "2026-02-04T08:42:18.499Z"
+}

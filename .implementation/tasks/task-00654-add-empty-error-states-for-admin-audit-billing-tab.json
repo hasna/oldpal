@@ -1,0 +1,14 @@
+{
+  "id": "654",
+  "subject": "Add empty/error states for admin audit + billing tables",
+  "description": "UI gap: admin audit and billing tables show no data without an empty state. Add EmptyState (or DataTableEmpty) for zero results, plus consistent error banners and retry actions.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "ui",
+    "ux"
+  ],
+  "created": "2026-02-04T08:50:04.959Z",
+  "updated": "2026-02-04T08:50:04.959Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "665",
+  "subject": "Normalize header/layout for settings page",
+  "description": "packages/web/src/app/(dashboard)/settings/page.tsx: Add breadcrumb + title header; remove description copy. Place primary action (Save) on same row, right-aligned. Ensure consistent header layout with other dashboard pages.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:53:18.942Z",
+  "updated": "2026-02-04T08:53:18.942Z"
+}

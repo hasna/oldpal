@@ -65,6 +65,10 @@ Generate a daily standup report for $ARGUMENTS
 
 Invoke with `/skill-name`.
 
+## Documentation
+
+- [Admin Dashboard](./docs/ADMIN.md) - User management, audit logging, and system monitoring
+
 ## License
 
 MIT

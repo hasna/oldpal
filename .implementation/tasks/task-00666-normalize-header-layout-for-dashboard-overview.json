@@ -1,0 +1,14 @@
+{
+  "id": "666",
+  "subject": "Normalize header/layout for dashboard overview",
+  "description": "packages/web/src/app/dashboard/page.tsx: Add breadcrumb + page title header; remove description copy. Align any primary action to the right of title. Keep layout consistent with other dashboard pages.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:53:25.091Z",
+  "updated": "2026-02-04T08:53:25.091Z"
+}

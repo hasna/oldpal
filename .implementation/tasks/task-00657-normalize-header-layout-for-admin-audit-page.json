@@ -1,0 +1,14 @@
+{
+  "id": "657",
+  "subject": "Normalize header/layout for admin audit page",
+  "description": "packages/web/src/app/(dashboard)/admin/audit/page.tsx: Add breadcrumb + page title header; remove page description copy. Place primary action (Refresh) on same row, right-aligned. Replace ad-hoc filter row with shared FilterBar and shared DataTable component (from new tasks) including empty/loading states.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:52:07.014Z",
+  "updated": "2026-02-04T08:52:07.014Z"
+}

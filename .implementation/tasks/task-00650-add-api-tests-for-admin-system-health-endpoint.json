@@ -1,0 +1,14 @@
+{
+  "id": "650",
+  "subject": "Add API tests for admin system health endpoint",
+  "description": "Missing tests for GET /api/v1/admin/system. Add coverage for admin auth and expected response shape/fields.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "tests",
+    "api",
+    "admin"
+  ],
+  "created": "2026-02-04T08:42:07.217Z",
+  "updated": "2026-02-04T08:42:07.217Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "664",
+  "subject": "Normalize header/layout for billing page",
+  "description": "packages/web/src/app/(dashboard)/billing/page.tsx: Add breadcrumb + title header; remove description copy. Place primary action (Manage billing/Upgrade) on same row, right-aligned. Migrate invoices table to shared DataTable + FilterBar, with empty/error states.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:53:12.516Z",
+  "updated": "2026-02-04T08:53:12.516Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "644",
+  "subject": "Fix terminal 'Worked for' duration always 0s",
+  "description": "Bug: terminal UI shows '✻ Worked for 0s' even when response took longer. Investigate packages/terminal/src/components/App.tsx: processingStartTime/processingStartTimeRef handling and finalizeResponse timing. Ensure processingStartTime is set at stream start (including queued/inline) and preserved until finalizeResponse computes elapsed; verify resetTurnState doesn’t clear too early.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "bug",
+    "metrics"
+  ],
+  "created": "2026-02-04T06:36:00.545Z",
+  "updated": "2026-02-04T06:36:00.545Z"
+}

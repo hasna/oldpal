@@ -1,0 +1,14 @@
+{
+  "id": "645",
+  "subject": "Investigate stop during tool-call: ensure stop cancels running tool safely",
+  "description": "Bug: stopping the agent while a tool call is running behaves incorrectly (hangs or leaves UI in bad state). Investigate terminal + backend flow when user stops during tool execution: chunk handling, stop signal propagation, and tool cancellation. Add logic so stop cleanly aborts tool call, finalizes response, and resets processing state.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "terminal",
+    "bug",
+    "tools"
+  ],
+  "created": "2026-02-04T06:36:10.948Z",
+  "updated": "2026-02-04T06:36:10.948Z"
+}

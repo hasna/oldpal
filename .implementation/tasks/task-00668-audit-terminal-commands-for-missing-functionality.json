@@ -1,0 +1,14 @@
+{
+  "id": "668",
+  "subject": "Audit terminal /commands for missing functionality",
+  "description": "Review packages/terminal/src/components/Input.tsx command list and App command handling. Identify missing or inconsistent commands vs CLI features (e.g., list/describe tools, help output, history, export). Add tasks for any missing /commands or remove stale ones.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "commands",
+    "ux"
+  ],
+  "created": "2026-02-04T08:53:43.992Z",
+  "updated": "2026-02-04T08:53:43.992Z"
+}

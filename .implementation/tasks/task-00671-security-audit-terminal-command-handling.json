@@ -1,0 +1,13 @@
+{
+  "id": "671",
+  "subject": "Security audit: terminal command handling",
+  "description": "Review terminal command parsing/handling for unsafe inputs, missing auth checks, and destructive actions. Verify /commands align to implemented handlers and add safeguards (confirmation prompts where needed).",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "security",
+    "terminal"
+  ],
+  "created": "2026-02-04T08:55:11.927Z",
+  "updated": "2026-02-04T08:55:11.927Z"
+}

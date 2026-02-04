@@ -1,0 +1,14 @@
+{
+  "id": "646",
+  "subject": "Debug queued messages not working at all",
+  "description": "Investigate terminal queue pipeline end-to-end: queued messages (Tab/Meta+Enter) never send or never render. Trace Input.tsx queue submission, App.tsx messageQueue/inlines, processQueue gating, pendingSendsRef, and chunk-driven state transitions. Fix root cause and add regression tests for queue drain across session switches and after stop/done.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "terminal",
+    "bug",
+    "queue"
+  ],
+  "created": "2026-02-04T06:37:25.109Z",
+  "updated": "2026-02-04T06:37:25.109Z"
+}

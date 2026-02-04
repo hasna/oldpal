@@ -1,0 +1,14 @@
+{
+  "id": "669",
+  "subject": "Security audit: web API auth + rate limiting",
+  "description": "Run a focused security review of web API endpoints (auth/admin/billing). Check auth/role enforcement, suspended user handling, input validation, and add rate limiting/abuse protections where missing. Document findings and add follow-up tasks/tests.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "api",
+    "backend"
+  ],
+  "created": "2026-02-04T08:54:59.149Z",
+  "updated": "2026-02-04T08:54:59.149Z"
+}

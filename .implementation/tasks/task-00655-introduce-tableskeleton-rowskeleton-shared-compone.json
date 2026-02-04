@@ -1,0 +1,14 @@
+{
+  "id": "655",
+  "subject": "Introduce TableSkeleton/RowSkeleton shared component",
+  "description": "Missing component: we repeat table skeleton markup across pages. Create shared TableSkeleton/TableRowSkeleton components and replace custom skeleton tables in admin/users and admin/audit (and any other list pages).",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "ui",
+    "components"
+  ],
+  "created": "2026-02-04T08:50:12.358Z",
+  "updated": "2026-02-04T08:50:12.358Z"
+}

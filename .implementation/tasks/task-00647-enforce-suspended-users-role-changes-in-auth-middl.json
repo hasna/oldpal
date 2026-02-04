@@ -1,0 +1,14 @@
+{
+  "id": "647",
+  "subject": "Enforce suspended users/role changes in auth middleware",
+  "description": "Security/logic: withAuth/withAdminAuth only trust JWT payload; suspended users (isActive=false) and demoted admins can keep using existing tokens until expiry. With new suspension fields, add DB validation (or token version/role check) in middleware to deny suspended users and re-check admin role on admin endpoints. Add caching if needed.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "auth",
+    "security",
+    "backend"
+  ],
+  "created": "2026-02-04T08:40:44.726Z",
+  "updated": "2026-02-04T08:40:44.726Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "643",
+  "subject": "Add regression tests for terminal queue flush",
+  "description": "Add/extend tests in packages/terminal/tests to cover Tab-queue behavior: when isProcessing=true, Tab queues a message; after done, queued message is sent (or processQueue called) and queue length decreases. Include edge cases for inline pending not blocking queue flush.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "tests",
+    "queue"
+  ],
+  "created": "2026-02-04T06:34:54.270Z",
+  "updated": "2026-02-04T06:34:54.270Z"
+}

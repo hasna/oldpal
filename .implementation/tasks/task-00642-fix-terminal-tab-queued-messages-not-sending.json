@@ -1,0 +1,14 @@
+{
+  "id": "642",
+  "subject": "Fix terminal tab-queued messages not sending",
+  "description": "Bug: in terminal UI, queued messages created via Tab while processing never send (or don’t flush after stream completes). Investigate packages/terminal/src/components/App.tsx processQueue + isProcessing/activeInline gating and Input.tsx Tab queue path. Ensure queued messages are drained when processing finishes (done/error/interrupt) and not blocked by stale inlinePending. Add logging/guards if needed, keep behavior for interrupt/inline intact.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "terminal",
+    "bug",
+    "queue"
+  ],
+  "created": "2026-02-04T06:34:50.457Z",
+  "updated": "2026-02-04T06:34:50.457Z"
+}

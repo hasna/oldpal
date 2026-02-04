@@ -1,0 +1,14 @@
+{
+  "id": "658",
+  "subject": "Normalize header/layout for admin users page",
+  "description": "packages/web/src/app/(dashboard)/admin/users/page.tsx: Add breadcrumb + title header; remove page description copy. Place primary action (New User/Suspend etc.) on same row, right-aligned. Replace custom filters with shared FilterBar + DataTable + TableSkeleton, and ensure empty/error states.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:52:15.821Z",
+  "updated": "2026-02-04T08:52:15.821Z"
+}

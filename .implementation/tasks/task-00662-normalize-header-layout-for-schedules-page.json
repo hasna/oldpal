@@ -1,0 +1,14 @@
+{
+  "id": "662",
+  "subject": "Normalize header/layout for schedules page",
+  "description": "packages/web/src/app/(dashboard)/schedules/page.tsx: Add breadcrumb + title header; remove description copy. Place primary action (New schedule) on same row, right-aligned. Replace filters/search with shared FilterBar + DataTable, including empty/error states.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T08:52:50.832Z",
+  "updated": "2026-02-04T08:52:50.832Z"
+}
