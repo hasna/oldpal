@@ -30,7 +30,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are Hasna Assistant, a helpful AI assistant r
 const DEFAULT_CONFIG: AssistantsConfig = {
   llm: {
     provider: 'anthropic',
-    model: 'claude-opus-4-5',
+    model: 'claude-opus-4-5-20251101',
     maxTokens: 8192,
   },
   voice: {

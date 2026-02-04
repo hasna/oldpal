@@ -1,7 +1,7 @@
 {
   "llm": {
     "provider": "anthropic",
-    "model": "claude-opus-4-5",
+    "model": "claude-opus-4-5-20251101",
     "maxTokens": 8192
   },
   "voice": {
