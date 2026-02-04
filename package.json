@@ -1,6 +1,6 @@
 {
   "name": "@hasna/assistants",
-  "version": "0.6.55",
+  "version": "0.6.56",
   "description": "Multi-assistant orchestration platform - terminal first, voice enabled, connector powered",
   "type": "module",
   "bin": {
@@ -42,7 +42,7 @@
     "typescript": "^5.7.0"
   },
   "publishConfig": {
-    "access": "public",
+    "access": "restricted",
     "registry": "https://registry.npmjs.org/"
   },
   "repository": {
