@@ -38,6 +38,18 @@ export {
   registerTaskTools,
   type TasksToolContext,
 } from './tools/tasks';
+export {
+  selfAwarenessTools,
+  contextGetTool,
+  contextStatsTool,
+  whoamiTool,
+  identityGetTool,
+  energyStatusTool,
+  resourceLimitsTool,
+  createSelfAwarenessToolExecutors,
+  registerSelfAwarenessTools,
+  type SelfAwarenessContext,
+} from './tools/self-awareness';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';

@@ -65,6 +65,7 @@ import { JobManager, createJobTools } from '../jobs';
 import { createMessagesManager, registerMessagesTools, type MessagesManager } from '../messages';
 import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
 import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
+import { registerSelfAwarenessTools } from '../tools/self-awareness';
 
 export interface AgentLoopOptions {
   config?: AssistantsConfig;
@@ -331,6 +332,19 @@ export class AgentLoop {
     registerProjectTools(this.toolRegistry, () => ({
       cwd: this.cwd,
     }));
+
+    // Register self-awareness tools (always available for agent introspection)
+    registerSelfAwarenessTools(this.toolRegistry, {
+      getContextManager: () => this.contextManager,
+      getContextInfo: () => this.getContextInfo(),
+      getAssistantManager: () => this.assistantManager,
+      getIdentityManager: () => this.identityManager,
+      getEnergyManager: () => this.energyManager,
+      getEnergyState: () => this.getEnergyState(),
+      getWalletManager: () => this.walletManager,
+      sessionId: this.sessionId,
+      model: this.config?.llm?.model,
+    });
 
     // Initialize jobs system if enabled
     if (this.config?.jobs?.enabled !== false) {
