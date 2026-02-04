@@ -18,7 +18,7 @@ import { WebTools } from '../tools/web';
 import { FeedbackTool } from '../tools/feedback';
 import { SchedulerTool } from '../tools/scheduler';
 import { ImageTools } from '../tools/image';
-import { SkillTool, createSkillListTool, createSkillReadTool } from '../tools/skills';
+import { SkillTool, createSkillListTool, createSkillReadTool, createSkillExecuteTool } from '../tools/skills';
 import { createAskUserTool, type AskUserHandler } from '../tools/ask-user';
 import { WaitTool, SleepTool } from '../tools/wait';
 import { runHookAgent } from './subagent';
@@ -251,6 +251,8 @@ export class AgentLoop {
     this.toolRegistry.register(skillListTool.tool, skillListTool.executor);
     const skillReadTool = createSkillReadTool(() => this.skillLoader);
     this.toolRegistry.register(skillReadTool.tool, skillReadTool.executor);
+    const skillExecuteTool = createSkillExecuteTool(() => this.skillLoader);
+    this.toolRegistry.register(skillExecuteTool.tool, skillExecuteTool.executor);
     const askUserTool = createAskUserTool(() => this.askUserHandler);
     this.toolRegistry.register(askUserTool.tool, askUserTool.executor);
     this.toolRegistry.register(FeedbackTool.tool, FeedbackTool.executor);

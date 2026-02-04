@@ -3,6 +3,7 @@ import type { ToolExecutor } from './registry';
 import { ToolExecutionError, ErrorCodes } from '../errors';
 import { createSkill, type SkillScope } from '../skills/create';
 import type { SkillLoader } from '../skills/loader';
+import { SkillExecutor } from '../skills/executor';
 
 function normalizeScope(input: unknown): SkillScope | null {
   if (!input) return null;
@@ -201,6 +202,105 @@ export function createSkillReadTool(getLoader: () => SkillLoader | null) {
       });
     }
     return skill.content || '(empty skill content)';
+  };
+
+  return { tool, executor };
+}
+
+export function createSkillExecuteTool(getLoader: () => SkillLoader | null) {
+  const skillExecutor = new SkillExecutor();
+
+  const tool: Tool = {
+    name: 'skill_execute',
+    description: 'Execute a skill by name with optional arguments. Returns the prepared skill content for you to follow.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Skill name to execute (e.g., "commit", "review-pr").',
+        },
+        arguments: {
+          type: 'string',
+          description: 'Arguments to pass to the skill (replaces $ARGUMENTS in skill content).',
+        },
+      },
+      required: ['name'],
+    },
+  };
+
+  const executor: ToolExecutor = async (input) => {
+    const loader = getLoader();
+    if (!loader) {
+      throw new ToolExecutionError('Skill loader is not available.', {
+        toolName: 'skill_execute',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: true,
+        retryable: false,
+      });
+    }
+
+    const name = String(input.name || '').trim();
+    if (!name) {
+      throw new ToolExecutionError('Skill name is required.', {
+        toolName: 'skill_execute',
+        toolInput: input,
+        code: ErrorCodes.TOOL_EXECUTION_FAILED,
+        recoverable: false,
+        retryable: false,
+        suggestion: 'Use skills_list to see available skills.',
+      });
+    }
+
+    // Ensure skill content is loaded
+    const skill = await loader.ensureSkillContent(name);
+    if (!skill) {
+      throw new ToolExecutionError(`Skill "${name}" not found.`, {
+        toolName: 'skill_execute',
+        toolInput: input,
+        code: ErrorCodes.TOOL_NOT_FOUND,
+        recoverable: true,
+        retryable: false,
+        suggestion: 'Use skills_list to see available skills.',
+      });
+    }
+
+    // Parse arguments into array
+    const argsString = String(input.arguments || '').trim();
+    const args = argsString ? argsString.split(/\s+/) : [];
+
+    // Prepare skill content with argument substitution
+    const preparedContent = await skillExecutor.prepare(skill, args);
+
+    // Build response with skill metadata and content
+    const lines: string[] = [
+      `## Executing Skill: ${skill.name}`,
+      '',
+    ];
+
+    if (skill.description) {
+      lines.push(`**Description:** ${skill.description}`);
+      lines.push('');
+    }
+
+    if (skill.allowedTools && skill.allowedTools.length > 0) {
+      lines.push(`**Allowed Tools:** ${skill.allowedTools.join(', ')}`);
+      lines.push('');
+    }
+
+    if (args.length > 0) {
+      lines.push(`**Arguments:** ${args.join(' ')}`);
+      lines.push('');
+    }
+
+    lines.push('---');
+    lines.push('');
+    lines.push('## Skill Instructions');
+    lines.push('');
+    lines.push(preparedContent);
+
+    return lines.join('\n');
   };
 
   return { tool, executor };
