@@ -15,8 +15,16 @@ export { BashTool } from './tools/bash';
 export { FilesystemTools } from './tools/filesystem';
 export { WebTools } from './tools/web';
 export { FeedbackTool } from './tools/feedback';
-export { SchedulerTool } from './tools/scheduler';
+export { SchedulerTool, createSchedulerTool, registerSchedulerTools, type SchedulerContext } from './tools/scheduler';
 export { WaitTool, SleepTool } from './tools/wait';
+export {
+  projectTools,
+  planTools,
+  projectAndPlanTools,
+  registerProjectTools,
+  createProjectToolExecutors,
+  type ProjectToolContext,
+} from './tools/projects';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';
@@ -96,10 +104,35 @@ export { EmbeddedClient } from './client';
 // Sessions
 export { SessionRegistry } from './sessions/registry';
 export type { SessionInfo, PersistedSession } from './sessions/registry';
+export {
+  sessionTools,
+  sessionInfoTool,
+  sessionListTool,
+  sessionCreateTool,
+  sessionUpdateTool,
+  sessionDeleteTool,
+  createSessionToolExecutors,
+  registerSessionTools,
+} from './sessions';
+export type {
+  SessionContext,
+  SessionQueryFunctions,
+  AgentSessionData,
+  SessionMetadata as SessionToolMetadata,
+  ListSessionsOptions,
+  CreateSessionData,
+  UpdateSessionData,
+} from './sessions';
 
 // Logger
 export { Logger, SessionStorage, initAssistantsDir } from './logger';
 export type { SessionData, SavedSessionInfo } from './logger';
+
+// History
+export * from './history';
+
+// Projects
+export * from './projects';
 
 // Errors
 export * from './errors';
@@ -112,6 +145,9 @@ export * from './validation';
 
 // Security
 export * from './security';
+
+// Features (runtime feature detection)
+export * from './features';
 
 // Re-export commonly used shared types (avoid duplicates with local definitions)
 export type {

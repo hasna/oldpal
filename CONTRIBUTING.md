@@ -26,9 +26,14 @@ By participating in this project, you agree to maintain a respectful and inclusi
    ```bash
    pnpm install
    ```
-4. Run the development server:
+4. Set up environment:
    ```bash
-   pnpm dev
+   export ANTHROPIC_API_KEY="sk-ant-..."
+   ```
+5. Run the terminal app:
+   ```bash
+   cd packages/terminal
+   bun run dev
    ```
 
 ## Development Workflow
@@ -38,11 +43,20 @@ By participating in this project, you agree to maintain a respectful and inclusi
 ```
 packages/
 ├── core/           # Platform-agnostic agent runtime
+│   ├── agent/      # Agent loop and context
+│   ├── tools/      # Built-in tools (Bash, Read, Write, etc.)
+│   ├── skills/     # Skill loading and execution
+│   ├── hooks/      # Hook system
+│   └── ...
 ├── terminal/       # Ink-based terminal UI
+│   ├── src/
+│   │   ├── components/  # React/Ink components
+│   │   ├── cli/         # CLI argument parsing
+│   │   └── ...
+│   └── examples/   # Usage examples
 ├── shared/         # Shared types and utilities
 ├── web/            # Web UI (React/Next.js)
-├── runtime-bun/    # Bun runtime implementation
-└── runtime-node/   # Node.js runtime implementation
+└── runtime-bun/    # Bun runtime implementation
 ```
 
 ### Running Tests
@@ -51,11 +65,15 @@ packages/
 # Run all tests
 pnpm test
 
-# Run tests with coverage
-pnpm test:coverage
-
 # Run tests for a specific package
-pnpm --filter @assistants/core test
+cd packages/core
+bun test
+
+# Watch mode
+bun test --watch
+
+# Run a specific test file
+bun test src/tools/registry.test.ts
 ```
 
 ### Type Checking
@@ -67,8 +85,39 @@ pnpm typecheck
 ### Building
 
 ```bash
+# Build all packages
 pnpm build
+
+# Build terminal package only
+cd packages/terminal
+bun run build
 ```
+
+## Code Style
+
+### TypeScript
+
+- Use TypeScript for all code
+- Enable strict mode
+- Prefer explicit return types for public functions
+- Use `type` for simple type aliases, `interface` for extendable objects
+
+### Formatting
+
+- 2 spaces for indentation
+- Single quotes for strings
+- Max line length: 100 characters
+- No trailing semicolons (match existing code)
+
+### Naming Conventions
+
+| Type | Convention | Example |
+|------|------------|---------|
+| Files | kebab-case | `tool-registry.ts` |
+| Classes | PascalCase | `ToolRegistry` |
+| Functions | camelCase | `registerTool` |
+| Constants | UPPER_SNAKE_CASE | `MAX_RETRIES` |
+| Types/Interfaces | PascalCase | `ToolConfig` |
 
 ## Making Changes
 
@@ -84,22 +133,23 @@ Use descriptive branch names:
 ### Commit Messages
 
 Follow conventional commit format:
-- `feat: add new feature`
-- `fix: resolve bug in X`
+- `feat(package): add new feature`
+- `fix(core): resolve bug in X`
 - `docs: update README`
-- `refactor: simplify Y logic`
-- `test: add tests for Z`
+- `refactor(terminal): simplify Y logic`
+- `test(core): add tests for Z`
 - `chore: update dependencies`
 
 ### Pull Request Process
 
 1. Create a new branch from `main`
 2. Make your changes
-3. Ensure all tests pass (`pnpm test`)
-4. Ensure type checking passes (`pnpm typecheck`)
-5. Push your branch and create a pull request
-6. Fill out the PR template with relevant details
-7. Wait for review and address any feedback
+3. Write/update tests as needed
+4. Ensure all tests pass (`pnpm test`)
+5. Ensure type checking passes (`pnpm typecheck`)
+6. Push your branch and create a pull request
+7. Fill out the PR template with relevant details
+8. Wait for review and address any feedback
 
 ### Pull Request Guidelines
 
@@ -107,6 +157,63 @@ Follow conventional commit format:
 - Include tests for new functionality
 - Update documentation as needed
 - Ensure CI passes before requesting review
+
+## Adding Features
+
+### New Tools
+
+1. Create tool file in `packages/core/src/tools/`
+2. Define tool schema and executor
+3. Export from `packages/core/src/tools/index.ts`
+4. Add tests
+5. Update documentation
+
+```typescript
+// packages/core/src/tools/my-tool.ts
+import type { Tool, ToolExecutor } from '../registry';
+
+export const myTool: Tool = {
+  name: 'my_tool',
+  description: 'What this tool does',
+  parameters: {
+    type: 'object',
+    properties: {
+      input: { type: 'string', description: 'Input value' },
+    },
+    required: ['input'],
+  },
+};
+
+export const myToolExecutor: ToolExecutor = async (params) => {
+  // Implementation
+  return { result: 'success' };
+};
+```
+
+### New Slash Commands
+
+1. Add command to `packages/core/src/commands/builtin.ts`
+2. Implement the handler function
+3. Add tests
+4. Update README
+
+### New Skills
+
+Create a `SKILL.md` file in `~/.assistants/skills/my-skill/`:
+
+```markdown
+---
+name: my-skill
+description: What this skill does
+argument-hint: <file>
+allowed-tools: Read, Write
+---
+
+## Instructions
+
+Your prompt instructions here.
+Use $ARGUMENTS for user input.
+```
 
 ## Reporting Issues
 
@@ -128,11 +235,17 @@ Feature requests are welcome! Please:
 3. Explain the proposed solution
 4. Consider implementation complexity
 
+## Security Issues
+
+**Do not create public issues for security vulnerabilities.**
+
+Please report security concerns privately.
+
 ## Questions?
 
 If you have questions, feel free to:
-- Open a discussion on GitHub
-- Check existing issues and discussions
+- Open a [Discussion](https://github.com/hasna/assistants/discussions)
+- Check existing [Issues](https://github.com/hasna/assistants/issues)
 
 ## License
 

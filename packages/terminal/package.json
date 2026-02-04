@@ -1,17 +1,57 @@
 {
   "name": "@hasna/assistants-terminal",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "A powerful AI assistant that runs in your terminal, powered by Claude",
+  "license": "MIT",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "import": "./dist/lib.js"
+    }
+  },
+  "main": "./dist/lib.js",
+  "types": "./dist/lib.d.ts",
   "bin": {
-    "assistants": "./src/index.tsx",
-    "ast": "./src/index.tsx"
+    "assistants": "./dist/cli.js",
+    "ast": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hasna/assistants.git",
+    "directory": "packages/terminal"
+  },
+  "homepage": "https://github.com/hasna/assistants/tree/main/packages/terminal#readme",
+  "bugs": {
+    "url": "https://github.com/hasna/assistants/issues"
+  },
+  "keywords": [
+    "ai",
+    "assistant",
+    "terminal",
+    "cli",
+    "claude",
+    "anthropic",
+    "chatbot",
+    "ink",
+    "bun"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
-    "dev": "bun run src/index.tsx",
+    "dev": "bun run src/cli.tsx",
+    "build": "bun run scripts/build.ts",
+    "build:types": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build"
   },
   "dependencies": {
     "@hasna/assistants-core": "workspace:*",
@@ -32,5 +72,9 @@
     "@types/react": "^19.0.0",
     "bun-types": "^1.3.8",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.0"
   }
 }
