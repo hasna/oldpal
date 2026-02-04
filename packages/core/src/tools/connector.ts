@@ -655,6 +655,108 @@ export class ConnectorBridge {
   getConnectors(): Connector[] {
     return Array.from(this.connectors.values());
   }
+
+  /**
+   * Check authentication status for a connector
+   * Returns status object with authenticated flag, user/email info, or error
+   */
+  async checkAuthStatus(connector: Connector): Promise<{
+    authenticated: boolean;
+    user?: string;
+    email?: string;
+    error?: string;
+  }> {
+    const cli = connector.cli || `connect-${connector.name}`;
+    const runtime = getRuntime();
+
+    try {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<{ exitCode: number; stdout: string }>((resolve) => {
+        timeoutId = setTimeout(() => {
+          resolve({ exitCode: 1, stdout: '' });
+        }, 1000);
+      });
+
+      const execPromise = (async () => {
+        const cmdParts = buildCommandArgs(cli, ['auth', 'status', '--format', 'json']);
+        const proc = runtime.spawn(cmdParts, {
+          cwd: this.cwd || process.cwd(),
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'ignore',
+        });
+        const stdout = proc.stdout ? await new Response(proc.stdout).text() : '';
+        const exitCode = await proc.exited;
+        return { exitCode, stdout };
+      })();
+
+      const result = await Promise.race([execPromise, timeoutPromise]);
+
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      if (result.exitCode === 0) {
+        try {
+          const parsed = JSON.parse(result.stdout);
+          return {
+            authenticated: Boolean(parsed.authenticated),
+            user: parsed.user,
+            email: parsed.email,
+          };
+        } catch {
+          return { authenticated: false, error: 'Invalid response' };
+        }
+      }
+
+      return { authenticated: false };
+    } catch (err) {
+      return { authenticated: false, error: err instanceof Error ? err.message : 'Failed to check' };
+    }
+  }
+
+  /**
+   * Get detailed help for a specific command
+   * Runs: <cli> <command> --help
+   */
+  async getCommandHelp(connector: Connector, command: string): Promise<string> {
+    const cli = connector.cli || `connect-${connector.name}`;
+    const runtime = getRuntime();
+
+    try {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<{ exitCode: number; stdout: string }>((resolve) => {
+        timeoutId = setTimeout(() => {
+          resolve({ exitCode: 1, stdout: '' });
+        }, 2000);
+      });
+
+      const execPromise = (async () => {
+        const cmdParts = buildCommandArgs(cli, [command, '--help']);
+        const proc = runtime.spawn(cmdParts, {
+          cwd: this.cwd || process.cwd(),
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'pipe',
+        });
+        const stdout = proc.stdout ? await new Response(proc.stdout).text() : '';
+        const stderr = proc.stderr ? await new Response(proc.stderr).text() : '';
+        const exitCode = await proc.exited;
+        // Some CLIs output help to stderr
+        return { exitCode, stdout: stdout || stderr };
+      })();
+
+      const result = await Promise.race([execPromise, timeoutPromise]);
+
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      return result.stdout.trim() || 'No help available';
+    } catch {
+      return 'Failed to get help';
+    }
+  }
 }
 
 export const __test__ = {

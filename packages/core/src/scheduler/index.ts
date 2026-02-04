@@ -7,6 +7,7 @@ export {
   updateSchedule,
   acquireScheduleLock,
   releaseScheduleLock,
+  type ListSchedulesOptions,
 } from './store';
 
 export { parseCronExpression, getNextCronRun } from './cron';

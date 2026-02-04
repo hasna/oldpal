@@ -33,7 +33,12 @@ async function ensureDirs(cwd: string): Promise<void> {
   await mkdir(locksDir(cwd), { recursive: true });
 }
 
-export async function listSchedules(cwd: string): Promise<ScheduledCommand[]> {
+export interface ListSchedulesOptions {
+  sessionId?: string;
+  global?: boolean;
+}
+
+export async function listSchedules(cwd: string, options?: ListSchedulesOptions): Promise<ScheduledCommand[]> {
   try {
     const dir = schedulesDir(cwd);
     const files = await readdir(dir);
@@ -48,6 +53,14 @@ export async function listSchedules(cwd: string): Promise<ScheduledCommand[]> {
         // Skip malformed schedule files
       }
     }
+
+    // Filter by sessionId if provided and not showing global schedules
+    if (options?.sessionId && !options?.global) {
+      return schedules.filter(
+        (s) => s.sessionId === options.sessionId || !s.sessionId
+      );
+    }
+
     return schedules;
   } catch {
     return [];

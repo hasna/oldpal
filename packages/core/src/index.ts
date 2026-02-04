@@ -25,6 +25,19 @@ export {
   createProjectToolExecutors,
   type ProjectToolContext,
 } from './tools/projects';
+export {
+  taskTools,
+  tasksListTool,
+  tasksGetTool,
+  tasksAddTool,
+  tasksNextTool,
+  tasksCompleteTool,
+  tasksFailTool,
+  tasksStatusTool,
+  createTaskToolExecutors,
+  registerTaskTools,
+  type TasksToolContext,
+} from './tools/tasks';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';
@@ -133,6 +146,9 @@ export * from './history';
 
 // Projects
 export * from './projects';
+
+// Tasks
+export * from './tasks';
 
 // Errors
 export * from './errors';

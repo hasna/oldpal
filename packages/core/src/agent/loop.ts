@@ -16,7 +16,7 @@ import { BashTool } from '../tools/bash';
 import { FilesystemTools } from '../tools/filesystem';
 import { WebTools } from '../tools/web';
 import { FeedbackTool } from '../tools/feedback';
-import { SchedulerTool } from '../tools/scheduler';
+import { registerSchedulerTools, type SchedulerContext } from '../tools/scheduler';
 import { ImageTools } from '../tools/image';
 import { SkillTool, createSkillListTool, createSkillReadTool, createSkillExecuteTool } from '../tools/skills';
 import { createAskUserTool, type AskUserHandler } from '../tools/ask-user';
@@ -31,7 +31,7 @@ import {
   ScopeContextManager,
   createScopeVerificationHook,
 } from '../hooks';
-import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext } from '../commands';
+import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext, type CommandResult } from '../commands';
 import { createLLMClient, type LLMClient } from '../llm/client';
 import { loadConfig, loadHooksConfig, loadSystemPrompt, ensureConfigDir, getConfigDir } from '../config';
 import {
@@ -63,6 +63,8 @@ import { createWalletManager, registerWalletTools, type WalletManager } from '..
 import { createSecretsManager, registerSecretsTools, type SecretsManager } from '../secrets';
 import { JobManager, createJobTools } from '../jobs';
 import { createMessagesManager, registerMessagesTools, type MessagesManager } from '../messages';
+import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
+import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
 
 export interface AgentLoopOptions {
   config?: AssistantsConfig;
@@ -76,6 +78,11 @@ export interface AgentLoopOptions {
   onToolStart?: (toolCall: ToolCall) => void;
   onToolEnd?: (toolCall: ToolCall, result: ToolResult) => void;
   onTokenUsage?: (usage: TokenUsage) => void;
+  /** Session context for session management tools (userId, query functions) */
+  sessionContext?: {
+    userId: string;
+    queryFn: SessionQueryFunctions;
+  };
 }
 
 /**
@@ -133,6 +140,7 @@ export class AgentLoop {
   private activeProjectId: string | null = null;
   private assistantId: string | null = null;
   private askUserHandler: AskUserHandler | null = null;
+  private sessionContextOptions: { userId: string; queryFn: SessionQueryFunctions } | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -159,6 +167,7 @@ export class AgentLoop {
     this.allowedTools = this.normalizeAllowedTools(options.allowedTools);
     this.extraSystemPrompt = options.extraSystemPrompt || null;
     this.llmClient = options.llmClient ?? null;
+    this.sessionContextOptions = options.sessionContext || null;
 
     this.onChunk = options.onChunk;
     this.onToolStart = options.onToolStart;
@@ -256,7 +265,13 @@ export class AgentLoop {
     const askUserTool = createAskUserTool(() => this.askUserHandler);
     this.toolRegistry.register(askUserTool.tool, askUserTool.executor);
     this.toolRegistry.register(FeedbackTool.tool, FeedbackTool.executor);
-    this.toolRegistry.register(SchedulerTool.tool, SchedulerTool.executor);
+
+    // Register scheduler tools with session context
+    registerSchedulerTools(this.toolRegistry, () => ({
+      sessionId: this.sessionId,
+      cwd: this.cwd,
+    }));
+
     this.toolRegistry.register(WaitTool.tool, WaitTool.executor);
     this.toolRegistry.register(SleepTool.tool, SleepTool.executor);
 
@@ -299,6 +314,23 @@ export class AgentLoop {
       await this.messagesManager.initialize();
       registerMessagesTools(this.toolRegistry, () => this.messagesManager);
     }
+
+    // Register session tools if session context is provided
+    if (this.sessionContextOptions) {
+      registerSessionTools(this.toolRegistry, () => {
+        if (!this.sessionContextOptions) return null;
+        return {
+          userId: this.sessionContextOptions.userId,
+          sessionId: this.sessionId,
+          queryFn: this.sessionContextOptions.queryFn,
+        };
+      });
+    }
+
+    // Register project tools (always available for managing projects and plans)
+    registerProjectTools(this.toolRegistry, () => ({
+      cwd: this.cwd,
+    }));
 
     // Initialize jobs system if enabled
     if (this.config?.jobs?.enabled !== false) {
@@ -451,6 +483,13 @@ export class AgentLoop {
             if (commandResult.exit) {
               this.emit({ type: 'exit' });
             }
+            if (commandResult.showPanel) {
+              this.emit({
+                type: 'show_panel',
+                panel: commandResult.showPanel,
+                panelValue: commandResult.panelInitialValue,
+              });
+            }
             return { ok: true, summary: `Handled ${userMessage}` };
           }
           if (commandResult.prompt) {
@@ -462,6 +501,13 @@ export class AgentLoop {
         } else {
           const commandResult = await this.handleCommand(userMessage);
           if (commandResult.handled) {
+            if (commandResult.showPanel) {
+              this.emit({
+                type: 'show_panel',
+                panel: commandResult.showPanel,
+                panelValue: commandResult.panelInitialValue,
+              });
+            }
             return { ok: true, summary: `Handled ${userMessage}` };
           }
           if (commandResult.prompt) {
@@ -681,12 +727,28 @@ export class AgentLoop {
   private async maybeSummarizeContext(): Promise<void> {
     if (!this.contextManager) return;
     try {
-      const result = await this.contextManager.processMessages(this.context.getMessages());
+      const messagesBefore = this.context.getMessages();
+      const result = await this.contextManager.processMessages(messagesBefore);
       if (!result.summarized) return;
 
+      // Check if the agent was actively working (had recent tool calls)
+      const lastAssistantMessage = this.findLastAssistantMessage(messagesBefore);
+      const wasActivelyWorking = lastAssistantMessage?.toolCalls && lastAssistantMessage.toolCalls.length > 0;
+
       this.context.import(result.messages);
-      const notice = `\n[Context summarized: ${result.summarizedCount} messages, ${result.tokensBefore.toLocaleString()} -> ${result.tokensAfter.toLocaleString()} tokens]\n`;
-      this.emit({ type: 'text', content: notice });
+
+      // Inject continuation prompt if agent was actively working
+      if (wasActivelyWorking && lastAssistantMessage?.toolCalls) {
+        const lastToolCall = lastAssistantMessage.toolCalls[lastAssistantMessage.toolCalls.length - 1];
+        const continuationPrompt = this.buildContinuationPrompt(lastToolCall);
+        this.context.addUserMessage(continuationPrompt);
+
+        const notice = `\n[Context summarized: ${result.summarizedCount} messages compacted. Continuing from: ${lastToolCall.name}]\n`;
+        this.emit({ type: 'text', content: notice });
+      } else {
+        const notice = `\n[Context summarized: ${result.summarizedCount} messages, ${result.tokensBefore.toLocaleString()} -> ${result.tokensAfter.toLocaleString()} tokens]\n`;
+        this.emit({ type: 'text', content: notice });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.errorAggregator.record(new AssistantError(message, {
@@ -697,6 +759,44 @@ export class AgentLoop {
       }));
       this.emit({ type: 'text', content: `\n[Context summarization failed: ${message}]\n` });
     }
+  }
+
+  /**
+   * Find the last assistant message in the conversation
+   */
+  private findLastAssistantMessage(messages: Message[]): Message | undefined {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        return messages[i];
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Build a continuation prompt to help the agent resume work after context compaction
+   */
+  private buildContinuationPrompt(lastToolCall: ToolCall): string {
+    const toolName = lastToolCall.name;
+    const toolInput = lastToolCall.input;
+
+    // Build a descriptive hint about what the agent was doing
+    let actionDescription = `using the ${toolName} tool`;
+    if (toolName === 'bash' && toolInput && typeof toolInput === 'object' && 'command' in toolInput) {
+      actionDescription = `running: ${String(toolInput.command).slice(0, 50)}${String(toolInput.command).length > 50 ? '...' : ''}`;
+    } else if (toolName === 'read' && toolInput && typeof toolInput === 'object' && 'file_path' in toolInput) {
+      actionDescription = `reading: ${String(toolInput.file_path)}`;
+    } else if (toolName === 'write' && toolInput && typeof toolInput === 'object' && 'file_path' in toolInput) {
+      actionDescription = `writing to: ${String(toolInput.file_path)}`;
+    } else if (toolName === 'edit' && toolInput && typeof toolInput === 'object' && 'file_path' in toolInput) {
+      actionDescription = `editing: ${String(toolInput.file_path)}`;
+    } else if (toolName === 'glob' && toolInput && typeof toolInput === 'object' && 'pattern' in toolInput) {
+      actionDescription = `searching for files matching: ${String(toolInput.pattern)}`;
+    } else if (toolName === 'grep' && toolInput && typeof toolInput === 'object' && 'pattern' in toolInput) {
+      actionDescription = `searching for: ${String(toolInput.pattern)}`;
+    }
+
+    return `[System: Context was automatically compacted to save space. Your last action was ${actionDescription}. Please continue from where you left off. Do not repeat work that was already completed - check the preserved tool results above for recent progress.]`;
   }
 
   /**
@@ -893,7 +993,7 @@ export class AgentLoop {
   /**
    * Handle slash command
    */
-  private async handleCommand(message: string): Promise<{ handled: boolean; prompt?: string; clearConversation?: boolean; exit?: boolean }> {
+  private async handleCommand(message: string): Promise<CommandResult> {
     const parsed = this.commandExecutor.parseCommand(message);
     const command = parsed ? this.commandLoader.getCommand(parsed.name) : undefined;
     if (parsed?.name === 'connectors' && this.connectorDiscovery) {
