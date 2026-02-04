@@ -30,12 +30,16 @@ export type DocumentSource =
   | { type: 'file'; fileId: string };
 
 export interface StreamChunk {
-  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'usage' | 'exit';
+  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'usage' | 'exit' | 'show_panel';
   content?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;
   error?: string;
   usage?: TokenUsage;
+  /** Panel to show (for 'show_panel' type) */
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants';
+  /** Initial value for the panel */
+  panelValue?: string;
 }
 
 export interface TokenUsage {
@@ -128,12 +132,18 @@ export interface ConnectorCommand {
   description: string;
   args: ConnectorArg[];
   options: ConnectorOption[];
+  /** Usage examples for the command */
+  examples?: string[];
 }
 
 export interface ConnectorArg {
   name: string;
   description?: string;
   required?: boolean;
+  /** Type hint for the argument */
+  type?: string;
+  /** Default value if optional */
+  default?: string;
 }
 
 export interface ConnectorOption {
@@ -142,6 +152,16 @@ export interface ConnectorOption {
   type: 'string' | 'number' | 'boolean';
   default?: unknown;
   alias?: string;
+}
+
+/**
+ * Extended connector information for interactive UI
+ */
+export interface ConnectorStatus {
+  authenticated: boolean;
+  user?: string;
+  email?: string;
+  error?: string;
 }
 
 export interface ConnectorAuth {
@@ -570,6 +590,13 @@ export interface ContextConfig {
   summaryModel?: string;
   summaryMaxTokens?: number;
   maxMessages?: number;
+  /**
+   * Number of recent tool calls to always preserve during summarization.
+   * Ensures the agent remembers what it just did and can continue
+   * multi-step operations after context compaction.
+   * Default: 5
+   */
+  preserveLastToolCalls?: number;
 }
 
 export interface EnergyCosts {
