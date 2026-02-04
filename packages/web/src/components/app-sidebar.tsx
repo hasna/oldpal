@@ -16,6 +16,7 @@ import {
   Users,
   BarChart3,
   FileText,
+  UserCircle,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -61,6 +62,10 @@ const data = {
         {
           title: "My Agents",
           url: "/agents",
+        },
+        {
+          title: "Identities",
+          url: "/identities",
         },
       ],
     },

@@ -13,3 +13,4 @@ export * from './admin-audit-logs';
 export * from './schedule-executions';
 export * from './login-history';
 export * from './notifications';
+export * from './identities';

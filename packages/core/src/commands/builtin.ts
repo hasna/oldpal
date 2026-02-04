@@ -66,6 +66,10 @@ import {
   type TaskPriority,
   PRIORITY_ORDER,
 } from '../tasks';
+import {
+  listTemplates,
+  createIdentityFromTemplate,
+} from '../identity/templates';
 
 // Version lookup - prefer explicit env to avoid stale hardcoded values
 const VERSION =
@@ -577,8 +581,33 @@ export class BuiltinCommands {
         }
 
         if (action === 'create') {
+          // Check for --template flag
+          const templateIndex = rest.indexOf('--template');
+          if (templateIndex !== -1) {
+            const templateName = rest[templateIndex + 1];
+            if (!templateName) {
+              context.emit('text', 'Usage: /identity create --template <template-name>\n');
+              context.emit('text', 'Use /identity templates to see available templates.\n');
+              context.emit('done');
+              return { handled: true };
+            }
+            const createOptions = createIdentityFromTemplate(templateName);
+            if (!createOptions) {
+              context.emit('text', `Template not found: ${templateName}\n`);
+              context.emit('text', 'Use /identity templates to see available templates.\n');
+              context.emit('done');
+              return { handled: true };
+            }
+            const created = await manager.createIdentity(createOptions);
+            await context.refreshIdentityContext?.();
+            context.emit('text', `Created identity "${created.name}" from template "${templateName}" (${created.id}).\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+
           if (!target) {
             context.emit('text', 'Usage: /identity create <name>\n');
+            context.emit('text', 'Or: /identity create --template <template-name>\n');
             context.emit('done');
             return { handled: true };
           }
@@ -632,7 +661,99 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
-        context.emit('text', 'Unknown /identity command.\n');
+        // /identity templates - List available templates
+        if (action === 'templates') {
+          const templates = listTemplates();
+          context.emit('text', '\n## Identity Templates\n\n');
+          for (const t of templates) {
+            context.emit('text', `**${t.name}** - ${t.description}\n`);
+          }
+          context.emit('text', '\nUsage: /identity create --template <name>\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /identity edit <name|id> - Show identity details for editing
+        if (action === 'edit' || action === 'show') {
+          if (!target) {
+            context.emit('text', `Usage: /identity ${action} <name|id>\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          const identities = manager.listIdentities();
+          const match = identities.find((identity) =>
+            identity.id === target || identity.name.toLowerCase() === target.toLowerCase()
+          );
+          if (!match) {
+            context.emit('text', `Identity not found: ${target}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          context.emit('text', '\n## Identity Details\n\n');
+          context.emit('text', `**Name:** ${match.name}\n`);
+          context.emit('text', `**ID:** ${match.id}\n`);
+          context.emit('text', `**Display Name:** ${match.profile.displayName}\n`);
+          if (match.profile.title) context.emit('text', `**Title:** ${match.profile.title}\n`);
+          if (match.profile.company) context.emit('text', `**Company:** ${match.profile.company}\n`);
+          context.emit('text', `**Timezone:** ${match.profile.timezone}\n`);
+          context.emit('text', `**Locale:** ${match.profile.locale}\n`);
+          context.emit('text', `**Communication Style:** ${match.preferences.communicationStyle}\n`);
+          context.emit('text', `**Response Length:** ${match.preferences.responseLength}\n`);
+          if (match.context) {
+            context.emit('text', `**Context:**\n${match.context}\n`);
+          }
+          context.emit('text', `**Default:** ${match.isDefault ? 'Yes' : 'No'}\n`);
+          context.emit('text', '\nTo update fields, use the web UI or edit the identity file directly.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /identity set-default <name|id> - Set as default
+        if (action === 'set-default' || action === 'default') {
+          if (!target) {
+            context.emit('text', 'Usage: /identity set-default <name|id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const identities = manager.listIdentities();
+          const match = identities.find((identity) =>
+            identity.id === target || identity.name.toLowerCase() === target.toLowerCase()
+          );
+          if (!match) {
+            context.emit('text', `Identity not found: ${target}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          // Remove default from all, set on this one
+          for (const identity of identities) {
+            if (identity.isDefault && identity.id !== match.id) {
+              await manager.updateIdentity(identity.id, { isDefault: false });
+            }
+          }
+          await manager.updateIdentity(match.id, { isDefault: true });
+          context.emit('text', `Set ${match.name} as default identity.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /identity help - Show help
+        if (action === 'help') {
+          context.emit('text', '\n## Identity Commands\n\n');
+          context.emit('text', '/identity                        Show current identity\n');
+          context.emit('text', '/identity list                   List all identities\n');
+          context.emit('text', '/identity create <name>          Create new identity\n');
+          context.emit('text', '/identity create --template <t>  Create from template\n');
+          context.emit('text', '/identity switch <name|id>       Switch to identity\n');
+          context.emit('text', '/identity show <name|id>         Show identity details\n');
+          context.emit('text', '/identity set-default <name|id>  Set as default\n');
+          context.emit('text', '/identity delete <name|id>       Delete identity\n');
+          context.emit('text', '/identity templates              List available templates\n');
+          context.emit('text', '/identity help                   Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', 'Unknown /identity command. Use /identity help for options.\n');
         context.emit('done');
         return { handled: true };
       },
