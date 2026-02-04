@@ -1,34 +1,60 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { buildLayout, moveCursorVertical, type InputLayout } from './inputLayout';
+import { CommandHistory, getCommandHistory } from '@hasna/assistants-core';
 
 // Available commands with descriptions
 const COMMANDS = [
+  // Core commands
   { name: '/help', description: 'show available commands' },
   { name: '/clear', description: 'clear the conversation' },
   { name: '/new', description: 'start a new conversation' },
+  { name: '/exit', description: 'exit assistants' },
+  // Session management
   { name: '/session', description: 'list/switch sessions (Ctrl+])' },
   { name: '/status', description: 'show session status' },
   { name: '/tokens', description: 'show token usage' },
   { name: '/cost', description: 'show estimated API cost' },
   { name: '/model', description: 'show model information' },
+  { name: '/compact', description: 'summarize to save context' },
+  // Skills and tools
   { name: '/skills', description: 'list available skills' },
   { name: '/skill', description: 'create or manage skills' },
-  { name: '/config', description: 'show configuration' },
-  { name: '/projects', description: 'manage projects in this folder' },
-  { name: '/plans', description: 'manage project plans' },
   { name: '/connectors', description: 'list available connectors' },
+  // Configuration
+  { name: '/config', description: 'show configuration' },
   { name: '/init', description: 'initialize assistants in project' },
-  { name: '/compact', description: 'summarize to save context' },
   { name: '/memory', description: 'show what AI remembers' },
   { name: '/context', description: 'manage injected project context' },
-  { name: '/feedback', description: 'submit feedback on GitHub' },
+  // Projects and plans
+  { name: '/projects', description: 'manage projects in this folder' },
+  { name: '/plans', description: 'manage project plans' },
+  // Scheduling
   { name: '/schedule', description: 'schedule a command' },
   { name: '/schedules', description: 'list scheduled commands' },
   { name: '/unschedule', description: 'delete a scheduled command' },
   { name: '/pause', description: 'pause a scheduled command' },
   { name: '/resume', description: 'resume a scheduled command' },
-  { name: '/exit', description: 'exit assistants' },
+  // Identity and assistant
+  { name: '/assistant', description: 'switch or list assistants' },
+  { name: '/identity', description: 'manage agent identity' },
+  { name: '/whoami', description: 'show current identity' },
+  // Voice features
+  { name: '/voice', description: 'toggle voice mode' },
+  { name: '/say', description: 'speak text aloud' },
+  { name: '/listen', description: 'transcribe voice input' },
+  // Agent communication
+  { name: '/inbox', description: 'view agent messages' },
+  { name: '/messages', description: 'manage agent-to-agent messages' },
+  // Resources
+  { name: '/wallet', description: 'manage agent wallet' },
+  { name: '/secrets', description: 'manage agent secrets' },
+  { name: '/jobs', description: 'list background jobs' },
+  // System
+  { name: '/rest', description: 'enter rest mode' },
+  { name: '/security-log', description: 'view security events' },
+  { name: '/verification', description: 'scope verification status' },
+  { name: '/feedback', description: 'submit feedback on GitHub' },
 ];
 
 interface SkillInfo {
@@ -46,6 +72,8 @@ interface InputProps {
   isAskingUser?: boolean;
   askPlaceholder?: string;
   allowBlankAnswer?: boolean;
+  /** Optional command history instance (uses global singleton if not provided) */
+  history?: CommandHistory;
 }
 
 export function Input({
@@ -57,12 +85,27 @@ export function Input({
   isAskingUser = false,
   askPlaceholder,
   allowBlankAnswer = false,
+  history: historyProp,
 }: InputProps) {
   // Combined value+cursor state for atomic updates during rapid paste operations
   // When text is pasted, it may arrive in multiple chunks; using a single state
   // object ensures each chunk sees the correct previous state via functional updates
   const [inputState, setInputState] = useState({ value: '', cursor: 0 });
   const { value, cursor } = inputState;
+
+  // Command history - use prop or global singleton
+  const historyRef = useRef<CommandHistory>(historyProp || getCommandHistory());
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // Track whether we've modified the input since starting history navigation
+  const [savedInput, setSavedInput] = useState<string>('');
+
+  // Load history on mount
+  useEffect(() => {
+    historyRef.current.load().then(() => {
+      setHistoryLoaded(true);
+    });
+  }, []);
 
   // Helpers for setting value/cursor together (atomic) or separately
   const setValue = (newValue: string | ((prev: string) => string)) => {
@@ -136,17 +179,27 @@ export function Input({
     setSelectedIndex((prev) => Math.min(prev, autocompleteItems.length - 1));
   }, [autocompleteItems.length]);
 
-  const setValueAndCursor = (nextValue: string, nextCursor: number = nextValue.length) => {
+  const setValueAndCursor = useCallback((nextValue: string, nextCursor: number = nextValue.length, resetHistory: boolean = true) => {
     const clamped = Math.max(0, Math.min(nextCursor, nextValue.length));
     setInputState({ value: nextValue, cursor: clamped });
     setPreferredColumn(null);
     setSelectedIndex(0);
-  };
+    // Reset history navigation when input changes (unless navigating history)
+    if (resetHistory) {
+      historyRef.current.resetIndex(nextValue);
+    }
+  }, []);
 
 
   const handleSubmit = (submittedValue: string) => {
     // Allow blank submission only for optional ask-user questions
     if (!submittedValue.trim() && !allowBlankAnswer) return;
+
+    // Add to history before submitting
+    const valueToAdd = submittedValue.trim();
+    if (valueToAdd && !isAskingUser) {
+      historyRef.current.add(valueToAdd);
+    }
 
     if (
       autocompleteMode === 'command' &&
@@ -155,6 +208,8 @@ export function Input({
     ) {
       const selected = filteredCommands[selectedIndex] || filteredCommands[0];
       if (selected) {
+        // Add the selected command to history instead
+        historyRef.current.add(selected.name);
         onSubmit(selected.name, isProcessing ? 'inline' : 'normal');
         setValueAndCursor('');
         return;
@@ -191,10 +246,15 @@ export function Input({
   const insertText = (text: string) => {
     if (!text) return;
     // Use functional update for atomic value+cursor change during rapid pastes
-    setInputState(prev => ({
-      value: prev.value.slice(0, prev.cursor) + text + prev.value.slice(prev.cursor),
-      cursor: prev.cursor + text.length,
-    }));
+    setInputState(prev => {
+      const newValue = prev.value.slice(0, prev.cursor) + text + prev.value.slice(prev.cursor);
+      // Reset history navigation when user types
+      historyRef.current.resetIndex(newValue);
+      return {
+        value: newValue,
+        cursor: prev.cursor + text.length,
+      };
+    });
     setPreferredColumn(null);
     setSelectedIndex(0);
   };
@@ -202,8 +262,11 @@ export function Input({
   const deleteBackward = () => {
     setInputState(prev => {
       if (prev.cursor === 0) return prev;
+      const newValue = prev.value.slice(0, prev.cursor - 1) + prev.value.slice(prev.cursor);
+      // Reset history navigation when user edits
+      historyRef.current.resetIndex(newValue);
       return {
-        value: prev.value.slice(0, prev.cursor - 1) + prev.value.slice(prev.cursor),
+        value: newValue,
         cursor: prev.cursor - 1,
       };
     });
@@ -214,8 +277,11 @@ export function Input({
   const deleteForward = () => {
     setInputState(prev => {
       if (prev.cursor >= prev.value.length) return prev;
+      const newValue = prev.value.slice(0, prev.cursor) + prev.value.slice(prev.cursor + 1);
+      // Reset history navigation when user edits
+      historyRef.current.resetIndex(newValue);
       return {
-        value: prev.value.slice(0, prev.cursor) + prev.value.slice(prev.cursor + 1),
+        value: newValue,
         cursor: prev.cursor,
       };
     });
@@ -241,8 +307,11 @@ export function Input({
       }
 
       // start is now at the space before the word (or -1 if at beginning)
+      const newValue = prev.value.slice(0, start + 1) + prev.value.slice(prev.cursor);
+      // Reset history navigation when user edits
+      historyRef.current.resetIndex(newValue);
       return {
-        value: prev.value.slice(0, start + 1) + prev.value.slice(prev.cursor),
+        value: newValue,
         cursor: start + 1,
       };
     });
@@ -254,6 +323,18 @@ export function Input({
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
       if (value.length > 0) {
+        setValueAndCursor('');
+      }
+      return;
+    }
+
+    // Escape: clear input and exit history mode (if not asking user)
+    if (key.escape && !isAskingUser) {
+      if (historyRef.current.isNavigating()) {
+        // If navigating history, restore saved input
+        setValueAndCursor(savedInput);
+        setSavedInput('');
+      } else if (value.length > 0) {
         setValueAndCursor('');
       }
       return;
@@ -283,14 +364,14 @@ export function Input({
         }
       }
 
-      // Arrow keys for autocomplete navigation
+      // Arrow keys for autocomplete navigation (circular)
       if (autocompleteItems.length > 0) {
         if (key.downArrow) {
-          setSelectedIndex((prev) => Math.min(prev + 1, autocompleteItems.length - 1));
+          setSelectedIndex((prev) => (prev + 1) % autocompleteItems.length);
           return;
         }
         if (key.upArrow) {
-          setSelectedIndex((prev) => Math.max(prev - 1, 0));
+          setSelectedIndex((prev) => (prev - 1 + autocompleteItems.length) % autocompleteItems.length);
           return;
         }
       }
@@ -306,12 +387,56 @@ export function Input({
       moveCursorBy(1);
       return;
     }
+
+    // Handle arrow up for history navigation
     if (key.upArrow) {
+      // Navigate history if:
+      // 1. Input is empty, OR
+      // 2. Already navigating history, OR
+      // 3. Cursor is on the first line of multi-line input
+      const isOnFirstLine = activeLayout.cursorRow === 0;
+      const shouldNavigateHistory = value.length === 0 || historyRef.current.isNavigating() || isOnFirstLine;
+
+      if (shouldNavigateHistory && !isAskingUser) {
+        // Save current input before navigating
+        if (!historyRef.current.isNavigating()) {
+          setSavedInput(value);
+          historyRef.current.resetIndex(value);
+        }
+        const prev = historyRef.current.previous();
+        if (prev !== null) {
+          // Set value and cursor at end, don't reset history
+          setValueAndCursor(prev, prev.length, false);
+        }
+        return;
+      }
+
+      // Otherwise, do vertical cursor movement for multi-line
       applyVerticalMove(activeLayout, -1);
       return;
     }
+
+    // Handle arrow down for history navigation
     if (key.downArrow) {
-      applyVerticalMove(activeLayout, 1);
+      // Navigate history if:
+      // 1. Already navigating history, OR
+      // 2. Cursor is on the last line of multi-line input
+      const isOnLastLine = activeLayout.cursorRow === activeLayout.displayLines.length - 1;
+      const isNavigatingHistory = historyRef.current.isNavigating();
+
+      if (isNavigatingHistory && !isAskingUser) {
+        const next = historyRef.current.next();
+        if (next !== null) {
+          // Set value and cursor at end, don't reset history
+          setValueAndCursor(next, next.length, false);
+        }
+        return;
+      }
+
+      // If on last line and not navigating history, do nothing (or could beep)
+      if (!isOnLastLine) {
+        applyVerticalMove(activeLayout, 1);
+      }
       return;
     }
     if (key.home) {

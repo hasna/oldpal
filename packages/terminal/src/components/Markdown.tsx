@@ -844,34 +844,122 @@ function wrapAnsiLines(lines: string[], width: number): string[] {
 
 function wrapAnsiLine(line: string, width: number): string[] {
   if (width <= 0) return [line];
-  const result: string[] = [];
-  let current = '';
-  let visible = 0;
-  let activeAnsi = '';
+
+  // Parse line into tokens: ANSI codes and visible characters/words
+  interface Token {
+    type: 'ansi' | 'word' | 'space';
+    text: string;
+    visibleLength: number;
+  }
+
+  const tokens: Token[] = [];
   let i = 0;
+  let currentWord = '';
+
   while (i < line.length) {
+    // Check for ANSI escape sequence
     const match = line.slice(i).match(/^\x1b\[[0-9;]*m/);
     if (match) {
-      current += match[0];
-      if (match[0] === '\x1b[0m') {
-        activeAnsi = '';
-      } else {
-        activeAnsi += match[0];
+      // Flush current word before ANSI
+      if (currentWord) {
+        tokens.push({ type: 'word', text: currentWord, visibleLength: currentWord.length });
+        currentWord = '';
       }
+      tokens.push({ type: 'ansi', text: match[0], visibleLength: 0 });
       i += match[0].length;
       continue;
     }
-    current += line[i];
-    visible += 1;
+
+    const char = line[i];
+    if (char === ' ') {
+      // Flush current word before space
+      if (currentWord) {
+        tokens.push({ type: 'word', text: currentWord, visibleLength: currentWord.length });
+        currentWord = '';
+      }
+      tokens.push({ type: 'space', text: ' ', visibleLength: 1 });
+    } else {
+      currentWord += char;
+    }
     i += 1;
-    if (visible >= width) {
-      result.push(current);
-      current = activeAnsi;
+  }
+
+  // Flush remaining word
+  if (currentWord) {
+    tokens.push({ type: 'word', text: currentWord, visibleLength: currentWord.length });
+  }
+
+  // Build wrapped lines
+  const result: string[] = [];
+  let currentLine = '';
+  let visible = 0;
+  let activeAnsi = '';
+
+  for (const token of tokens) {
+    if (token.type === 'ansi') {
+      currentLine += token.text;
+      if (token.text === '\x1b[0m') {
+        activeAnsi = '';
+      } else {
+        activeAnsi += token.text;
+      }
+      continue;
+    }
+
+    if (token.type === 'space') {
+      // Add space if it fits
+      if (visible + 1 <= width) {
+        currentLine += ' ';
+        visible += 1;
+      }
+      // Otherwise skip leading space on new line
+      continue;
+    }
+
+    // token.type === 'word'
+    const wordLen = token.visibleLength;
+
+    // If word fits on current line, add it
+    if (visible + wordLen <= width) {
+      currentLine += token.text;
+      visible += wordLen;
+      continue;
+    }
+
+    // Word doesn't fit - wrap
+    if (visible > 0) {
+      // Push current line and start new one
+      result.push(currentLine);
+      currentLine = activeAnsi;
       visible = 0;
     }
+
+    // If word fits on a fresh line, add it
+    if (wordLen <= width) {
+      currentLine += token.text;
+      visible = wordLen;
+      continue;
+    }
+
+    // Word is longer than width - must break it character by character
+    for (const char of token.text) {
+      if (visible >= width) {
+        result.push(currentLine);
+        currentLine = activeAnsi;
+        visible = 0;
+      }
+      currentLine += char;
+      visible += 1;
+    }
   }
-  if (current !== '') result.push(current);
-  return result.length > 0 ? result : [''];
+
+  if (currentLine !== '' && currentLine !== activeAnsi) {
+    result.push(currentLine);
+  } else if (result.length === 0) {
+    result.push('');
+  }
+
+  return result;
 }
 
 function truncateAnsi(line: string, width: number): string {

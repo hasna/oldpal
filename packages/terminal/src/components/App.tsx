@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
-import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, type SessionInfo, type RecoverableSession } from '@hasna/assistants-core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, AskUserRequest, AskUserResponse } from '@hasna/assistants-shared';
+import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, type SessionInfo, type RecoverableSession } from '@hasna/assistants-core';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
@@ -16,7 +16,23 @@ import { ErrorBanner } from './ErrorBanner';
 import { QueueIndicator } from './QueueIndicator';
 import { AskUserPanel } from './AskUserPanel';
 import { RecoveryPanel } from './RecoveryPanel';
+import { ConnectorsPanel } from './ConnectorsPanel';
+import { TasksPanel } from './TasksPanel';
+import { AssistantsPanel } from './AssistantsPanel';
 import type { QueuedMessage } from './appTypes';
+import {
+  getTasks,
+  addTask,
+  deleteTask,
+  clearPendingTasks,
+  clearCompletedTasks,
+  isPaused,
+  setPaused,
+  startTask,
+  updateTask,
+  type Task,
+  type TaskPriority,
+} from '@hasna/assistants-core';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
 
@@ -90,6 +106,20 @@ export function App({ cwd, version }: AppProps) {
   // Recovery state for crashed sessions
   const [recoverableSession, setRecoverableSession] = useState<RecoverableSession | null>(null);
   const [showRecoveryPanel, setShowRecoveryPanel] = useState(false);
+
+  // Connectors panel state
+  const [showConnectorsPanel, setShowConnectorsPanel] = useState(false);
+  const [connectorsPanelInitial, setConnectorsPanelInitial] = useState<string | undefined>();
+  const [connectors, setConnectors] = useState<Connector[]>([]);
+  const connectorBridgeRef = useRef<ConnectorBridge | null>(null);
+
+  // Tasks panel state
+  const [showTasksPanel, setShowTasksPanel] = useState(false);
+  const [tasksList, setTasksList] = useState<Task[]>([]);
+  const [tasksPaused, setTasksPaused] = useState(false);
+
+  // Assistants panel state
+  const [showAssistantsPanel, setShowAssistantsPanel] = useState(false);
 
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
@@ -534,8 +564,26 @@ export function App({ cwd, version }: AppProps) {
         setVoiceState(activeSession.client.getVoiceState() ?? undefined);
         setIdentityInfo(activeSession.client.getIdentityInfo() ?? undefined);
       }
+    } else if (chunk.type === 'show_panel') {
+      // Show interactive panel
+      if (chunk.panel === 'connectors') {
+        setConnectorsPanelInitial(chunk.panelValue);
+        setShowConnectorsPanel(true);
+      } else if (chunk.panel === 'tasks') {
+        // Load tasks and show panel
+        getTasks(cwd).then((tasks) => {
+          setTasksList(tasks);
+          isPaused(cwd).then((paused) => {
+            setTasksPaused(paused);
+            setShowTasksPanel(true);
+          });
+        });
+      } else if (chunk.panel === 'assistants') {
+        // Show assistants panel
+        setShowAssistantsPanel(true);
+      }
     }
-  }, [registry, exit, finalizeResponse, resetTurnState]);
+  }, [registry, exit, finalizeResponse, resetTurnState, cwd]);
 
   // Create a session (either fresh or from recovery)
   const createSessionFromRecovery = useCallback(async (recoverSession: RecoverableSession | null) => {
@@ -597,6 +645,13 @@ export function App({ cwd, version }: AppProps) {
     setEnergyState(session.client.getEnergyState() ?? undefined);
     setVoiceState(session.client.getVoiceState() ?? undefined);
     setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
+
+    // Initialize connector bridge for the connectors panel
+    if (!connectorBridgeRef.current) {
+      connectorBridgeRef.current = new ConnectorBridge(effectiveCwd);
+      const discovered = connectorBridgeRef.current.fastDiscover();
+      setConnectors(discovered);
+    }
 
     initStateRef.current = 'done';
     setIsInitializing(false);
@@ -1224,6 +1279,156 @@ export function App({ cwd, version }: AppProps) {
           onSelect={handleSessionSwitch}
           onNew={handleNewSession}
           onCancel={() => setShowSessionSelector(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show connectors panel
+  if (showConnectorsPanel) {
+    const handleCheckAuth = async (connector: Connector) => {
+      if (!connectorBridgeRef.current) {
+        return { authenticated: false, error: 'Not initialized' };
+      }
+      return connectorBridgeRef.current.checkAuthStatus(connector);
+    };
+
+    const handleGetCommandHelp = async (connector: Connector, command: string) => {
+      if (!connectorBridgeRef.current) {
+        return 'Not initialized';
+      }
+      return connectorBridgeRef.current.getCommandHelp(connector, command);
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <ConnectorsPanel
+          connectors={connectors}
+          initialConnector={connectorsPanelInitial}
+          onCheckAuth={handleCheckAuth}
+          onGetCommandHelp={handleGetCommandHelp}
+          onClose={() => {
+            setShowConnectorsPanel(false);
+            setConnectorsPanelInitial(undefined);
+          }}
+        />
+      </Box>
+    );
+  }
+
+  // Show tasks panel
+  if (showTasksPanel) {
+    const handleTasksAdd = async (description: string, priority: TaskPriority) => {
+      await addTask(cwd, description, priority);
+      setTasksList(await getTasks(cwd));
+    };
+
+    const handleTasksDelete = async (id: string) => {
+      await deleteTask(cwd, id);
+      setTasksList(await getTasks(cwd));
+    };
+
+    const handleTasksRun = async (id: string) => {
+      await startTask(cwd, id);
+      const task = tasksList.find((t) => t.id === id);
+      if (task && activeSession) {
+        // Send the task to the agent
+        await activeSession.client.send(`Execute the following task:\n\n${task.description}\n\nWhen done, report the result.`);
+      }
+    };
+
+    const handleTasksClearPending = async () => {
+      await clearPendingTasks(cwd);
+      setTasksList(await getTasks(cwd));
+    };
+
+    const handleTasksClearCompleted = async () => {
+      await clearCompletedTasks(cwd);
+      setTasksList(await getTasks(cwd));
+    };
+
+    const handleTasksTogglePause = async () => {
+      const newPaused = !tasksPaused;
+      await setPaused(cwd, newPaused);
+      setTasksPaused(newPaused);
+    };
+
+    const handleTasksChangePriority = async (id: string, priority: TaskPriority) => {
+      await updateTask(cwd, id, { priority });
+      setTasksList(await getTasks(cwd));
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <TasksPanel
+          tasks={tasksList}
+          paused={tasksPaused}
+          onAdd={handleTasksAdd}
+          onDelete={handleTasksDelete}
+          onRun={handleTasksRun}
+          onClearPending={handleTasksClearPending}
+          onClearCompleted={handleTasksClearCompleted}
+          onTogglePause={handleTasksTogglePause}
+          onChangePriority={handleTasksChangePriority}
+          onClose={() => setShowTasksPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show assistants panel
+  if (showAssistantsPanel) {
+    const assistantManager = activeSession?.client.getAssistantManager?.();
+    const assistantsList = assistantManager?.listAssistants() ?? [];
+    const activeAssistantId = assistantManager?.getActiveId() ?? undefined;
+
+    const handleAssistantSelect = async (assistantId: string) => {
+      if (assistantManager) {
+        await assistantManager.switchAssistant(assistantId);
+        // Refresh identity context after switching
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+      }
+      setShowAssistantsPanel(false);
+    };
+
+    const handleAssistantCreate = async (options: { name: string; description?: string; settings?: { model?: string; temperature?: number } }) => {
+      if (assistantManager) {
+        await assistantManager.createAssistant(options);
+        // Refresh identity context after creation
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+      }
+    };
+
+    const handleAssistantUpdate = async (id: string, updates: { name?: string; description?: string; settings?: Record<string, unknown> }) => {
+      if (assistantManager) {
+        await assistantManager.updateAssistant(id, updates);
+        // Refresh identity context after update
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+      }
+    };
+
+    const handleAssistantDelete = async (assistantId: string) => {
+      if (assistantManager) {
+        await assistantManager.deleteAssistant(assistantId);
+        // Refresh identity context after deletion
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+      }
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <AssistantsPanel
+          assistants={assistantsList}
+          activeAssistantId={activeAssistantId}
+          onSelect={handleAssistantSelect}
+          onCreate={handleAssistantCreate}
+          onUpdate={handleAssistantUpdate}
+          onDelete={handleAssistantDelete}
+          onCancel={() => setShowAssistantsPanel(false)}
         />
       </Box>
     );
