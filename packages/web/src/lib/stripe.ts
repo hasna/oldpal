@@ -85,3 +85,35 @@ export function constructWebhookEvent(
 ) {
   return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
 }
+
+// Payment Method Functions
+
+export async function listPaymentMethods(customerId: string) {
+  return stripe.paymentMethods.list({
+    customer: customerId,
+    type: 'card',
+  });
+}
+
+export async function getCustomer(customerId: string) {
+  return stripe.customers.retrieve(customerId);
+}
+
+export async function setDefaultPaymentMethod(customerId: string, paymentMethodId: string) {
+  return stripe.customers.update(customerId, {
+    invoice_settings: {
+      default_payment_method: paymentMethodId,
+    },
+  });
+}
+
+export async function detachPaymentMethod(paymentMethodId: string) {
+  return stripe.paymentMethods.detach(paymentMethodId);
+}
+
+export async function createSetupIntent(customerId: string) {
+  return stripe.setupIntents.create({
+    customer: customerId,
+    payment_method_types: ['card'],
+  });
+}

@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { errorResponse } from './api/response';
+import type { ApiResponse } from './api/response';
 
 /**
  * Simple in-memory rate limiter with sliding window.
  * For production multi-instance deployments, replace with Redis-based solution.
  */
+
+interface RateLimitErrorResponse {
+  success: false;
+  error: {
+    code: 'RATE_LIMIT_EXCEEDED';
+    message: string;
+  };
+}
 
 interface RateLimitEntry {
   count: number;
@@ -85,7 +93,7 @@ export function checkRateLimit(
   request: NextRequest,
   endpoint: string,
   config: RateLimitConfig
-): NextResponse | null {
+): NextResponse<RateLimitErrorResponse> | null {
   cleanupExpiredEntries();
 
   const identifier = config.keyGenerator
@@ -113,7 +121,7 @@ export function checkRateLimit(
   if (entry.count > config.limit) {
     const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
 
-    const response = NextResponse.json(
+    const response = NextResponse.json<RateLimitErrorResponse>(
       {
         success: false,
         error: {
@@ -157,7 +165,7 @@ export function withRateLimit<T>(
  * Create a rate limiter for use with user ID instead of IP.
  * Useful for authenticated endpoints where you want per-user limits.
  */
-export function createUserRateLimiter(userId: string, endpoint: string, config: RateLimitConfig): NextResponse | null {
+export function createUserRateLimiter(userId: string, endpoint: string, config: RateLimitConfig): NextResponse<RateLimitErrorResponse> | null {
   cleanupExpiredEntries();
 
   const key = `user:${userId}:${endpoint}`;
@@ -180,7 +188,7 @@ export function createUserRateLimiter(userId: string, endpoint: string, config: 
   if (entry.count > config.limit) {
     const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
 
-    const response = NextResponse.json(
+    const response = NextResponse.json<RateLimitErrorResponse>(
       {
         success: false,
         error: {

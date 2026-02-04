@@ -12,6 +12,7 @@ export interface AuthUser {
   name: string | null;
   role: 'user' | 'admin';
   avatarUrl: string | null;
+  hasPassword: boolean; // false for OAuth-only users
 }
 
 interface AuthState {

@@ -3,7 +3,7 @@ import type { ClientMessage, ServerMessage } from '@/lib/protocol';
 import { subscribeToSession, sendSessionMessage, stopSession } from '@/lib/server/agent-pool';
 import { verifyAccessToken } from '@/lib/auth/jwt';
 import { db } from '@/db';
-import { sessions, messages } from '@/db/schema';
+import { sessions, messages, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/lib/api/errors';
 import { randomUUID } from 'crypto';
@@ -13,6 +13,99 @@ import { WebSocketServer } from 'ws';
 const MAX_MESSAGE_LENGTH = 100_000;
 // Max WebSocket payload size: 1MB (allows for JSON overhead)
 const MAX_PAYLOAD_SIZE = 1_000_000;
+
+// Rate limiting configuration
+const CONNECTION_RATE_LIMIT = 10; // Max connections per IP per window
+const CONNECTION_WINDOW_MS = 60_000; // 1 minute window
+const MESSAGE_RATE_LIMIT = 60; // Max messages per session per window
+const MESSAGE_WINDOW_MS = 60_000; // 1 minute window
+
+// Rate limiting stores
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+const connectionRateLimits = new Map<string, RateLimitEntry>();
+const messageRateLimits = new Map<string, RateLimitEntry>();
+
+// Periodic cleanup of rate limit entries (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of connectionRateLimits.entries()) {
+    if (entry.resetTime < now) connectionRateLimits.delete(key);
+  }
+  for (const [key, entry] of messageRateLimits.entries()) {
+    if (entry.resetTime < now) messageRateLimits.delete(key);
+  }
+}, 5 * 60 * 1000);
+
+/**
+ * Check connection rate limit for an IP address.
+ * Returns true if rate limited (should reject), false if allowed.
+ */
+function isConnectionRateLimited(ip: string): boolean {
+  const now = Date.now();
+  let entry = connectionRateLimits.get(ip);
+
+  if (!entry || entry.resetTime < now) {
+    entry = { count: 1, resetTime: now + CONNECTION_WINDOW_MS };
+    connectionRateLimits.set(ip, entry);
+    return false;
+  }
+
+  entry.count++;
+  return entry.count > CONNECTION_RATE_LIMIT;
+}
+
+/**
+ * Check message rate limit for a session.
+ * Returns true if rate limited (should reject), false if allowed.
+ */
+function isMessageRateLimited(sessionId: string): boolean {
+  const now = Date.now();
+  let entry = messageRateLimits.get(sessionId);
+
+  if (!entry || entry.resetTime < now) {
+    entry = { count: 1, resetTime: now + MESSAGE_WINDOW_MS };
+    messageRateLimits.set(sessionId, entry);
+    return false;
+  }
+
+  entry.count++;
+  return entry.count > MESSAGE_RATE_LIMIT;
+}
+
+/**
+ * Get client IP from request headers.
+ */
+function getClientIp(req: any): string {
+  const forwardedFor = req?.headers?.['x-forwarded-for'];
+  if (forwardedFor) {
+    const firstIp = (typeof forwardedFor === 'string' ? forwardedFor : forwardedFor[0])?.split(',')[0]?.trim();
+    if (firstIp) return firstIp;
+  }
+  const realIp = req?.headers?.['x-real-ip'];
+  if (realIp) return typeof realIp === 'string' ? realIp : realIp[0];
+  const cfIp = req?.headers?.['cf-connecting-ip'];
+  if (cfIp) return typeof cfIp === 'string' ? cfIp : cfIp[0];
+  return req?.socket?.remoteAddress || 'unknown';
+}
+
+/**
+ * Check if a user is active (not suspended).
+ * Returns the user status or null if user doesn't exist.
+ */
+async function getUserStatus(userId: string): Promise<{ isActive: boolean } | null> {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { isActive: true },
+    });
+    return user || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Safely parse a URL and extract its origin.
@@ -186,6 +279,13 @@ export default function handler(_req: any, res: any) {
     res.socket.server.wss = wss;
 
     wss.on('connection', (ws: any, req: any) => {
+      // Rate limit connections per IP
+      const clientIp = getClientIp(req);
+      if (isConnectionRateLimited(clientIp)) {
+        ws.close(1008, 'Too many connections');
+        return;
+      }
+
       // Validate Origin header to prevent cross-site WebSocket hijacking
       const origin = req?.headers?.origin;
       if (!isOriginAllowed(origin)) {
@@ -244,6 +344,18 @@ export default function handler(_req: any, res: any) {
           return null;
         }
         if (auth?.userId) {
+          // Check if user account is active (not suspended)
+          const userStatus = await getUserStatus(auth.userId);
+          if (!userStatus) {
+            sendMessage(ws, { type: 'error', message: 'User account not found' });
+            ws.close(1008);
+            return null;
+          }
+          if (!userStatus.isActive) {
+            sendMessage(ws, { type: 'error', message: 'Account suspended' });
+            ws.close(1008);
+            return null;
+          }
           authenticatedUserId = auth.userId;
           ownerKey = `user:${auth.userId}`;
         } else {
@@ -413,6 +525,13 @@ export default function handler(_req: any, res: any) {
             sendMessage(ws, { type: 'error', message: 'Missing sessionId' });
             return;
           }
+
+          // Rate limit messages per session
+          if (isMessageRateLimited(nextSessionId)) {
+            sendMessage(ws, { type: 'error', message: 'Rate limit exceeded. Please slow down.' });
+            return;
+          }
+
           // Validate message length to prevent DoS
           const content = String(message.content || '');
           if (content.length > MAX_MESSAGE_LENGTH) {
@@ -441,11 +560,32 @@ export default function handler(_req: any, res: any) {
                 role: 'user',
                 content,
               });
-              // Update session timestamp
-              await db
-                .update(sessions)
-                .set({ updatedAt: new Date() })
-                .where(eq(sessions.id, nextSessionId));
+
+              // Auto-generate session label from first message if not set
+              const currentSession = await db.query.sessions.findFirst({
+                where: eq(sessions.id, nextSessionId),
+                columns: { label: true },
+              });
+
+              // Check if label is empty or matches the default "Chat date" pattern
+              const hasDefaultLabel =
+                !currentSession?.label ||
+                currentSession.label.match(/^Chat \d{1,2}\/\d{1,2}\/\d{2,4}$/);
+
+              if (hasDefaultLabel && content) {
+                // Generate label from first ~50 chars of content
+                const generatedLabel = content.slice(0, 50).trim() + (content.length > 50 ? '...' : '');
+                await db
+                  .update(sessions)
+                  .set({ label: generatedLabel, updatedAt: new Date() })
+                  .where(eq(sessions.id, nextSessionId));
+              } else {
+                // Just update timestamp
+                await db
+                  .update(sessions)
+                  .set({ updatedAt: new Date() })
+                  .where(eq(sessions.id, nextSessionId));
+              }
             } catch {
               // Ignore persistence errors to not break WebSocket flow
             }
