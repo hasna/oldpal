@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
-import { SessionRegistry, type SessionInfo } from '@hasna/assistants-core';
+import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, type SessionInfo, type RecoverableSession } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, AskUserRequest, AskUserResponse } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
@@ -15,6 +15,7 @@ import { SessionSelector } from './SessionSelector';
 import { ErrorBanner } from './ErrorBanner';
 import { QueueIndicator } from './QueueIndicator';
 import { AskUserPanel } from './AskUserPanel';
+import { RecoveryPanel } from './RecoveryPanel';
 import type { QueuedMessage } from './appTypes';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
@@ -85,6 +86,10 @@ export function App({ cwd, version }: AppProps) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [showSessionSelector, setShowSessionSelector] = useState(false);
+
+  // Recovery state for crashed sessions
+  const [recoverableSession, setRecoverableSession] = useState<RecoverableSession | null>(null);
+  const [showRecoveryPanel, setShowRecoveryPanel] = useState(false);
 
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
@@ -521,6 +526,91 @@ export function App({ cwd, version }: AppProps) {
     }
   }, [registry, exit, finalizeResponse, resetTurnState]);
 
+  // Create a session (either fresh or from recovery)
+  const createSessionFromRecovery = useCallback(async (recoverSession: RecoverableSession | null) => {
+    // Register chunk handler (only once, even on retry after error)
+    if (!handlersRegisteredRef.current) {
+      handlersRegisteredRef.current = true;
+      registry.onChunk(handleChunk);
+      registry.onError((err) => {
+        const finalized = finalizeResponse('error');
+        if (finalized) {
+          skipNextDoneRef.current = true;
+        }
+        resetTurnState();
+        setError(err.message);
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        const active = registryRef.current.getActiveSession();
+        if (active) {
+          registryRef.current.setProcessing(active.id, false);
+        }
+      });
+    }
+
+    // Load session data if recovering
+    let initialMessages: Message[] | undefined;
+    let sessionId: string | undefined;
+    let startedAt: string | undefined;
+    let effectiveCwd = cwd;
+
+    if (recoverSession) {
+      // Load saved session data
+      const sessionData = SessionStorage.loadSession(recoverSession.sessionId);
+      if (sessionData) {
+        initialMessages = sessionData.messages as Message[];
+        sessionId = recoverSession.sessionId;
+        startedAt = sessionData.startedAt;
+        effectiveCwd = sessionData.cwd || cwd;
+      }
+      // Clear recovery state files (heartbeat and state, but keep session storage)
+      clearRecoveryState(recoverSession.sessionId);
+    }
+
+    // Create session (with or without initial messages)
+    const session = await registry.createSession(effectiveCwd);
+
+    // If recovering, we need to import the old messages
+    // Since SessionRegistry doesn't support initialMessages, we'll display them in the UI
+    if (initialMessages && initialMessages.length > 0) {
+      setMessages(initialMessages);
+    }
+
+    setActiveSessionId(session.id);
+    session.client.setAskUserHandler((request) => beginAskUser(session.id, request));
+
+    await loadSessionMetadata(session);
+
+    setEnergyState(session.client.getEnergyState() ?? undefined);
+    setVoiceState(session.client.getVoiceState() ?? undefined);
+    setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
+
+    initStateRef.current = 'done';
+    setIsInitializing(false);
+  }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState, loadSessionMetadata, beginAskUser]);
+
+  // Handle recovery panel actions
+  const handleRecover = useCallback(() => {
+    setShowRecoveryPanel(false);
+    createSessionFromRecovery(recoverableSession).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+      setIsInitializing(false);
+    });
+  }, [recoverableSession, createSessionFromRecovery]);
+
+  const handleDiscardRecovery = useCallback(() => {
+    // Clear recovery state for the discarded session
+    if (recoverableSession) {
+      clearRecoveryState(recoverableSession.sessionId);
+    }
+    setShowRecoveryPanel(false);
+    setRecoverableSession(null);
+    createSessionFromRecovery(null).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+      setIsInitializing(false);
+    });
+  }, [recoverableSession, createSessionFromRecovery]);
+
   // Initialize first session
   useEffect(() => {
     // Only skip if initialization completed successfully
@@ -530,50 +620,27 @@ export function App({ cwd, version }: AppProps) {
     // If already pending, another instance is running
     if (initStateRef.current === 'pending') return;
 
+    // If showing recovery panel, wait for user decision
+    if (showRecoveryPanel) return;
+
     initStateRef.current = 'pending';
 
     let cancelled = false;
 
     const initSession = async () => {
       try {
-        // Register chunk handler (only once, even on retry after error)
-        if (!handlersRegisteredRef.current) {
-          handlersRegisteredRef.current = true;
-          registry.onChunk(handleChunk);
-          registry.onError((err) => {
-          const finalized = finalizeResponse('error');
-          if (finalized) {
-            skipNextDoneRef.current = true;
-          }
-          resetTurnState();
-          setError(err.message);
-          setIsProcessing(false);
-          isProcessingRef.current = false;
-          const active = registryRef.current.getActiveSession();
-          if (active) {
-            registryRef.current.setProcessing(active.id, false);
-          }
-          });
+        // Check for recoverable sessions first
+        const recoverableSessions = findRecoverableSessions();
+        if (recoverableSessions.length > 0 && !recoverableSession) {
+          // Show recovery panel for the most recent recoverable session
+          setRecoverableSession(recoverableSessions[0]);
+          setShowRecoveryPanel(true);
+          initStateRef.current = 'idle'; // Allow re-entry after user decision
+          return;
         }
 
-        // Create first session
-        const session = await registry.createSession(cwd);
-
-        // Once session is created, always complete initialization
-        // Even if cleanup was called, the session is ready to use
-        // This prevents the "Initializing..." hang when cleanup races with creation
-
-        setActiveSessionId(session.id);
-        session.client.setAskUserHandler((request) => beginAskUser(session.id, request));
-
-        await loadSessionMetadata(session);
-
-        setEnergyState(session.client.getEnergyState() ?? undefined);
-        setVoiceState(session.client.getVoiceState() ?? undefined);
-        setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
-
-        initStateRef.current = 'done';
-        setIsInitializing(false);
+        // No recovery needed, create fresh session
+        await createSessionFromRecovery(null);
       } catch (err) {
         initStateRef.current = 'idle'; // Allow retry on error
         if (cancelled) return;
@@ -589,7 +656,7 @@ export function App({ cwd, version }: AppProps) {
     return () => {
       cancelled = true;
     };
-  }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState, loadSessionMetadata, beginAskUser]);
+  }, [cwd, registry, showRecoveryPanel, recoverableSession, createSessionFromRecovery]);
 
   // Separate effect for component mount/unmount lifecycle
   // This ensures registry is only closed when component truly unmounts
@@ -1108,10 +1175,23 @@ export function App({ cwd, version }: AppProps) {
     ]
   );
 
-  if (isInitializing) {
+  if (isInitializing && !showRecoveryPanel) {
     return (
       <Box flexDirection="column" padding={1}>
         <Spinner label="Initializing..." />
+      </Box>
+    );
+  }
+
+  // Show recovery panel for crashed sessions
+  if (showRecoveryPanel && recoverableSession) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <RecoveryPanel
+          session={recoverableSession}
+          onRecover={handleRecover}
+          onDiscard={handleDiscardRecovery}
+        />
       </Box>
     );
   }
