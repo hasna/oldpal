@@ -176,12 +176,52 @@ export class ContextManager {
     summarizedCount: number;
   } {
     const keepRecent = Math.max(0, this.config.keepRecentMessages);
+    const preserveToolCalls = Math.max(0, this.config.preserveLastToolCalls ?? 5);
+
+    // Start with the configured number of recent messages
     let recentMessages = keepRecent > 0 ? messages.slice(-keepRecent) : [];
     let startIndex = messages.length - recentMessages.length;
 
+    // If the first preserved message has tool results, include the preceding message
+    // (which likely contains the tool call)
     if (recentMessages.length > 0 && recentMessages[0].toolResults) {
       if (startIndex > 0) {
         startIndex -= 1;
+        recentMessages = messages.slice(startIndex);
+      }
+    }
+
+    // Now ensure we preserve the last N tool calls
+    // Scan backwards from startIndex to find messages with tool calls/results
+    if (preserveToolCalls > 0) {
+      let toolCallsFound = 0;
+      let scanIndex = startIndex - 1;
+      let newStartIndex = startIndex;
+
+      // Count tool calls already in recentMessages
+      for (const msg of recentMessages) {
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          toolCallsFound += msg.toolCalls.length;
+        }
+      }
+
+      // Scan backwards to find more tool calls if needed
+      while (scanIndex >= 0 && toolCallsFound < preserveToolCalls) {
+        const msg = messages[scanIndex];
+        // If this message has tool calls or results, include it
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          toolCallsFound += msg.toolCalls.length;
+          newStartIndex = scanIndex;
+        } else if (msg.toolResults && msg.toolResults.length > 0) {
+          // Include tool results as well
+          newStartIndex = scanIndex;
+        }
+        scanIndex--;
+      }
+
+      // If we found more tool calls to preserve, extend recentMessages
+      if (newStartIndex < startIndex) {
+        startIndex = newStartIndex;
         recentMessages = messages.slice(startIndex);
       }
     }

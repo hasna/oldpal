@@ -115,4 +115,8 @@ export interface CommandResult {
   sessionAction?: 'list' | 'switch' | 'new';
   /** Session number to switch to (1-based) */
   sessionNumber?: number;
+  /** Panel to show (terminal-specific interactive UIs) */
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants';
+  /** Initial value for panel (e.g., connector name) */
+  panelInitialValue?: string;
 }

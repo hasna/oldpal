@@ -11,6 +11,13 @@ export interface ContextConfig {
   summaryModel?: string;
   summaryMaxTokens: number;
   maxMessages: number;
+  /**
+   * Number of recent tool calls to always preserve during summarization.
+   * This ensures the agent remembers what it just did and can continue
+   * multi-step operations after context compaction.
+   * Default: 5
+   */
+  preserveLastToolCalls?: number;
 }
 
 export interface ContextState {

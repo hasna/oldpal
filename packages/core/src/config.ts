@@ -70,6 +70,7 @@ const DEFAULT_CONFIG: AssistantsConfig = {
     summaryStrategy: 'hybrid',
     summaryMaxTokens: 2000,
     maxMessages: 500,
+    preserveLastToolCalls: 5,
   },
   energy: {
     enabled: true,

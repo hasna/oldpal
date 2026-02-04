@@ -47,6 +47,25 @@ import {
   cleanupSessionJobs,
   type Job,
 } from '../jobs';
+import {
+  getTasks,
+  getTask,
+  addTask,
+  updateTask,
+  deleteTask,
+  clearPendingTasks,
+  clearCompletedTasks,
+  getNextTask,
+  isPaused,
+  setPaused,
+  startTask,
+  completeTask,
+  failTask,
+  getTaskCounts,
+  type Task,
+  type TaskPriority,
+  PRIORITY_ORDER,
+} from '../tasks';
 
 // Version lookup - prefer explicit env to avoid stale hardcoded values
 const VERSION =
@@ -167,6 +186,7 @@ export class BuiltinCommands {
     loader.register(this.secretsCommand());
     loader.register(this.jobsCommand());
     loader.register(this.messagesCommand());
+    loader.register(this.tasksCommand());
     loader.register(this.exitCommand());
   }
 
@@ -323,7 +343,14 @@ export class BuiltinCommands {
         const [action, ...rest] = args.trim().split(/\s+/).filter(Boolean);
         const target = rest.join(' ');
 
-        if (!action) {
+        // Show interactive panel for no args or 'ui' command
+        if (!action || action === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'assistants' };
+        }
+
+        // Show current assistant info (text output for scripting)
+        if (action === 'show' || action === 'info') {
           const active = manager.getActive();
           if (!active) {
             context.emit('text', 'No active assistant.\n');
@@ -331,6 +358,10 @@ export class BuiltinCommands {
             context.emit('text', `Current assistant: ${active.name}\n`);
             context.emit('text', `ID: ${active.id}\n`);
             if (active.description) context.emit('text', `Description: ${active.description}\n`);
+            context.emit('text', `Model: ${active.settings.model}\n`);
+            if (active.settings.temperature !== undefined) {
+              context.emit('text', `Temperature: ${active.settings.temperature}\n`);
+            }
           }
           context.emit('done');
           return { handled: true };
@@ -475,7 +506,8 @@ export class BuiltinCommands {
         // /assistant help
         if (action === 'help') {
           context.emit('text', '\n## Assistant Commands\n\n');
-          context.emit('text', '/assistant                    Show current assistant\n');
+          context.emit('text', '/assistant                    Open interactive assistant panel\n');
+          context.emit('text', '/assistant show               Show current assistant info\n');
           context.emit('text', '/assistant list               List all assistants\n');
           context.emit('text', '/assistant create <name>      Create new assistant\n');
           context.emit('text', '/assistant switch <name|id>   Switch to assistant\n');
@@ -1950,6 +1982,299 @@ Created: ${new Date(job.createdAt).toISOString()}
     };
   }
 
+  /**
+   * /tasks - Task queue management
+   */
+  private tasksCommand(): Command {
+    return {
+      name: 'tasks',
+      description: 'Manage task queue for agent to execute',
+      tags: ['tasks', 'queue', 'automation'],
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const parts = splitArgs(args);
+        const sub = parts[0] || '';
+
+        // Show help when bare command or explicit help
+        if (!sub || sub === 'help') {
+          const tasks = await getTasks(context.cwd);
+          const counts = await getTaskCounts(context.cwd);
+          const paused = await isPaused(context.cwd);
+
+          let output = '\n📋 **Tasks** - Queue tasks for the agent to execute\n\n';
+
+          // Show current status
+          const pendingCount = counts.pending;
+          const inProgressCount = counts.in_progress;
+          const completedCount = counts.completed;
+          const failedCount = counts.failed;
+
+          if (tasks.length > 0) {
+            output += `**Status**: ${pendingCount} pending, ${inProgressCount} in progress, ${completedCount} completed, ${failedCount} failed\n`;
+            output += `**Queue**: ${paused ? '⏸ Paused' : '▶ Active'}\n\n`;
+
+            output += '**Recent Tasks:**\n';
+            const recent = tasks.slice(0, 5);
+            for (const task of recent) {
+              const statusIcon = task.status === 'pending' ? '○' :
+                                 task.status === 'in_progress' ? '◐' :
+                                 task.status === 'completed' ? '●' : '✗';
+              const priorityIcon = task.priority === 'high' ? '↑' :
+                                   task.priority === 'low' ? '↓' : '-';
+              output += `  ${statusIcon} [${priorityIcon}] ${task.description.slice(0, 50)}${task.description.length > 50 ? '...' : ''}\n`;
+            }
+            if (tasks.length > 5) {
+              output += `  ... and ${tasks.length - 5} more\n`;
+            }
+            output += '\n';
+          } else {
+            output += '**Status**: No tasks in queue\n\n';
+          }
+
+          output += '**Interactive Mode:**\n';
+          output += '  /tasks ui                Open interactive task panel\n\n';
+
+          output += '**Commands:**\n';
+          output += '  /tasks list              List all tasks\n';
+          output += '  /tasks add <desc>        Add a task (normal priority)\n';
+          output += '  /tasks add -p high <desc>  Add high priority task\n';
+          output += '  /tasks add -p low <desc>   Add low priority task\n';
+          output += '  /tasks show <id>         Show task details\n';
+          output += '  /tasks delete <id>       Delete a task\n';
+          output += '  /tasks clear             Clear all pending tasks\n';
+          output += '  /tasks clear done        Clear completed/failed tasks\n';
+          output += '  /tasks priority <id> <high|normal|low>\n';
+          output += '  /tasks pause             Pause auto-processing\n';
+          output += '  /tasks resume            Resume auto-processing\n';
+          output += '  /tasks run               Run next pending task\n';
+          output += '  /tasks help              Show this help\n';
+
+          context.emit('text', output);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Interactive UI mode
+        if (sub === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'tasks' as const };
+        }
+
+        // List all tasks
+        if (sub === 'list') {
+          const tasks = await getTasks(context.cwd);
+          if (tasks.length === 0) {
+            context.emit('text', 'No tasks in queue.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const paused = await isPaused(context.cwd);
+          let output = `\n**Task Queue** ${paused ? '(Paused)' : ''}\n\n`;
+          output += '| Status | Pri | Description | Created |\n';
+          output += '|--------|-----|-------------|----------|\n';
+
+          for (const task of tasks) {
+            const statusIcon = task.status === 'pending' ? '○' :
+                               task.status === 'in_progress' ? '◐' :
+                               task.status === 'completed' ? '●' : '✗';
+            const priorityIcon = task.priority === 'high' ? '↑' :
+                                 task.priority === 'low' ? '↓' : '-';
+            const desc = task.description.slice(0, 40) + (task.description.length > 40 ? '...' : '');
+            const created = new Date(task.createdAt).toLocaleDateString();
+            output += `| ${statusIcon} | ${priorityIcon} | ${desc} | ${created} |\n`;
+          }
+
+          context.emit('text', output);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Add a task
+        if (sub === 'add') {
+          let priority: TaskPriority = 'normal';
+          let descriptionParts = parts.slice(1);
+
+          // Check for priority flag
+          if (descriptionParts[0] === '-p' && descriptionParts[1]) {
+            const p = descriptionParts[1].toLowerCase();
+            if (p === 'high' || p === 'normal' || p === 'low') {
+              priority = p as TaskPriority;
+              descriptionParts = descriptionParts.slice(2);
+            }
+          }
+
+          const description = descriptionParts.join(' ').trim();
+          if (!description) {
+            context.emit('text', 'Usage: /tasks add [-p high|normal|low] <description>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const projectId = context.getActiveProjectId?.() || undefined;
+          const task = await addTask(context.cwd, description, priority, projectId);
+          const priorityLabel = task.priority === 'high' ? ' (high priority)' :
+                                task.priority === 'low' ? ' (low priority)' : '';
+          context.emit('text', `Task added${priorityLabel}: ${task.description}\n`);
+          context.emit('text', `ID: ${task.id}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Show task details
+        if (sub === 'show') {
+          const id = parts[1];
+          if (!id) {
+            context.emit('text', 'Usage: /tasks show <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const task = await getTask(context.cwd, id);
+          if (!task) {
+            context.emit('text', `Task not found: ${id}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          let output = '\n**Task Details**\n\n';
+          output += `**ID:** ${task.id}\n`;
+          output += `**Description:** ${task.description}\n`;
+          output += `**Status:** ${task.status}\n`;
+          output += `**Priority:** ${task.priority}\n`;
+          output += `**Created:** ${new Date(task.createdAt).toLocaleString()}\n`;
+          if (task.startedAt) {
+            output += `**Started:** ${new Date(task.startedAt).toLocaleString()}\n`;
+          }
+          if (task.completedAt) {
+            output += `**Completed:** ${new Date(task.completedAt).toLocaleString()}\n`;
+          }
+          if (task.result) {
+            output += `**Result:** ${task.result}\n`;
+          }
+          if (task.error) {
+            output += `**Error:** ${task.error}\n`;
+          }
+          if (task.projectId) {
+            output += `**Project:** ${task.projectId}\n`;
+          }
+
+          context.emit('text', output);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Delete a task
+        if (sub === 'delete') {
+          const id = parts[1];
+          if (!id) {
+            context.emit('text', 'Usage: /tasks delete <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const deleted = await deleteTask(context.cwd, id);
+          if (deleted) {
+            context.emit('text', `Task deleted: ${id}\n`);
+          } else {
+            context.emit('text', `Task not found: ${id}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Clear tasks
+        if (sub === 'clear') {
+          const arg = parts[1]?.toLowerCase();
+          if (arg === 'done' || arg === 'completed') {
+            const count = await clearCompletedTasks(context.cwd);
+            context.emit('text', `Cleared ${count} completed/failed task${count !== 1 ? 's' : ''}.\n`);
+          } else {
+            const count = await clearPendingTasks(context.cwd);
+            context.emit('text', `Cleared ${count} pending task${count !== 1 ? 's' : ''}.\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Change priority
+        if (sub === 'priority') {
+          const id = parts[1];
+          const newPriority = parts[2]?.toLowerCase();
+          if (!id || !newPriority) {
+            context.emit('text', 'Usage: /tasks priority <id> <high|normal|low>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          if (newPriority !== 'high' && newPriority !== 'normal' && newPriority !== 'low') {
+            context.emit('text', 'Priority must be high, normal, or low.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const task = await updateTask(context.cwd, id, { priority: newPriority as TaskPriority });
+          if (task) {
+            context.emit('text', `Task priority updated to ${newPriority}: ${task.description}\n`);
+          } else {
+            context.emit('text', `Task not found: ${id}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Pause queue
+        if (sub === 'pause') {
+          await setPaused(context.cwd, true);
+          context.emit('text', 'Task queue paused. Tasks will not auto-run.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Resume queue
+        if (sub === 'resume') {
+          await setPaused(context.cwd, false);
+          context.emit('text', 'Task queue resumed. Tasks will auto-run.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Run next task
+        if (sub === 'run') {
+          const paused = await isPaused(context.cwd);
+          if (paused) {
+            context.emit('text', 'Task queue is paused. Use /tasks resume to enable auto-run.\n');
+          }
+
+          const nextTask = await getNextTask(context.cwd);
+          if (!nextTask) {
+            context.emit('text', 'No pending tasks to run.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // Mark as in progress
+          await startTask(context.cwd, nextTask.id);
+          context.emit('text', `Running task: ${nextTask.description}\n`);
+          context.emit('done');
+
+          // Return the task description as a prompt to execute
+          return {
+            handled: false,
+            prompt: `Execute the following task:\n\n${nextTask.description}\n\nWhen done, report the result.`,
+          };
+        }
+
+        context.emit('text', `Unknown tasks command: ${sub}\n`);
+        context.emit('text', 'Use /tasks help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
   private exitCommand(): Command {
     return {
       name: 'exit',
@@ -2235,19 +2560,33 @@ Created: ${new Date(job.createdAt).toISOString()}
       content: '',
       handler: async (args, context) => {
         const parts = splitArgs(args);
-        const sub = parts[0] || 'list';
+        const sub = parts[0] || '';
 
-        if (sub === 'help') {
-          const usage = [
-            'Usage:',
-            '  /projects list',
-            '  /projects new <name>',
-            '  /projects use <id|name>',
-            '  /projects show [id|name]',
-            '  /projects delete <id|name>',
-            '  /projects describe <id|name> <description>',
-          ].join('\n');
-          context.emit('text', `\n${usage}\n`);
+        // Show help when bare command or explicit help
+        if (!sub || sub === 'help') {
+          const projects = await listProjects(context.cwd);
+          const activeId = context.getActiveProjectId?.();
+          const activeProject = activeId ? projects.find(p => p.id === activeId) : null;
+
+          let output = '\n📁 **Projects** - Manage projects in this folder\n\n';
+          output += '**Commands:**\n';
+          output += '  /projects list                    List all projects\n';
+          output += '  /projects new <name>              Create new project\n';
+          output += '  /projects use <id|name>           Select active project\n';
+          output += '  /projects show [id|name]          Show project details\n';
+          output += '  /projects describe <id> <text>    Update description\n';
+          output += '  /projects delete <id|name>        Delete project\n';
+          output += '\n';
+
+          if (activeProject) {
+            output += `**Current:** ${singleLine(activeProject.name)} (${activeProject.id})\n`;
+          } else if (projects.length > 0) {
+            output += `**Projects:** ${projects.length} (none selected)\n`;
+          } else {
+            output += '**No projects yet.** Use `/projects new <name>` to create one.\n';
+          }
+
+          context.emit('text', output);
           context.emit('done');
           return { handled: true };
         }
@@ -2410,20 +2749,31 @@ Created: ${new Date(job.createdAt).toISOString()}
       content: '',
       handler: async (args, context) => {
         const parts = splitArgs(args);
-        const sub = parts[0] || 'list';
+        const sub = parts[0] || '';
 
-        if (sub === 'help') {
-          const usage = [
-            'Usage:',
-            '  /plans list',
-            '  /plans new <title>',
-            '  /plans show <planId>',
-            '  /plans add <planId> <step>',
-            '  /plans set <planId> <stepId> <todo|doing|done|blocked>',
-            '  /plans remove <planId> <stepId>',
-            '  /plans delete <planId>',
-          ].join('\n');
-          context.emit('text', `\n${usage}\n`);
+        // Show help when bare command or explicit help
+        if (!sub || sub === 'help') {
+          const project = await this.ensureActiveProject(context, false);
+
+          let output = '\n📋 **Plans** - Manage plans for the active project\n\n';
+          output += '**Commands:**\n';
+          output += '  /plans list                             List all plans\n';
+          output += '  /plans new <title>                      Create new plan\n';
+          output += '  /plans show <planId>                    Show plan details\n';
+          output += '  /plans add <planId> <step>              Add step to plan\n';
+          output += '  /plans set <planId> <stepId> <status>   Update step status\n';
+          output += '  /plans remove <planId> <stepId>         Remove step\n';
+          output += '  /plans delete <planId>                  Delete plan\n';
+          output += '\n';
+
+          if (project) {
+            output += `**Active project:** ${singleLine(project.name)} (${project.id})\n`;
+            output += `**Plans:** ${project.plans.length}\n`;
+          } else {
+            output += '**No active project.** Use `/projects new <name>` first.\n';
+          }
+
+          context.emit('text', output);
           context.emit('done');
           return { handled: true };
         }
@@ -3507,16 +3857,37 @@ Keep it concise but comprehensive.`,
 
   /**
    * /connectors - List and manage connectors
+   *
+   * Usage:
+   *   /connectors              - Open interactive panel (default)
+   *   /connectors <name>       - Open panel at specific connector
+   *   /connectors --list       - Show text-based table (non-interactive)
+   *   /connectors --list <name> - Show text-based detail for specific connector
    */
   private connectorsCommand(): Command {
     return {
       name: 'connectors',
-      description: 'List available connectors and their status',
+      description: 'Browse connectors interactively (use --list for text output)',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
-        const connectorName = args.trim().toLowerCase();
+        const trimmedArgs = args.trim();
+        const hasListFlag = trimmedArgs.includes('--list');
+        const argWithoutFlag = trimmedArgs.replace('--list', '').trim().toLowerCase();
+
+        // Interactive mode (default): open the connectors panel
+        if (!hasListFlag) {
+          context.emit('done');
+          return {
+            handled: true,
+            showPanel: 'connectors' as const,
+            panelInitialValue: argWithoutFlag || undefined,
+          };
+        }
+
+        // Text-based mode with --list flag
+        const connectorName = argWithoutFlag;
 
         // If a specific connector is requested, show details
         if (connectorName) {
@@ -3530,7 +3901,7 @@ Keep it concise but comprehensive.`,
 
           if (!connector) {
             context.emit('text', `\nConnector "${connectorName}" not found.\n`);
-            context.emit('text', `Use /connectors to see available connectors.\n`);
+            context.emit('text', `Use /connectors --list to see available connectors.\n`);
             context.emit('done');
             return { handled: true };
           }
@@ -3600,7 +3971,7 @@ Keep it concise but comprehensive.`,
           return { handled: true };
         }
 
-        // List all connectors
+        // List all connectors (text mode)
         let message = '\n**Available Connectors**\n\n';
 
         if (context.connectors.length === 0) {
@@ -3669,7 +4040,8 @@ Keep it concise but comprehensive.`,
           message += `\n${context.connectors.length} connector(s) available.\n\n`;
           message += '**Legend:** ✓ authenticated | ○ not authenticated | ? unknown\n\n';
           message += '**Commands:**\n';
-          message += '  `/connectors <name>` - Show details for a connector\n';
+          message += '  `/connectors` - Open interactive browser\n';
+          message += '  `/connectors <name>` - Open browser at specific connector\n';
           message += '  `connect-<name> auth login` - Authenticate a connector\n';
         }
 

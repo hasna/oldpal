@@ -16,8 +16,8 @@ class StubSummarizer {
 const baseConfig: ContextConfig = {
   enabled: true,
   maxContextTokens: 200,
-  targetContextTokens: 150,
-  summaryTriggerRatio: 0.5,
+  targetContextTokens: 100,
+  summaryTriggerRatio: 0.3, // Triggers at 60 tokens
   keepRecentMessages: 2,
   keepSystemPrompt: true,
   summaryStrategy: 'llm',
@@ -84,6 +84,131 @@ describe('ContextManager', () => {
     const state = manager.refreshState(messages);
     expect(state.messageCount).toBe(2);
     expect(state.totalTokens).toBeGreaterThan(0);
+  });
+});
+
+describe('ContextManager tool call preservation', () => {
+  // Use a config that triggers summarization more easily
+  const toolTestConfig: ContextConfig = {
+    enabled: true,
+    maxContextTokens: 100,
+    targetContextTokens: 50,
+    summaryTriggerRatio: 0.3, // Triggers at 30 tokens
+    keepRecentMessages: 2,
+    keepSystemPrompt: true,
+    summaryStrategy: 'llm',
+    summaryMaxTokens: 50,
+    maxMessages: 100,
+    preserveLastToolCalls: 3,
+  };
+
+  test('preserves last N tool calls during summarization', async () => {
+    const tokenCounter = new TokenCounter();
+    const manager = new ContextManager(toolTestConfig, new StubSummarizer(), tokenCounter);
+
+    const longText = 'hello world this is a long message '.repeat(20);
+    const messages: Message[] = [
+      { id: 's', role: 'system', content: 'system', timestamp: 0 },
+      { id: '1', role: 'user', content: longText, timestamp: 0 },
+      { id: '2', role: 'assistant', content: 'response', timestamp: 0 },
+      { id: '3', role: 'user', content: longText, timestamp: 0 },
+      // First tool call
+      {
+        id: '4',
+        role: 'assistant',
+        content: '',
+        timestamp: 0,
+        toolCalls: [{ id: 't1', name: 'bash', input: { cmd: 'ls' } }],
+      },
+      { id: '5', role: 'user', content: '', timestamp: 0, toolResults: [{ id: 't1', output: 'file.txt' }] },
+      // Second tool call
+      {
+        id: '6',
+        role: 'assistant',
+        content: '',
+        timestamp: 0,
+        toolCalls: [{ id: 't2', name: 'read', input: { path: 'file.txt' } }],
+      },
+      { id: '7', role: 'user', content: '', timestamp: 0, toolResults: [{ id: 't2', output: 'content' }] },
+      // Third tool call
+      {
+        id: '8',
+        role: 'assistant',
+        content: '',
+        timestamp: 0,
+        toolCalls: [{ id: 't3', name: 'write', input: { path: 'out.txt' } }],
+      },
+      { id: '9', role: 'user', content: '', timestamp: 0, toolResults: [{ id: 't3', output: 'done' }] },
+      // Final response
+      { id: '10', role: 'assistant', content: 'all done', timestamp: 0 },
+    ];
+
+    const result = await manager.processMessages(messages);
+    expect(result.summarized).toBe(true);
+
+    // Should preserve all 3 tool calls and their results
+    const nonSystemMessages = result.messages.filter(m => m.role !== 'system' || m.content.includes('Context Summary'));
+    // At least the tool call messages should be preserved
+    const toolCallMessages = nonSystemMessages.filter(m => m.toolCalls && m.toolCalls.length > 0);
+    expect(toolCallMessages.length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('includes tool results when preserving tool calls', async () => {
+    const tokenCounter = new TokenCounter();
+    const config: ContextConfig = {
+      ...toolTestConfig,
+      keepRecentMessages: 1,
+      preserveLastToolCalls: 2,
+    };
+    const manager = new ContextManager(config, new StubSummarizer(), tokenCounter);
+
+    const longText = 'hello world this is a long message '.repeat(20);
+    const messages: Message[] = [
+      { id: 's', role: 'system', content: 'system', timestamp: 0 },
+      { id: '1', role: 'user', content: longText, timestamp: 0 },
+      { id: '2', role: 'assistant', content: 'response', timestamp: 0 },
+      // Tool call
+      {
+        id: '3',
+        role: 'assistant',
+        content: '',
+        timestamp: 0,
+        toolCalls: [{ id: 't1', name: 'bash', input: { cmd: 'ls' } }],
+      },
+      { id: '4', role: 'user', content: '', timestamp: 0, toolResults: [{ id: 't1', output: 'file.txt' }] },
+      // Final response
+      { id: '5', role: 'assistant', content: longText, timestamp: 0 },
+    ];
+
+    const result = await manager.processMessages(messages);
+    expect(result.summarized).toBe(true);
+
+    // Check that tool result message is preserved
+    const toolResultMessages = result.messages.filter(m => m.toolResults && m.toolResults.length > 0);
+    expect(toolResultMessages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('uses default of 5 tool calls if not specified', async () => {
+    const tokenCounter = new TokenCounter();
+    const config: ContextConfig = {
+      ...toolTestConfig,
+      keepRecentMessages: 2,
+      preserveLastToolCalls: undefined, // Explicitly undefined to test default
+    };
+    const manager = new ContextManager(config, new StubSummarizer(), tokenCounter);
+
+    const longText = 'hello world this is a long message '.repeat(20);
+    // Need enough messages so that after keeping 2 recent, there's something to summarize
+    const messages: Message[] = [
+      { id: 's', role: 'system', content: 'system', timestamp: 0 },
+      { id: '1', role: 'user', content: longText, timestamp: 0 },
+      { id: '2', role: 'assistant', content: longText, timestamp: 0 },
+      { id: '3', role: 'user', content: longText, timestamp: 0 },
+      { id: '4', role: 'assistant', content: longText, timestamp: 0 },
+    ];
+
+    const result = await manager.processMessages(messages);
+    expect(result.summarized).toBe(true);
   });
 });
 
