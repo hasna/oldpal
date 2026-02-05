@@ -36,10 +36,15 @@ const pathToBreadcrumb: Record<string, { parent?: string; parentPath?: string; l
   '/sessions': { parent: 'Chat', parentPath: '/chat', label: 'Sessions' },
   '/agents': { label: 'Agents' },
   '/messages': { label: 'Messages' },
+  '/tools': { label: 'Tools' },
+  '/skills': { label: 'Skills' },
+  '/schedules': { label: 'Schedules' },
+  '/identities': { label: 'Identities' },
   '/billing': { label: 'Billing' },
   '/settings': { label: 'Settings' },
   '/admin/users': { parent: 'Admin', label: 'Users' },
   '/admin/stats': { parent: 'Admin', label: 'Stats' },
+  '/admin/audit': { parent: 'Admin', label: 'Audit' },
 };
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {

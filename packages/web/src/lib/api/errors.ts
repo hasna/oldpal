@@ -48,6 +48,15 @@ export class ValidationError extends ApiError {
   }
 }
 
+export class TooManyRequestsError extends ApiError {
+  constructor(
+    message = 'Too many requests',
+    public retryAfter?: number
+  ) {
+    super(429, 'TOO_MANY_REQUESTS', message);
+  }
+}
+
 export class InternalServerError extends ApiError {
   constructor(message = 'Internal server error') {
     super(500, 'INTERNAL_SERVER_ERROR', message);

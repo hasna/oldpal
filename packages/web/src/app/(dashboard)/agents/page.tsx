@@ -79,6 +79,8 @@ interface Agent {
   settings?: {
     temperature?: number;
     maxTokens?: number;
+    tools?: string[];
+    skills?: string[];
   } | null;
   isActive: boolean;
   createdAt: string;
