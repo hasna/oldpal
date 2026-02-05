@@ -542,9 +542,9 @@ export function Input({
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      {/* Top border */}
+      {/* Top border - solid line */}
       <Box>
-        <Text color="#666666">{'-'.repeat(terminalWidth)}</Text>
+        <Text color="#666666">{'─'.repeat(terminalWidth)}</Text>
       </Box>
 
       {/* Input area */}
@@ -595,9 +595,9 @@ export function Input({
         </Box>
       )}
 
-      {/* Bottom border */}
+      {/* Bottom border - solid line */}
       <Box>
-        <Text color="#666666">{'-'.repeat(terminalWidth)}</Text>
+        <Text color="#666666">{'─'.repeat(terminalWidth)}</Text>
       </Box>
 
       {isProcessing && !isAskingUser && (
