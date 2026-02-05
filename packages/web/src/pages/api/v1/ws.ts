@@ -92,18 +92,30 @@ function getClientIp(req: any): string {
 }
 
 /**
- * Check if a user is active (not suspended).
- * Returns the user status or null if user doesn't exist.
+ * WebSocket user status result
  */
-async function getUserStatus(userId: string): Promise<{ isActive: boolean } | null> {
+type WsUserStatusResult =
+  | { type: 'found'; isActive: boolean }
+  | { type: 'not_found' }
+  | { type: 'db_error' };
+
+/**
+ * Check if a user is active (not suspended).
+ * Returns user status, 'not_found' if user doesn't exist, or 'db_error' on database failure.
+ */
+async function getUserStatus(userId: string): Promise<WsUserStatusResult> {
   try {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
       columns: { isActive: true },
     });
-    return user || null;
-  } catch {
-    return null;
+    if (!user) {
+      return { type: 'not_found' };
+    }
+    return { type: 'found', isActive: user.isActive };
+  } catch (error) {
+    console.error(`[WS] Failed to verify user status for ${userId}:`, error);
+    return { type: 'db_error' };
   }
 }
 
@@ -346,16 +358,18 @@ export default function handler(_req: any, res: any) {
         if (auth?.userId) {
           // Check if user account is active (not suspended)
           const userStatus = await getUserStatus(auth.userId);
-          if (!userStatus) {
+          if (userStatus.type === 'not_found') {
             sendMessage(ws, { type: 'error', message: 'User account not found' });
             ws.close(1008);
             return null;
           }
-          if (!userStatus.isActive) {
+          if (userStatus.type === 'found' && !userStatus.isActive) {
             sendMessage(ws, { type: 'error', message: 'Account suspended' });
             ws.close(1008);
             return null;
           }
+          // On db_error, fail-open: allow the connection to proceed
+          // The user was authenticated via JWT, so we trust that
           authenticatedUserId = auth.userId;
           ownerKey = `user:${auth.userId}`;
         } else {

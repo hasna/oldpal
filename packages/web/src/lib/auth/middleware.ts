@@ -38,16 +38,28 @@ const userStatusCache = new Map<string, UserStatusCache>();
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 /**
- * Get user status from cache or database
- * Returns null if user doesn't exist
+ * User status result from database lookup
  */
-async function getUserStatus(userId: string): Promise<{ isActive: boolean; role: 'user' | 'admin' } | null> {
+type UserStatusResult =
+  | { type: 'found'; isActive: boolean; role: 'user' | 'admin' }
+  | { type: 'not_found' }
+  | { type: 'db_error' };
+
+/**
+ * Get user status from cache or database
+ *
+ * Returns:
+ * - `{ type: 'found', isActive, role }` - User found, contains current status
+ * - `{ type: 'not_found' }` - User does not exist in database
+ * - `{ type: 'db_error' }` - Database error occurred, fail-open should use JWT payload
+ */
+async function getUserStatus(userId: string): Promise<UserStatusResult> {
   const now = Date.now();
   const cached = userStatusCache.get(userId);
 
   // Return cached value if still valid
   if (cached && now - cached.timestamp < CACHE_TTL_MS) {
-    return { isActive: cached.isActive, role: cached.role };
+    return { type: 'found', isActive: cached.isActive, role: cached.role };
   }
 
   // Fetch from database
@@ -60,7 +72,7 @@ async function getUserStatus(userId: string): Promise<{ isActive: boolean; role:
     if (!user) {
       // Remove from cache if user doesn't exist
       userStatusCache.delete(userId);
-      return null;
+      return { type: 'not_found' };
     }
 
     // Update cache
@@ -70,12 +82,12 @@ async function getUserStatus(userId: string): Promise<{ isActive: boolean; role:
       timestamp: now,
     });
 
-    return { isActive: user.isActive, role: user.role };
-  } catch {
-    // On DB error, trust the JWT payload (fail open for availability)
-    // but log for monitoring
-    console.error(`[Auth] Failed to verify user status for ${userId}`);
-    return null;
+    return { type: 'found', isActive: user.isActive, role: user.role };
+  } catch (error) {
+    // On DB error, log for monitoring and return db_error
+    // Callers should implement fail-open by trusting JWT payload
+    console.error(`[Auth] Failed to verify user status for ${userId}:`, error);
+    return { type: 'db_error' };
   }
 }
 
@@ -112,21 +124,25 @@ export function withAuth<T = unknown, C = RouteContext>(handler: AuthedHandler<T
     // Verify user status from database
     const userStatus = await getUserStatus(payload.userId);
 
-    // Check if user still exists
-    if (!userStatus) {
+    // Handle different user status results
+    let effectiveRole = payload.role;
+    if (userStatus.type === 'not_found') {
+      // User deleted from database - deny access
       return errorResponse(new UnauthorizedError('User account not found'));
+    } else if (userStatus.type === 'found') {
+      // Check if user is suspended
+      if (!userStatus.isActive) {
+        return errorResponse(new ForbiddenError('Your account has been suspended'));
+      }
+      // Use current role from database (catches role changes since token was issued)
+      effectiveRole = userStatus.role;
     }
+    // On db_error, fail-open: trust the JWT payload role
 
-    // Check if user is suspended
-    if (!userStatus.isActive) {
-      return errorResponse(new ForbiddenError('Your account has been suspended'));
-    }
-
-    // Update the payload with current role from database
-    // This catches role changes (demotions) that happened after token was issued
+    // Update the payload with effective role
     const updatedPayload: TokenPayload = {
       ...payload,
-      role: userStatus.role,
+      role: effectiveRole,
     };
 
     (request as AuthenticatedRequest).user = updatedPayload;
@@ -159,19 +175,25 @@ export async function getAuthUser(request: NextRequest): Promise<TokenPayload | 
     return null;
   }
 
-  // For read-only operations, we can optionally verify user status
-  // but return null on any issue
+  // Verify user status from database
   const userStatus = await getUserStatus(payload.userId);
 
-  if (!userStatus || !userStatus.isActive) {
-    return null;
+  // Handle different user status results
+  if (userStatus.type === 'not_found') {
+    return null; // User deleted
+  } else if (userStatus.type === 'found') {
+    if (!userStatus.isActive) {
+      return null; // User suspended
+    }
+    // Return with current role from database
+    return {
+      ...payload,
+      role: userStatus.role,
+    };
   }
 
-  // Return with current role
-  return {
-    ...payload,
-    role: userStatus.role,
-  };
+  // On db_error, fail-open: trust the JWT payload
+  return payload;
 }
 
 interface ApiKeyAuthResult {
@@ -339,17 +361,21 @@ export function withApiKeyAuth<T = unknown, C = RouteContext>(handler: AuthedHan
     // Verify user status from database
     const userStatus = await getUserStatus(payload.userId);
 
-    if (!userStatus) {
+    // Handle different user status results
+    let effectiveRole = payload.role;
+    if (userStatus.type === 'not_found') {
       return errorResponse(new UnauthorizedError('User account not found'));
+    } else if (userStatus.type === 'found') {
+      if (!userStatus.isActive) {
+        return errorResponse(new ForbiddenError('Your account has been suspended'));
+      }
+      effectiveRole = userStatus.role;
     }
-
-    if (!userStatus.isActive) {
-      return errorResponse(new ForbiddenError('Your account has been suspended'));
-    }
+    // On db_error, fail-open: trust the JWT payload role
 
     const updatedPayload: TokenPayload = {
       ...payload,
-      role: userStatus.role,
+      role: effectiveRole,
     };
 
     (request as AuthenticatedRequest).user = updatedPayload;

@@ -10,6 +10,7 @@ import type { WalletManager } from '../wallet';
 import type { SecretsManager } from '../secrets';
 import type { MessagesManager } from '../messages';
 import type { GlobalMemoryManager } from '../memory';
+import type { SwarmCoordinator } from '../swarm';
 
 // Re-export TokenUsage from shared
 export type { TokenUsage } from '@hasna/assistants-shared';
@@ -110,6 +111,7 @@ export interface CommandContext {
   addGuardrailsPolicy?: (policy: GuardrailsPolicy) => void;
   removeGuardrailsPolicy?: (policyId: string) => void;
   setGuardrailsDefaultAction?: (action: PolicyAction) => void;
+  getSwarmCoordinator?: () => SwarmCoordinator | null;
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;
   emit: (type: 'text' | 'done' | 'error', content?: string) => void;

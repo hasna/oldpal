@@ -4628,18 +4628,20 @@ Format the summary as a brief bullet-point list. This summary will replace the c
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
-        // Import swarm coordinator
-        const { SwarmCoordinator, DEFAULT_SWARM_CONFIG } = await import('../swarm');
-        const { SubagentManager } = await import('../agent/subagent-manager');
-        const { getGlobalRegistry } = await import('../registry');
+        // Import swarm config
+        const { DEFAULT_SWARM_CONFIG } = await import('../swarm');
 
         const trimmedArgs = args.trim();
+
+        // Get swarm coordinator from context (available when running in full agent loop)
+        const coordinator = context.getSwarmCoordinator?.();
 
         // /swarm help
         if (trimmedArgs === 'help' || trimmedArgs === '') {
           let message = '\n## Swarm Commands\n\n';
           message += '/swarm <goal>                 Execute swarm for a goal\n';
           message += '/swarm status                 Show swarm status\n';
+          message += '/swarm stop                   Stop current swarm\n';
           message += '/swarm config                 Show swarm configuration\n';
           message += '/swarm help                   Show this help\n\n';
           message += '**Example:**\n';
@@ -4672,54 +4674,117 @@ Format the summary as a brief bullet-point list. This summary will replace the c
 
         // /swarm status - Show current swarm status
         if (trimmedArgs === 'status') {
-          context.emit('text', '\nNo swarm currently running. Use /swarm <goal> to start.\n');
+          if (!coordinator) {
+            context.emit('text', '\n⚠️ Swarm coordinator not available in this context.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const state = coordinator.getState();
+          if (!state) {
+            context.emit('text', '\nNo swarm currently running. Use /swarm <goal> to start.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          let message = '\n**Swarm Status**\n\n';
+          message += `ID: ${state.id}\n`;
+          message += `Status: ${state.status}\n`;
+          if (state.plan) {
+            message += `\n**Plan:** ${state.plan.goal}\n`;
+            message += `Tasks: ${state.plan.tasks.length}\n`;
+            message += `Approved: ${state.plan.approved ? 'Yes' : 'No'}\n`;
+          }
+          if (state.metrics) {
+            message += '\n**Metrics:**\n';
+            message += `  Completed: ${state.metrics.completedTasks}/${state.metrics.totalTasks}\n`;
+            if (state.metrics.failedTasks > 0) {
+              message += `  Failed: ${state.metrics.failedTasks}\n`;
+            }
+            message += `  Tool Calls: ${state.metrics.toolCalls}\n`;
+          }
+          if (state.errors && state.errors.length > 0) {
+            message += '\n**Errors:**\n';
+            for (const err of state.errors.slice(-3)) {
+              message += `  - ${err}\n`;
+            }
+          }
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /swarm stop - Stop current swarm
+        if (trimmedArgs === 'stop') {
+          if (!coordinator) {
+            context.emit('text', '\n⚠️ Swarm coordinator not available in this context.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          if (!coordinator.isRunning()) {
+            context.emit('text', '\nNo swarm currently running.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          coordinator.stop();
+          context.emit('text', '\n✓ Swarm execution stopped.\n');
           context.emit('done');
           return { handled: true };
         }
 
         // /swarm <goal> - Execute swarm
-        // Create a minimal SubagentManager context for the swarm
-        const subagentManager = new SubagentManager(
-          {
-            maxDepth: DEFAULT_SWARM_CONFIG.maxDepth,
-            maxConcurrent: DEFAULT_SWARM_CONFIG.maxConcurrent,
-            maxTurns: 15,
-            defaultTimeoutMs: DEFAULT_SWARM_CONFIG.taskTimeoutMs,
-            forbiddenTools: DEFAULT_SWARM_CONFIG.forbiddenTools,
-          },
-          {
-            createSubagentLoop: async () => {
-              throw new Error('Swarm execution requires full agent context. Use swarm tools instead.');
+        if (!coordinator) {
+          context.emit('text', '\n⚠️ Swarm coordinator not available.\n');
+          context.emit('text', 'Swarm execution requires full agent context with subagent support.\n');
+          context.emit('text', '\n**Alternatives:**\n');
+          context.emit('text', '- Use the `swarm_execute` tool programmatically\n');
+          context.emit('text', '- Use the `agent_delegate` tool for complex tasks\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Execute the swarm
+        context.emit('text', `\n🐝 Starting swarm for goal: ${trimmedArgs}\n\n`);
+
+        try {
+          const result = await coordinator.execute({
+            goal: trimmedArgs,
+            config: {
+              autoApprove: true, // Auto-approve for command-line usage
             },
-            getTools: () => context.tools,
-            getParentAllowedTools: () => null,
-            getLLMClient: () => null,
-          }
-        );
+          });
 
-        const coordinator = new SwarmCoordinator(DEFAULT_SWARM_CONFIG, {
-          subagentManager,
-          registry: getGlobalRegistry(),
-          sessionId: context.sessionId,
-          cwd: context.cwd,
-          depth: 0,
-          onChunk: (chunk) => {
-            if (chunk.type === 'text' && chunk.content) {
-              context.emit('text', chunk.content);
+          if (result.success) {
+            let message = '\n**✓ Swarm completed successfully**\n\n';
+            if (result.result) {
+              message += '**Result:**\n';
+              message += result.result + '\n\n';
             }
-          },
-        });
+            message += '**Metrics:**\n';
+            message += `  Tasks: ${result.metrics.completedTasks}/${result.metrics.totalTasks} completed\n`;
+            if (result.metrics.failedTasks > 0) {
+              message += `  Failed: ${result.metrics.failedTasks}\n`;
+            }
+            message += `  Tool calls: ${result.metrics.toolCalls}\n`;
+            message += `  Duration: ${Math.round(result.durationMs / 1000)}s\n`;
+            context.emit('text', message);
+          } else {
+            let message = '\n**✗ Swarm execution failed**\n\n';
+            message += `Error: ${result.error}\n`;
+            if (Object.keys(result.taskResults).length > 0) {
+              message += `\nPartial results: ${Object.keys(result.taskResults).length} tasks completed before failure\n`;
+            }
+            message += '\n**Metrics:**\n';
+            message += `  Tasks: ${result.metrics.completedTasks}/${result.metrics.totalTasks}\n`;
+            message += `  Failed: ${result.metrics.failedTasks}\n`;
+            context.emit('text', message);
+          }
+        } catch (error) {
+          context.emit('text', `\n**✗ Swarm execution error:**\n${error instanceof Error ? error.message : String(error)}\n`);
+        }
 
-        // Return a prompt for the LLM to handle the swarm execution
-        // The actual swarm execution would require the full agent loop context
-        // which is available through the agent_spawn tools
-        context.emit('text', '\n⚠️ Direct /swarm execution is not yet fully integrated.\n');
-        context.emit('text', '\n**To use swarm mode:**\n');
-        context.emit('text', '1. Use the `agent_delegate` tool with a complex task\n');
-        context.emit('text', '2. The system will automatically use swarm patterns for multi-step tasks\n');
-        context.emit('text', '3. Or use the swarm tools programmatically from the agent loop\n\n');
-        context.emit('text', `**Goal:** ${trimmedArgs}\n\n`);
-        context.emit('text', 'To proceed with this goal, I can help break it down into steps.\n');
         context.emit('done');
         return { handled: true };
       },

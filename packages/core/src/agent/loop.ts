@@ -1708,6 +1708,7 @@ export class AgentLoop {
           this.policyEvaluator.updateConfig({ ...config, defaultAction: action });
         }
       },
+      getSwarmCoordinator: () => this.getOrCreateSwarmCoordinator(),
     };
 
     const result = await this.commandExecutor.execute(message, context);

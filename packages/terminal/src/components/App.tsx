@@ -508,6 +508,7 @@ export function App({ cwd, version }: AppProps) {
     setActivityLog([]);
     activityLogRef.current = [];
     setProcessingStartTime(undefined);
+    processingStartTimeRef.current = undefined; // Sync ref immediately to avoid stale values
     setCurrentTurnTokens(0);
   }, []);
 
@@ -552,6 +553,7 @@ export function App({ cwd, version }: AppProps) {
       setHeartbeatState(state.heartbeatState);
       setIdentityInfo(state.identityInfo);
       setProcessingStartTime(state.processingStartTime);
+      processingStartTimeRef.current = state.processingStartTime; // Sync ref immediately
       setCurrentTurnTokens(state.currentTurnTokens);
       setError(state.error);
       setLastWorkedFor(state.lastWorkedFor);
@@ -572,6 +574,7 @@ export function App({ cwd, version }: AppProps) {
       setHeartbeatState(undefined);
       setIdentityInfo(undefined);
       setProcessingStartTime(undefined);
+      processingStartTimeRef.current = undefined; // Sync ref immediately
       setCurrentTurnTokens(0);
       setError(null);
       setLastWorkedFor(undefined);
