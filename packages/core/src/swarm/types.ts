@@ -194,7 +194,7 @@ export const DEFAULT_SWARM_CONFIG: SwarmConfig = {
   enableCritic: true,
   maxCriticIterations: 2,
   plannerTools: ['read', 'glob', 'grep', 'web_search', 'web_fetch'],
-  workerTools: ['read', 'glob', 'grep', 'bash', 'edit', 'write'],
+  workerTools: ['read', 'glob', 'grep', 'bash', 'write'],
   criticTools: ['read', 'glob', 'grep'],
   forbiddenTools: ['agent_spawn', 'wallet_get', 'secrets_get', 'schedule_create'],
   tokenBudget: 0,
