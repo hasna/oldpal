@@ -145,7 +145,7 @@ export class ConnectorBridge {
             name = name.slice(0, -ext.length);
           }
           // Skip if it's a common non-connector (like connect.js or similar)
-          if (name && !name.includes('.') && name.length > 1) {
+          if (name && !name.includes('.')) {
             connectorNames.add(name);
           }
         }
