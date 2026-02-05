@@ -160,10 +160,17 @@ if (options.print !== null) {
     continue: options.continue,
     resume: options.resume,
     cwdProvided: options.cwdProvided,
-  }).catch((error) => {
-    console.error('Error:', error.message);
-    process.exit(1);
-  });
+  })
+    .then((result) => {
+      // Exit with error code if the operation failed
+      if (!result.success) {
+        process.exit(1);
+      }
+    })
+    .catch((error) => {
+      console.error('Error:', error.message);
+      process.exit(1);
+    });
 } else {
   // Interactive mode
   // Enable synchronized output for terminals that support DEC 2026 (Ghostty, WezTerm, etc.)

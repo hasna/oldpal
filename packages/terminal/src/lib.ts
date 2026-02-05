@@ -50,7 +50,7 @@ export { EmbeddedClient } from '@hasna/assistants-core';
 
 // Headless runner for non-interactive usage
 export { runHeadless } from './headless';
-export type { HeadlessOptions } from './headless';
+export type { HeadlessOptions, HeadlessResult } from './headless';
 
 // ============================================================================
 // CLI Utilities

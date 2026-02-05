@@ -25,9 +25,24 @@ interface JsonOutput {
 }
 
 /**
- * Run assistants in headless (non-interactive) mode
+ * Result returned by runHeadless
  */
-export async function runHeadless(options: HeadlessOptions): Promise<void> {
+export interface HeadlessResult {
+  success: boolean;
+  result: string;
+  sessionId: string;
+  usage?: TokenUsage;
+  toolCalls: Array<{ name: string; input: Record<string, unknown> }>;
+  error?: string;
+  structuredOutput?: unknown;
+}
+
+/**
+ * Run assistants in headless (non-interactive) mode
+ *
+ * @returns HeadlessResult with success status, result, and error info
+ */
+export async function runHeadless(options: HeadlessOptions): Promise<HeadlessResult> {
   const {
     prompt,
     cwd,
@@ -175,10 +190,26 @@ export async function runHeadless(options: HeadlessOptions): Promise<void> {
   // Cleanup
   client.disconnect();
 
-  // Exit with error code if there was an error
-  if (hadError) {
-    process.exit(1);
+  // Return result object (let caller decide exit behavior)
+  const headlessResult: HeadlessResult = {
+    success: !hadError,
+    result: result.trim(),
+    sessionId: client.getSessionId(),
+    usage: client.getTokenUsage(),
+    toolCalls,
+    error: hadError ? errorMessage : undefined,
+  };
+
+  // Include structured output if JSON schema was provided
+  if (jsonSchema) {
+    try {
+      headlessResult.structuredOutput = JSON.parse(result.trim());
+    } catch {
+      // Result wasn't valid JSON - that's okay
+    }
   }
+
+  return headlessResult;
 }
 
 /**
