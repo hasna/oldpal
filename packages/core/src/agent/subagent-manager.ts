@@ -161,6 +161,7 @@ export class SubagentManager {
   private config: Required<SubagentManagerConfig>;
   private activeSubagents: Map<string, SubagentInfo> = new Map();
   private activeRunners: Map<string, SubagentRunner> = new Map();
+  private activeTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private asyncJobs: Map<string, SubagentJob> = new Map();
   private context: SubagentManagerContext;
 
@@ -386,6 +387,8 @@ export class SubagentManager {
       );
       return finalResult;
     } finally {
+      // Clean up all tracking for this subagent
+      this.cancelTimeout(subagentId);
       this.activeSubagents.delete(subagentId);
       this.activeRunners.delete(subagentId);
     }
@@ -397,6 +400,7 @@ export class SubagentManager {
   stopSubagent(subagentId: string): boolean {
     const runner = this.activeRunners.get(subagentId);
     if (runner) {
+      this.cancelTimeout(subagentId);
       runner.stop();
       return true;
     }
@@ -409,6 +413,7 @@ export class SubagentManager {
   stopAll(): number {
     let stopped = 0;
     for (const [id, runner] of this.activeRunners) {
+      this.cancelTimeout(id);
       runner.stop();
       stopped++;
     }
@@ -600,7 +605,9 @@ export class SubagentManager {
 
   private createTimeout(ms: number, runner: SubagentRunner, subagentId: string): Promise<SubagentResult> {
     return new Promise((resolve) => {
-      setTimeout(() => {
+      const timerId = setTimeout(() => {
+        // Clean up the timer reference
+        this.activeTimeouts.delete(subagentId);
         runner.stop();
         resolve({
           success: false,
@@ -610,7 +617,20 @@ export class SubagentManager {
           subagentId,
         });
       }, ms);
+      // Track the timer so we can cancel it if the runner completes first
+      this.activeTimeouts.set(subagentId, timerId);
     });
+  }
+
+  /**
+   * Cancel a timeout timer for a subagent
+   */
+  private cancelTimeout(subagentId: string): void {
+    const timerId = this.activeTimeouts.get(subagentId);
+    if (timerId) {
+      clearTimeout(timerId);
+      this.activeTimeouts.delete(subagentId);
+    }
   }
 
   private sleep(ms: number): Promise<void> {
