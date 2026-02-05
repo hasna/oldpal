@@ -26,8 +26,9 @@ import type {
   SwarmStatus,
   SwarmRole,
   SwarmMetrics,
+  SerializableSwarmState,
 } from './types';
-import { DEFAULT_SWARM_CONFIG, ROLE_SYSTEM_PROMPTS } from './types';
+import { DEFAULT_SWARM_CONFIG, ROLE_SYSTEM_PROMPTS, serializeSwarmState } from './types';
 
 /**
  * Approval decision from user
@@ -144,6 +145,13 @@ export class SwarmCoordinator {
    */
   getState(): SwarmState | null {
     return this.state ? { ...this.state } : null;
+  }
+
+  /**
+   * Get current state in JSON-serializable form (for API/UI consumers)
+   */
+  getSerializableState(): SerializableSwarmState | null {
+    return this.state ? serializeSwarmState(this.state) : null;
   }
 
   /**

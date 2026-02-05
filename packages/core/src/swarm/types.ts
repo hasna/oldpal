@@ -236,6 +236,56 @@ export interface SwarmEvent {
 export type SwarmEventListener = (event: SwarmEvent) => void;
 
 /**
+ * JSON-serializable version of SwarmState for API/UI consumers
+ */
+export interface SerializableSwarmState {
+  /** Swarm execution ID */
+  id: string;
+  /** Current status */
+  status: SwarmStatus;
+  /** Current execution plan */
+  plan: SwarmPlan | null;
+  /** Parent session ID */
+  sessionId: string;
+  /** Results from completed tasks (as object instead of Map) */
+  taskResults: Record<string, SubagentResult>;
+  /** Active agent IDs (as array instead of Set) */
+  activeAgents: string[];
+  /** Error messages */
+  errors: string[];
+  /** Start timestamp */
+  startedAt: number;
+  /** End timestamp */
+  endedAt?: number;
+  /** Final aggregated result */
+  finalResult?: string;
+  /** Progress metrics */
+  metrics: SwarmMetrics;
+  /** Unresolved issues from critic review (if any) */
+  unresolvedIssues?: string[];
+}
+
+/**
+ * Convert SwarmState to JSON-serializable form
+ */
+export function serializeSwarmState(state: SwarmState): SerializableSwarmState {
+  return {
+    id: state.id,
+    status: state.status,
+    plan: state.plan,
+    sessionId: state.sessionId,
+    taskResults: Object.fromEntries(state.taskResults),
+    activeAgents: Array.from(state.activeAgents),
+    errors: state.errors,
+    startedAt: state.startedAt,
+    endedAt: state.endedAt,
+    finalResult: state.finalResult,
+    metrics: state.metrics,
+    unresolvedIssues: state.unresolvedIssues,
+  };
+}
+
+/**
  * Result from swarm execution
  */
 export interface SwarmResult {

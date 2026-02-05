@@ -4703,6 +4703,9 @@ Format the summary as a brief bullet-point list. This summary will replace the c
             }
             message += `  Tool Calls: ${state.metrics.toolCalls}\n`;
           }
+          if (state.activeAgents && state.activeAgents.size > 0) {
+            message += `\n**Active Agents:** ${state.activeAgents.size}\n`;
+          }
           if (state.errors && state.errors.length > 0) {
             message += '\n**Errors:**\n';
             for (const err of state.errors.slice(-3)) {
