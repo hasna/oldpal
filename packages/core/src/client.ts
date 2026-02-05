@@ -374,6 +374,45 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the wallet manager
+   */
+  getWalletManager(): any {
+    if (typeof (this.agent as any).getWalletManager === 'function') {
+      return (this.agent as any).getWalletManager();
+    }
+    return null;
+  }
+
+  /**
+   * Get the secrets manager
+   */
+  getSecretsManager(): any {
+    if (typeof (this.agent as any).getSecretsManager === 'function') {
+      return (this.agent as any).getSecretsManager();
+    }
+    return null;
+  }
+
+  /**
+   * Get the active project ID
+   */
+  getActiveProjectId(): string | null {
+    if (typeof (this.agent as any).getActiveProjectId === 'function') {
+      return (this.agent as any).getActiveProjectId();
+    }
+    return null;
+  }
+
+  /**
+   * Set the active project ID
+   */
+  setActiveProjectId(projectId: string | null): void {
+    if (typeof (this.agent as any).setActiveProjectId === 'function') {
+      (this.agent as any).setActiveProjectId(projectId);
+    }
+  }
+
+  /**
    * Add a system message to the conversation context
    */
   addSystemMessage(content: string): void {

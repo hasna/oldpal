@@ -1812,10 +1812,16 @@ export class BuiltinCommands {
         }
 
         const parts = splitArgs(args);
-        const subcommand = parts[0]?.toLowerCase() || 'list';
+        const subcommand = parts[0]?.toLowerCase() || '';
 
-        // /wallet or /wallet list
-        if (subcommand === 'list' || (!parts[0] && !args.trim())) {
+        // Interactive UI mode - default when no args or explicit 'ui'
+        if (!subcommand || subcommand === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'wallet' as const };
+        }
+
+        // /wallet list
+        if (subcommand === 'list') {
           try {
             const cards = await manager.list();
 
@@ -1923,7 +1929,7 @@ export class BuiltinCommands {
         // /wallet help
         if (subcommand === 'help') {
           context.emit('text', '\n## Wallet Commands\n\n');
-          context.emit('text', '/wallet                  List stored cards\n');
+          context.emit('text', '/wallet                  Interactive wallet manager\n');
           context.emit('text', '/wallet list             List stored cards\n');
           context.emit('text', '/wallet add              Show instructions to add a card\n');
           context.emit('text', '/wallet remove <id>      Remove a card by ID\n');
@@ -1977,10 +1983,16 @@ export class BuiltinCommands {
         }
 
         const parts = args.trim().split(/\s+/);
-        const subcommand = parts[0]?.toLowerCase() || 'list';
+        const subcommand = parts[0]?.toLowerCase() || '';
 
-        // /secrets or /secrets list [scope]
-        if (subcommand === 'list' || (!parts[0] && !args.trim())) {
+        // Interactive UI mode - default when no args or explicit 'ui'
+        if (!subcommand || subcommand === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'secrets' as const };
+        }
+
+        // /secrets list [scope]
+        if (subcommand === 'list') {
           try {
             const scope = parts[1]?.toLowerCase() || 'all';
             const secrets = await manager.list(scope as 'global' | 'agent' | 'all');
@@ -2136,7 +2148,7 @@ export class BuiltinCommands {
         // /secrets help
         if (subcommand === 'help') {
           context.emit('text', '\n## Secrets Commands\n\n');
-          context.emit('text', '/secrets                  List all secrets (names only)\n');
+          context.emit('text', '/secrets                  Interactive secrets manager\n');
           context.emit('text', '/secrets list [scope]     List secrets, optionally filtered by scope\n');
           context.emit('text', '/secrets get <name>       Get a secret value (masked)\n');
           context.emit('text', '/secrets set              Show instructions for secrets_set tool\n');
@@ -2671,8 +2683,14 @@ Created: ${new Date(job.createdAt).toISOString()}
         const parts = splitArgs(args);
         const sub = parts[0] || '';
 
-        // Show help when bare command or explicit help
-        if (!sub || sub === 'help') {
+        // Interactive UI mode - default when no args or explicit 'ui'
+        if (!sub || sub === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'tasks' as const };
+        }
+
+        // Show help with explicit help command
+        if (sub === 'help') {
           const tasks = await getTasks(context.cwd);
           const counts = await getTaskCounts(context.cwd);
           const paused = await isPaused(context.cwd);
@@ -2707,10 +2725,8 @@ Created: ${new Date(job.createdAt).toISOString()}
             output += '**Status**: No tasks in queue\n\n';
           }
 
-          output += '**Interactive Mode:**\n';
-          output += '  /tasks ui                Open interactive task panel\n\n';
-
           output += '**Commands:**\n';
+          output += '  /tasks                   Open interactive task panel\n';
           output += '  /tasks list              List all tasks\n';
           output += '  /tasks add <desc>        Add a task (normal priority)\n';
           output += '  /tasks add -p high <desc>  Add high priority task\n';
@@ -2728,12 +2744,6 @@ Created: ${new Date(job.createdAt).toISOString()}
           context.emit('text', output);
           context.emit('done');
           return { handled: true };
-        }
-
-        // Interactive UI mode
-        if (sub === 'ui') {
-          context.emit('done');
-          return { handled: true, showPanel: 'tasks' as const };
         }
 
         // List all tasks
@@ -3236,14 +3246,21 @@ Created: ${new Date(job.createdAt).toISOString()}
         const parts = splitArgs(args);
         const sub = parts[0] || '';
 
-        // Show help when bare command or explicit help
-        if (!sub || sub === 'help') {
+        // Interactive UI mode - default when no args or explicit 'ui'
+        if (!sub || sub === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'projects' as const };
+        }
+
+        // Show help with explicit help command
+        if (sub === 'help') {
           const projects = await listProjects(context.cwd);
           const activeId = context.getActiveProjectId?.();
           const activeProject = activeId ? projects.find(p => p.id === activeId) : null;
 
           let output = '\n📁 **Projects** - Manage projects in this folder\n\n';
           output += '**Commands:**\n';
+          output += '  /projects                         Interactive project manager\n';
           output += '  /projects list                    List all projects\n';
           output += '  /projects new <name>              Create new project\n';
           output += '  /projects use <id|name>           Select active project\n';
@@ -3425,12 +3442,19 @@ Created: ${new Date(job.createdAt).toISOString()}
         const parts = splitArgs(args);
         const sub = parts[0] || '';
 
-        // Show help when bare command or explicit help
-        if (!sub || sub === 'help') {
+        // Interactive UI mode - default when no args or explicit 'ui'
+        if (!sub || sub === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'plans' as const };
+        }
+
+        // Show help with explicit help command
+        if (sub === 'help') {
           const project = await this.ensureActiveProject(context, false);
 
           let output = '\n📋 **Plans** - Manage plans for the active project\n\n';
           output += '**Commands:**\n';
+          output += '  /plans                                  Interactive plan manager\n';
           output += '  /plans list                             List all plans\n';
           output += '  /plans new <title>                      Create new plan\n';
           output += '  /plans show <planId>                    Show plan details\n';

@@ -26,6 +26,10 @@ import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
 import { AgentsPanel } from './AgentsPanel';
 import { SchedulesPanel } from './SchedulesPanel';
+import { ProjectsPanel } from './ProjectsPanel';
+import { PlansPanel } from './PlansPanel';
+import { WalletPanel } from './WalletPanel';
+import { SecretsPanel } from './SecretsPanel';
 import type { QueuedMessage } from './appTypes';
 import {
   getTasks,
@@ -60,6 +64,14 @@ import {
   deleteSchedule,
   updateSchedule,
   computeNextRun,
+  listProjects,
+  createProject,
+  deleteProject,
+  updateProject,
+  readProject,
+  type ProjectRecord,
+  type ProjectPlan,
+  type PlanStepStatus,
 } from '@hasna/assistants-core';
 import type { BudgetConfig, BudgetLimits } from '@hasna/assistants-shared';
 import type { AssistantsConfig } from '@hasna/assistants-shared';
@@ -236,6 +248,25 @@ export function App({ cwd, version }: AppProps) {
     createdAt: string;
     replyCount?: number;
   }>>([]);
+
+  // Projects panel state
+  const [showProjectsPanel, setShowProjectsPanel] = useState(false);
+  const [projectsList, setProjectsList] = useState<ProjectRecord[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | undefined>();
+
+  // Plans panel state (shown for a specific project)
+  const [showPlansPanel, setShowPlansPanel] = useState(false);
+  const [plansProject, setPlansProject] = useState<ProjectRecord | null>(null);
+
+  // Wallet panel state
+  const [showWalletPanel, setShowWalletPanel] = useState(false);
+  const [walletCards, setWalletCards] = useState<Array<{ id: string; name: string; last4: string; brand?: string; expiryMonth?: number; expiryYear?: number; isDefault?: boolean; createdAt?: string }>>([]);
+  const [walletError, setWalletError] = useState<string | null>(null);
+
+  // Secrets panel state
+  const [showSecretsPanel, setShowSecretsPanel] = useState(false);
+  const [secretsList, setSecretsList] = useState<Array<{ name: string; scope: 'global' | 'agent'; createdAt?: string; updatedAt?: string }>>([]);
+  const [secretsError, setSecretsError] = useState<string | null>(null);
 
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
@@ -790,6 +821,64 @@ export function App({ cwd, version }: AppProps) {
         setAgentsList(agents);
         setRegistryStats(stats);
         setShowAgentsPanel(true);
+      } else if (chunk.panel === 'projects') {
+        // Load projects and show panel
+        listProjects(cwd).then((projects) => {
+          const activeId = registry.getActiveSession()?.client.getActiveProjectId?.();
+          setProjectsList(projects);
+          setActiveProjectId(activeId || undefined);
+          setShowProjectsPanel(true);
+        });
+      } else if (chunk.panel === 'plans') {
+        // Load active project's plans and show panel
+        const activeId = registry.getActiveSession()?.client.getActiveProjectId?.();
+        if (activeId) {
+          readProject(cwd, activeId).then((project) => {
+            if (project) {
+              setPlansProject(project);
+              setShowPlansPanel(true);
+            }
+          });
+        } else {
+          // No active project, show projects panel instead
+          listProjects(cwd).then((projects) => {
+            setProjectsList(projects);
+            setActiveProjectId(undefined);
+            setShowProjectsPanel(true);
+          });
+        }
+      } else if (chunk.panel === 'wallet') {
+        // Load wallet cards and show panel
+        const walletManager = registry.getActiveSession()?.client.getWalletManager?.();
+        if (walletManager) {
+          walletManager.list().then((cards: Array<{ id: string; name: string; last4: string; brand?: string; expiryMonth?: number; expiryYear?: number; isDefault?: boolean; createdAt?: string }>) => {
+            setWalletCards(cards);
+            setWalletError(null);
+            setShowWalletPanel(true);
+          }).catch((err: Error) => {
+            setWalletError(err instanceof Error ? err.message : String(err));
+            setShowWalletPanel(true);
+          });
+        } else {
+          setWalletError('Wallet not enabled. Configure wallet in config.json.');
+          setShowWalletPanel(true);
+        }
+      } else if (chunk.panel === 'secrets') {
+        // Load secrets and show panel
+        const secretsManager = registry.getActiveSession()?.client.getSecretsManager?.();
+        if (secretsManager) {
+          secretsManager.list('all').then((secrets: Array<{ name: string; scope: 'global' | 'agent'; createdAt?: string; updatedAt?: string }>) => {
+            setSecretsList(secrets);
+            setSecretsError(null);
+            setShowSecretsPanel(true);
+          }).catch((err: Error) => {
+            setSecretsError(err instanceof Error ? err.message : String(err));
+            setShowSecretsPanel(true);
+          });
+        } else {
+          setSecretsError('Secrets not enabled. Configure secrets in config.json.');
+          setShowSecretsPanel(true);
+        }
       }
     }
   }, [registry, exit, finalizeResponse, resetTurnState, cwd, activeSessionId]);
@@ -1990,6 +2079,217 @@ export function App({ cwd, version }: AppProps) {
           stats={registryStats}
           onRefresh={handleAgentsRefresh}
           onCancel={() => setShowAgentsPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show projects panel
+  if (showProjectsPanel) {
+    const handleProjectSelect = (projectId: string) => {
+      const activeSession = registry.getActiveSession();
+      activeSession?.client.setActiveProjectId?.(projectId);
+      setActiveProjectId(projectId);
+      setShowProjectsPanel(false);
+    };
+
+    const handleProjectCreate = async (name: string, description?: string) => {
+      const project = await createProject(cwd, name, description);
+      const projects = await listProjects(cwd);
+      setProjectsList(projects);
+      // Auto-select the new project
+      const activeSession = registry.getActiveSession();
+      activeSession?.client.setActiveProjectId?.(project.id);
+      setActiveProjectId(project.id);
+    };
+
+    const handleProjectDelete = async (projectId: string) => {
+      await deleteProject(cwd, projectId);
+      const projects = await listProjects(cwd);
+      setProjectsList(projects);
+      // Clear active project if it was deleted
+      if (activeProjectId === projectId) {
+        const activeSession = registry.getActiveSession();
+        activeSession?.client.setActiveProjectId?.(null);
+        setActiveProjectId(undefined);
+      }
+    };
+
+    const handleViewPlans = (projectId: string) => {
+      readProject(cwd, projectId).then((project) => {
+        if (project) {
+          setPlansProject(project);
+          setShowProjectsPanel(false);
+          setShowPlansPanel(true);
+        }
+      });
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <ProjectsPanel
+          projects={projectsList}
+          activeProjectId={activeProjectId}
+          onSelect={handleProjectSelect}
+          onCreate={handleProjectCreate}
+          onDelete={handleProjectDelete}
+          onViewPlans={handleViewPlans}
+          onCancel={() => setShowProjectsPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show plans panel
+  if (showPlansPanel && plansProject) {
+    const handleCreatePlan = async (title: string) => {
+      const now = Date.now();
+      const plan: ProjectPlan = {
+        id: `plan-${now}`,
+        title,
+        createdAt: now,
+        updatedAt: now,
+        steps: [],
+      };
+      const updated = await updateProject(cwd, plansProject.id, (current) => ({
+        ...current,
+        plans: [...current.plans, plan],
+        updatedAt: now,
+      }));
+      if (updated) setPlansProject(updated);
+    };
+
+    const handleDeletePlan = async (planId: string) => {
+      const now = Date.now();
+      const updated = await updateProject(cwd, plansProject.id, (current) => ({
+        ...current,
+        plans: current.plans.filter((p) => p.id !== planId),
+        updatedAt: now,
+      }));
+      if (updated) setPlansProject(updated);
+    };
+
+    const handleAddStep = async (planId: string, text: string) => {
+      const now = Date.now();
+      const updated = await updateProject(cwd, plansProject.id, (current) => ({
+        ...current,
+        plans: current.plans.map((p) =>
+          p.id === planId
+            ? { ...p, steps: [...p.steps, { id: `step-${now}`, text, status: 'todo' as const, createdAt: now, updatedAt: now }], updatedAt: now }
+            : p
+        ),
+        updatedAt: now,
+      }));
+      if (updated) setPlansProject(updated);
+    };
+
+    const handleUpdateStep = async (planId: string, stepId: string, status: PlanStepStatus) => {
+      const now = Date.now();
+      const updated = await updateProject(cwd, plansProject.id, (current) => ({
+        ...current,
+        plans: current.plans.map((p) =>
+          p.id === planId
+            ? { ...p, steps: p.steps.map((s) => (s.id === stepId ? { ...s, status, updatedAt: now } : s)), updatedAt: now }
+            : p
+        ),
+        updatedAt: now,
+      }));
+      if (updated) setPlansProject(updated);
+    };
+
+    const handleRemoveStep = async (planId: string, stepId: string) => {
+      const now = Date.now();
+      const updated = await updateProject(cwd, plansProject.id, (current) => ({
+        ...current,
+        plans: current.plans.map((p) =>
+          p.id === planId
+            ? { ...p, steps: p.steps.filter((s) => s.id !== stepId), updatedAt: now }
+            : p
+        ),
+        updatedAt: now,
+      }));
+      if (updated) setPlansProject(updated);
+    };
+
+    const handleBack = () => {
+      setShowPlansPanel(false);
+      listProjects(cwd).then((projects) => {
+        setProjectsList(projects);
+        setShowProjectsPanel(true);
+      });
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <PlansPanel
+          project={plansProject}
+          onCreatePlan={handleCreatePlan}
+          onDeletePlan={handleDeletePlan}
+          onAddStep={handleAddStep}
+          onUpdateStep={handleUpdateStep}
+          onRemoveStep={handleRemoveStep}
+          onBack={handleBack}
+          onClose={() => setShowPlansPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show wallet panel
+  if (showWalletPanel) {
+    const walletManager = activeSession?.client.getWalletManager?.();
+
+    const handleWalletGet = async (cardId: string) => {
+      if (!walletManager) throw new Error('Wallet not available');
+      const card = await walletManager.get(cardId);
+      return card;
+    };
+
+    const handleWalletRemove = async (cardId: string) => {
+      if (!walletManager) throw new Error('Wallet not available');
+      await walletManager.remove(cardId);
+      const cards = await walletManager.list();
+      setWalletCards(cards);
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <WalletPanel
+          cards={walletCards}
+          onGet={handleWalletGet}
+          onRemove={handleWalletRemove}
+          onClose={() => setShowWalletPanel(false)}
+          error={walletError}
+        />
+      </Box>
+    );
+  }
+
+  // Show secrets panel
+  if (showSecretsPanel) {
+    const secretsManager = activeSession?.client.getSecretsManager?.();
+
+    const handleSecretsGet = async (name: string, scope?: 'global' | 'agent') => {
+      if (!secretsManager) throw new Error('Secrets not available');
+      const value = await secretsManager.get(name, scope, 'plain');
+      return value || '';
+    };
+
+    const handleSecretsDelete = async (name: string, scope: 'global' | 'agent') => {
+      if (!secretsManager) throw new Error('Secrets not available');
+      await secretsManager.delete(name, scope);
+      const secrets = await secretsManager.list('all');
+      setSecretsList(secrets);
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <SecretsPanel
+          secrets={secretsList}
+          onGet={handleSecretsGet}
+          onDelete={handleSecretsDelete}
+          onClose={() => setShowSecretsPanel(false)}
+          error={secretsError}
         />
       </Box>
     );
