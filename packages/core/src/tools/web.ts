@@ -777,13 +777,24 @@ function isPrivateHost(hostname: string): boolean {
 }
 
 function isPrivateIPv4(octets: number[]): boolean {
+  // 0.0.0.0/8 - "This" network
   if (octets[0] === 0) return true;
+  // 10.0.0.0/8 - Private
   if (octets[0] === 10) return true;
+  // 100.64.0.0/10 - Carrier-grade NAT
   if (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127) return true;
+  // 169.254.0.0/16 - Link-local
   if (octets[0] === 169 && octets[1] === 254) return true;
+  // 192.168.0.0/16 - Private
   if (octets[0] === 192 && octets[1] === 168) return true;
+  // 172.16.0.0/12 - Private
   if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
+  // 127.0.0.0/8 - Loopback
   if (octets[0] === 127) return true;
+  // 224.0.0.0/4 - Multicast (SSRF protection)
+  if (octets[0] >= 224 && octets[0] <= 239) return true;
+  // 240.0.0.0/4 - Reserved (SSRF protection)
+  if (octets[0] >= 240) return true;
   return false;
 }
 

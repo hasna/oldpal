@@ -12,6 +12,7 @@ import type { ContextManager, ContextInfo, ContextConfig, ContextState } from '.
 import type { EnergyManager, EnergyEffects, EnergyLevel } from '../energy';
 import type { AssistantManager, IdentityManager, Assistant, Identity } from '../identity';
 import type { WalletManager } from '../wallet';
+import type { StatsTracker, SessionStats, ToolStats } from '../agent/stats';
 
 // ============================================
 // Types
@@ -25,6 +26,24 @@ export interface SelfAwarenessContext {
   getEnergyManager?: () => EnergyManager | null;
   getEnergyState?: () => EnergyState | null;
   getWalletManager?: () => WalletManager | null;
+  getStatsTracker?: () => StatsTracker | null;
+  // Session state getters
+  isProcessing?: () => boolean;
+  getQueueLength?: () => number;
+  getPendingToolCalls?: () => Map<string, string> | null;
+  getLastError?: () => { message: string; timestamp: string } | null;
+  getCwd?: () => string;
+  getStartedAt?: () => string;
+  // Message access
+  getMessages?: () => Array<{ id: string; role: string; content: string; timestamp: number }>;
+  // UI state access (web only)
+  getUiState?: () => {
+    route?: string;
+    panels?: string[];
+    selectedItems?: Record<string, string | string[]>;
+    filters?: Record<string, unknown>;
+    scrollPosition?: { x: number; y: number };
+  } | null;
   sessionId: string;
   model?: string;
 }
@@ -99,6 +118,120 @@ export const resourceLimitsTool: Tool = {
   },
 };
 
+export const sessionStatsTool: Tool = {
+  name: 'session_stats',
+  description:
+    'Get comprehensive session statistics including tool call counts, success rates, durations, and token usage. Use to understand overall session performance.',
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+};
+
+export const toolStatsTool: Tool = {
+  name: 'tool_stats',
+  description:
+    'Get detailed statistics for a specific tool or all tools including call counts, success/failure rates, and execution timings.',
+  parameters: {
+    type: 'object',
+    properties: {
+      tool_name: {
+        type: 'string',
+        description:
+          'Name of the tool to get stats for. If not provided, returns stats for all tools.',
+      },
+    },
+    required: [],
+  },
+};
+
+export const statsSummaryTool: Tool = {
+  name: 'stats_summary',
+  description:
+    'Get a compact summary of session statistics: total tool calls, success rate, average duration, and top tools used.',
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+};
+
+export const sessionStateTool: Tool = {
+  name: 'session_state',
+  description:
+    'Get current session state including processing status, queue length, pending tool calls, model, working directory, and timing. Use to understand what the agent is currently doing.',
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+};
+
+export const workspaceMapTool: Tool = {
+  name: 'workspace_map',
+  description:
+    'Get a map of the current workspace including directory tree, git status, recent files, and project info. Use for spatial awareness and understanding the project structure.',
+  parameters: {
+    type: 'object',
+    properties: {
+      depth: {
+        type: 'number',
+        description: 'Maximum directory depth to traverse (default: 3)',
+      },
+      include_git_status: {
+        type: 'boolean',
+        description: 'Include git status information (default: true)',
+      },
+      include_recent_files: {
+        type: 'boolean',
+        description: 'Include recently modified files (default: true)',
+      },
+      max_files: {
+        type: 'number',
+        description: 'Maximum number of files to list per directory (default: 20)',
+      },
+    },
+    required: [],
+  },
+};
+
+export const messageIndexTool: Tool = {
+  name: 'message_index',
+  description:
+    'Get an index of conversation messages with IDs, timestamps, roles, and short topics. Use for precise message referencing, partial summarization, and targeted retrieval.',
+  parameters: {
+    type: 'object',
+    properties: {
+      limit: {
+        type: 'number',
+        description: 'Maximum number of messages to return (default: 50)',
+      },
+      offset: {
+        type: 'number',
+        description: 'Number of messages to skip from the start (default: 0)',
+      },
+      role: {
+        type: 'string',
+        description: 'Filter by message role (user, assistant, system)',
+        enum: ['user', 'assistant', 'system'],
+      },
+    },
+    required: [],
+  },
+};
+
+export const uiStateTool: Tool = {
+  name: 'ui_state',
+  description:
+    'Get current UI state including active view, open panels, selected items, and scroll position. Use for spatial awareness when guiding users through UI interactions. Only available in web/GUI contexts.',
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+};
+
 // ============================================
 // Tool array for convenience
 // ============================================
@@ -110,6 +243,13 @@ export const selfAwarenessTools: Tool[] = [
   identityGetTool,
   energyStatusTool,
   resourceLimitsTool,
+  sessionStatsTool,
+  toolStatsTool,
+  statsSummaryTool,
+  sessionStateTool,
+  workspaceMapTool,
+  messageIndexTool,
+  uiStateTool,
 ];
 
 // ============================================
@@ -508,6 +648,413 @@ export function createSelfAwarenessToolExecutors(
       }
 
       return JSON.stringify(response, null, 2);
+    },
+
+    session_stats: async (): Promise<string> => {
+      const statsTracker = context.getStatsTracker?.();
+
+      if (!statsTracker) {
+        return JSON.stringify({
+          error: 'Stats tracking not available',
+          sessionId: context.sessionId,
+          totalToolCalls: 0,
+          totalSuccessful: 0,
+          totalFailed: 0,
+          totalExecutionTimeMs: 0,
+          avgTimeBetweenCallsMs: 0,
+          totalLlmCalls: 0,
+          tokenUsage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            maxContextTokens: 0,
+          },
+          toolStats: {},
+        });
+      }
+
+      const stats = statsTracker.getSessionStats();
+      return JSON.stringify(stats, null, 2);
+    },
+
+    tool_stats: async (input: { tool_name?: string }): Promise<string> => {
+      const statsTracker = context.getStatsTracker?.();
+
+      if (!statsTracker) {
+        return JSON.stringify({
+          error: 'Stats tracking not available',
+          tools: [],
+        });
+      }
+
+      if (input.tool_name) {
+        const toolStats = statsTracker.getToolStats(input.tool_name);
+        if (!toolStats) {
+          return JSON.stringify({
+            error: `No stats found for tool: ${input.tool_name}`,
+            tool: input.tool_name,
+          });
+        }
+        return JSON.stringify(toolStats, null, 2);
+      }
+
+      const allStats = statsTracker.getAllToolStats();
+      return JSON.stringify({ tools: allStats }, null, 2);
+    },
+
+    stats_summary: async (): Promise<string> => {
+      const statsTracker = context.getStatsTracker?.();
+
+      if (!statsTracker) {
+        return JSON.stringify({
+          error: 'Stats tracking not available',
+          totalToolCalls: 0,
+          successRate: 100,
+          avgDurationMs: 0,
+          topTools: [],
+          totalLlmCalls: 0,
+          tokensUsed: 0,
+        });
+      }
+
+      const summary = statsTracker.getSummary();
+      return JSON.stringify(summary, null, 2);
+    },
+
+    session_state: async (): Promise<string> => {
+      const assistantManager = context.getAssistantManager?.();
+      const identityManager = context.getIdentityManager?.();
+      const pendingToolCalls = context.getPendingToolCalls?.();
+      const lastError = context.getLastError?.();
+
+      const isProcessing = context.isProcessing?.() ?? false;
+      const queueLength = context.getQueueLength?.() ?? 0;
+      const cwd = context.getCwd?.() ?? process.cwd();
+      const startedAt = context.getStartedAt?.() ?? new Date().toISOString();
+
+      // Calculate uptime
+      const startTime = new Date(startedAt).getTime();
+      const uptimeMs = Date.now() - startTime;
+      const uptimeSeconds = Math.floor(uptimeMs / 1000);
+
+      // Get pending tool call info
+      const pendingTools: { id: string; name: string }[] = [];
+      if (pendingToolCalls) {
+        for (const [id, name] of pendingToolCalls) {
+          pendingTools.push({ id, name });
+        }
+      }
+
+      const assistant = assistantManager?.getActive();
+      const identity = identityManager?.getActive();
+
+      const response = {
+        sessionId: context.sessionId,
+        status: isProcessing ? 'processing' : 'idle',
+        queueLength,
+        model: context.model,
+        cwd,
+        startedAt,
+        uptimeSeconds,
+        assistant: assistant ? {
+          id: assistant.id,
+          name: assistant.name,
+        } : null,
+        identity: identity ? {
+          id: identity.id,
+          name: identity.name,
+          displayName: identity.profile.displayName,
+        } : null,
+        pendingToolCalls: pendingTools,
+        lastError: lastError ? {
+          message: lastError.message,
+          timestamp: lastError.timestamp,
+        } : null,
+      };
+
+      return JSON.stringify(response, null, 2);
+    },
+
+    workspace_map: async (input: {
+      depth?: number;
+      include_git_status?: boolean;
+      include_recent_files?: boolean;
+      max_files?: number;
+    }): Promise<string> => {
+      const { readdir, stat, access } = await import('fs/promises');
+      const { execSync } = await import('child_process');
+      const { join, basename } = await import('path');
+
+      const depth = input.depth ?? 3;
+      const includeGitStatus = input.include_git_status !== false;
+      const includeRecentFiles = input.include_recent_files !== false;
+      const maxFiles = input.max_files ?? 20;
+
+      const cwd = context.getCwd?.() ?? process.cwd();
+
+      // Default ignore patterns
+      const ignorePatterns = [
+        'node_modules', '.git', 'dist', 'build', '.next', '.turbo',
+        '__pycache__', '.venv', 'venv', '.cache', 'coverage',
+        '.DS_Store', 'Thumbs.db', '*.log',
+      ];
+
+      const shouldIgnore = (name: string): boolean => {
+        return ignorePatterns.some(pattern => {
+          if (pattern.includes('*')) {
+            const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+            return regex.test(name);
+          }
+          return name === pattern;
+        });
+      };
+
+      // Build directory tree
+      interface TreeNode {
+        name: string;
+        type: 'file' | 'directory';
+        children?: TreeNode[];
+      }
+
+      const buildTree = async (dir: string, currentDepth: number): Promise<TreeNode[]> => {
+        if (currentDepth > depth) return [];
+
+        try {
+          const entries = await readdir(dir, { withFileTypes: true });
+          const nodes: TreeNode[] = [];
+          let fileCount = 0;
+
+          for (const entry of entries) {
+            if (shouldIgnore(entry.name)) continue;
+            if (fileCount >= maxFiles) {
+              nodes.push({ name: `... and more files`, type: 'file' });
+              break;
+            }
+
+            if (entry.isDirectory()) {
+              const children = await buildTree(join(dir, entry.name), currentDepth + 1);
+              nodes.push({
+                name: entry.name,
+                type: 'directory',
+                children: children.length > 0 ? children : undefined,
+              });
+            } else {
+              nodes.push({ name: entry.name, type: 'file' });
+              fileCount++;
+            }
+          }
+
+          return nodes.sort((a, b) => {
+            // Directories first
+            if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+        } catch {
+          return [];
+        }
+      };
+
+      // Get git status
+      let gitStatus: { branch?: string; status: string[]; isRepo: boolean } = {
+        isRepo: false,
+        status: [],
+      };
+
+      if (includeGitStatus) {
+        try {
+          await access(join(cwd, '.git'));
+          gitStatus.isRepo = true;
+
+          try {
+            const branch = execSync('git branch --show-current', { cwd, encoding: 'utf-8' }).trim();
+            gitStatus.branch = branch || 'HEAD detached';
+          } catch {
+            gitStatus.branch = 'unknown';
+          }
+
+          try {
+            const status = execSync('git status --porcelain', { cwd, encoding: 'utf-8' });
+            gitStatus.status = status.split('\n').filter(Boolean).slice(0, 20);
+            if (status.split('\n').filter(Boolean).length > 20) {
+              gitStatus.status.push('... and more changes');
+            }
+          } catch {
+            gitStatus.status = [];
+          }
+        } catch {
+          // Not a git repo
+        }
+      }
+
+      // Get recent files
+      interface RecentFile {
+        path: string;
+        mtime: string;
+      }
+
+      const recentFiles: RecentFile[] = [];
+
+      if (includeRecentFiles) {
+        const collectFiles = async (dir: string, relativePath: string = ''): Promise<void> => {
+          if (recentFiles.length >= 10) return;
+
+          try {
+            const entries = await readdir(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              if (shouldIgnore(entry.name)) continue;
+
+              const fullPath = join(dir, entry.name);
+              const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+              if (entry.isFile()) {
+                try {
+                  const stats = await stat(fullPath);
+                  recentFiles.push({
+                    path: relPath,
+                    mtime: stats.mtime.toISOString(),
+                  });
+                } catch {
+                  // Skip files we can't stat
+                }
+              } else if (entry.isDirectory() && recentFiles.length < 10) {
+                await collectFiles(fullPath, relPath);
+              }
+            }
+          } catch {
+            // Skip directories we can't read
+          }
+        };
+
+        await collectFiles(cwd);
+        recentFiles.sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime());
+        recentFiles.splice(10); // Keep only top 10
+      }
+
+      // Detect project type
+      const projectIndicators: { type: string; file: string }[] = [
+        { type: 'node', file: 'package.json' },
+        { type: 'python', file: 'pyproject.toml' },
+        { type: 'python', file: 'setup.py' },
+        { type: 'rust', file: 'Cargo.toml' },
+        { type: 'go', file: 'go.mod' },
+        { type: 'ruby', file: 'Gemfile' },
+        { type: 'java', file: 'pom.xml' },
+        { type: 'java', file: 'build.gradle' },
+      ];
+
+      let projectType = 'unknown';
+      let projectName = basename(cwd);
+
+      for (const indicator of projectIndicators) {
+        try {
+          await access(join(cwd, indicator.file));
+          projectType = indicator.type;
+
+          if (indicator.file === 'package.json') {
+            try {
+              const { readFile } = await import('fs/promises');
+              const pkg = JSON.parse(await readFile(join(cwd, indicator.file), 'utf-8'));
+              projectName = pkg.name || projectName;
+            } catch {
+              // Ignore parse errors
+            }
+          }
+          break;
+        } catch {
+          // File doesn't exist
+        }
+      }
+
+      const tree = await buildTree(cwd, 1);
+
+      const response = {
+        projectRoot: cwd,
+        projectName,
+        projectType,
+        git: gitStatus,
+        tree,
+        recentFiles: includeRecentFiles ? recentFiles : undefined,
+      };
+
+      return JSON.stringify(response, null, 2);
+    },
+
+    message_index: async (input: {
+      limit?: number;
+      offset?: number;
+      role?: 'user' | 'assistant' | 'system';
+    }): Promise<string> => {
+      const messages = context.getMessages?.() ?? [];
+      const limit = input.limit ?? 50;
+      const offset = input.offset ?? 0;
+
+      // Extract topic from content (first 8-12 words)
+      const extractTopic = (content: string): string => {
+        if (!content) return '(empty)';
+
+        // Remove markdown formatting
+        const cleaned = content
+          .replace(/```[\s\S]*?```/g, '[code block]')
+          .replace(/`[^`]+`/g, '[code]')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/#{1,6}\s/g, '')
+          .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
+          .trim();
+
+        const words = cleaned.split(/\s+/).slice(0, 10);
+        const topic = words.join(' ');
+
+        return topic.length > 60 ? topic.slice(0, 57) + '...' : topic;
+      };
+
+      // Filter by role if specified
+      let filtered = messages;
+      if (input.role) {
+        filtered = messages.filter(m => m.role === input.role);
+      }
+
+      // Apply pagination
+      const paginated = filtered.slice(offset, offset + limit);
+
+      // Build index
+      const index = paginated.map((msg, idx) => ({
+        index: offset + idx,
+        id: msg.id,
+        role: msg.role,
+        timestamp: new Date(msg.timestamp).toISOString(),
+        topic: extractTopic(msg.content),
+        contentLength: msg.content.length,
+      }));
+
+      return JSON.stringify({
+        total: filtered.length,
+        offset,
+        limit,
+        count: index.length,
+        messages: index,
+      }, null, 2);
+    },
+
+    ui_state: async (): Promise<string> => {
+      const uiState = context.getUiState?.();
+
+      if (!uiState) {
+        return JSON.stringify({
+          available: false,
+          message: 'UI state not available (terminal/CLI context)',
+          context: 'terminal',
+        }, null, 2);
+      }
+
+      return JSON.stringify({
+        available: true,
+        context: 'web',
+        route: uiState.route ?? 'unknown',
+        panels: uiState.panels ?? [],
+        selectedItems: uiState.selectedItems ?? {},
+        filters: uiState.filters ?? {},
+        scrollPosition: uiState.scrollPosition ?? { x: 0, y: 0 },
+      }, null, 2);
     },
   };
 }

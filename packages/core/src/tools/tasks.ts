@@ -9,6 +9,8 @@ import {
   failTask,
   isPaused,
   getTaskCounts,
+  getRecurringTasks,
+  cancelRecurringTask,
   type TaskPriority,
 } from '../tasks';
 
@@ -145,6 +147,80 @@ export const tasksStatusTool: Tool = {
 };
 
 /**
+ * Tool for listing recurring tasks
+ */
+export const tasksRecurringListTool: Tool = {
+  name: 'tasks_recurring_list',
+  description: 'List all recurring task templates with their schedule and next run time',
+  parameters: {
+    type: 'object',
+    properties: {},
+  },
+};
+
+/**
+ * Tool for adding a recurring task
+ */
+export const tasksRecurringAddTool: Tool = {
+  name: 'tasks_recurring_add',
+  description: 'Add a new recurring task that creates instances on a schedule',
+  parameters: {
+    type: 'object',
+    properties: {
+      description: {
+        type: 'string',
+        description: 'The task description - what needs to be done each time',
+      },
+      kind: {
+        type: 'string',
+        description: 'Recurrence type: "cron" for cron expression or "interval" for fixed intervals',
+        enum: ['cron', 'interval'],
+      },
+      cron: {
+        type: 'string',
+        description: 'Cron expression (for kind: "cron"), e.g., "0 9 * * 1" for every Monday at 9am',
+      },
+      intervalMs: {
+        type: 'number',
+        description: 'Interval in milliseconds (for kind: "interval"), e.g., 86400000 for daily',
+      },
+      timezone: {
+        type: 'string',
+        description: 'Timezone for cron schedules (e.g., "America/New_York")',
+      },
+      maxOccurrences: {
+        type: 'number',
+        description: 'Maximum number of times to run (optional, unlimited if not set)',
+      },
+      priority: {
+        type: 'string',
+        description: 'Task priority: high, normal, or low (default: normal)',
+        enum: ['high', 'normal', 'low'],
+      },
+    },
+    required: ['description', 'kind'],
+  },
+};
+
+/**
+ * Tool for cancelling a recurring task
+ */
+export const tasksRecurringCancelTool: Tool = {
+  name: 'tasks_recurring_cancel',
+  description: 'Cancel a recurring task, stopping future instances from being created',
+  parameters: {
+    type: 'object',
+    properties: {
+      id: {
+        type: 'string',
+        description: 'The recurring task template ID to cancel',
+      },
+    },
+    required: ['id'],
+  },
+};
+
+/**
  * All task management tools
  */
 export const taskTools: Tool[] = [
@@ -155,6 +231,9 @@ export const taskTools: Tool[] = [
   tasksCompleteTool,
   tasksFailTool,
   tasksStatusTool,
+  tasksRecurringListTool,
+  tasksRecurringAddTool,
+  tasksRecurringCancelTool,
 ];
 
 /**
@@ -269,6 +348,72 @@ export function createTaskToolExecutors(context: TasksToolContext) {
       ];
 
       return lines.join('\n');
+    },
+
+    tasks_recurring_list: async () => {
+      const recurring = await getRecurringTasks(context.cwd);
+
+      if (recurring.length === 0) {
+        return 'No recurring tasks configured.';
+      }
+
+      const lines = recurring.map((t) => {
+        const schedule = t.recurrence?.kind === 'cron'
+          ? `cron: ${t.recurrence.cron}`
+          : `interval: ${Math.round((t.recurrence?.intervalMs || 0) / 1000 / 60)}min`;
+        const nextRun = t.nextRunAt
+          ? new Date(t.nextRunAt).toISOString()
+          : 'completed';
+        const count = t.recurrence?.occurrenceCount ?? 0;
+        const statusIcon = t.status === 'pending' ? '◐' : '●';
+        return `${statusIcon} ${t.id.slice(0, 8)} - ${t.description}\n   ${schedule} | next: ${nextRun} | runs: ${count}`;
+      });
+
+      return `Recurring Tasks (${recurring.length}):\n${lines.join('\n')}`;
+    },
+
+    tasks_recurring_add: async (input: {
+      description: string;
+      kind: 'cron' | 'interval';
+      cron?: string;
+      intervalMs?: number;
+      timezone?: string;
+      maxOccurrences?: number;
+      priority?: string;
+    }) => {
+      if (input.kind === 'cron' && !input.cron) {
+        return 'Error: cron expression required for kind: "cron"';
+      }
+      if (input.kind === 'interval' && !input.intervalMs) {
+        return 'Error: intervalMs required for kind: "interval"';
+      }
+
+      const task = await addTask(context.cwd, {
+        description: input.description,
+        priority: (input.priority || 'normal') as TaskPriority,
+        projectId: context.projectId,
+        recurrence: {
+          kind: input.kind,
+          cron: input.cron,
+          intervalMs: input.intervalMs,
+          timezone: input.timezone,
+          maxOccurrences: input.maxOccurrences,
+        },
+      });
+
+      const schedule = task.recurrence?.kind === 'cron'
+        ? `cron: ${task.recurrence.cron}`
+        : `interval: ${Math.round((task.recurrence?.intervalMs || 0) / 1000 / 60)}min`;
+
+      return `Recurring task created: ${task.id}\nDescription: ${task.description}\nSchedule: ${schedule}\nNext run: ${task.nextRunAt ? new Date(task.nextRunAt).toISOString() : 'calculating...'}`;
+    },
+
+    tasks_recurring_cancel: async (input: { id: string }) => {
+      const task = await cancelRecurringTask(context.cwd, input.id);
+      if (!task) {
+        return `Recurring task not found: ${input.id}`;
+      }
+      return `Recurring task cancelled: ${task.id}\nTotal runs completed: ${task.recurrence?.occurrenceCount ?? 0}`;
     },
   };
 }

@@ -1,4 +1,4 @@
-import type { Tool, Connector, ConnectorCommand } from '@hasna/assistants-shared';
+import type { Tool, Connector, ConnectorCommand, ConnectorsConfigShared } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
 import type { JobManager } from '../jobs';
 import { homedir } from 'os';
@@ -7,6 +7,19 @@ import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSy
 import { ConnectorError, ErrorCodes } from '../errors';
 import { getRuntime } from '../runtime';
 import { buildCommandArgs, splitCommandLine } from '../utils/command-line';
+
+/**
+ * Normalize connectors config to the object format
+ */
+function normalizeConnectorsConfig(config?: string[] | ConnectorsConfigShared): ConnectorsConfigShared {
+  if (!config) {
+    return {};
+  }
+  if (Array.isArray(config)) {
+    return { enabled: config };
+  }
+  return config;
+}
 
 type TimeoutResolve = (value: { exitCode: number }) => void;
 
@@ -602,14 +615,72 @@ export class ConnectorBridge {
   }
 
   /**
-   * Register all discovered connectors as tools
+   * Register connector tools based on configuration
+   * @param registry - Tool registry to register tools with
+   * @param config - Connectors configuration (optional)
+   * @returns Set of connector names that were registered as individual tools
    */
-  registerAll(registry: ToolRegistry): void {
-    for (const [name, connector] of this.connectors) {
+  registerAll(registry: ToolRegistry, config?: string[] | ConnectorsConfigShared): Set<string> {
+    const normalizedConfig = normalizeConnectorsConfig(config);
+    const maxTools = normalizedConfig.maxToolsInContext ?? 0; // 0 = unlimited
+    const priorityConnectors = new Set(normalizedConfig.priorityConnectors || []);
+    const dynamicBinding = normalizedConfig.dynamicBinding ?? false;
+
+    const registeredConnectors = new Set<string>();
+    const connectorList = Array.from(this.connectors.values());
+
+    // If dynamic binding is enabled and no priority connectors, don't register any individual tools
+    if (dynamicBinding && priorityConnectors.size === 0) {
+      return registeredConnectors;
+    }
+
+    // Sort connectors: priority connectors first, then alphabetically
+    const sortedConnectors = connectorList.sort((a, b) => {
+      const aPriority = priorityConnectors.has(a.name);
+      const bPriority = priorityConnectors.has(b.name);
+      if (aPriority && !bPriority) return -1;
+      if (!aPriority && bPriority) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    for (const connector of sortedConnectors) {
+      // Check if we've hit the limit (if set and not unlimited)
+      const isPriority = priorityConnectors.has(connector.name);
+      if (maxTools > 0 && registeredConnectors.size >= maxTools && !isPriority) {
+        // Skip non-priority connectors when limit is reached
+        continue;
+      }
+
+      // Skip non-priority connectors if dynamic binding is enabled
+      if (dynamicBinding && !isPriority) {
+        continue;
+      }
+
       const tool = this.createTool(connector);
       const executor = this.createExecutor(connector);
       registry.register(tool, executor);
+      registeredConnectors.add(connector.name);
     }
+
+    return registeredConnectors;
+  }
+
+  /**
+   * Register a single connector as a tool (for on-demand binding)
+   * @param registry - Tool registry to register with
+   * @param connectorName - Name of connector to register
+   * @returns true if registered, false if connector not found
+   */
+  registerConnector(registry: ToolRegistry, connectorName: string): boolean {
+    const connector = this.connectors.get(connectorName);
+    if (!connector) {
+      return false;
+    }
+
+    const tool = this.createTool(connector);
+    const executor = this.createExecutor(connector);
+    registry.register(tool, executor);
+    return true;
   }
 
   /**
@@ -784,6 +855,50 @@ export class ConnectorBridge {
   }
 
   /**
+   * Clear all caches (memory and disk) to force re-discovery
+   */
+  static clearCache(): void {
+    ConnectorBridge.cache.clear();
+    ConnectorBridge.diskCacheLoaded = false;
+
+    // Remove disk cache file
+    try {
+      const cachePath = ConnectorBridge.getCachePath();
+      if (existsSync(cachePath)) {
+        const { unlinkSync } = require('fs');
+        unlinkSync(cachePath);
+      }
+    } catch {
+      // Ignore errors - cache file may not exist
+    }
+  }
+
+  /**
+   * Get cache statistics for status display
+   */
+  static getCacheStats(): { cacheSize: number; diskCacheLoaded: boolean; cachePath: string } {
+    return {
+      cacheSize: ConnectorBridge.cache.size,
+      diskCacheLoaded: ConnectorBridge.diskCacheLoaded,
+      cachePath: ConnectorBridge.getCachePath(),
+    };
+  }
+
+  /**
+   * Refresh connectors by clearing cache and re-discovering
+   */
+  async refresh(connectorNames?: string[]): Promise<Connector[]> {
+    // Clear instance connectors
+    this.connectors.clear();
+
+    // Clear static caches
+    ConnectorBridge.clearCache();
+
+    // Re-discover connectors
+    return this.discover(connectorNames);
+  }
+
+  /**
    * Check authentication status for a connector
    * Returns status object with authenticated flag, user/email info, or error
    */
@@ -891,6 +1006,231 @@ export const __test__ = {
 };
 
 // ============================================
+// Connector Execute Tool (Generic)
+// ============================================
+
+/**
+ * Generic connector execution tool that can run any connector command.
+ * This reduces context usage when many connectors are available by providing
+ * a single tool that can execute any discovered connector.
+ */
+export const connectorExecuteTool: Tool = {
+  name: 'connector_execute',
+  description: 'Execute a command on any discovered connector. Use connectors_list or connectors_search first to discover available connectors and their commands.',
+  parameters: {
+    type: 'object',
+    properties: {
+      connector: {
+        type: 'string',
+        description: 'Name of the connector to use (e.g., "notion", "gmail", "googledrive")',
+      },
+      command: {
+        type: 'string',
+        description: 'The command to run on the connector',
+      },
+      args: {
+        type: 'array',
+        description: 'Arguments to pass to the command',
+        items: { type: 'string', description: 'Argument value' },
+      },
+      options: {
+        type: 'object',
+        description: 'Options to pass to the command (key-value pairs)',
+      },
+    },
+    required: ['connector', 'command'],
+  },
+};
+
+export interface ConnectorExecuteContext {
+  getConnectorBridge: () => ConnectorBridge | null;
+}
+
+export function createConnectorExecuteExecutor(
+  context: ConnectorExecuteContext
+): ToolExecutor {
+  return async (input: Record<string, unknown>): Promise<string> => {
+    const bridge = context.getConnectorBridge();
+    if (!bridge) {
+      return JSON.stringify({
+        error: 'Connector system not available',
+        suggestion: 'Ensure connectors are configured and discovered',
+      });
+    }
+
+    const connectorName = input.connector as string;
+    if (!connectorName) {
+      return JSON.stringify({
+        error: 'Missing required parameter: connector',
+        suggestion: 'Use connectors_list to find available connectors',
+      });
+    }
+
+    const connector = bridge.getConnector(connectorName);
+    if (!connector) {
+      const available = bridge.getConnectors().map(c => c.name);
+      return JSON.stringify({
+        error: `Connector '${connectorName}' not found`,
+        available: available.slice(0, 10),
+        totalAvailable: available.length,
+        suggestion: 'Use connectors_list to see all available connectors',
+      });
+    }
+
+    // Create an executor for this connector and run it
+    const executor = bridge['createExecutor'](connector);
+    return executor({
+      command: input.command,
+      args: input.args,
+      options: input.options,
+      cwd: input.cwd,
+    });
+  };
+}
+
+export function registerConnectorExecuteTool(
+  registry: ToolRegistry,
+  context: ConnectorExecuteContext
+): void {
+  const executor = createConnectorExecuteExecutor(context);
+  registry.register(connectorExecuteTool, executor);
+}
+
+// ============================================
+// Connectors Search Tool
+// ============================================
+
+/**
+ * Search tool for finding connectors by name, description, or command.
+ * Useful when many connectors are available and user needs to find specific ones.
+ */
+export const connectorsSearchTool: Tool = {
+  name: 'connectors_search',
+  description: 'Search for connectors by name, description, or command. Use this to find the right connector for a task when many are available.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'Search query to match against connector names, descriptions, and commands',
+      },
+      limit: {
+        type: 'number',
+        description: 'Maximum number of results to return (default: 5, max: 20)',
+      },
+    },
+    required: ['query'],
+  },
+};
+
+export interface ConnectorSearchContext {
+  getConnectorBridge: () => ConnectorBridge | null;
+  onConnectorSelected?: (connectorName: string) => void;
+}
+
+export function createConnectorsSearchExecutor(
+  context: ConnectorSearchContext
+): ToolExecutor {
+  return async (input: Record<string, unknown>): Promise<string> => {
+    const bridge = context.getConnectorBridge();
+    if (!bridge) {
+      return JSON.stringify({
+        error: 'Connector discovery not available',
+        results: [],
+      });
+    }
+
+    const query = (input.query as string || '').toLowerCase();
+    const limit = Math.min(Math.max(1, Number(input.limit) || 5), 20);
+
+    if (!query) {
+      return JSON.stringify({
+        error: 'Search query is required',
+        suggestion: 'Provide a query like "email", "storage", or "calendar"',
+      });
+    }
+
+    const connectors = bridge.getConnectors();
+    const results: Array<{
+      name: string;
+      description: string;
+      matchedCommands: string[];
+      score: number;
+    }> = [];
+
+    for (const connector of connectors) {
+      let score = 0;
+      const matchedCommands: string[] = [];
+
+      // Score name match (highest weight)
+      if (connector.name.toLowerCase().includes(query)) {
+        score += 10;
+        if (connector.name.toLowerCase() === query) {
+          score += 5; // Exact match bonus
+        }
+      }
+
+      // Score description match
+      if (connector.description.toLowerCase().includes(query)) {
+        score += 5;
+      }
+
+      // Score command matches
+      for (const cmd of connector.commands) {
+        if (cmd.name.toLowerCase().includes(query)) {
+          score += 2;
+          matchedCommands.push(cmd.name);
+        }
+        if (cmd.description.toLowerCase().includes(query)) {
+          score += 1;
+          if (!matchedCommands.includes(cmd.name)) {
+            matchedCommands.push(cmd.name);
+          }
+        }
+      }
+
+      if (score > 0) {
+        results.push({
+          name: connector.name,
+          description: connector.description,
+          matchedCommands: matchedCommands.slice(0, 5),
+          score,
+        });
+      }
+    }
+
+    // Sort by score (descending) and limit results
+    results.sort((a, b) => b.score - a.score);
+    const topResults = results.slice(0, limit);
+
+    // Notify about selected connectors (for dynamic binding)
+    if (context.onConnectorSelected && topResults.length > 0) {
+      for (const result of topResults) {
+        context.onConnectorSelected(result.name);
+      }
+    }
+
+    return JSON.stringify({
+      query,
+      count: topResults.length,
+      totalMatches: results.length,
+      results: topResults.map(({ score, ...rest }) => rest),
+      suggestion: topResults.length > 0
+        ? `Use connector_execute with connector="${topResults[0].name}" to run commands`
+        : 'Try a different search query or use connectors_list to see all available connectors',
+    }, null, 2);
+  };
+}
+
+export function registerConnectorsSearchTool(
+  registry: ToolRegistry,
+  context: ConnectorSearchContext
+): void {
+  const executor = createConnectorsSearchExecutor(context);
+  registry.register(connectorsSearchTool, executor);
+}
+
+// ============================================
 // Connectors List Tool
 // ============================================
 
@@ -908,6 +1248,14 @@ export const connectorsListTool: Tool = {
         type: 'boolean',
         description: 'Optional: include detailed command information (default: false)',
       },
+      page: {
+        type: 'number',
+        description: 'Optional: page number for paginated results (default: 1)',
+      },
+      limit: {
+        type: 'number',
+        description: 'Optional: items per page (default: 10, max: 50)',
+      },
     },
     required: [],
   },
@@ -915,6 +1263,8 @@ export const connectorsListTool: Tool = {
 
 export interface ConnectorListContext {
   getConnectorBridge: () => ConnectorBridge | null;
+  /** Optional callback when a connector is explicitly viewed (for dynamic binding) */
+  onConnectorSelected?: (connectorName: string) => void;
 }
 
 export function createConnectorsListExecutor(
@@ -932,19 +1282,42 @@ export function createConnectorsListExecutor(
     const connectors = bridge.getConnectors();
     const filterName = input.name as string | undefined;
     const verbose = input.verbose === true;
+    const page = Math.max(1, Number(input.page) || 1);
+    const limit = Math.min(Math.max(1, Number(input.limit) || 10), 50);
 
-    const filtered = filterName
+    // Filter by name if specified
+    let filtered = filterName
       ? connectors.filter((c) => c.name.toLowerCase() === filterName.toLowerCase())
       : connectors;
 
     if (filtered.length === 0 && filterName) {
-      return JSON.stringify({
-        error: `Connector '${filterName}' not found`,
-        available: connectors.map((c) => c.name),
-      });
+      // Try partial match
+      filtered = connectors.filter((c) =>
+        c.name.toLowerCase().includes(filterName.toLowerCase())
+      );
+
+      if (filtered.length === 0) {
+        return JSON.stringify({
+          error: `Connector '${filterName}' not found`,
+          available: connectors.slice(0, 10).map((c) => c.name),
+          totalAvailable: connectors.length,
+          suggestion: 'Use connectors_search to find connectors by functionality',
+        });
+      }
     }
 
-    const result = filtered.map((connector) => {
+    // Notify about explicitly viewed connector (for dynamic binding)
+    if (context.onConnectorSelected && filterName && filtered.length === 1) {
+      context.onConnectorSelected(filtered[0].name);
+    }
+
+    // Apply pagination
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIndex = (page - 1) * limit;
+    const paginated = filtered.slice(startIndex, startIndex + limit);
+
+    const result = paginated.map((connector) => {
       const base: Record<string, unknown> = {
         name: connector.name,
         description: connector.description,
@@ -973,7 +1346,15 @@ export function createConnectorsListExecutor(
     return JSON.stringify(
       {
         count: result.length,
+        total,
+        page,
+        limit,
+        totalPages,
+        hasMore: page < totalPages,
         connectors: result,
+        ...(total > limit && !filterName ? {
+          tip: 'Use connectors_search to find specific connectors, or connector_execute to run commands directly',
+        } : {}),
       },
       null,
       2

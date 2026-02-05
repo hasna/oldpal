@@ -4,6 +4,27 @@ import { AssistantError, ErrorAggregator, ErrorCodes, ToolExecutionError } from 
 import { enforceToolOutputLimit, getLimits } from '../validation/limits';
 import { validateToolInput, type ValidationMode } from '../validation/schema';
 import { getSecurityLogger } from '../security/logger';
+import { PolicyEvaluator, type EvaluationContext } from '../guardrails/evaluator';
+import type { PolicyAction, PolicyEvaluationResult } from '../guardrails/types';
+
+/**
+ * Tool with guardrails annotation
+ */
+export interface AnnotatedTool extends Tool {
+  /** Guardrails policy status for this tool */
+  guardrailsStatus?: {
+    /** Policy action for this tool */
+    action: PolicyAction;
+    /** Whether the tool is allowed */
+    allowed: boolean;
+    /** Whether approval is required */
+    requiresApproval: boolean;
+    /** Reasons for the policy decision */
+    reasons: string[];
+    /** Warnings */
+    warnings: string[];
+  };
+}
 
 /**
  * Tool executor function type
@@ -25,6 +46,7 @@ export class ToolRegistry {
   private tools: Map<string, RegisteredTool> = new Map();
   private errorAggregator?: ErrorAggregator;
   private validationConfig?: ValidationConfig;
+  private policyEvaluator?: PolicyEvaluator;
 
   /**
    * Register a tool
@@ -48,6 +70,20 @@ export class ToolRegistry {
   }
 
   /**
+   * Set a policy evaluator for guardrails enforcement
+   */
+  setPolicyEvaluator(evaluator?: PolicyEvaluator): void {
+    this.policyEvaluator = evaluator;
+  }
+
+  /**
+   * Get the policy evaluator
+   */
+  getPolicyEvaluator(): PolicyEvaluator | undefined {
+    return this.policyEvaluator;
+  }
+
+  /**
    * Unregister a tool
    */
   unregister(name: string): void {
@@ -63,6 +99,93 @@ export class ToolRegistry {
       tools.push(entry.tool);
     }
     return tools;
+  }
+
+  /**
+   * Get tools annotated with guardrails policy status
+   */
+  getAnnotatedTools(depth?: number): AnnotatedTool[] {
+    const tools: AnnotatedTool[] = [];
+    for (const entry of this.tools.values()) {
+      const annotated: AnnotatedTool = { ...entry.tool };
+
+      if (this.policyEvaluator?.isEnabled()) {
+        const result = this.policyEvaluator.evaluateToolUse({
+          toolName: entry.tool.name,
+          depth,
+        });
+        annotated.guardrailsStatus = {
+          action: result.action,
+          allowed: result.allowed,
+          requiresApproval: result.requiresApproval,
+          reasons: result.reasons,
+          warnings: result.warnings,
+        };
+      }
+
+      tools.push(annotated);
+    }
+    return tools;
+  }
+
+  /**
+   * Get tools filtered by guardrails policy (only allowed tools)
+   */
+  getAllowedTools(depth?: number): Tool[] {
+    if (!this.policyEvaluator?.isEnabled()) {
+      return this.getTools();
+    }
+
+    const tools: Tool[] = [];
+    for (const entry of this.tools.values()) {
+      const result = this.policyEvaluator.evaluateToolUse({
+        toolName: entry.tool.name,
+        depth,
+      });
+
+      // Include if allowed or requires approval (let approval flow handle it)
+      if (result.allowed || result.requiresApproval) {
+        tools.push(entry.tool);
+      }
+    }
+    return tools;
+  }
+
+  /**
+   * Get denied tools based on guardrails policy
+   */
+  getDeniedTools(depth?: number): Tool[] {
+    if (!this.policyEvaluator?.isEnabled()) {
+      return [];
+    }
+
+    const tools: Tool[] = [];
+    for (const entry of this.tools.values()) {
+      const result = this.policyEvaluator.evaluateToolUse({
+        toolName: entry.tool.name,
+        depth,
+      });
+
+      if (!result.allowed && !result.requiresApproval) {
+        tools.push(entry.tool);
+      }
+    }
+    return tools;
+  }
+
+  /**
+   * Check if a specific tool is allowed by guardrails
+   */
+  isToolAllowedByPolicy(toolName: string, input?: Record<string, unknown>, depth?: number): PolicyEvaluationResult | null {
+    if (!this.policyEvaluator?.isEnabled()) {
+      return null;
+    }
+
+    return this.policyEvaluator.evaluateToolUse({
+      toolName,
+      toolInput: input,
+      depth,
+    });
   }
 
   /**
