@@ -16,8 +16,8 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const role = searchParams.get('role'); // 'user' | 'assistant'
     const dateFrom = searchParams.get('from');
     const dateTo = searchParams.get('to');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20), 50);
+    const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0);
 
     if (!query || query.length < 2) {
       return successResponse({

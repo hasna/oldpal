@@ -10,7 +10,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const userId = request.user.userId;
     const { searchParams } = new URL(request.url);
 
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20), 50);
     const unreadOnly = searchParams.get('unread') === 'true';
 
     // Build where clause

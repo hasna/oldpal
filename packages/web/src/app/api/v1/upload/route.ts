@@ -9,6 +9,8 @@ import { BadRequestError } from '@/lib/api/errors';
 // Configuration
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_UPLOAD_TYPES = ['avatar', 'attachment'] as const;
+type UploadType = typeof ALLOWED_UPLOAD_TYPES[number];
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
 
 /**
@@ -55,7 +57,9 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     // Determine upload type and validate
-    const uploadType = type || 'avatar';
+    const uploadType: UploadType = (type && ALLOWED_UPLOAD_TYPES.includes(type as UploadType))
+      ? (type as UploadType)
+      : 'avatar';
 
     if (uploadType === 'avatar') {
       // Validate image type for avatars
