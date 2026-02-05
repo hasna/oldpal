@@ -287,8 +287,14 @@ export class SubagentManager {
         this.createTimeout(this.config.defaultTimeoutMs, runner),
       ]);
 
-      // Update info
-      info.status = result.success ? 'completed' : 'failed';
+      // Update info - detect timeout from error message
+      if (result.success) {
+        info.status = 'completed';
+      } else if (result.error?.includes('timed out')) {
+        info.status = 'timeout';
+      } else {
+        info.status = 'failed';
+      }
       info.completedAt = Date.now();
       info.result = result;
 
@@ -415,7 +421,14 @@ export class SubagentManager {
   private async runAsyncJob(job: SubagentJob): Promise<void> {
     try {
       const result = await this.spawn(job.config);
-      job.status = result.success ? 'completed' : 'failed';
+      // Detect timeout from error message
+      if (result.success) {
+        job.status = 'completed';
+      } else if (result.error?.includes('timed out')) {
+        job.status = 'timeout';
+      } else {
+        job.status = 'failed';
+      }
       job.completedAt = Date.now();
       job.result = result;
     } catch (error) {
