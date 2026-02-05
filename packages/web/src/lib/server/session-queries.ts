@@ -4,7 +4,7 @@
  */
 
 import { db } from '@/db';
-import { sessions, agents } from '@/db/schema';
+import { sessions, assistants } from '@/db/schema';
 import { eq, desc, and, ilike } from 'drizzle-orm';
 import type {
   SessionQueryFunctions,
@@ -162,8 +162,8 @@ async function deleteSession(sessionId: string, userId: string): Promise<boolean
  * Verify that a user owns an agent
  */
 async function verifyAgentOwnership(agentId: string, userId: string): Promise<boolean> {
-  const agent = await db.query.agents.findFirst({
-    where: eq(agents.id, agentId),
+  const agent = await db.query.assistants.findFirst({
+    where: eq(assistants.id, agentId),
   });
 
   if (!agent) {

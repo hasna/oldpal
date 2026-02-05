@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { sessions, messages, agents, schedules } from '@/db/schema';
+import { sessions, messages, assistants, schedules } from '@/db/schema';
 import { eq, and, asc, desc } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth/middleware';
 
 export const runtime = 'nodejs';
 
 type ExportFormat = 'json' | 'csv' | 'markdown';
-type ExportType = 'all' | 'sessions' | 'agents' | 'messages';
+type ExportType = 'all' | 'sessions' | 'assistants' | 'messages';
 
 interface ExportData {
   exportedAt: string;
@@ -28,7 +28,7 @@ interface ExportData {
       createdAt: string;
     }>;
   }>;
-  agents?: Array<{
+  assistants?: Array<{
     id: string;
     name: string;
     description: string | null;
@@ -77,21 +77,21 @@ function toMarkdown(data: ExportData): string {
   lines.push(`Exported at: ${data.exportedAt}`);
   lines.push('');
 
-  if (data.agents && data.agents.length > 0) {
-    lines.push('## Agents');
+  if (data.assistants && data.assistants.length > 0) {
+    lines.push('## Assistants');
     lines.push('');
-    for (const agent of data.agents) {
-      lines.push(`### ${agent.name}`);
-      if (agent.description) lines.push(`*${agent.description}*`);
+    for (const assistant of data.assistants) {
+      lines.push(`### ${assistant.name}`);
+      if (assistant.description) lines.push(`*${assistant.description}*`);
       lines.push('');
-      lines.push(`- **Model:** ${agent.model}`);
-      lines.push(`- **Active:** ${agent.isActive ? 'Yes' : 'No'}`);
-      lines.push(`- **Created:** ${new Date(agent.createdAt).toLocaleString()}`);
-      if (agent.systemPrompt) {
+      lines.push(`- **Model:** ${assistant.model}`);
+      lines.push(`- **Active:** ${assistant.isActive ? 'Yes' : 'No'}`);
+      lines.push(`- **Created:** ${new Date(assistant.createdAt).toLocaleString()}`);
+      if (assistant.systemPrompt) {
         lines.push('');
         lines.push('**System Prompt:**');
         lines.push('```');
-        lines.push(agent.systemPrompt);
+        lines.push(assistant.systemPrompt);
         lines.push('```');
       }
       lines.push('');
@@ -238,14 +238,14 @@ export async function GET(request: NextRequest) {
       exportData.sessions = sessionData;
     }
 
-    if (type === 'all' || type === 'agents') {
-      const userAgents = await db
+    if (type === 'all' || type === 'assistants') {
+      const userAssistants = await db
         .select()
-        .from(agents)
-        .where(eq(agents.userId, user.userId))
-        .orderBy(desc(agents.createdAt));
+        .from(assistants)
+        .where(eq(assistants.userId, user.userId))
+        .orderBy(desc(assistants.createdAt));
 
-      exportData.agents = userAgents.map(a => ({
+      exportData.assistants = userAssistants.map(a => ({
         id: a.id,
         name: a.name,
         description: a.description,
@@ -296,8 +296,8 @@ export async function GET(request: NextRequest) {
           }))
         );
         content = toCSV(flatMessages, ['sessionId', 'sessionLabel', 'messageId', 'role', 'content', 'createdAt']);
-      } else if (exportData.agents) {
-        content = toCSV(exportData.agents, ['id', 'name', 'description', 'model', 'isActive', 'createdAt']);
+      } else if (exportData.assistants) {
+        content = toCSV(exportData.assistants, ['id', 'name', 'description', 'model', 'isActive', 'createdAt']);
       } else {
         content = '';
       }

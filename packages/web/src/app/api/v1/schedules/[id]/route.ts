@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { CronExpressionParser } from 'cron-parser';
 import { db } from '@/db';
-import { schedules, agents } from '@/db/schema';
+import { schedules, assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { ForbiddenError, NotFoundError, BadRequestError } from '@/lib/api/errors';
@@ -136,8 +136,8 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
 
     // Verify agent ownership if agentId is being changed
     if (data.agentId !== undefined && data.agentId !== null) {
-      const agent = await db.query.agents.findFirst({
-        where: eq(agents.id, data.agentId),
+      const agent = await db.query.assistants.findFirst({
+        where: eq(assistants.id, data.agentId),
       });
 
       if (!agent) {

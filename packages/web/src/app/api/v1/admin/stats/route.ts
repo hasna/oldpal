@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/db';
-import { users, sessions, agents, messages, agentMessages } from '@/db/schema';
+import { users, sessions, assistants, messages, agentMessages } from '@/db/schema';
 import { withAdminAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { count, sql, gte } from 'drizzle-orm';
@@ -27,7 +27,7 @@ export const GET = withAdminAuth(async (request: AuthenticatedRequest) => {
     ] = await Promise.all([
       db.select({ totalUsers: count() }).from(users),
       db.select({ totalSessions: count() }).from(sessions),
-      db.select({ totalAgents: count() }).from(agents),
+      db.select({ totalAgents: count() }).from(assistants),
       db.select({ totalMessages: count() }).from(messages),
       db.select({ totalAgentMessages: count() }).from(agentMessages),
       db.select({ newUsersToday: count() }).from(users).where(gte(users.createdAt, oneDayAgo)),

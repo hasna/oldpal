@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { schedules, scheduleExecutions, agents } from '@/db/schema';
+import { schedules, scheduleExecutions, assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { ForbiddenError, NotFoundError } from '@/lib/api/errors';
@@ -39,8 +39,8 @@ async function executeScheduleCommand(
     let model: string | undefined;
 
     if (agentId) {
-      const agent = await db.query.agents.findFirst({
-        where: eq(agents.id, agentId),
+      const agent = await db.query.assistants.findFirst({
+        where: eq(assistants.id, agentId),
         columns: { settings: true, systemPrompt: true, model: true },
       });
 

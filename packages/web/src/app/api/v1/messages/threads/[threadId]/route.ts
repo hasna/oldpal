@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/db';
-import { agentMessages, agents } from '@/db/schema';
+import { agentMessages, assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
@@ -25,8 +25,8 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     validateUUID(threadId, 'thread id');
 
     // Get user's agents
-    const userAgents = await db.query.agents.findMany({
-      where: eq(agents.userId, request.user.userId),
+    const userAgents = await db.query.assistants.findMany({
+      where: eq(assistants.userId, request.user.userId),
       columns: { id: true },
     });
 

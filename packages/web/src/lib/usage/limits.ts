@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { subscriptions, subscriptionPlans, usageMetrics, agents, sessions, schedules, messages } from '@/db/schema';
+import { subscriptions, subscriptionPlans, usageMetrics, assistants, sessions, schedules, messages } from '@/db/schema';
 import { eq, and, gte, lte, count } from 'drizzle-orm';
 
 export interface UsageLimits {
@@ -121,7 +121,7 @@ export async function getCurrentUsage(userId: string): Promise<CurrentUsage> {
   // Count current resources
   const [agentCount, sessionCount, scheduleCount, messagesToday] = await Promise.all([
     // Count agents
-    db.select({ count: count() }).from(agents).where(eq(agents.userId, userId)),
+    db.select({ count: count() }).from(assistants).where(eq(assistants.userId, userId)),
 
     // Count sessions
     db.select({ count: count() }).from(sessions).where(eq(sessions.userId, userId)),

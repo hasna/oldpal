@@ -207,6 +207,21 @@ export function EmptyAgentsState({ onCreate }: { onCreate?: () => void }) {
   );
 }
 
+export function EmptyAssistantsState({ onCreate }: { onCreate?: () => void }) {
+  return (
+    <EmptyState
+      illustration="agents"
+      title="No assistants configured"
+      description="Create your first AI assistant to customize how it responds and behaves."
+      tip="Each assistant can have its own personality, skills, and system prompt."
+      action={{
+        label: 'Create your first assistant',
+        onClick: onCreate,
+      }}
+    />
+  );
+}
+
 export function EmptyMessagesState({ filter }: { filter?: 'all' | 'unread' | 'archived' }) {
   const isFiltered = filter && filter !== 'all';
 

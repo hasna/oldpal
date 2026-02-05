@@ -1,6 +1,6 @@
 export * from './users';
 export * from './refresh-tokens';
-export * from './agents';
+export * from './assistants';
 export * from './sessions';
 export * from './messages';
 export * from './agent-messages';

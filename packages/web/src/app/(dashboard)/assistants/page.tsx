@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AvatarUpload } from '@/components/ui/avatar-upload';
-import { EmptyAgentsState, EmptySearchResultsState } from '@/components/shared/EmptyState';
+import { EmptyAssistantsState, EmptySearchResultsState } from '@/components/shared/EmptyState';
 import {
   BulkActionsToolbar,
   SelectableItemCheckbox,
@@ -58,7 +58,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AgentEditDialog } from '@/components/agents/AgentEditDialog';
+import { AssistantEditDialog } from '@/components/assistants/AssistantEditDialog';
 import {
   ANTHROPIC_MODELS,
   DEFAULT_MODEL,
@@ -69,7 +69,7 @@ import {
   getModelDisplayName,
 } from '@hasna/assistants-shared';
 
-interface Agent {
+interface Assistant {
   id: string;
   name: string;
   description: string | null;
@@ -86,32 +86,32 @@ interface Agent {
   createdAt: string;
 }
 
-type AgentFilters = {
+type AssistantFilters = {
   search: string | undefined;
   status: string | undefined;
 } & Record<string, string | undefined>;
 
-export default function AgentsPage() {
+export default function AssistantsPage() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [assistants, setAssistants] = useState<Assistant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [newAgentName, setNewAgentName] = useState('');
-  const [newAgentDescription, setNewAgentDescription] = useState('');
-  const [newAgentAvatar, setNewAgentAvatar] = useState<string | null>(null);
-  const [newAgentModel, setNewAgentModel] = useState(DEFAULT_MODEL);
-  const [newAgentTemperature, setNewAgentTemperature] = useState(DEFAULT_TEMPERATURE);
+  const [newAssistantName, setNewAssistantName] = useState('');
+  const [newAssistantDescription, setNewAssistantDescription] = useState('');
+  const [newAssistantAvatar, setNewAssistantAvatar] = useState<string | null>(null);
+  const [newAssistantModel, setNewAssistantModel] = useState(DEFAULT_MODEL);
+  const [newAssistantTemperature, setNewAssistantTemperature] = useState(DEFAULT_TEMPERATURE);
   const createFormRef = useRef<HTMLDivElement>(null);
 
   // Edit dialog state
-  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [editingAssistant, setEditingAssistant] = useState<Assistant | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Selection state for bulk actions
-  const selection = useSelection<Agent>();
+  const selection = useSelection<Assistant>();
 
   // Sorting state
   const { sortConfig, handleSort, getSortParams } = useSorting({ column: 'createdAt', direction: 'desc' });
@@ -120,7 +120,7 @@ export default function AgentsPage() {
   const { page, setPage, pageSize, setPageSize, totalItems, setTotalItems, totalPages, loaded: paginationLoaded } = usePagination(20);
 
   // Filter state
-  const filters = useFilters<AgentFilters>({
+  const filters = useFilters<AssistantFilters>({
     search: undefined,
     status: undefined,
   });
@@ -134,7 +134,7 @@ export default function AgentsPage() {
     }, 500);
   };
 
-  const loadAgents = useCallback(async () => {
+  const loadAssistants = useCallback(async () => {
     setError(''); // Clear any previous errors
     try {
       const params = new URLSearchParams();
@@ -154,23 +154,23 @@ export default function AgentsPage() {
       params.set('page', String(page));
       params.set('limit', String(pageSize));
 
-      const url = `/api/v1/agents${params.toString() ? `?${params.toString()}` : ''}`;
+      const url = `/api/v1/assistants${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await fetchWithAuth(url);
       const data = await response.json();
       if (data.success) {
-        setAgents(data.data.items);
+        setAssistants(data.data.items);
         setTotalItems(data.data.total || 0);
       } else {
-        setError(data.error?.message || 'Failed to load agents');
+        setError(data.error?.message || 'Failed to load assistants');
       }
     } catch {
-      setError('Failed to load agents');
+      setError('Failed to load assistants');
     } finally {
       setIsLoading(false);
     }
   }, [fetchWithAuth, filters, getSortParams, page, pageSize, setTotalItems]);
 
-  // Load agents when filters, sorting, or pagination change
+  // Load assistants when filters, sorting, or pagination change
   useEffect(() => {
     if (!paginationLoaded) return;
 
@@ -178,129 +178,129 @@ export default function AgentsPage() {
       clearTimeout(searchTimeoutRef.current);
     }
     searchTimeoutRef.current = setTimeout(() => {
-      loadAgents();
+      loadAssistants();
     }, 300);
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [loadAgents, paginationLoaded]);
+  }, [loadAssistants, paginationLoaded]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
   }, [filters.values, sortConfig, setPage]);
 
-  const createAgent = async (e: React.FormEvent) => {
+  const createAssistant = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAgentName.trim()) return;
+    if (!newAssistantName.trim()) return;
 
     setIsCreating(true);
     try {
-      const response = await fetchWithAuth('/api/v1/agents', {
+      const response = await fetchWithAuth('/api/v1/assistants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newAgentName,
-          description: newAgentDescription || undefined,
-          avatar: newAgentAvatar || undefined,
-          model: newAgentModel,
+          name: newAssistantName,
+          description: newAssistantDescription || undefined,
+          avatar: newAssistantAvatar || undefined,
+          model: newAssistantModel,
           settings: {
-            temperature: newAgentTemperature,
+            temperature: newAssistantTemperature,
           },
         }),
       });
       const data = await response.json();
       if (data.success) {
-        setAgents((prev) => [data.data, ...prev]);
-        setNewAgentName('');
-        setNewAgentDescription('');
-        setNewAgentAvatar(null);
-        setNewAgentModel(DEFAULT_MODEL);
-        setNewAgentTemperature(DEFAULT_TEMPERATURE);
+        setAssistants((prev) => [data.data, ...prev]);
+        setNewAssistantName('');
+        setNewAssistantDescription('');
+        setNewAssistantAvatar(null);
+        setNewAssistantModel(DEFAULT_MODEL);
+        setNewAssistantTemperature(DEFAULT_TEMPERATURE);
         toast({
-          title: 'Agent created',
+          title: 'Assistant created',
           description: `${data.data.name} has been created successfully.`,
         });
       } else {
-        setError(data.error?.message || 'Failed to create agent');
+        setError(data.error?.message || 'Failed to create assistant');
       }
     } catch {
-      setError('Failed to create agent');
+      setError('Failed to create assistant');
     } finally {
       setIsCreating(false);
     }
   };
 
-  // Update agent through edit dialog
-  const updateAgent = async (agentId: string, data: Partial<Agent>) => {
-    const response = await fetchWithAuth(`/api/v1/agents/${agentId}`, {
+  // Update assistant through edit dialog
+  const updateAssistant = async (assistantId: string, data: Partial<Assistant>) => {
+    const response = await fetchWithAuth(`/api/v1/assistants/${assistantId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await response.json();
     if (result.success) {
-      setAgents((prev) =>
-        prev.map((a) => (a.id === agentId ? { ...a, ...result.data } : a))
+      setAssistants((prev) =>
+        prev.map((a) => (a.id === assistantId ? { ...a, ...result.data } : a))
       );
       toast({
-        title: 'Agent updated',
+        title: 'Assistant updated',
         description: `${result.data.name} has been updated successfully.`,
       });
     } else {
-      throw new Error(result.error?.message || 'Failed to update agent');
+      throw new Error(result.error?.message || 'Failed to update assistant');
     }
   };
 
   // Open edit dialog
-  const openEditDialog = (agent: Agent) => {
-    setEditingAgent(agent);
+  const openEditDialog = (assistant: Assistant) => {
+    setEditingAssistant(assistant);
     setIsEditDialogOpen(true);
   };
 
-  const deleteAgent = async (id: string) => {
+  const deleteAssistant = async (id: string) => {
     try {
-      const response = await fetchWithAuth(`/api/v1/agents/${id}`, {
+      const response = await fetchWithAuth(`/api/v1/assistants/${id}`, {
         method: 'DELETE',
       });
       if (response.ok) {
-        setAgents((prev) => prev.filter((a) => a.id !== id));
+        setAssistants((prev) => prev.filter((a) => a.id !== id));
         toast({
-          title: 'Agent deleted',
-          description: 'The agent has been deleted successfully.',
+          title: 'Assistant deleted',
+          description: 'The assistant has been deleted successfully.',
         });
       }
     } catch {
-      setError('Failed to delete agent');
+      setError('Failed to delete assistant');
     }
   };
 
-  const toggleAgent = async (id: string, isActive: boolean) => {
+  const toggleAssistant = async (id: string, isActive: boolean) => {
     try {
-      const response = await fetchWithAuth(`/api/v1/agents/${id}`, {
+      const response = await fetchWithAuth(`/api/v1/assistants/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !isActive }),
       });
       const data = await response.json();
       if (data.success) {
-        setAgents((prev) =>
+        setAssistants((prev) =>
           prev.map((a) => (a.id === id ? { ...a, isActive: !isActive } : a))
         );
       }
     } catch {
-      setError('Failed to update agent');
+      setError('Failed to update assistant');
     }
   };
 
-  // Bulk activate agents
+  // Bulk activate assistants
   const bulkActivate = useCallback(
-    async (agentsToUpdate: Agent[]) => {
+    async (assistantsToUpdate: Assistant[]) => {
       await Promise.allSettled(
-        agentsToUpdate.map((a) =>
-          fetchWithAuth(`/api/v1/agents/${a.id}`, {
+        assistantsToUpdate.map((a) =>
+          fetchWithAuth(`/api/v1/assistants/${a.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isActive: true }),
@@ -308,26 +308,26 @@ export default function AgentsPage() {
         )
       );
 
-      setAgents((prev) =>
+      setAssistants((prev) =>
         prev.map((a) =>
-          agentsToUpdate.find((u) => u.id === a.id) ? { ...a, isActive: true } : a
+          assistantsToUpdate.find((u) => u.id === a.id) ? { ...a, isActive: true } : a
         )
       );
       selection.deselectAll();
       toast({
-        title: 'Agents activated',
-        description: `${agentsToUpdate.length} agent${agentsToUpdate.length === 1 ? '' : 's'} activated.`,
+        title: 'Assistants activated',
+        description: `${assistantsToUpdate.length} assistant${assistantsToUpdate.length === 1 ? '' : 's'} activated.`,
       });
     },
     [fetchWithAuth, selection, toast]
   );
 
-  // Bulk deactivate agents
+  // Bulk deactivate assistants
   const bulkDeactivate = useCallback(
-    async (agentsToUpdate: Agent[]) => {
+    async (assistantsToUpdate: Assistant[]) => {
       await Promise.allSettled(
-        agentsToUpdate.map((a) =>
-          fetchWithAuth(`/api/v1/agents/${a.id}`, {
+        assistantsToUpdate.map((a) =>
+          fetchWithAuth(`/api/v1/assistants/${a.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isActive: false }),
@@ -335,42 +335,42 @@ export default function AgentsPage() {
         )
       );
 
-      setAgents((prev) =>
+      setAssistants((prev) =>
         prev.map((a) =>
-          agentsToUpdate.find((u) => u.id === a.id) ? { ...a, isActive: false } : a
+          assistantsToUpdate.find((u) => u.id === a.id) ? { ...a, isActive: false } : a
         )
       );
       selection.deselectAll();
       toast({
-        title: 'Agents deactivated',
-        description: `${agentsToUpdate.length} agent${agentsToUpdate.length === 1 ? '' : 's'} deactivated.`,
+        title: 'Assistants deactivated',
+        description: `${assistantsToUpdate.length} assistant${assistantsToUpdate.length === 1 ? '' : 's'} deactivated.`,
       });
     },
     [fetchWithAuth, selection, toast]
   );
 
-  // Bulk delete agents
-  const bulkDeleteAgents = useCallback(
-    async (agentsToDelete: Agent[]) => {
-      const ids = agentsToDelete.map((a) => a.id);
+  // Bulk delete assistants
+  const bulkDeleteAssistants = useCallback(
+    async (assistantsToDelete: Assistant[]) => {
+      const ids = assistantsToDelete.map((a) => a.id);
       await Promise.allSettled(
         ids.map((id) =>
-          fetchWithAuth(`/api/v1/agents/${id}`, { method: 'DELETE' })
+          fetchWithAuth(`/api/v1/assistants/${id}`, { method: 'DELETE' })
         )
       );
 
-      setAgents((prev) => prev.filter((a) => !ids.includes(a.id)));
+      setAssistants((prev) => prev.filter((a) => !ids.includes(a.id)));
       selection.deselectAll();
       toast({
-        title: 'Agents deleted',
-        description: `${agentsToDelete.length} agent${agentsToDelete.length === 1 ? '' : 's'} deleted.`,
+        title: 'Assistants deleted',
+        description: `${assistantsToDelete.length} assistant${assistantsToDelete.length === 1 ? '' : 's'} deleted.`,
       });
     },
     [fetchWithAuth, selection, toast]
   );
 
   // Bulk actions configuration
-  const bulkActions: BulkAction<Agent>[] = [
+  const bulkActions: BulkAction<Assistant>[] = [
     {
       id: 'activate',
       label: 'Activate',
@@ -385,7 +385,7 @@ export default function AgentsPage() {
       variant: 'ghost',
       execute: bulkDeactivate,
     },
-    createDeleteAction(bulkDeleteAgents, 'agent'),
+    createDeleteAction(bulkDeleteAssistants, 'assistant'),
   ];
 
   const hasActiveFilters = filters.hasActiveFilters;
@@ -395,10 +395,10 @@ export default function AgentsPage() {
       <div className="flex flex-col h-[calc(100vh-3.5rem)]">
         {/* Page Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h1 className="text-lg font-semibold">Agents</h1>
+          <h1 className="text-lg font-semibold">Assistants</h1>
           <Button size="sm" disabled>
             <Plus className="h-4 w-4 mr-2" />
-            New Agent
+            New Assistant
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
@@ -440,10 +440,10 @@ export default function AgentsPage() {
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       {/* Page Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h1 className="text-lg font-semibold">Agents</h1>
+        <h1 className="text-lg font-semibold">Assistants</h1>
         <Button size="sm" onClick={scrollToCreateForm}>
           <Plus className="h-4 w-4 mr-2" />
-          New Agent
+          New Assistant
         </Button>
       </div>
 
@@ -457,23 +457,23 @@ export default function AgentsPage() {
         </Alert>
       )}
 
-      {/* Create Agent Form */}
+      {/* Create Assistant Form */}
       <Card className="mb-8" ref={createFormRef}>
         <CardHeader>
-          <CardTitle>Create New Agent</CardTitle>
-          <CardDescription>Configure a new AI agent for your workspace</CardDescription>
+          <CardTitle>Create New Assistant</CardTitle>
+          <CardDescription>Configure a new AI assistant for your workspace</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={createAgent} className="space-y-4">
+          <form onSubmit={createAssistant} className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-6">
               {/* Avatar Upload */}
               <div className="flex-shrink-0">
                 <Label className="block mb-2">Avatar (optional)</Label>
                 <AvatarUpload
-                  currentAvatarUrl={newAgentAvatar}
-                  fallback={newAgentName?.charAt(0)?.toUpperCase() || '?'}
-                  onUpload={async (url) => setNewAgentAvatar(url)}
-                  onRemove={async () => setNewAgentAvatar(null)}
+                  currentAvatarUrl={newAssistantAvatar}
+                  fallback={newAssistantName?.charAt(0)?.toUpperCase() || '?'}
+                  onUpload={async (url) => setNewAssistantAvatar(url)}
+                  onRemove={async () => setNewAssistantAvatar(null)}
                   size="md"
                 />
               </div>
@@ -484,8 +484,8 @@ export default function AgentsPage() {
                   <Label htmlFor="name">Name</Label>
                   <Input
                     id="name"
-                    value={newAgentName}
-                    onChange={(e) => setNewAgentName(e.target.value)}
+                    value={newAssistantName}
+                    onChange={(e) => setNewAssistantName(e.target.value)}
                     placeholder="My Assistant"
                     required
                   />
@@ -494,8 +494,8 @@ export default function AgentsPage() {
                   <Label htmlFor="description">Description (optional)</Label>
                   <Textarea
                     id="description"
-                    value={newAgentDescription}
-                    onChange={(e) => setNewAgentDescription(e.target.value)}
+                    value={newAssistantDescription}
+                    onChange={(e) => setNewAssistantDescription(e.target.value)}
                     placeholder="A helpful assistant for..."
                     className="resize-none"
                     rows={2}
@@ -508,7 +508,7 @@ export default function AgentsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="model">Model</Label>
-                <Select value={newAgentModel} onValueChange={setNewAgentModel}>
+                <Select value={newAssistantModel} onValueChange={setNewAssistantModel}>
                   <SelectTrigger id="model">
                     <SelectValue />
                   </SelectTrigger>
@@ -524,22 +524,22 @@ export default function AgentsPage() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label htmlFor="temperature">Temperature</Label>
-                  <span className="text-sm text-muted-foreground">{newAgentTemperature.toFixed(1)}</span>
+                  <span className="text-sm text-muted-foreground">{newAssistantTemperature.toFixed(1)}</span>
                 </div>
                 <Slider
                   id="temperature"
-                  value={[newAgentTemperature]}
+                  value={[newAssistantTemperature]}
                   min={MIN_TEMPERATURE}
                   max={MAX_TEMPERATURE}
                   step={TEMPERATURE_STEP}
-                  onValueChange={([value]) => setNewAgentTemperature(value)}
+                  onValueChange={([value]) => setNewAssistantTemperature(value)}
                   className="w-full"
                 />
               </div>
             </div>
 
-            <Button type="submit" disabled={isCreating || !newAgentName.trim()}>
-              {isCreating ? 'Creating...' : 'Create Agent'}
+            <Button type="submit" disabled={isCreating || !newAssistantName.trim()}>
+              {isCreating ? 'Creating...' : 'Create Assistant'}
             </Button>
           </form>
         </CardContent>
@@ -551,7 +551,7 @@ export default function AgentsPage() {
         <SearchBar
           value={filters.values.search || ''}
           onChange={(value) => filters.updateFilter('search', value || undefined)}
-          placeholder="Search agents by name..."
+          placeholder="Search assistants by name..."
         />
 
         {/* Filters and Sort Row */}
@@ -602,60 +602,60 @@ export default function AgentsPage() {
       </div>
 
       {/* Bulk Actions Toolbar */}
-      {agents.length > 0 && (
+      {assistants.length > 0 && (
         <BulkActionsToolbar
           selectedCount={selection.selectedCount}
-          totalCount={agents.length}
-          onSelectAll={() => selection.selectAll(agents)}
+          totalCount={assistants.length}
+          onSelectAll={() => selection.selectAll(assistants)}
           onDeselectAll={selection.deselectAll}
           actions={bulkActions}
-          selectedItems={selection.getSelectedItems(agents)}
-          onActionComplete={loadAgents}
+          selectedItems={selection.getSelectedItems(assistants)}
+          onActionComplete={loadAssistants}
         />
       )}
 
-      {/* Agents List */}
-      {agents.length === 0 ? (
+      {/* Assistants List */}
+      {assistants.length === 0 ? (
         hasActiveFilters ? (
           <EmptySearchResultsState
             query={filters.values.search || ''}
             onClear={filters.clearAllFilters}
           />
         ) : (
-          <EmptyAgentsState onCreate={scrollToCreateForm} />
+          <EmptyAssistantsState onCreate={scrollToCreateForm} />
         )
       ) : (
         <>
           <div className="space-y-3">
-            {agents.map((agent) => (
-              <Card key={agent.id}>
+            {assistants.map((assistant) => (
+              <Card key={assistant.id}>
                 <CardContent className="flex items-center gap-3 p-4">
                   <SelectableItemCheckbox
-                    checked={selection.isSelected(agent.id)}
-                    onChange={() => selection.toggle(agent.id)}
+                    checked={selection.isSelected(assistant.id)}
+                    onChange={() => selection.toggle(assistant.id)}
                   />
                   <div className="flex items-center gap-4 flex-1">
-                    {/* Agent Avatar */}
+                    {/* Assistant Avatar */}
                     <Avatar className="h-12 w-12">
-                      <AvatarImage src={agent.avatar || undefined} alt={agent.name} />
+                      <AvatarImage src={assistant.avatar || undefined} alt={assistant.name} />
                       <AvatarFallback className="bg-muted">
-                        {agent.name.charAt(0).toUpperCase()}
+                        {assistant.name.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-foreground font-medium truncate">{agent.name}</span>
-                        {!agent.isActive && (
+                        <span className="text-foreground font-medium truncate">{assistant.name}</span>
+                        {!assistant.isActive && (
                           <Badge variant="default">Inactive</Badge>
                         )}
                       </div>
-                      {agent.description && (
-                        <p className="text-sm text-muted-foreground mt-1 truncate">{agent.description}</p>
+                      {assistant.description && (
+                        <p className="text-sm text-muted-foreground mt-1 truncate">{assistant.description}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        {getModelDisplayName(agent.model)}
-                        {agent.settings?.temperature !== undefined && ` | T: ${agent.settings.temperature.toFixed(1)}`}
+                        {getModelDisplayName(assistant.model)}
+                        {assistant.settings?.temperature !== undefined && ` | T: ${assistant.settings.temperature.toFixed(1)}`}
                       </p>
                     </div>
                   </div>
@@ -663,7 +663,7 @@ export default function AgentsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => openEditDialog(agent)}
+                      onClick={() => openEditDialog(assistant)}
                     >
                       <Pencil className="h-4 w-4 mr-1" />
                       Edit
@@ -671,9 +671,9 @@ export default function AgentsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => toggleAgent(agent.id, agent.isActive)}
+                      onClick={() => toggleAssistant(assistant.id, assistant.isActive)}
                     >
-                      {agent.isActive ? 'Deactivate' : 'Activate'}
+                      {assistant.isActive ? 'Deactivate' : 'Activate'}
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -687,14 +687,14 @@ export default function AgentsPage() {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Delete agent?</AlertDialogTitle>
+                          <AlertDialogTitle>Delete assistant?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Are you sure you want to delete this agent? This action cannot be undone.
+                            Are you sure you want to delete this assistant? This action cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => deleteAgent(agent.id)}>
+                          <AlertDialogAction onClick={() => deleteAssistant(assistant.id)}>
                             Delete
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -723,11 +723,11 @@ export default function AgentsPage() {
       </div>
 
       {/* Edit Dialog */}
-      <AgentEditDialog
-        agent={editingAgent}
+      <AssistantEditDialog
+        assistant={editingAssistant}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
-        onSave={updateAgent}
+        onSave={updateAssistant}
       />
     </div>
   );

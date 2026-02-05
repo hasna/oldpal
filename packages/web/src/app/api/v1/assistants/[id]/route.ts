@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
-import { agents } from '@/db/schema';
+import { assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
@@ -18,7 +18,7 @@ const avatarSchema = z
   .optional()
   .nullable();
 
-const updateAgentSchema = z.object({
+const updateAssistantSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional().nullable(),
   avatar: avatarSchema,
@@ -41,46 +41,46 @@ async function resolveParams(
   return params;
 }
 
-// GET /api/v1/agents/:id - Get an agent
+// GET /api/v1/assistants/:id - Get an assistant
 export const GET = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
     const params = await resolveParams(context);
     const id = params?.id;
     if (!id) {
-      return errorResponse(new BadRequestError('Missing agent id'));
+      return errorResponse(new BadRequestError('Missing assistant id'));
     }
-    validateUUID(id, 'agent id');
+    validateUUID(id, 'assistant id');
 
-    const agent = await db.query.agents.findFirst({
-      where: eq(agents.id, id),
+    const assistant = await db.query.assistants.findFirst({
+      where: eq(assistants.id, id),
     });
 
-    if (!agent) {
-      return errorResponse(new NotFoundError('Agent not found'));
+    if (!assistant) {
+      return errorResponse(new NotFoundError('Assistant not found'));
     }
 
-    if (agent.userId !== request.user.userId) {
+    if (assistant.userId !== request.user.userId) {
       return errorResponse(new ForbiddenError('Access denied'));
     }
 
-    return successResponse(agent);
+    return successResponse(assistant);
   } catch (error) {
     return errorResponse(error);
   }
 });
 
-// PATCH /api/v1/agents/:id - Update an agent
+// PATCH /api/v1/assistants/:id - Update an assistant
 export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
     const params = await resolveParams(context);
     const id = params?.id;
     if (!id) {
-      return errorResponse(new BadRequestError('Missing agent id'));
+      return errorResponse(new BadRequestError('Missing assistant id'));
     }
-    validateUUID(id, 'agent id');
+    validateUUID(id, 'assistant id');
 
     const body = await request.json();
-    const data = updateAgentSchema.parse(body);
+    const data = updateAssistantSchema.parse(body);
 
     // Validate and clamp maxTokens against model's limit
     if (data.settings?.maxTokens !== undefined && data.model) {
@@ -91,59 +91,59 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
     }
 
     // Check ownership
-    const existingAgent = await db.query.agents.findFirst({
-      where: eq(agents.id, id),
+    const existingAssistant = await db.query.assistants.findFirst({
+      where: eq(assistants.id, id),
     });
 
-    if (!existingAgent) {
-      return errorResponse(new NotFoundError('Agent not found'));
+    if (!existingAssistant) {
+      return errorResponse(new NotFoundError('Assistant not found'));
     }
 
-    if (existingAgent.userId !== request.user.userId) {
+    if (existingAssistant.userId !== request.user.userId) {
       return errorResponse(new ForbiddenError('Access denied'));
     }
 
-    const [updatedAgent] = await db
-      .update(agents)
+    const [updatedAssistant] = await db
+      .update(assistants)
       .set({
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(agents.id, id))
+      .where(eq(assistants.id, id))
       .returning();
 
-    return successResponse(updatedAgent);
+    return successResponse(updatedAssistant);
   } catch (error) {
     return errorResponse(error);
   }
 });
 
-// DELETE /api/v1/agents/:id - Delete an agent
+// DELETE /api/v1/assistants/:id - Delete an assistant
 export const DELETE = withAuth(async (request: AuthenticatedRequest, context?: { params?: Record<string, string> | Promise<Record<string, string>> | Promise<{}> }) => {
   try {
     const params = await resolveParams(context);
     const id = params?.id;
     if (!id) {
-      return errorResponse(new BadRequestError('Missing agent id'));
+      return errorResponse(new BadRequestError('Missing assistant id'));
     }
-    validateUUID(id, 'agent id');
+    validateUUID(id, 'assistant id');
 
     // Check ownership
-    const existingAgent = await db.query.agents.findFirst({
-      where: eq(agents.id, id),
+    const existingAssistant = await db.query.assistants.findFirst({
+      where: eq(assistants.id, id),
     });
 
-    if (!existingAgent) {
-      return errorResponse(new NotFoundError('Agent not found'));
+    if (!existingAssistant) {
+      return errorResponse(new NotFoundError('Assistant not found'));
     }
 
-    if (existingAgent.userId !== request.user.userId) {
+    if (existingAssistant.userId !== request.user.userId) {
       return errorResponse(new ForbiddenError('Access denied'));
     }
 
-    await db.delete(agents).where(eq(agents.id, id));
+    await db.delete(assistants).where(eq(assistants.id, id));
 
-    return successResponse({ message: 'Agent deleted' });
+    return successResponse({ message: 'Assistant deleted' });
   } catch (error) {
     return errorResponse(error);
   }

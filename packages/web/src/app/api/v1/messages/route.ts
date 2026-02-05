@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
-import { agentMessages, agents } from '@/db/schema';
+import { agentMessages, assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, isValidUUID } from '@/lib/api/errors';
@@ -71,8 +71,8 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     // Get user's agents
-    const userAgents = await db.query.agents.findMany({
-      where: eq(agents.userId, request.user.userId),
+    const userAgents = await db.query.assistants.findMany({
+      where: eq(assistants.userId, request.user.userId),
       columns: { id: true },
     });
 
@@ -150,8 +150,8 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
 
     // Verify sender agent ownership (if specified)
     if (data.fromAgentId) {
-      const fromAgent = await db.query.agents.findFirst({
-        where: eq(agents.id, data.fromAgentId),
+      const fromAgent = await db.query.assistants.findFirst({
+        where: eq(assistants.id, data.fromAgentId),
       });
 
       if (!fromAgent || fromAgent.userId !== request.user.userId) {
@@ -160,8 +160,8 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     // Verify recipient agent exists and user owns it
-    const toAgent = await db.query.agents.findFirst({
-      where: eq(agents.id, data.toAgentId),
+    const toAgent = await db.query.assistants.findFirst({
+      where: eq(assistants.id, data.toAgentId),
     });
 
     if (!toAgent) {
@@ -173,8 +173,8 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     // Get all user's agents for ownership checks
-    const userAgents = await db.query.agents.findMany({
-      where: eq(agents.userId, request.user.userId),
+    const userAgents = await db.query.assistants.findMany({
+      where: eq(assistants.userId, request.user.userId),
       columns: { id: true },
     });
     const agentIds = userAgents.map((a) => a.id);

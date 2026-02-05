@@ -5,7 +5,7 @@ import { sessions, messages } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
 import { ForbiddenError, NotFoundError } from '@/lib/api/errors';
-import { agents } from '@/db/schema';
+import { assistants } from '@/db/schema';
 import { eq, desc, asc, count, and, or, ilike, gte, lte, inArray, sql } from 'drizzle-orm';
 
 const createSessionSchema = z.object({
@@ -149,8 +149,8 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
 
     // Verify agent ownership if agentId is provided
     if (data.agentId) {
-      const agent = await db.query.agents.findFirst({
-        where: eq(agents.id, data.agentId),
+      const agent = await db.query.assistants.findFirst({
+        where: eq(assistants.id, data.agentId),
       });
 
       if (!agent) {

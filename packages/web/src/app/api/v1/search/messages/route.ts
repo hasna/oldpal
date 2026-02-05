@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { messages, sessions, agents } from '@/db/schema';
+import { messages, sessions, assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { eq, and, ilike, or, desc, gte, lte, sql } from 'drizzle-orm';

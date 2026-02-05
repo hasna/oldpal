@@ -56,14 +56,14 @@ const data = {
       ],
     },
     {
-      title: "Agents",
-      url: "/agents",
+      title: "Assistants",
+      url: "/assistants",
       icon: Bot,
-      tourId: "agents-link",
+      tourId: "assistants-link",
       items: [
         {
-          title: "My Agents",
-          url: "/agents",
+          title: "My Assistants",
+          url: "/assistants",
         },
         {
           title: "Identities",

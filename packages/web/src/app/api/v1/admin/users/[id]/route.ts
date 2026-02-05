@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/db';
-import { users, sessions, agents } from '@/db/schema';
+import { users, sessions, assistants } from '@/db/schema';
 import { withAdminAuth, type AuthenticatedRequest, invalidateUserStatusCache } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit';
@@ -50,17 +50,17 @@ export const GET = withAdminAuth(async (request: AuthenticatedRequest, context: 
       throw new NotFoundError('User not found');
     }
 
-    // Get counts for sessions and agents
-    const [sessionCount, agentCount] = await Promise.all([
+    // Get counts for sessions and assistants
+    const [sessionCount, assistantCount] = await Promise.all([
       db.select({ count: count() }).from(sessions).where(eq(sessions.userId, id)),
-      db.select({ count: count() }).from(agents).where(eq(agents.userId, id)),
+      db.select({ count: count() }).from(assistants).where(eq(assistants.userId, id)),
     ]);
 
     return successResponse({
       ...user,
       _counts: {
         sessions: sessionCount[0]?.count ?? 0,
-        agents: agentCount[0]?.count ?? 0,
+        assistants: assistantCount[0]?.count ?? 0,
       },
     });
   } catch (error) {

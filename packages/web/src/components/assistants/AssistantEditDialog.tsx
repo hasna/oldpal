@@ -43,7 +43,7 @@ import {
   DEFAULT_MAX_TOKENS,
 } from '@hasna/assistants-shared';
 
-interface Agent {
+interface Assistant {
   id: string;
   name: string;
   description: string | null;
@@ -59,19 +59,19 @@ interface Agent {
   isActive: boolean;
 }
 
-interface AgentEditDialogProps {
-  agent: Agent | null;
+interface AssistantEditDialogProps {
+  assistant: Assistant | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (agentId: string, data: Partial<Agent>) => Promise<void>;
+  onSave: (assistantId: string, data: Partial<Assistant>) => Promise<void>;
 }
 
-export function AgentEditDialog({
-  agent,
+export function AssistantEditDialog({
+  assistant,
   open,
   onOpenChange,
   onSave,
-}: AgentEditDialogProps) {
+}: AssistantEditDialogProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -85,25 +85,25 @@ export function AgentEditDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Reset form when agent changes
+  // Reset form when assistant changes
   useEffect(() => {
-    if (agent) {
-      setName(agent.name);
-      setDescription(agent.description || '');
-      setAvatar(agent.avatar);
-      setModel(agent.model || DEFAULT_MODEL);
-      setTemperature(agent.settings?.temperature ?? DEFAULT_TEMPERATURE);
-      setMaxTokens(agent.settings?.maxTokens ?? DEFAULT_MAX_TOKENS);
-      setSystemPrompt(agent.systemPrompt || '');
-      setSelectedTools(agent.settings?.tools || []);
-      setSelectedSkills(agent.settings?.skills || []);
-      setIsActive(agent.isActive);
+    if (assistant) {
+      setName(assistant.name);
+      setDescription(assistant.description || '');
+      setAvatar(assistant.avatar);
+      setModel(assistant.model || DEFAULT_MODEL);
+      setTemperature(assistant.settings?.temperature ?? DEFAULT_TEMPERATURE);
+      setMaxTokens(assistant.settings?.maxTokens ?? DEFAULT_MAX_TOKENS);
+      setSystemPrompt(assistant.systemPrompt || '');
+      setSelectedTools(assistant.settings?.tools || []);
+      setSelectedSkills(assistant.settings?.skills || []);
+      setIsActive(assistant.isActive);
       setError('');
     }
-  }, [agent]);
+  }, [assistant]);
 
   const handleSave = async () => {
-    if (!agent) return;
+    if (!assistant) return;
     if (!name.trim()) {
       setError('Name is required');
       return;
@@ -113,7 +113,7 @@ export function AgentEditDialog({
     setError('');
 
     try {
-      const data: Partial<Agent> = {
+      const data: Partial<Assistant> = {
         name: name.trim(),
         description: description.trim() || null,
         avatar: avatar,
@@ -129,10 +129,10 @@ export function AgentEditDialog({
         isActive,
       };
 
-      await onSave(agent.id, data);
+      await onSave(assistant.id, data);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save agent');
+      setError(err instanceof Error ? err.message : 'Failed to save assistant');
     } finally {
       setIsSaving(false);
     }
@@ -162,9 +162,9 @@ export function AgentEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Agent</DialogTitle>
+          <DialogTitle>Edit Assistant</DialogTitle>
           <DialogDescription>
-            Configure the agent settings, tools, and skills below.
+            Configure the assistant settings, tools, and skills below.
           </DialogDescription>
         </DialogHeader>
 
@@ -231,7 +231,7 @@ export function AgentEditDialog({
               <div className="space-y-0.5">
                 <Label htmlFor="edit-active">Active</Label>
                 <p className="text-xs text-muted-foreground">
-                  {isActive ? 'Agent is active and available for use' : 'Agent is inactive'}
+                  {isActive ? 'Assistant is active and available for use' : 'Assistant is inactive'}
                 </p>
               </div>
               <Switch
@@ -350,7 +350,7 @@ export function AgentEditDialog({
                 className="font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                Add custom instructions that will be included in every conversation with this agent.
+                Add custom instructions that will be included in every conversation with this assistant.
                 This is appended to the default system prompt.
               </p>
             </div>
@@ -361,7 +361,7 @@ export function AgentEditDialog({
             <div className="space-y-2">
               <Label>Available Tools</Label>
               <p className="text-xs text-muted-foreground">
-                Select which tools this agent can use. Leave empty to allow all tools.
+                Select which tools this assistant can use. Leave empty to allow all tools.
               </p>
             </div>
             <ToolSelector
@@ -377,11 +377,11 @@ export function AgentEditDialog({
                 <Badge variant="outline" className="text-sm">Coming Soon</Badge>
                 <h3 className="font-medium">Skill Allowlists</h3>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  Per-agent skill allowlists will allow you to restrict which skills
-                  each agent can access. This feature is under development.
+                  Per-assistant skill allowlists will allow you to restrict which skills
+                  each assistant can access. This feature is under development.
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  For now, all agents have access to all available skills.
+                  For now, all assistants have access to all available skills.
                 </p>
               </div>
             </div>

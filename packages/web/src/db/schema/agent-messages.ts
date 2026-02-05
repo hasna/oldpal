@@ -1,6 +1,6 @@
 import { pgTable, uuid, varchar, text, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { agents } from './agents';
+import { assistants } from './assistants';
 
 export const messagePriorityEnum = pgEnum('message_priority', ['low', 'normal', 'high', 'urgent']);
 export const messageStatusEnum = pgEnum('message_status', ['unread', 'read', 'archived', 'injected']);
@@ -9,8 +9,8 @@ export const agentMessages = pgTable('agent_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   threadId: uuid('thread_id').notNull(),
   parentId: uuid('parent_id'),
-  fromAgentId: uuid('from_agent_id').references(() => agents.id, { onDelete: 'set null' }),
-  toAgentId: uuid('to_agent_id').references(() => agents.id, { onDelete: 'set null' }),
+  fromAgentId: uuid('from_agent_id').references(() => assistants.id, { onDelete: 'set null' }),
+  toAgentId: uuid('to_agent_id').references(() => assistants.id, { onDelete: 'set null' }),
   subject: varchar('subject', { length: 500 }),
   body: text('body').notNull(),
   priority: messagePriorityEnum('priority').default('normal').notNull(),
@@ -21,14 +21,14 @@ export const agentMessages = pgTable('agent_messages', {
 });
 
 export const agentMessagesRelations = relations(agentMessages, ({ one }) => ({
-  fromAgent: one(agents, {
+  fromAgent: one(assistants, {
     fields: [agentMessages.fromAgentId],
-    references: [agents.id],
+    references: [assistants.id],
     relationName: 'fromAgent',
   }),
-  toAgent: one(agents, {
+  toAgent: one(assistants, {
     fields: [agentMessages.toAgentId],
-    references: [agents.id],
+    references: [assistants.id],
     relationName: 'toAgent',
   }),
 }));

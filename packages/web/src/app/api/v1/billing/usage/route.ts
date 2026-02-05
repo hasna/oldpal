@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { agents, sessions, messages } from '@/db/schema';
+import { assistants, sessions, messages } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { eq, and, count, gte, sql } from 'drizzle-orm';
@@ -8,13 +8,13 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const userId = request.user.userId;
 
-    // Count active agents for user
-    const agentCountResult = await db
+    // Count active assistants for user
+    const assistantCountResult = await db
       .select({ count: count() })
-      .from(agents)
-      .where(and(eq(agents.userId, userId), eq(agents.isActive, true)));
+      .from(assistants)
+      .where(and(eq(assistants.userId, userId), eq(assistants.isActive, true)));
 
-    const agentCount = agentCountResult[0]?.count ?? 0;
+    const assistantCount = assistantCountResult[0]?.count ?? 0;
 
     // Count sessions for user
     const sessionCountResult = await db
@@ -43,7 +43,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const messageCount = messageCountResult[0]?.count ?? 0;
 
     return successResponse({
-      agents: agentCount,
+      assistants: assistantCount,
       sessions: sessionCount,
       messagestoday: messageCount,
     });

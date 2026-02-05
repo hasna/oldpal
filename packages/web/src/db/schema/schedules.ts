@@ -1,7 +1,7 @@
 import { pgTable, uuid, varchar, text, integer, timestamp, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
-import { agents } from './agents';
+import { assistants } from './assistants';
 
 export const schedules = pgTable('schedules', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -9,7 +9,7 @@ export const schedules = pgTable('schedules', {
     .references(() => users.id, { onDelete: 'cascade' })
     .notNull(),
   agentId: uuid('agent_id')
-    .references(() => agents.id, { onDelete: 'cascade' }),
+    .references(() => assistants.id, { onDelete: 'cascade' }),
   command: text('command').notNull(),
   description: text('description'),
   status: varchar('status', { length: 20 }).default('active').notNull(),
@@ -33,9 +33,9 @@ export const schedulesRelations = relations(schedules, ({ one }) => ({
     fields: [schedules.userId],
     references: [users.id],
   }),
-  agent: one(agents, {
+  agent: one(assistants, {
     fields: [schedules.agentId],
-    references: [agents.id],
+    references: [assistants.id],
   }),
 }));
 

@@ -1,7 +1,7 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
-import { agents } from './agents';
+import { assistants } from './assistants';
 
 export const sessions = pgTable('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -10,7 +10,7 @@ export const sessions = pgTable('sessions', {
     .notNull(),
   label: varchar('label', { length: 255 }),
   cwd: text('cwd'),
-  agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+  agentId: uuid('agent_id').references(() => assistants.id, { onDelete: 'set null' }),
   metadata: jsonb('metadata').$type<SessionMetadata>(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -21,9 +21,9 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
     fields: [sessions.userId],
     references: [users.id],
   }),
-  agent: one(agents, {
+  agent: one(assistants, {
     fields: [sessions.agentId],
-    references: [agents.id],
+    references: [assistants.id],
   }),
 }));
 

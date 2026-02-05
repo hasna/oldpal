@@ -9,7 +9,7 @@ if (!hasRuntime()) {
 import type { StreamChunk } from '@hasna/assistants-shared';
 import { EmbeddedClient } from '@hasna/assistants-core';
 import { db } from '@/db';
-import { sessions as sessionsTable, agents } from '@/db/schema';
+import { sessions as sessionsTable, assistants } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 type ChunkListener = (chunk: StreamChunk) => void;
@@ -45,8 +45,8 @@ async function getAgentSettingsForSession(sessionId: string): Promise<{
     }
 
     // Look up agent to get settings
-    const agent = await db.query.agents.findFirst({
-      where: eq(agents.id, session.agentId),
+    const agent = await db.query.assistants.findFirst({
+      where: eq(assistants.id, session.agentId),
       columns: { settings: true, systemPrompt: true, model: true, isActive: true },
     });
 

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
-import { agents } from '@/db/schema';
+import { assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
 import { eq, desc, asc, count, and, ilike } from 'drizzle-orm';
@@ -17,7 +17,7 @@ const avatarSchema = z
   .optional()
   .nullable();
 
-const createAgentSchema = z.object({
+const createAssistantSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   avatar: avatarSchema,
@@ -31,7 +31,7 @@ const createAgentSchema = z.object({
   }).optional(),
 });
 
-// GET /api/v1/agents - List user agents
+// GET /api/v1/assistants - List user assistants
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url);
@@ -57,16 +57,16 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const sortDirection = sortDir === 'asc' ? asc : desc;
 
     // Build filter conditions
-    const conditions = [eq(agents.userId, request.user.userId)];
+    const conditions = [eq(assistants.userId, request.user.userId)];
 
     if (activeOnly || status === 'active') {
-      conditions.push(eq(agents.isActive, true));
+      conditions.push(eq(assistants.isActive, true));
     } else if (status === 'inactive') {
-      conditions.push(eq(agents.isActive, false));
+      conditions.push(eq(assistants.isActive, false));
     }
 
     if (search) {
-      conditions.push(ilike(agents.name, `%${search}%`));
+      conditions.push(ilike(assistants.name, `%${search}%`));
     }
 
     const whereClause = and(...conditions);
@@ -75,38 +75,38 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const getOrderBy = () => {
       switch (sortColumn) {
         case 'name':
-          return [sortDirection(agents.name)];
+          return [sortDirection(assistants.name)];
         case 'updatedAt':
-          return [sortDirection(agents.updatedAt)];
+          return [sortDirection(assistants.updatedAt)];
         case 'model':
-          return [sortDirection(agents.model)];
+          return [sortDirection(assistants.model)];
         case 'createdAt':
         default:
-          return [sortDirection(agents.createdAt)];
+          return [sortDirection(assistants.createdAt)];
       }
     };
 
-    const [userAgents, [{ total }]] = await Promise.all([
-      db.query.agents.findMany({
+    const [userAssistants, [{ total }]] = await Promise.all([
+      db.query.assistants.findMany({
         where: whereClause,
         orderBy: getOrderBy(),
         limit,
         offset,
       }),
-      db.select({ total: count() }).from(agents).where(whereClause),
+      db.select({ total: count() }).from(assistants).where(whereClause),
     ]);
 
-    return paginatedResponse(userAgents, total, page, limit);
+    return paginatedResponse(userAssistants, total, page, limit);
   } catch (error) {
     return errorResponse(error);
   }
 });
 
-// POST /api/v1/agents - Create a new agent
+// POST /api/v1/assistants - Create a new assistant
 export const POST = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
-    const data = createAgentSchema.parse(body);
+    const data = createAssistantSchema.parse(body);
 
     // Validate and clamp maxTokens against model's limit
     if (data.settings?.maxTokens !== undefined) {
@@ -116,8 +116,8 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       }
     }
 
-    const [newAgent] = await db
-      .insert(agents)
+    const [newAssistant] = await db
+      .insert(assistants)
       .values({
         userId: request.user.userId,
         name: data.name,
@@ -129,7 +129,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       })
       .returning();
 
-    return successResponse(newAgent, 201);
+    return successResponse(newAssistant, 201);
   } catch (error) {
     return errorResponse(error);
   }

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
-import { users, agents, agentMessages } from '@/db/schema';
+import { users, assistants, agentMessages } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
@@ -136,24 +136,24 @@ export const DELETE = withAuth(async (request: AuthenticatedRequest, context?: {
 
     // Use a transaction to ensure all deletions succeed or fail together
     await db.transaction(async (tx) => {
-      // 1. Get all agent IDs owned by the user
-      const userAgents = await tx.query.agents.findMany({
-        where: eq(agents.userId, id),
+      // 1. Get all assistant IDs owned by the user
+      const userAssistants = await tx.query.assistants.findMany({
+        where: eq(assistants.userId, id),
         columns: { id: true },
       });
-      const agentIds = userAgents.map((a) => a.id);
+      const assistantIds = userAssistants.map((a: { id: string }) => a.id);
 
-      // 2. Delete agent_messages where fromAgentId or toAgentId belongs to user's agents
+      // 2. Delete agent_messages where fromAgentId or toAgentId belongs to user's assistants
       // (these would be orphaned with SET NULL, so clean them up properly)
-      if (agentIds.length > 0) {
+      if (assistantIds.length > 0) {
         await tx
           .delete(agentMessages)
-          .where(or(inArray(agentMessages.fromAgentId, agentIds), inArray(agentMessages.toAgentId, agentIds)));
+          .where(or(inArray(agentMessages.fromAgentId, assistantIds), inArray(agentMessages.toAgentId, assistantIds)));
       }
 
       // 3. Delete the user - cascades will handle:
       //    - refresh_tokens (CASCADE)
-      //    - agents (CASCADE)
+      //    - assistants (CASCADE)
       //    - sessions (CASCADE) -> messages (CASCADE)
       //    - schedules (CASCADE)
       await tx.delete(users).where(eq(users.id, id));
