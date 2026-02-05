@@ -523,18 +523,37 @@ Maximum ${this.config.maxTasks} tasks.`;
   }
 
   private createPlanFromTasks(goal: string, tasks: SwarmInput['tasks']): SwarmPlan {
-    const taskIds = (tasks || []).map(() => generateId());
+    // Enforce maxTasks limit
+    const limitedTasks = (tasks || []).slice(0, this.config.maxTasks);
+    if (tasks && tasks.length > this.config.maxTasks) {
+      this.streamText(`\n⚠️ Task list truncated from ${tasks.length} to ${this.config.maxTasks} (maxTasks limit)\n`);
+    }
+
+    const taskIds = limitedTasks.map(() => generateId());
+
+    // Map dependency references:
+    // - Numeric index strings ("0", "1", "2") -> mapped to generated task IDs
+    // - Non-numeric strings -> preserved as-is (assumed to be existing task IDs)
+    const mapDependency = (dep: string): string => {
+      // Check if it's a valid numeric index
+      const index = parseInt(dep, 10);
+      if (!isNaN(index) && index >= 0 && index < taskIds.length && String(index) === dep) {
+        return taskIds[index];
+      }
+      // Not a numeric index - preserve the original string ID
+      return dep;
+    };
 
     return {
       id: generateId(),
       goal,
-      tasks: (tasks || []).map((t, index) => ({
+      tasks: limitedTasks.map((t, index) => ({
         id: taskIds[index],
         description: t.description,
         status: 'pending' as SwarmTaskStatus,
         role: t.role || 'worker',
         priority: t.priority || 3,
-        dependsOn: (t.dependsOn || []).map(i => taskIds[parseInt(i)] || i),
+        dependsOn: (t.dependsOn || []).map(mapDependency),
         createdAt: Date.now(),
         requiredTools: t.requiredTools,
       })),
