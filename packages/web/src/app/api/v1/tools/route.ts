@@ -309,6 +309,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
       properties: {
         category: { type: 'string', description: 'Filter by category', enum: ['preference', 'fact', 'knowledge', 'history'] },
         scope: { type: 'string', description: 'Filter by scope', enum: ['global', 'shared', 'private'] },
+        tags: { type: 'array', description: 'Filter by tags (matches any)' },
         minImportance: { type: 'number', description: 'Minimum importance level (1-10)' },
         limit: { type: 'number', description: 'Maximum results to return', default: 20 },
       },
@@ -369,7 +370,24 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
     parameters: {
       type: 'object',
       properties: {
-        memories: { type: 'array', description: 'Array of memory objects to import' },
+        memories: {
+          type: 'array',
+          description: 'Array of memory objects to import',
+          items: {
+            type: 'object',
+            properties: {
+              key: { type: 'string', description: 'Unique identifier' },
+              value: { type: 'string', description: 'The information to store' },
+              category: { type: 'string', enum: ['preference', 'fact', 'knowledge', 'history'] },
+              scope: { type: 'string', enum: ['global', 'shared', 'private'] },
+              scopeId: { type: 'string', description: 'Scope identifier' },
+              importance: { type: 'number', description: 'Importance 1-10' },
+              summary: { type: 'string', description: 'Short summary' },
+              tags: { type: 'array', description: 'Tags for categorization' },
+            },
+            required: ['key', 'value', 'category'],
+          },
+        },
         overwrite: { type: 'boolean', description: 'Overwrite existing memories with same key', default: false },
       },
       required: ['memories'],
