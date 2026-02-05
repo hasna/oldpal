@@ -4370,16 +4370,20 @@ Please summarize the last interaction and suggest 2-3 next steps.
               if (errors.length > 10) {
                 context.emit('text', `  ... and ${errors.length - 10} more errors\n`);
               }
-              if (validMemories.length > 0) {
-                context.emit('text', `\n${validMemories.length} valid entries found. Import them anyway? Use /memory import <file> --overwrite to proceed.\n`);
+
+              if (validMemories.length === 0) {
+                context.emit('text', '\nNo valid entries to import. Please fix the errors and try again.\n');
+                context.emit('done');
+                return { handled: true };
               }
-              context.emit('done');
-              return { handled: true };
+
+              // Import valid entries and skip invalid ones
+              context.emit('text', `\nImporting ${validMemories.length} valid entries (skipping ${errors.length} invalid)...\n`);
             }
 
             // Import valid memories
             const imported = await manager.import(validMemories as Parameters<typeof manager.import>[0], { overwrite });
-            context.emit('text', `Imported ${imported} memories from: ${filePath}${overwrite ? ' (with overwrite)' : ''}\n`);
+            context.emit('text', `Imported ${imported} memories from: ${filePath}${overwrite ? ' (with overwrite)' : ''}${errors.length > 0 ? ` (${errors.length} skipped)` : ''}\n`);
           } catch (error) {
             context.emit('text', `Error importing: ${error instanceof Error ? error.message : String(error)}\n`);
           }
