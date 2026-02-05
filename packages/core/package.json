@@ -1,6 +1,6 @@
 {
   "name": "@hasna/assistants-core",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Core runtime library for building AI assistants with Claude",
   "license": "MIT",
