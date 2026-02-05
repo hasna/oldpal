@@ -1,6 +1,6 @@
 {
   "name": "@hasna/assistants-terminal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A powerful AI assistant that runs in your terminal, powered by Claude",
   "license": "MIT",
   "type": "module",
