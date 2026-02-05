@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { withApiKeyAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
+import { withScopedApiKeyAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 
 /**
@@ -1133,6 +1133,331 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
       properties: {},
     },
   },
+  {
+    name: 'tasks_recurring_list',
+    description: 'List all recurring task templates with their schedule and next run time',
+    category: 'tasks',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'tasks_recurring_add',
+    description: 'Add a new recurring task that creates instances on a schedule',
+    category: 'tasks',
+    parameters: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'The task description - what needs to be done each time' },
+        kind: { type: 'string', description: 'Recurrence type', enum: ['cron', 'interval'] },
+        cron: { type: 'string', description: 'Cron expression (for kind: "cron"), e.g., "0 9 * * 1"' },
+        intervalMs: { type: 'number', description: 'Interval in milliseconds (for kind: "interval")' },
+        timezone: { type: 'string', description: 'Timezone for cron schedules' },
+        maxOccurrences: { type: 'number', description: 'Maximum number of times to run (optional)' },
+        priority: { type: 'string', description: 'Task priority', enum: ['high', 'normal', 'low'] },
+      },
+      required: ['description', 'kind'],
+    },
+  },
+  {
+    name: 'tasks_recurring_cancel',
+    description: 'Cancel a recurring task, stopping future instances from being created',
+    category: 'tasks',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The recurring task template ID to cancel' },
+      },
+      required: ['id'],
+    },
+  },
+
+  // Assistant tools (aligned with core/src/tools/assistant.ts)
+  {
+    name: 'assistant_list',
+    description: 'List all configured assistants with their details (id, name, description, model, active status).',
+    category: 'assistants',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'assistant_get',
+    description: 'Get detailed information about a specific assistant by ID.',
+    category: 'assistants',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The assistant ID to retrieve' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'assistant_create',
+    description: 'Create a new assistant with the specified configuration.',
+    category: 'assistants',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name for the new assistant' },
+        description: { type: 'string', description: 'Optional description of the assistant' },
+        model: { type: 'string', description: 'LLM model to use (e.g., "claude-opus-4-5")' },
+        systemPromptAddition: { type: 'string', description: 'Optional system prompt addition' },
+        maxTokens: { type: 'number', description: 'Optional maximum tokens per response' },
+        temperature: { type: 'number', description: 'Optional temperature setting (0.0-1.0)' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'assistant_update',
+    description: "Update an existing assistant's configuration.",
+    category: 'assistants',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The assistant ID to update' },
+        name: { type: 'string', description: 'New name for the assistant' },
+        description: { type: 'string', description: 'New description' },
+        model: { type: 'string', description: 'New LLM model' },
+        systemPromptAddition: { type: 'string', description: 'New system prompt addition' },
+        maxTokens: { type: 'number', description: 'New max tokens setting' },
+        temperature: { type: 'number', description: 'New temperature setting' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'assistant_delete',
+    description: 'Delete an assistant. Cannot delete the currently active assistant.',
+    category: 'assistants',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The assistant ID to delete' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'assistant_switch',
+    description: 'Switch to a different assistant. Changes the active assistant for the current session.',
+    category: 'assistants',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The assistant ID to switch to' },
+      },
+      required: ['id'],
+    },
+  },
+
+  // Model tools (aligned with core/src/tools/model.ts)
+  {
+    name: 'model_list',
+    description: 'List all available LLM models with their details (provider, context window, cost, capabilities).',
+    category: 'models',
+    parameters: {
+      type: 'object',
+      properties: {
+        provider: { type: 'string', description: 'Filter by provider', enum: ['anthropic', 'openai'] },
+      },
+    },
+  },
+  {
+    name: 'model_get',
+    description: 'Get detailed information about a specific model by ID.',
+    category: 'models',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The model ID to retrieve details for' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'model_current',
+    description: 'Get information about the currently active model.',
+    category: 'models',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'model_switch',
+    description: 'Switch to a different LLM model. Changes take effect immediately.',
+    category: 'models',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The model ID to switch to' },
+      },
+      required: ['id'],
+    },
+  },
+
+  // Config tools (aligned with core/src/tools/config.ts)
+  {
+    name: 'config_get',
+    description: 'Read a configuration value. Supports both project and global config.',
+    category: 'config',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Config path (e.g., "llm.model", "context.maxTokens")' },
+        scope: { type: 'string', description: 'Config scope', enum: ['project', 'global'], default: 'project' },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: 'config_set',
+    description: 'Update a configuration value. Only safe paths can be modified.',
+    category: 'config',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Config path to update' },
+        value: { type: ['string', 'number', 'boolean', 'array'], description: 'New value to set' },
+        scope: { type: 'string', description: 'Config scope', enum: ['project', 'global'], default: 'project' },
+      },
+      required: ['path', 'value'],
+    },
+  },
+
+  // Identity tools (aligned with core/src/tools/identity.ts)
+  {
+    name: 'identity_list',
+    description: 'List all identities for the current assistant with their details.',
+    category: 'identity',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'identity_create',
+    description: 'Create a new identity for the current assistant. Can use templates.',
+    category: 'identity',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name for the new identity' },
+        template: { type: 'string', description: 'Template to use', enum: ['tech-support', 'professional', 'creative', 'analyst', 'mentor', 'developer'] },
+        displayName: { type: 'string', description: 'Display name' },
+        title: { type: 'string', description: 'Job title or role' },
+        company: { type: 'string', description: 'Company name' },
+        timezone: { type: 'string', description: 'Timezone (e.g., "UTC")' },
+        communicationStyle: { type: 'string', description: 'Communication style' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'identity_update',
+    description: "Update an existing identity's settings.",
+    category: 'identity',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Identity ID to update' },
+        name: { type: 'string', description: 'New name' },
+        displayName: { type: 'string', description: 'New display name' },
+        title: { type: 'string', description: 'New title' },
+        company: { type: 'string', description: 'New company' },
+        timezone: { type: 'string', description: 'New timezone' },
+        communicationStyle: { type: 'string', description: 'New communication style' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'identity_delete',
+    description: 'Delete an identity. Cannot delete the active identity.',
+    category: 'identity',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Identity ID to delete' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'identity_switch',
+    description: 'Switch to a different identity for the current assistant.',
+    category: 'identity',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Identity ID to switch to' },
+      },
+      required: ['id'],
+    },
+  },
+
+  // Energy tools (aligned with core/src/tools/energy.ts)
+  {
+    name: 'energy_rest',
+    description: 'Recharge energy by resting. Restores energy points (default: 20% of max).',
+    category: 'energy',
+    parameters: {
+      type: 'object',
+      properties: {
+        amount: { type: 'number', description: 'Amount of energy to restore' },
+      },
+    },
+  },
+  {
+    name: 'energy_info',
+    description: 'Get detailed information about current energy state including level, effects, and recommendations.',
+    category: 'energy',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+
+  // Security tools (aligned with core/src/tools/security.ts)
+  {
+    name: 'security_log_list',
+    description: 'List security log events. Shows blocked commands, path violations, and validation failures.',
+    category: 'security',
+    parameters: {
+      type: 'object',
+      properties: {
+        severity: { type: 'string', description: 'Filter by severity', enum: ['critical', 'high', 'medium', 'low'] },
+        eventType: { type: 'string', description: 'Filter by event type', enum: ['blocked_command', 'path_violation', 'validation_failure'] },
+        sessionOnly: { type: 'boolean', description: 'Only show events from current session (default: true)' },
+        limit: { type: 'number', description: 'Maximum events to return (default: 50)' },
+      },
+    },
+  },
+  {
+    name: 'security_log_clear',
+    description: 'Clear the in-memory security log. Does not affect persisted log file.',
+    category: 'security',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'security_log_summary',
+    description: 'Get a summary of security events showing counts by type and severity.',
+    category: 'security',
+    parameters: {
+      type: 'object',
+      properties: {
+        sessionOnly: { type: 'boolean', description: 'Only show events from current session (default: true)' },
+      },
+    },
+  },
 
   // Self-awareness tools (aligned with core/src/tools/self-awareness.ts)
   {
@@ -1189,6 +1514,130 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
       properties: {},
     },
   },
+
+  // Voice tools (aligned with core/src/tools/voice.ts)
+  {
+    name: 'voice_enable',
+    description: 'Enable voice mode for text-to-speech output and speech-to-text input.',
+    category: 'voice',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'voice_disable',
+    description: 'Disable voice mode. Stops any active speaking or listening.',
+    category: 'voice',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'voice_status',
+    description: 'Get the current voice mode status including enabled state, speaking/listening activity, and configured providers.',
+    category: 'voice',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'voice_say',
+    description: 'Speak text aloud using text-to-speech. Voice mode must be enabled.',
+    category: 'voice',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The text to speak aloud' },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'voice_listen',
+    description: 'Listen for speech and transcribe it to text. Voice mode must be enabled. Returns the transcribed text.',
+    category: 'voice',
+    parameters: {
+      type: 'object',
+      properties: {
+        durationSeconds: { type: 'number', description: 'Maximum recording duration in seconds (optional)' },
+      },
+    },
+  },
+  {
+    name: 'voice_stop',
+    description: 'Stop any active speaking or listening.',
+    category: 'voice',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'What to stop: speaking, listening, or all (default: all)', enum: ['speaking', 'listening', 'all'] },
+      },
+    },
+  },
+
+  // Connector tools (aligned with core/src/tools/connector.ts)
+  {
+    name: 'connectors_list',
+    description: 'List all discovered connectors and their available commands. Use this to discover what connectors are available and what operations they support.',
+    category: 'connectors',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Optional: filter to a specific connector by name' },
+        verbose: { type: 'boolean', description: 'Optional: include detailed command information (default: false)' },
+        page: { type: 'number', description: 'Optional: page number for paginated results (default: 1)' },
+        limit: { type: 'number', description: 'Optional: items per page (default: 10, max: 50)' },
+      },
+    },
+  },
+  {
+    name: 'connectors_search',
+    description: 'Search for connectors by name, description, or command. Use this to find the right connector for a task when many are available.',
+    category: 'connectors',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query to match against connector names, descriptions, and commands' },
+        limit: { type: 'number', description: 'Maximum number of results to return (default: 5, max: 20)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'connector_execute',
+    description: 'Execute a command on any discovered connector. Use connectors_list or connectors_search first to discover available connectors and their commands.',
+    category: 'connectors',
+    parameters: {
+      type: 'object',
+      properties: {
+        connector: { type: 'string', description: 'Name of the connector to use (e.g., "notion", "gmail", "googledrive")' },
+        command: { type: 'string', description: 'The command to run on the connector' },
+        args: { type: 'array', description: 'Arguments to pass to the command' },
+        options: { type: 'object', description: 'Options to pass to the command (key-value pairs)' },
+      },
+      required: ['connector', 'command'],
+    },
+  },
+
+  // Tool discovery tools (aligned with core/src/tools/search.ts)
+  {
+    name: 'tools_search',
+    description: 'Search for available tools by name, description, category, or tags. Use this to find the right tool for a task without loading all tools into context.',
+    category: 'discovery',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query to match against tool names and descriptions' },
+        category: { type: 'string', description: 'Filter by category (e.g., "memory", "filesystem", "web", "agents")' },
+        tags: { type: 'array', description: 'Filter by tags (e.g., ["search", "create"])' },
+        source: { type: 'string', description: 'Filter by source', enum: ['builtin', 'connector', 'skill', 'custom'] },
+        limit: { type: 'number', description: 'Maximum number of results to return (default: 10, max: 50)' },
+      },
+    },
+  },
 ];
 
 /**
@@ -1203,7 +1652,8 @@ function getCategories(): string[] {
 }
 
 // GET /api/v1/tools - List available tools with pagination and filtering
-export const GET = withApiKeyAuth(async (request: AuthenticatedRequest) => {
+// Requires 'read:tools' scope for API key access, JWT tokens have full access
+export const GET = withScopedApiKeyAuth(['read:tools'], async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url);
 

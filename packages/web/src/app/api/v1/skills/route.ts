@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { withApiKeyAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
+import { withScopedApiKeyAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { SkillLoader } from '@hasna/assistants-core';
 import type { Skill } from '@hasna/assistants-shared';
@@ -74,7 +74,8 @@ function toSkillMetadata(skill: Skill): SkillMetadata {
 }
 
 // GET /api/v1/skills - List available skills with pagination and filtering
-export const GET = withApiKeyAuth(async (request: AuthenticatedRequest) => {
+// Requires 'read:skills' scope for API key access, JWT tokens have full access
+export const GET = withScopedApiKeyAuth(['read:skills'], async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url);
 
