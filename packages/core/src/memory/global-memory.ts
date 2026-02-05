@@ -878,10 +878,38 @@ export class GlobalMemoryManager {
 
   /**
    * Export memories to JSON
+   *
+   * Unlike query(), export() retrieves ALL matching memories by paginating
+   * through results. Use query filters (scope, category) to limit the export.
    */
   async export(query?: MemoryQuery): Promise<Memory[]> {
-    const result = await this.query(query || { limit: 10000 });
-    return result.memories;
+    const allMemories: Memory[] = [];
+    const pageSize = 1000; // Max page size for query
+    let offset = 0;
+    let hasMore = true;
+
+    // Create base query without pagination params
+    const baseQuery: MemoryQuery = {
+      ...query,
+      limit: pageSize,
+    };
+
+    // Paginate through all results
+    while (hasMore) {
+      const result = await this.query({ ...baseQuery, offset });
+      allMemories.push(...result.memories);
+
+      // Check if there are more results
+      hasMore = result.hasMore;
+      offset += result.memories.length;
+
+      // Safety limit: prevent infinite loops (max 100 pages = 100k memories)
+      if (offset >= 100000) {
+        break;
+      }
+    }
+
+    return allMemories;
   }
 
   /**
