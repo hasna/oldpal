@@ -948,6 +948,7 @@ Maximum ${this.config.maxTasks} tasks.`;
       parentSessionId: this.context.sessionId,
       depth: this.context.depth + 1,
       cwd: this.context.cwd,
+      timeoutMs: this.config.taskTimeoutMs,
     };
 
     const result = await this.context.subagentManager.spawn(config);

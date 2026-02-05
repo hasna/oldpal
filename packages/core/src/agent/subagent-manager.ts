@@ -35,6 +35,8 @@ export interface SubagentConfig {
   depth: number;
   /** Working directory */
   cwd: string;
+  /** Timeout in ms (default: uses SubagentManagerConfig.defaultTimeoutMs) */
+  timeoutMs?: number;
 }
 
 export interface SubagentResult {
@@ -340,10 +342,11 @@ export class SubagentManager {
       // Track the runner so we can stop it if needed
       this.activeRunners.set(subagentId, runner);
 
-      // Run with timeout
+      // Run with timeout (use config-specific timeout if provided, otherwise use default)
+      const timeoutMs = config.timeoutMs ?? this.config.defaultTimeoutMs;
       const result = await Promise.race([
         runner.run(),
-        this.createTimeout(this.config.defaultTimeoutMs, runner, subagentId),
+        this.createTimeout(timeoutMs, runner, subagentId),
       ]);
 
       // Update info - detect timeout from error message
