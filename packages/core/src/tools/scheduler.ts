@@ -125,7 +125,22 @@ function createSchedulerExecutor(getContext: () => SchedulerContext): ToolExecut
 
     if (action === 'create') {
       const command = String(input.command || '').trim();
-      if (!command) return 'Error: command is required.';
+      const actionType = input.actionType as 'command' | 'message' | undefined;
+      const message = input.message as string | undefined;
+
+      // Validate command/message based on actionType
+      if (actionType === 'message') {
+        // For message type, require message and allow empty command
+        if (!message?.trim()) {
+          return 'Error: message is required when actionType is "message".';
+        }
+      } else {
+        // For command type (default), require command
+        if (!command) {
+          return 'Error: command is required.';
+        }
+      }
+
       const at = input.at as string | undefined;
       const cron = input.cron as string | undefined;
       const minInterval = input.minInterval as number | undefined;
@@ -167,9 +182,6 @@ function createSchedulerExecutor(getContext: () => SchedulerContext): ToolExecut
       if (timezone && !isValidTimeZone(timezone)) {
         return `Error: invalid timezone "${timezone}".`;
       }
-
-      const actionType = input.actionType as 'command' | 'message' | undefined;
-      const message = input.message as string | undefined;
 
       // Determine schedule kind
       let scheduleKind: 'once' | 'cron' | 'random' | 'interval';

@@ -35,6 +35,13 @@ function getGlobalSkillsDir(): string {
 }
 
 /**
+ * Get project skills directory path
+ */
+function getProjectSkillsDir(cwd: string): string {
+  return join(cwd, '.assistants', 'skills');
+}
+
+/**
  * Derive category from file path
  * Normalizes path separators for cross-platform support (Windows uses \)
  */
@@ -68,10 +75,19 @@ export const GET = withApiKeyAuth(async (
 ) => {
   try {
     const { name } = await params;
+    const { searchParams } = new URL(request.url);
+    const cwd = searchParams.get('cwd'); // Optional project directory
 
     // Create a skill loader and load skills with content
     const skillLoader = new SkillLoader();
+
+    // Load global skills first
     await skillLoader.loadFromDirectory(getGlobalSkillsDir(), { includeContent: true });
+
+    // Load project-specific skills if cwd is provided (may override global)
+    if (cwd && cwd.trim()) {
+      await skillLoader.loadFromDirectory(getProjectSkillsDir(cwd), { includeContent: true });
+    }
 
     // Find the skill by name
     const skill = skillLoader.getSkill(name);

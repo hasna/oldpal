@@ -31,6 +31,13 @@ function getGlobalSkillsDir(): string {
 }
 
 /**
+ * Get project skills directory path
+ */
+function getProjectSkillsDir(cwd: string): string {
+  return join(cwd, '.assistants', 'skills');
+}
+
+/**
  * Derive category from file path
  * Normalizes path separators for cross-platform support (Windows uses \)
  */
@@ -87,18 +94,25 @@ export const GET = withScopedApiKeyAuth(['read:skills'], async (request: Authent
     const search = searchParams.get('search')?.toLowerCase();
     const category = searchParams.get('category');
     const userInvocableOnly = searchParams.get('userInvocableOnly') === 'true';
+    const cwd = searchParams.get('cwd'); // Optional project directory
 
     // Sort params
     const sortBy = searchParams.get('sortBy') || 'name';
     const sortDir = searchParams.get('sortDir') || 'asc';
 
-    // Create a skill loader and load user's global skills
+    // Create a skill loader and load skills
     const skillLoader = new SkillLoader();
 
-    // Load skills without content (just metadata)
+    // Load global skills (shared across all projects)
     await skillLoader.loadFromDirectory(getGlobalSkillsDir(), { includeContent: false });
 
+    // Load project-specific skills if cwd is provided
+    if (cwd && cwd.trim()) {
+      await skillLoader.loadFromDirectory(getProjectSkillsDir(cwd), { includeContent: false });
+    }
+
     // Get all loaded skills and convert to metadata format
+    // Note: SkillLoader handles name collisions - project skills can override global
     const allSkills = skillLoader.getSkills();
     let filteredSkills = allSkills.map(toSkillMetadata);
 
