@@ -424,6 +424,13 @@ export class SwarmCoordinator {
   stop(): void {
     this.stopped = true;
     this.clearTimeoutTimer();
+
+    // Stop all active subagents
+    const stoppedCount = this.context.subagentManager.stopAll();
+    if (stoppedCount > 0) {
+      this.streamText(`\nStopping ${stoppedCount} active subagent(s)...\n`);
+    }
+
     if (this.state && this.isRunning()) {
       this.state.endedAt = Date.now();
       this.updateStatus('cancelled');

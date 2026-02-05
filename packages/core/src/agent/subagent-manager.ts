@@ -160,6 +160,7 @@ const FORBIDDEN_SUBAGENT_TOOLS = [
 export class SubagentManager {
   private config: Required<SubagentManagerConfig>;
   private activeSubagents: Map<string, SubagentInfo> = new Map();
+  private activeRunners: Map<string, SubagentRunner> = new Map();
   private asyncJobs: Map<string, SubagentJob> = new Map();
   private context: SubagentManagerContext;
 
@@ -335,6 +336,9 @@ export class SubagentManager {
         // llmClient intentionally not passed - subagent creates its own
       });
 
+      // Track the runner so we can stop it if needed
+      this.activeRunners.set(subagentId, runner);
+
       // Run with timeout
       const result = await Promise.race([
         runner.run(),
@@ -383,7 +387,32 @@ export class SubagentManager {
       return finalResult;
     } finally {
       this.activeSubagents.delete(subagentId);
+      this.activeRunners.delete(subagentId);
     }
+  }
+
+  /**
+   * Stop a specific subagent by ID
+   */
+  stopSubagent(subagentId: string): boolean {
+    const runner = this.activeRunners.get(subagentId);
+    if (runner) {
+      runner.stop();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Stop all active subagents
+   */
+  stopAll(): number {
+    let stopped = 0;
+    for (const [id, runner] of this.activeRunners) {
+      runner.stop();
+      stopped++;
+    }
+    return stopped;
   }
 
   /**
