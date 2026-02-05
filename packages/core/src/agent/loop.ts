@@ -1416,6 +1416,10 @@ export class AgentLoop {
     this.llmClient = await createLLMClient(newConfig);
     this.hookExecutor.setLLMClient(this.llmClient);
 
+    // Update config.llm to reflect the new model/provider
+    // This ensures downstream consumers (summary client, reporting, etc.) see the correct model
+    this.config.llm = newConfig;
+
     // Recompute context config with new model's context window
     // This allows expanding when switching to a larger model
     if (this.contextConfig) {
