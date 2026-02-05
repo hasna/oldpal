@@ -48,6 +48,8 @@ export interface SubagentResult {
   turns: number;
   /** Number of tool calls made */
   toolCalls: number;
+  /** Total tokens used (input + output) */
+  tokensUsed?: number;
 }
 
 export interface SubagentInfo {

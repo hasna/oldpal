@@ -2911,18 +2911,28 @@ Be concise but thorough. Focus only on this task.`,
           const messages = subagent.getContext().getMessages();
           turns = messages.filter((m) => m.role === 'assistant').length;
 
+          // Get token usage from subagent
+          const usage = subagent.getTokenUsage();
+          const tokensUsed = usage.inputTokens + usage.outputTokens;
+
           return {
             success: true,
             result: response.trim(),
             turns,
             toolCalls,
+            tokensUsed,
           };
         } catch (error) {
+          // Get token usage even on error
+          const usage = subagent.getTokenUsage();
+          const tokensUsed = usage.inputTokens + usage.outputTokens;
+
           return {
             success: false,
             error: error instanceof Error ? error.message : String(error),
             turns,
             toolCalls,
+            tokensUsed,
           };
         } finally {
           subagent.shutdown();

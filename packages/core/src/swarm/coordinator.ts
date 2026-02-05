@@ -682,8 +682,7 @@ Maximum ${this.config.maxTasks} tasks.`;
 
       // Update metrics
       if (this.state) {
-        // tokensUsed will be added to SubagentResult in task #1098
-        this.state.metrics.tokensUsed += (result as SubagentResult & { tokensUsed?: number }).tokensUsed || 0;
+        this.state.metrics.tokensUsed += result.tokensUsed || 0;
         this.state.metrics.toolCalls += result.toolCalls;
         this.state.metrics.llmCalls++;
 
