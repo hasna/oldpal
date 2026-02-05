@@ -37,7 +37,7 @@ async function build() {
       // Internal packages are bundled, not external
       // '@hasna/assistants-core',  -- bundled
       // '@hasna/assistants-shared', -- bundled
-      '@hasna/runtime-bun',
+      // '@hasna/runtime-bun', -- bundled
       'react',
       'ink',
       'ink-text-input',
@@ -70,7 +70,7 @@ async function build() {
       // Internal packages are bundled, not external
       // '@hasna/assistants-core',  -- bundled
       // '@hasna/assistants-shared', -- bundled
-      '@hasna/runtime-bun',
+      // '@hasna/runtime-bun', -- bundled
       'react',
       'ink',
       'ink-text-input',
