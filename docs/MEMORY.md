@@ -266,6 +266,52 @@ Use `memory_forget` or the `/memory delete` command to remove specific memories.
 5. The database is located at `~/.assistants/memory.db`
 6. Memory injection can be disabled via configuration
 
+## Multi-Tenant (Web) Deployment
+
+When deploying the memory system in a multi-user web environment, consider the following:
+
+### Tenant Isolation
+
+- **ScopeId**: In web deployments, the `scopeId` is set to the agent ID (from the database) or session ID. Both are user-specific, providing tenant isolation at the data level.
+- **Session Ownership**: The web API enforces session ownership checks before allowing memory access. Users can only access memories for sessions they own.
+- **Database File**: All tenant data is stored in a single SQLite database file. Isolation is enforced through `scopeId` filtering in queries.
+
+### Security Recommendations for Production
+
+1. **Disable Global Scope**: In multi-tenant deployments, consider disabling global scope to prevent data leakage:
+   ```json
+   {
+     "memory": {
+       "scopes": {
+         "globalEnabled": false,
+         "sharedEnabled": true,
+         "privateEnabled": true
+       }
+     }
+   }
+   ```
+
+2. **Use Private Scope by Default**: The system defaults to private scope, which requires a valid scopeId and prevents cross-tenant access.
+
+3. **Configure ASSISTANTS_DIR**: Use the `ASSISTANTS_DIR` environment variable to specify a custom location for the memory database, separate from user home directories.
+
+4. **Database Encryption**: For sensitive deployments, consider encrypting the SQLite database at rest using filesystem encryption.
+
+### Scope Isolation Rules
+
+| Scope | Access Rule | Multi-tenant Safety |
+|-------|-------------|---------------------|
+| `private` | Only accessible if `scope_id` matches agent's scopeId | ✅ Safe - requires exact match |
+| `shared` | Accessible if `scope_id` is null OR matches agent's scopeId | ⚠️ Caution - null scopeId visible to all |
+| `global` | Accessible by all (scope_id must be null) | ❌ Not safe for multi-tenant |
+
+### Best Practices for Multi-Tenant
+
+1. **Always use explicit scopeId**: When saving memories, explicitly set scopeId to the user/agent identifier
+2. **Avoid global scope**: Don't store tenant-specific data in global scope
+3. **Audit access**: Monitor the `memory_access_log` table for unusual access patterns
+4. **Regular cleanup**: Implement retention policies to remove old tenant data
+
 ## Disabling Memory
 
 To completely disable the memory system:

@@ -1,6 +1,15 @@
 # assistants
 
-Your personal AI assistant - terminal first, connector powered.
+A general-purpose AI assistant designed to help with any task - from research and writing to coding, automation, and beyond. Built terminal-first with powerful integrations.
+
+**This is not just a coding tool.** While it excels at development workflows, it's designed as a versatile assistant that can help with:
+- Research and analysis
+- Writing and content creation
+- Task management and productivity
+- Business operations
+- Personal assistance
+- Software development
+- Automation and integrations
 
 ## Installation
 
@@ -28,11 +37,14 @@ export ANTHROPIC_API_KEY="your-key"
 
 ## Features
 
-- **Terminal-first**: Ink-based TUI
-- **Connector-powered**: Uses `connect-*` CLIs (Notion, Google Drive, Gmail, etc.)
-- **Skills**: Reusable instructions with `SKILL.md` files
-- **Hooks**: Event-driven automation
-- **Wait/Sleep tool**: Let the agent pause between actions with exact or ranged delays
+- **General-purpose**: Handles any task - research, writing, coding, automation, and more
+- **Terminal-first**: Fast, keyboard-driven interface with an Ink-based TUI
+- **Connector-powered**: Integrates with services via `connect-*` CLIs (Notion, Google Drive, Gmail, Linear, Slack, etc.)
+- **Skills**: Reusable instructions with `SKILL.md` files for domain-specific workflows
+- **Hooks**: Event-driven automation for custom behaviors
+- **Memory**: Persistent context across sessions for continuity
+- **Multi-session**: Work on multiple tasks simultaneously
+- **Identity management**: Switch between personas and contexts
 
 ## Configuration
 
