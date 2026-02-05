@@ -1,0 +1,14 @@
+{
+  "id": "709",
+  "subject": "Add subagent config to AssistantsConfig",
+  "description": "Bad logic: SubagentManager limits (maxDepth/maxConcurrent/maxTurns/timeout/tools) are hardcoded. Expose configuration in AssistantsConfig and wire into AgentLoop.initializeSubagentManager. Add docs and tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "agents",
+    "config"
+  ],
+  "created": "2026-02-04T20:43:23.771Z",
+  "updated": "2026-02-04T20:43:23.771Z"
+}

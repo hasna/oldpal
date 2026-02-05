@@ -1,0 +1,14 @@
+{
+  "id": "689",
+  "subject": "Document memory persistence + privacy boundaries",
+  "description": "Docs gap: new memory system needs explicit privacy boundaries (global/shared/private), retention, and how to disable. Add to docs/ or README with examples of /memory commands and tool usage.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "docs",
+    "memory",
+    "security"
+  ],
+  "created": "2026-02-04T16:27:47.117Z",
+  "updated": "2026-02-04T16:27:47.117Z"
+}

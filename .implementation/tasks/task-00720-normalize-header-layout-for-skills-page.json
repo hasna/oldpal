@@ -1,0 +1,8 @@
+{
+  "id": "720",
+  "subject": "Normalize header layout for skills page",
+  "description": "packages/web/src/app/(dashboard)/skills/page.tsx: Add breadcrumb + page title header; remove count/description copy. Place primary action (if any) on same row right-aligned. Align filters with shared FilterBar/DataTable layout standards.",
+  "status": "pending",
+  "created": "2026-02-04T20:56:50.004Z",
+  "updated": "2026-02-04T20:56:50.004Z"
+}

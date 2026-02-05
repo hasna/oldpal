@@ -1,0 +1,14 @@
+{
+  "id": "706",
+  "subject": "Use authenticated fetch in ToolSelector/SkillSelector",
+  "description": "Bug: ToolSelector and SkillSelector use plain fetch to /api/v1/tools and /api/v1/skills, which require auth. Switch to useAuth().fetchWithAuth or accept fetchWithAuth via props to avoid 401s and empty lists. Add tests for error handling.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "auth"
+  ],
+  "created": "2026-02-04T20:42:48.264Z",
+  "updated": "2026-02-04T20:42:48.264Z"
+}

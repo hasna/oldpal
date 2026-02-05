@@ -1,0 +1,8 @@
+{
+  "id": "727",
+  "subject": "Add scope controls to /memory set and memory_save tool",
+  "description": "Missing functionality: global/shared scopes exist but /memory set and memory_save tool don't accept scope/scopeId, so users can't create shared/global memories. Add optional --scope/--scope-id flags to /memory set and add scope/scopeId parameters to memory_save tool (with validation + respect config.scopes).",
+  "status": "pending",
+  "created": "2026-02-04T21:02:26.732Z",
+  "updated": "2026-02-04T21:02:26.732Z"
+}

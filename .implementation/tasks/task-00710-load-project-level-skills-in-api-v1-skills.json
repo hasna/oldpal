@@ -1,0 +1,14 @@
+{
+  "id": "710",
+  "subject": "Load project-level skills in /api/v1/skills",
+  "description": "Potential logic gap: skills API only loads global shared skills. Consider also loading project skills from .assistants/skills (or configured path) so UI can select local skills. Add tests and access controls if enabled.",
+  "status": "pending",
+  "priority": "low",
+  "tags": [
+    "web",
+    "api",
+    "skills"
+  ],
+  "created": "2026-02-04T20:43:33.926Z",
+  "updated": "2026-02-04T20:43:33.926Z"
+}

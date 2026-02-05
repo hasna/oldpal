@@ -1,0 +1,14 @@
+{
+  "id": "685",
+  "subject": "Limit memory entry size",
+  "description": "Bad logic: memory values/summaries have no size limits, risking huge SQLite rows. Add max byte size for value/summary (configurable), reject or truncate oversized inputs, and add tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "storage"
+  ],
+  "created": "2026-02-04T16:24:42.261Z",
+  "updated": "2026-02-04T16:24:42.261Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "692",
+  "subject": "Avoid exposing server file paths in /api/v1/skills",
+  "description": "Security bug: skills API returns absolute filePath to clients. Remove filePath from response or map to safe relative identifiers; keep category without leaking server paths. Add tests to ensure no absolute paths in response.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "api",
+    "security"
+  ],
+  "created": "2026-02-04T20:35:34.258Z",
+  "updated": "2026-02-04T20:35:34.258Z"
+}

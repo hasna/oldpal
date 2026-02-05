@@ -1,0 +1,14 @@
+{
+  "id": "687",
+  "subject": "Validate /memory import file structure",
+  "description": "Bad logic: /memory import assumes JSON array of memory objects; invalid structure will throw or mis-import. Validate schema (array + required fields), reject invalid entries with errors, and optionally support --overwrite flag. Add tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "commands"
+  ],
+  "created": "2026-02-04T16:26:58.565Z",
+  "updated": "2026-02-04T16:26:58.565Z"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "699",
+  "subject": "Load available models dynamically in ChatSettings",
+  "description": "Bad logic: ChatSettings hardcodes model IDs + prices (includes GPT-5.2). Should be sourced from server or shared model list to avoid drift. Add /api/v1/models endpoint or reuse core model registry and update ChatSettings to fetch models; ensure prices/capabilities are accurate and per-provider.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "ui",
+    "models",
+    "api"
+  ],
+  "created": "2026-02-04T20:37:45.654Z",
+  "updated": "2026-02-04T20:37:45.654Z"
+}

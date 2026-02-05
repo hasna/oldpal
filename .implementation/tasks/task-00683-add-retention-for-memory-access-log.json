@@ -1,0 +1,14 @@
+{
+  "id": "683",
+  "subject": "Add retention for memory access log",
+  "description": "Bad logic: memory_access_log grows unbounded. Add retention policy (max rows or days) and periodic cleanup (e.g., on startup or after writes). Add config + tests.",
+  "status": "pending",
+  "priority": "low",
+  "tags": [
+    "core",
+    "memory",
+    "storage"
+  ],
+  "created": "2026-02-04T16:24:19.933Z",
+  "updated": "2026-02-04T16:24:19.933Z"
+}

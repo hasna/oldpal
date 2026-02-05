@@ -1,0 +1,8 @@
+{
+  "id": "719",
+  "subject": "Add tests for API key management endpoints",
+  "description": "Missing tests: cover /api/v1/users/me/api-keys GET/POST and /api/v1/users/me/api-keys/[id] GET/DELETE (auth required, ownership checks, limit=10, revoke sets revokedAt, lastUsedAt/expiry behavior). Add tests under packages/web/tests.",
+  "status": "pending",
+  "created": "2026-02-04T20:56:41.331Z",
+  "updated": "2026-02-04T20:56:41.331Z"
+}

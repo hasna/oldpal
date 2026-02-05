@@ -1,0 +1,8 @@
+{
+  "id": "717",
+  "subject": "Show indeterminate state for tool/skill category checkboxes",
+  "description": "UI bug: ToolSelector/SkillSelector pass data-state but Checkbox only respects checked/indeterminate via Radix. Set checked to 'indeterminate' when some items selected, or set aria-checked + styling so partial selection is visible. Update packages/web/src/components/agents/ToolSelector.tsx and SkillSelector.tsx.",
+  "status": "pending",
+  "created": "2026-02-04T20:56:24.417Z",
+  "updated": "2026-02-04T20:56:24.417Z"
+}

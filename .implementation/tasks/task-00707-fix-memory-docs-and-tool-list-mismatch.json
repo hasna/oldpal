@@ -1,0 +1,14 @@
+{
+  "id": "707",
+  "subject": "Fix memory docs and tool list mismatch",
+  "description": "Docs bug: packages/core/README.md uses GlobalMemoryManager option \"scope\" (actual: defaultScope) and lists memory_export/import tools that are not implemented. Update docs or implement missing tools to match reality.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "docs",
+    "core",
+    "memory"
+  ],
+  "created": "2026-02-04T20:42:58.715Z",
+  "updated": "2026-02-04T20:42:58.715Z"
+}

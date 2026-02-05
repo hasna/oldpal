@@ -1,0 +1,8 @@
+{
+  "id": "722",
+  "subject": "Clear expired memories before enforcing storage limits",
+  "description": "Logic bug: enforceStorageLimits excludes expired rows (WHERE expires_at IS NULL OR expires_at > now), so expired memories still count toward maxEntries and can cause live entries to be evicted. Clear expired entries first (or include them in eviction), then enforce limits.",
+  "status": "pending",
+  "created": "2026-02-04T21:01:14.936Z",
+  "updated": "2026-02-04T21:01:14.936Z"
+}

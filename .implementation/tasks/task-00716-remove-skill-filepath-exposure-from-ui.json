@@ -1,0 +1,8 @@
+{
+  "id": "716",
+  "subject": "Remove skill filePath exposure from UI",
+  "description": "Security/UX: SkillCard/SkillDetailDrawer rely on skill.filePath (absolute server path). Once API stops exposing file paths, update UI to avoid showing filePath; replace with safe source label (shared/project) and optional relative identifier. Update types in packages/web/src/components/skills and handle missing filePath gracefully.",
+  "status": "pending",
+  "created": "2026-02-04T20:56:14.691Z",
+  "updated": "2026-02-04T20:56:14.691Z"
+}

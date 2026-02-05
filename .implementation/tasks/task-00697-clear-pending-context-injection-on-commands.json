@@ -1,0 +1,14 @@
+{
+  "id": "697",
+  "subject": "Clear pending context injection on commands",
+  "description": "Bug: AgentLoop injects environment context before command handling; if a /command or explicit tool is handled without LLM call, pendingContextInjection can leak into the next LLM prompt. Clear pendingContextInjection when commands/tools/skills are handled, or only inject for non-command messages. Add tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "context",
+    "bug"
+  ],
+  "created": "2026-02-04T20:36:33.250Z",
+  "updated": "2026-02-04T20:36:33.250Z"
+}

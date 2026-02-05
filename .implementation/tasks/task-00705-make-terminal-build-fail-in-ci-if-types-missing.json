@@ -1,0 +1,14 @@
+{
+  "id": "705",
+  "subject": "Make terminal build fail in CI if types missing",
+  "description": "Build script now swallows tsc errors. Add CI guard or env flag to fail when declaration generation fails in release builds; keep local dev warning. Add tests or CI check.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "build",
+    "ci"
+  ],
+  "created": "2026-02-04T20:39:40.854Z",
+  "updated": "2026-02-04T20:39:40.854Z"
+}

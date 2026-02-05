@@ -1,0 +1,14 @@
+{
+  "id": "672",
+  "subject": "Fix memory scopeId defaulting for global/shared memories",
+  "description": "Bug in packages/core/src/memory/global-memory.ts: set() assigns scopeId = options.scopeId || defaultScopeId, which incorrectly tags global/shared memories with assistant scope. Make scopeId default conditional: only apply defaultScopeId for private (and maybe shared) scope; for global keep null unless explicitly set. Update get/query semantics and add tests to prevent cross-assistant leakage.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "core",
+    "memory",
+    "bug"
+  ],
+  "created": "2026-02-04T16:17:50.084Z",
+  "updated": "2026-02-04T16:17:50.084Z"
+}

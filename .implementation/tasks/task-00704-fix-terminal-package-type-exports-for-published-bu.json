@@ -1,0 +1,14 @@
+{
+  "id": "704",
+  "subject": "Fix terminal package type exports for published builds",
+  "description": "Bad logic: packages/terminal/package.json now points types to ./src/lib.ts and includes src in files, which breaks published consumer types and bloats package. Restore types to dist output and ensure build generates .d.ts in CI; if monorepo dev needs fallback, use conditional exports or postbuild copy.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "terminal",
+    "build",
+    "bug"
+  ],
+  "created": "2026-02-04T20:39:27.965Z",
+  "updated": "2026-02-04T20:39:27.965Z"
+}

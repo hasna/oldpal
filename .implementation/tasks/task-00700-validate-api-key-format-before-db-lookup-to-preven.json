@@ -1,0 +1,14 @@
+{
+  "id": "700",
+  "subject": "Validate API key format before DB lookup to prevent timing leaks",
+  "description": "Security: withApiKeyAuth currently queries DB on any Bearer token if it matches key format. Add constant-time checks and rate limiting (per IP/key prefix), and avoid per-key hash verification loops that leak timing. Consider indexed lookup by keyPrefix + hashed key (HMAC) to avoid brute force on prefixes.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "security",
+    "api",
+    "auth"
+  ],
+  "created": "2026-02-04T20:37:58.248Z",
+  "updated": "2026-02-04T20:37:58.248Z"
+}

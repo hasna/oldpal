@@ -1,0 +1,14 @@
+{
+  "id": "679",
+  "subject": "Enforce memory storage limits (maxEntries/defaultTTL)",
+  "description": "Bad logic: MemoryConfig.storage.maxEntries/defaultTTL are defined but not enforced. Implement retention (e.g., delete lowest-importance/oldest when exceeding maxEntries) and apply default TTL on insert when ttl/expiresAt not provided. Add tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "storage"
+  ],
+  "created": "2026-02-04T16:21:34.691Z",
+  "updated": "2026-02-04T16:21:34.691Z"
+}

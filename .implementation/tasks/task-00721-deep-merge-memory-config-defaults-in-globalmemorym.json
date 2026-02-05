@@ -1,0 +1,8 @@
+{
+  "id": "721",
+  "subject": "Deep-merge memory config defaults in GlobalMemoryManager",
+  "description": "Bug: GlobalMemoryManager uses shallow merge ({...DEFAULT_MEMORY_CONFIG, ...options.config}), so partial overrides wipe nested defaults (injection/storage/scopes/accessLog). Use a deep merge (like mergeConfig) to preserve defaults while applying overrides.",
+  "status": "pending",
+  "created": "2026-02-04T21:01:05.217Z",
+  "updated": "2026-02-04T21:01:05.217Z"
+}

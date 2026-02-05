@@ -1,0 +1,8 @@
+{
+  "id": "724",
+  "subject": "Handle empty categories/scopes in memory getRelevant",
+  "description": "Bug: GlobalMemoryManager.getRelevant builds SQL with category IN (...) and scope IN (...) without guarding empty arrays. If config passes empty categories/scopes, query becomes invalid. Guard by returning [] or skipping those clauses when arrays are empty.",
+  "status": "pending",
+  "created": "2026-02-04T21:01:36.134Z",
+  "updated": "2026-02-04T21:01:36.134Z"
+}

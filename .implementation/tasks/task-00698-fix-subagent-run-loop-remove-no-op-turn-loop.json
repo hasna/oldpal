@@ -1,0 +1,14 @@
+{
+  "id": "698",
+  "subject": "Fix subagent run loop (remove no-op turn loop)",
+  "description": "Bad logic: AgentLoop.createSubagentLoop runs subagent.process(), then loops up to maxTurns without performing any additional work. Remove this no-op loop or implement proper multi-turn continuation. Add tests to verify maxTurns semantics.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "agents",
+    "bug"
+  ],
+  "created": "2026-02-04T20:36:47.949Z",
+  "updated": "2026-02-04T20:36:47.949Z"
+}

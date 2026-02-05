@@ -1,0 +1,14 @@
+{
+  "id": "680",
+  "subject": "Update /memory help text to include import + categories",
+  "description": "UX bug: /memory help omits the import subcommand and doesn't list allowed categories clearly. Update help output to include /memory import <file> and category options (preference|fact|knowledge|history).",
+  "status": "pending",
+  "priority": "low",
+  "tags": [
+    "core",
+    "memory",
+    "ux"
+  ],
+  "created": "2026-02-04T16:21:55.735Z",
+  "updated": "2026-02-04T16:21:55.735Z"
+}

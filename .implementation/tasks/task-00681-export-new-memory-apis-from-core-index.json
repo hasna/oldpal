@@ -1,0 +1,14 @@
+{
+  "id": "681",
+  "subject": "Export new memory APIs from core index",
+  "description": "DX gap: packages/core/src/index.ts still exports legacy MemoryStore/SessionManager but not GlobalMemoryManager/MemoryInjector or memory tools. Decide public API and export new memory modules if intended; update docs accordingly.",
+  "status": "pending",
+  "priority": "low",
+  "tags": [
+    "core",
+    "memory",
+    "dx"
+  ],
+  "created": "2026-02-04T16:22:07.126Z",
+  "updated": "2026-02-04T16:22:07.126Z"
+}

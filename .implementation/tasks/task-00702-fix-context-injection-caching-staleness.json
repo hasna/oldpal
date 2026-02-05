@@ -1,0 +1,14 @@
+{
+  "id": "702",
+  "subject": "Fix context injection caching staleness",
+  "description": "Potential bug: ContextInjector caches cwd/project/git for long TTL. If cwd changes or repo switches, injected context can be stale. Invalidate cache on cwd change or expose refresh hook on project switch; add tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "context",
+    "bug"
+  ],
+  "created": "2026-02-04T20:38:38.084Z",
+  "updated": "2026-02-04T20:38:38.084Z"
+}

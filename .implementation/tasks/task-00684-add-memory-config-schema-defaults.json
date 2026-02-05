@@ -1,0 +1,14 @@
+{
+  "id": "684",
+  "subject": "Add memory config schema + defaults",
+  "description": "Missing config wiring: packages/core/src/config.ts does not include memory settings. Add memory section (enabled, scopes, injection config, storage limits) with defaults, env overrides, and validation. Ensure AgentLoop honors it.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "config",
+    "memory"
+  ],
+  "created": "2026-02-04T16:24:34.283Z",
+  "updated": "2026-02-04T16:24:34.283Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "712",
+  "subject": "Wire agent tool allowlist into runtime sessions",
+  "description": "Bug: web agents store settings.tools but runtime never applies them. When creating/starting sessions, fetch agent by session.agentId and pass allowedTools into EmbeddedClient/AgentLoop (agent-pool + session bootstrap). Align naming with core (enabledTools) or map settings.tools to allowedTools. Add tests to confirm tools are restricted per agent.",
+  "status": "pending",
+  "created": "2026-02-04T20:55:34.668Z",
+  "updated": "2026-02-04T20:55:34.668Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "682",
+  "subject": "Validate /memory command arguments",
+  "description": "Bad logic: /memory set/list/search accept arbitrary category values and do not validate importance/tags. Add explicit validation and clear error messages; clamp importance to 1–10; reject unknown categories; ensure /memory list/search require valid args.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "commands"
+  ],
+  "created": "2026-02-04T16:24:08.367Z",
+  "updated": "2026-02-04T16:24:08.367Z"
+}

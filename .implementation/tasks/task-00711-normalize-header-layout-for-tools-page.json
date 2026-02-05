@@ -1,0 +1,14 @@
+{
+  "id": "711",
+  "subject": "Normalize header/layout for tools page",
+  "description": "packages/web/src/app/(dashboard)/tools/page.tsx: Add breadcrumb + page title header; remove description/count copy. Place primary action (e.g., Refresh) on same row right-aligned. Ensure filters use shared FilterBar and align with data table layout standards.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "ui",
+    "layout"
+  ],
+  "created": "2026-02-04T20:46:52.902Z",
+  "updated": "2026-02-04T20:46:52.902Z"
+}

@@ -4,6 +4,62 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 727 | Add scope controls to /memory set and me | pending | - | - |
+| 726 | Fix /model output for unknown model prov | pending | - | - |
+| 725 | Fix memory_export tool to export full re | pending | - | - |
+| 724 | Handle empty categories/scopes in memory | pending | - | - |
+| 723 | Enforce memory scope enablement + requir | pending | - | - |
+| 722 | Clear expired memories before enforcing  | pending | - | - |
+| 721 | Deep-merge memory config defaults in Glo | pending | - | - |
+| 720 | Normalize header layout for skills page | pending | - | - |
+| 719 | Add tests for API key management endpoin | pending | - | - |
+| 718 | API key auth: update lastUsedAt only for | pending | - | - |
+| 717 | Show indeterminate state for tool/skill  | pending | - | - |
+| 716 | Remove skill filePath exposure from UI | pending | - | - |
+| 715 | Fix /model switch to update maxContextTo | pending | - | - |
+| 714 | AgentEditDialog: use shared model regist | pending | - | - |
+| 713 | Implement per-agent skill allowlist or r | pending | - | - |
+| 712 | Wire agent tool allowlist into runtime s | pending | - | - |
+| 711 | Normalize header/layout for tools page | pending | - | - |
+| 710 | Load project-level skills in /api/v1/ski | pending | - | - |
+| 709 | Add subagent config to AssistantsConfig | pending | - | - |
+| 708 | Validate provider/model compatibility in | pending | - | - |
+| 707 | Fix memory docs and tool list mismatch | pending | - | - |
+| 706 | Use authenticated fetch in ToolSelector/ | pending | - | - |
+| 705 | Make terminal build fail in CI if types  | pending | - | - |
+| 704 | Fix terminal package type exports for pu | pending | - | - |
+| 703 | Add tests for API key auth + tools/skill | pending | - | - |
+| 702 | Fix context injection caching staleness | pending | - | - |
+| 701 | Clear pending injections when session re | pending | - | - |
+| 700 | Validate API key format before DB lookup | pending | - | - |
+| 699 | Load available models dynamically in Cha | pending | - | - |
+| 698 | Fix subagent run loop (remove no-op turn | pending | - | - |
+| 697 | Clear pending context injection on comma | pending | - | - |
+| 696 | Avoid sharing parent LLM client across c | pending | - | - |
+| 695 | Support API key auth for skills/tools en | pending | - | - |
+| 694 | Enforce API key permissions in middlewar | pending | - | - |
+| 693 | Handle undefined skill descriptions in / | pending | - | - |
+| 692 | Avoid exposing server file paths in /api | pending | - | - |
+| 691 | Align /api/v1/tools metadata with actual | pending | - | - |
+| 690 | Add /memory tool parity or map to tools | pending | - | - |
+| 689 | Document memory persistence + privacy bo | pending | - | - |
+| 688 | Add tests for AgentLoop memory injection | pending | - | - |
+| 687 | Validate /memory import file structure | pending | - | - |
+| 686 | Skip memory injection for slash/explicit | pending | - | - |
+| 685 | Limit memory entry size | pending | - | - |
+| 684 | Add memory config schema + defaults | pending | - | - |
+| 683 | Add retention for memory access log | pending | - | - |
+| 682 | Validate /memory command arguments | pending | - | - |
+| 681 | Export new memory APIs from core index | pending | - | - |
+| 680 | Update /memory help text to include impo | pending | - | - |
+| 679 | Enforce memory storage limits (maxEntrie | pending | - | - |
+| 678 | Sanitize memory query ordering inputs | pending | - | - |
+| 677 | Fix MemoryInjector refresh/dedup logic | pending | - | - |
+| 676 | Add tests + docs for memory system | pending | - | - |
+| 675 | Harden memory tools input validation | pending | - | - |
+| 674 | Close memory DB and respect memory confi | pending | - | - |
+| 673 | Prevent memory list/query from leaking o | pending | - | - |
+| 672 | Fix memory scopeId defaulting for global | pending | - | - |
 | 671 | Security audit: terminal command handlin | pending | - | - |
 | 670 | Security audit: websocket + realtime tra | pending | - | - |
 | 669 | Security audit: web API auth + rate limi | pending | - | - |

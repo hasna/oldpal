@@ -1,0 +1,14 @@
+{
+  "id": "686",
+  "subject": "Skip memory injection for slash/explicit tool commands",
+  "description": "Logic bug: AgentLoop injects memory context before command handling, so /memory (or other /commands) can still trigger memory injection that persists into the next LLM call. Move injectMemoryContext to run only for non-command user messages, or clear pendingMemoryContext when a command is handled. Add tests to ensure commands don't mutate memory context.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "core",
+    "memory",
+    "logic"
+  ],
+  "created": "2026-02-04T16:26:39.324Z",
+  "updated": "2026-02-04T16:26:39.324Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "718",
+  "subject": "API key auth: update lastUsedAt only for active users",
+  "description": "Logic bug: authenticateWithApiKey updates api_keys.lastUsedAt before confirming the owning user is active. Move lastUsedAt update after user lookup/active check (or skip update when user inactive) to avoid side effects and potential info leaks. File: packages/web/src/lib/auth/middleware.ts.",
+  "status": "pending",
+  "created": "2026-02-04T20:56:32.617Z",
+  "updated": "2026-02-04T20:56:32.617Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "715",
+  "subject": "Fix /model switch to update maxContextTokens on larger models",
+  "description": "Bug: AgentLoop.switchModel only shrinks contextConfig.maxContextTokens (min of current vs model context). Switching to a larger model never expands the context window. Update switchModel to recompute maxContextTokens based on config defaults + new modelDef.contextWindow, and update builtin token usage accordingly. Add tests.",
+  "status": "pending",
+  "created": "2026-02-04T20:55:59.637Z",
+  "updated": "2026-02-04T20:55:59.637Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "678",
+  "subject": "Sanitize memory query ordering inputs",
+  "description": "Security/logic: GlobalMemoryManager.query() interpolates orderDir and orderBy without validation; invalid values can cause SQL errors or injection if exposed. Clamp orderBy to known columns and orderDir to asc/desc, defaulting safely. Add tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "security"
+  ],
+  "created": "2026-02-04T16:21:27.190Z",
+  "updated": "2026-02-04T16:21:27.190Z"
+}

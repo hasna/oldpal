@@ -1,0 +1,14 @@
+{
+  "id": "694",
+  "subject": "Enforce API key permissions in middleware",
+  "description": "Security gap: API key auth ignores api_keys.permissions. Add permission checks (e.g., scopes per route) and reject keys lacking required scope. Update docs and tests.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "api",
+    "auth"
+  ],
+  "created": "2026-02-04T20:35:54.858Z",
+  "updated": "2026-02-04T20:35:54.858Z"
+}

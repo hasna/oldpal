@@ -1,0 +1,14 @@
+{
+  "id": "688",
+  "subject": "Add tests for AgentLoop memory injection lifecycle",
+  "description": "Missing tests: ensure memory injection only happens for user messages (not /commands), clears old injection, and respects stop/error flows. Add tests for pendingMemoryContext handling across turns and session reset.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "tests"
+  ],
+  "created": "2026-02-04T16:27:34.718Z",
+  "updated": "2026-02-04T16:27:34.718Z"
+}

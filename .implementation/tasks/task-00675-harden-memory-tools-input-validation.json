@@ -1,0 +1,14 @@
+{
+  "id": "675",
+  "subject": "Harden memory tools input validation",
+  "description": "Bad logic: memory_save assumes value is string (uses startsWith), memory_recall/list allow empty search returning everything, and limits are unbounded. Validate inputs (type checks, required key/value), clamp limits, and return user-facing errors; add tests for invalid inputs.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "tools"
+  ],
+  "created": "2026-02-04T16:18:24.292Z",
+  "updated": "2026-02-04T16:18:24.292Z"
+}

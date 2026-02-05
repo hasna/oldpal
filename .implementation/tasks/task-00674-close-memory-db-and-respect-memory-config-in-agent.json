@@ -1,0 +1,14 @@
+{
+  "id": "674",
+  "subject": "Close memory DB and respect memory config in AgentLoop",
+  "description": "Bad logic: memory manager/injector are always enabled and never closed. Wire AssistantsConfig memory settings (enabled, scopes, maxEntries) and ensure memoryManager.close() is called in AgentLoop.shutdown(). Add tests for enabling/disabling memory and scope config.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "config"
+  ],
+  "created": "2026-02-04T16:18:14.492Z",
+  "updated": "2026-02-04T16:18:14.492Z"
+}

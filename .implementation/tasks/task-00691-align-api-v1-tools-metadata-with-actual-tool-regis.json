@@ -1,0 +1,15 @@
+{
+  "id": "691",
+  "subject": "Align /api/v1/tools metadata with actual tool registry",
+  "description": "Bad logic: tools API lists memory_store/spawn_agent/send_message which don't exist in core (actual: memory_save, agent_spawn, agent_delegate, agent_job_status). Update tools API to reflect real tool names/params or generate dynamically from registry. Add tests to keep list in sync.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "web",
+    "api",
+    "tools",
+    "bug"
+  ],
+  "created": "2026-02-04T20:35:23.201Z",
+  "updated": "2026-02-04T20:35:23.201Z"
+}

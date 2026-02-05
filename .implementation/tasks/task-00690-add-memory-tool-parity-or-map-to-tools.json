@@ -1,0 +1,14 @@
+{
+  "id": "690",
+  "subject": "Add /memory tool parity or map to tools",
+  "description": "Potential logic gap: /memory command is implemented, but tools memory_save/recall/list/update/stats exist separately. Ensure parity between /memory commands and tool behavior (categories, scopes, limits) or explicitly document differences. Add tests to keep them aligned.",
+  "status": "pending",
+  "priority": "low",
+  "tags": [
+    "core",
+    "memory",
+    "commands"
+  ],
+  "created": "2026-02-04T16:28:12.505Z",
+  "updated": "2026-02-04T16:28:12.505Z"
+}

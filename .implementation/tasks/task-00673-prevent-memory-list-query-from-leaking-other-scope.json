@@ -1,0 +1,14 @@
+{
+  "id": "673",
+  "subject": "Prevent memory list/query from leaking other scopes",
+  "description": "Bug/logic: GlobalMemoryManager.query() with no scopeId filters returns all memories across assistants. Tighten default behavior (for /memory list and tools) to apply current scopeId for private/shared unless explicitly requesting all scopes. Add an explicit flag to list/search if full cross-scope listing is desired, and add tests.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "core",
+    "memory",
+    "security"
+  ],
+  "created": "2026-02-04T16:18:02.141Z",
+  "updated": "2026-02-04T16:18:02.141Z"
+}

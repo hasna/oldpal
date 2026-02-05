@@ -1,0 +1,14 @@
+{
+  "id": "677",
+  "subject": "Fix MemoryInjector refresh/dedup logic",
+  "description": "Bad logic: MemoryInjector tracks lastInjectedIds + refreshInterval but never uses it to filter repeats, so memories are injected every turn and refreshInterval is meaningless. Implement dedupe (skip recently injected unless refresh), or remove unused state. Add tests for refreshInterval behavior.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "logic"
+  ],
+  "created": "2026-02-04T16:21:16.947Z",
+  "updated": "2026-02-04T16:21:16.947Z"
+}

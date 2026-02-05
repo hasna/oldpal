@@ -1,0 +1,14 @@
+{
+  "id": "703",
+  "subject": "Add tests for API key auth + tools/skills pagination",
+  "description": "Missing tests: withApiKeyAuth flow (valid/invalid/expired/revoked, inactive user), and new pagination/filtering in /api/v1/skills and /api/v1/tools. Add coverage for category/search/sort params and permissions.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "tests",
+    "api",
+    "auth"
+  ],
+  "created": "2026-02-04T20:38:56.012Z",
+  "updated": "2026-02-04T20:38:56.012Z"
+}

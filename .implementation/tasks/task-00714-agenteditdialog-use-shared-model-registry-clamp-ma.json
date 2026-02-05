@@ -1,0 +1,8 @@
+{
+  "id": "714",
+  "subject": "AgentEditDialog: use shared model registry + clamp maxTokens",
+  "description": "Bug/UX: AgentEditDialog only lists ANTHROPIC_MODELS and lets maxTokens exceed selected model maxOutputTokens. Switch to shared model registry (all providers) and clamp or auto-reduce maxTokens when model changes; also validate in agents API (create/update) to reject maxTokens beyond model limits.",
+  "status": "pending",
+  "created": "2026-02-04T20:55:51.862Z",
+  "updated": "2026-02-04T20:55:51.862Z"
+}

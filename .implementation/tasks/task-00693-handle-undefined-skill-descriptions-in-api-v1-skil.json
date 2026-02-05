@@ -1,0 +1,14 @@
+{
+  "id": "693",
+  "subject": "Handle undefined skill descriptions in /api/v1/skills",
+  "description": "Bug: skills API filter uses skill.description.toLowerCase(); description may be empty/undefined causing crash. Guard against missing descriptions and default to empty string in filtering/sorting.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "api",
+    "bug"
+  ],
+  "created": "2026-02-04T20:35:44.506Z",
+  "updated": "2026-02-04T20:35:44.506Z"
+}

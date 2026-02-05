@@ -1,0 +1,15 @@
+{
+  "id": "676",
+  "subject": "Add tests + docs for memory system",
+  "description": "Missing coverage and docs for new memory system. Add unit tests for GlobalMemoryManager, MemoryInjector, and /memory command flows (list/get/set/search/export/import). Add docs to README or docs/ describing memory scopes, commands, and privacy boundaries.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "memory",
+    "tests",
+    "docs"
+  ],
+  "created": "2026-02-04T16:18:41.091Z",
+  "updated": "2026-02-04T16:18:41.091Z"
+}

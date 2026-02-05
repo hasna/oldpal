@@ -1,0 +1,14 @@
+{
+  "id": "701",
+  "subject": "Clear pending injections when session resets",
+  "description": "Bug: context/memory injections are cached in AgentLoop and may persist across /clear or session restore. Ensure resetContext/loadSessionState clears pendingContextInjection and pendingMemoryContext and refreshes context injector cache. Add tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "context",
+    "bug"
+  ],
+  "created": "2026-02-04T20:38:11.053Z",
+  "updated": "2026-02-04T20:38:11.053Z"
+}

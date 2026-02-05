@@ -1,0 +1,8 @@
+{
+  "id": "725",
+  "subject": "Fix memory_export tool to export full result set",
+  "description": "Bug/doc mismatch: memory_export tool advertises exporting all memories, but it calls manager.query with limit MAX_LIMIT (100). Use manager.export (or paginate) to return all matching memories, or accept a limit/offset parameter explicitly.",
+  "status": "pending",
+  "created": "2026-02-04T21:01:46.384Z",
+  "updated": "2026-02-04T21:01:46.384Z"
+}

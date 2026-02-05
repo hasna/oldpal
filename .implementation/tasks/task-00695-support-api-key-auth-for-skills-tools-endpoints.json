@@ -1,0 +1,14 @@
+{
+  "id": "695",
+  "subject": "Support API key auth for skills/tools endpoints",
+  "description": "Logic gap: /api/v1/skills and /api/v1/tools use withAuth only. If API keys are supported, switch to withApiKeyAuth (or allow both) so external clients can list available skills/tools. Add tests for API key access.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "web",
+    "api",
+    "auth"
+  ],
+  "created": "2026-02-04T20:36:06.515Z",
+  "updated": "2026-02-04T20:36:06.515Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "723",
+  "subject": "Enforce memory scope enablement + require scopeId for private",
+  "description": "Logic/security: GlobalMemoryManager does not respect config.scopes flags and allows private scope without a scopeId (falls back to null). Enforce scope enablement on set/get/query/getRelevant and throw/return empty when disabled. Require scopeId for private scope (or refuse) to prevent unscoped private data.",
+  "status": "pending",
+  "created": "2026-02-04T21:01:24.767Z",
+  "updated": "2026-02-04T21:01:24.767Z"
+}

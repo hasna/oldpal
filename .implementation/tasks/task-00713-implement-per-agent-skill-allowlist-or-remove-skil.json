@@ -1,0 +1,8 @@
+{
+  "id": "713",
+  "subject": "Implement per-agent skill allowlist or remove skills UI",
+  "description": "Missing implementation: AgentEditDialog lets users select skills, but backend/core never enforces an allowlist. Either implement allowedSkills in AgentLoop/SkillLoader (filter skill list + skill execution by settings.skills) and wire it from DB agent settings, or remove/disable skills selector until enforcement exists. Add tests.",
+  "status": "pending",
+  "created": "2026-02-04T20:55:42.440Z",
+  "updated": "2026-02-04T20:55:42.440Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "696",
+  "subject": "Avoid sharing parent LLM client across concurrent subagents",
+  "description": "Bad logic: SubagentManager passes parent LLM client instance into subagents, which can cause concurrency issues if multiple subagents run in parallel. Create a new client per subagent (clone config) or ensure client is concurrency-safe. Add tests for concurrent subagent runs.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "core",
+    "agents",
+    "concurrency"
+  ],
+  "created": "2026-02-04T20:36:16.349Z",
+  "updated": "2026-02-04T20:36:16.349Z"
+}

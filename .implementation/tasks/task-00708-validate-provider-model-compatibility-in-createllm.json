@@ -1,0 +1,14 @@
+{
+  "id": "708",
+  "subject": "Validate provider/model compatibility in createLLMClient",
+  "description": "Bug: createLLMClient only auto-detects provider when provider is missing or 'anthropic'. If provider is set incorrectly (e.g., openai + claude), it will misconfigure. Add validation: if model maps to a different provider, override or throw with clear error. Add tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "core",
+    "llm",
+    "bug"
+  ],
+  "created": "2026-02-04T20:43:10.795Z",
+  "updated": "2026-02-04T20:43:10.795Z"
+}
