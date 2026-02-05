@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
 import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, type SessionInfo, type RecoverableSession } from '@hasna/assistants-core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler } from '@hasna/assistants-shared';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
@@ -25,6 +25,7 @@ import { MessagesPanel } from './MessagesPanel';
 import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
 import { AgentsPanel } from './AgentsPanel';
+import { SchedulesPanel } from './SchedulesPanel';
 import type { QueuedMessage } from './appTypes';
 import {
   getTasks,
@@ -55,6 +56,10 @@ import {
   type BudgetStatus,
   type RegisteredAgent,
   type RegistryStats,
+  listSchedules,
+  deleteSchedule,
+  updateSchedule,
+  computeNextRun,
 } from '@hasna/assistants-core';
 import type { BudgetConfig, BudgetLimits } from '@hasna/assistants-shared';
 import type { AssistantsConfig } from '@hasna/assistants-shared';
@@ -175,6 +180,10 @@ export function App({ cwd, version }: AppProps) {
   const [showTasksPanel, setShowTasksPanel] = useState(false);
   const [tasksList, setTasksList] = useState<Task[]>([]);
   const [tasksPaused, setTasksPaused] = useState(false);
+
+  // Schedules panel state
+  const [showSchedulesPanel, setShowSchedulesPanel] = useState(false);
+  const [schedulesList, setSchedulesList] = useState<ScheduledCommand[]>([]);
 
   // Assistants panel state
   const [showAssistantsPanel, setShowAssistantsPanel] = useState(false);
@@ -689,6 +698,12 @@ export function App({ cwd, version }: AppProps) {
             setTasksPaused(paused);
             setShowTasksPanel(true);
           });
+        });
+      } else if (chunk.panel === 'schedules') {
+        // Load schedules and show panel
+        listSchedules(cwd).then((schedules) => {
+          setSchedulesList(schedules);
+          setShowSchedulesPanel(true);
         });
       } else if (chunk.panel === 'assistants') {
         // Show assistants panel
@@ -1638,6 +1653,62 @@ export function App({ cwd, version }: AppProps) {
           onTogglePause={handleTasksTogglePause}
           onChangePriority={handleTasksChangePriority}
           onClose={() => setShowTasksPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show schedules panel
+  if (showSchedulesPanel) {
+    const handleSchedulePause = async (id: string) => {
+      await updateSchedule(cwd, id, (schedule) => ({
+        ...schedule,
+        status: 'paused',
+        updatedAt: Date.now(),
+      }));
+      setSchedulesList(await listSchedules(cwd));
+    };
+
+    const handleScheduleResume = async (id: string) => {
+      await updateSchedule(cwd, id, (schedule) => {
+        const nextRun = computeNextRun(schedule, Date.now());
+        return {
+          ...schedule,
+          status: 'active',
+          updatedAt: Date.now(),
+          nextRunAt: nextRun,
+        };
+      });
+      setSchedulesList(await listSchedules(cwd));
+    };
+
+    const handleScheduleDelete = async (id: string) => {
+      await deleteSchedule(cwd, id);
+      setSchedulesList(await listSchedules(cwd));
+    };
+
+    const handleScheduleRun = async (id: string) => {
+      const schedule = schedulesList.find((s) => s.id === id);
+      if (schedule && activeSession) {
+        // Execute the command now
+        await activeSession.client.send(schedule.command);
+      }
+    };
+
+    const handleScheduleRefresh = async () => {
+      setSchedulesList(await listSchedules(cwd));
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <SchedulesPanel
+          schedules={schedulesList}
+          onPause={handleSchedulePause}
+          onResume={handleScheduleResume}
+          onDelete={handleScheduleDelete}
+          onRun={handleScheduleRun}
+          onRefresh={handleScheduleRefresh}
+          onClose={() => setShowSchedulesPanel(false)}
         />
       </Box>
     );

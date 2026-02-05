@@ -630,19 +630,61 @@ export function TasksPanel({
       </Box>
 
       {/* Selected task details */}
-      {tasks.length > 0 && selectedIndex < tasks.length && (
-        <Box marginTop={1} flexDirection="column">
-          <Text dimColor wrap="wrap">
-            {tasks[selectedIndex].description}
-          </Text>
-          {tasks[selectedIndex].error && (
-            <Text color="red">Error: {tasks[selectedIndex].error}</Text>
-          )}
-          {tasks[selectedIndex].result && (
-            <Text color="green">Result: {tasks[selectedIndex].result}</Text>
-          )}
-        </Box>
-      )}
+      {tasks.length > 0 && selectedIndex < tasks.length && (() => {
+        const task = tasks[selectedIndex];
+        const formatTime = (ts: number | undefined) => ts ? new Date(ts).toLocaleString() : 'n/a';
+        const getElapsed = () => {
+          if (task.status !== 'in_progress' || !task.startedAt) return null;
+          const elapsed = Date.now() - task.startedAt;
+          const secs = Math.floor(elapsed / 1000);
+          const mins = Math.floor(secs / 60);
+          const hrs = Math.floor(mins / 60);
+          if (hrs > 0) return `${hrs}h ${mins % 60}m elapsed`;
+          if (mins > 0) return `${mins}m ${secs % 60}s elapsed`;
+          return `${secs}s elapsed`;
+        };
+        const elapsed = getElapsed();
+
+        return (
+          <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
+            <Text bold wrap="wrap">{task.description}</Text>
+
+            {/* Timestamps and elapsed time */}
+            <Box marginTop={0}>
+              <Text dimColor>Created: {formatTime(task.createdAt)}</Text>
+              {elapsed && <Text color="yellow"> | {elapsed}</Text>}
+            </Box>
+            {task.startedAt && (
+              <Text dimColor>Started: {formatTime(task.startedAt)}</Text>
+            )}
+            {task.completedAt && (
+              <Text dimColor>Completed: {formatTime(task.completedAt)}</Text>
+            )}
+
+            {/* Dependencies and assignment */}
+            {task.blockedBy && task.blockedBy.length > 0 && (
+              <Text dimColor>Blocked by: {task.blockedBy.map(id => getTaskLabel(id)).join(', ')}</Text>
+            )}
+            {task.blocks && task.blocks.length > 0 && (
+              <Text dimColor>Blocks: {task.blocks.map(id => getTaskLabel(id)).join(', ')}</Text>
+            )}
+            {task.assignee && (
+              <Text dimColor>Assignee: {task.assignee}</Text>
+            )}
+            {task.projectId && (
+              <Text dimColor>Project: {task.projectId}</Text>
+            )}
+
+            {/* Result/Error */}
+            {task.error && (
+              <Text color="red">Error: {task.error}</Text>
+            )}
+            {task.result && (
+              <Text color="green">Result: {task.result}</Text>
+            )}
+          </Box>
+        );
+      })()}
 
       <Box marginTop={1}>
         <Text dimColor>
