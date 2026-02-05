@@ -1249,10 +1249,34 @@ export function App({ cwd, version }: AppProps) {
   const renderWidth = columns ? Math.max(1, columns - 2) : undefined;
   const wrapChars = renderWidth ?? MESSAGE_WRAP_CHARS;
 
-  const displayMessages = useMemo(
-    () => buildDisplayMessages(messages, MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth }),
-    [messages, wrapChars, renderWidth]
-  );
+  // Use a ref to track which messages have been rendered to Static
+  // This ensures keys remain stable even when terminal width changes
+  const renderedMessageIdsRef = useRef<Set<string>>(new Set());
+  const cachedDisplayMessagesRef = useRef<Map<string, ReturnType<typeof buildDisplayMessages>[0][]>>(new Map());
+
+  const displayMessages = useMemo(() => {
+    const result: ReturnType<typeof buildDisplayMessages> = [];
+
+    for (const msg of messages) {
+      // Use cached rendering if available to keep keys stable
+      const cached = cachedDisplayMessagesRef.current.get(msg.id);
+      if (cached && renderedMessageIdsRef.current.has(msg.id)) {
+        result.push(...cached);
+        continue;
+      }
+
+      // Build display for this message
+      const msgDisplay = buildDisplayMessages([msg], MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth });
+
+      // Cache the result
+      cachedDisplayMessagesRef.current.set(msg.id, msgDisplay);
+      renderedMessageIdsRef.current.add(msg.id);
+
+      result.push(...msgDisplay);
+    }
+
+    return result;
+  }, [messages, wrapChars, renderWidth]);
 
   const reservedLines = 12;
   const dynamicBudget = Math.max(6, rows - reservedLines);

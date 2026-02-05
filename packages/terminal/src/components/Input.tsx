@@ -608,8 +608,8 @@ export function Input({
     placeholder = askPlaceholder || 'Answer the question...';
   } else if (isProcessing) {
     placeholder = queueLength > 0
-      ? 'Type to queue (Tab) or interrupt (Shift+Enter)...'
-      : 'Type to interrupt (Shift+Enter)...';
+      ? 'Enter=inline | Tab=queue | Shift+Enter=interrupt'
+      : 'Enter=send inline | Shift+Enter=interrupt';
   }
 
   // Truncate description to fit in terminal
