@@ -58,10 +58,16 @@ export function SkillSelector({ selectedSkills, onChange }: SkillSelectorProps) 
           throw new Error('Failed to fetch skills');
         }
         const data = await response.json();
-        setSkills(data.data.items || []);
-        setCategories(data.data.categories || []);
+        const items = data.data.items || [];
+        setSkills(items);
+        // Derive categories from items if API doesn't return them
+        const apiCategories = data.data.categories || [];
+        const derivedCategories = apiCategories.length > 0
+          ? apiCategories
+          : [...new Set(items.map((s: Skill) => s.category))].sort();
+        setCategories(derivedCategories);
         // Expand all categories by default
-        setExpandedCategories(new Set(data.data.categories || []));
+        setExpandedCategories(new Set(derivedCategories));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load skills');
       } finally {

@@ -54,10 +54,16 @@ export function ToolSelector({ selectedTools, onChange }: ToolSelectorProps) {
           throw new Error('Failed to fetch tools');
         }
         const data = await response.json();
-        setTools(data.data.items || []);
-        setCategories(data.data.categories || []);
+        const items = data.data.items || [];
+        setTools(items);
+        // Derive categories from items if API doesn't return them
+        const apiCategories = data.data.categories || [];
+        const derivedCategories = apiCategories.length > 0
+          ? apiCategories
+          : [...new Set(items.map((t: Tool) => t.category))].sort();
+        setCategories(derivedCategories);
         // Expand all categories by default
-        setExpandedCategories(new Set(data.data.categories || []));
+        setExpandedCategories(new Set(derivedCategories));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load tools');
       } finally {
