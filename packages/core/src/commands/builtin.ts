@@ -21,6 +21,7 @@ import {
   updateSchedule,
   computeNextRun,
 } from '../scheduler/store';
+import { formatRelativeTime } from '../scheduler/format';
 import {
   createProject,
   deleteProject,
@@ -5584,27 +5585,53 @@ Please summarize the last interaction and suggest 2-3 next steps.
   private schedulesCommand(): Command {
     return {
       name: 'schedules',
-      description: 'List scheduled commands',
+      description: 'Browse and manage scheduled commands',
       builtin: true,
       selfHandled: true,
       content: '',
-      handler: async (_args, context) => {
-        const schedules = await listSchedules(context.cwd);
-        if (schedules.length === 0) {
-          context.emit('text', 'No schedules found.\n');
+      handler: async (args, context) => {
+        const trimmed = args.trim().toLowerCase();
+
+        // Show interactive panel for no args or 'ui' command
+        if (!trimmed || trimmed === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'schedules' };
+        }
+
+        // Text-based list for 'list' or '--list'
+        if (trimmed === 'list' || trimmed === '--list') {
+          const schedules = await listSchedules(context.cwd);
+          if (schedules.length === 0) {
+            context.emit('text', 'No schedules found.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const escapeCell = (value: string) =>
+            value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+
+          let output = '\n| ID | Status | Next Run | Command |\n';
+          output += '|----|--------|----------|---------|\n';
+          for (const schedule of schedules.sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))) {
+            const next = formatRelativeTime(schedule.nextRunAt);
+            const cmd = escapeCell(schedule.command.slice(0, 40) + (schedule.command.length > 40 ? '...' : ''));
+            output += `| ${schedule.id.slice(0, 8)} | ${schedule.status} | ${next} | ${cmd} |\n`;
+          }
+          context.emit('text', output);
           context.emit('done');
           return { handled: true };
         }
 
-        const escapeCell = (value: string) =>
-          value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
-        let output = '\n| ID | Status | Next Run | Command |\n';
-        output += '|----|--------|----------|---------|\n';
-        for (const schedule of schedules.sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))) {
-          const next = schedule.nextRunAt ? new Date(schedule.nextRunAt).toISOString() : 'n/a';
-          output += `| ${schedule.id} | ${schedule.status} | ${next} | ${escapeCell(schedule.command)} |\n`;
-        }
-        context.emit('text', output);
+        // Show help
+        context.emit('text', '\n**Schedules** - Manage scheduled commands\n\n');
+        context.emit('text', 'Usage:\n');
+        context.emit('text', '  /schedules           Open interactive panel\n');
+        context.emit('text', '  /schedules ui        Open interactive panel\n');
+        context.emit('text', '  /schedules list      Show text table (scripting)\n');
+        context.emit('text', '  /schedule <time> <cmd>  Create a schedule\n');
+        context.emit('text', '  /unschedule <id>     Delete a schedule\n');
+        context.emit('text', '  /pause <id>          Pause a schedule\n');
+        context.emit('text', '  /resume <id>         Resume a schedule\n');
         context.emit('done');
         return { handled: true };
       },

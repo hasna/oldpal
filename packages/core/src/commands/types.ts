@@ -134,7 +134,7 @@ export interface CommandResult {
   /** Session number to switch to (1-based) */
   sessionNumber?: number;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'agents';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'agents' | 'schedules';
   /** Initial value for panel (e.g., connector name) */
   panelInitialValue?: string;
 }
