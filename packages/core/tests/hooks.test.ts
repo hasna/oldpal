@@ -212,6 +212,51 @@ describe('HookExecutor', () => {
       const input = createInput({ tool_name: '[' });
       expect(matchesPattern(executor, '[', input)).toBe(true);
     });
+
+    test('should match PermissionRequest tool name', () => {
+      const input = createInput({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'bash',
+      });
+      expect(matchesPattern(executor, 'bash', input)).toBe(true);
+      expect(matchesPattern(executor, 'read', input)).toBe(false);
+    });
+
+    test('should match Notification type', () => {
+      const input = createInput({
+        hook_event_name: 'Notification',
+        notification_type: 'info' as any,
+      });
+      expect(matchesPattern(executor, 'info', input)).toBe(true);
+      expect(matchesPattern(executor, 'error', input)).toBe(false);
+    });
+
+    test('should match SubagentStart task pattern', () => {
+      const input = createInput({
+        hook_event_name: 'SubagentStart',
+        task: 'search for files' as any,
+      });
+      expect(matchesPattern(executor, 'search.*', input)).toBe(true);
+      expect(matchesPattern(executor, 'delete.*', input)).toBe(false);
+    });
+
+    test('should match SubagentStop status', () => {
+      const input = createInput({
+        hook_event_name: 'SubagentStop',
+        status: 'completed' as any,
+      });
+      expect(matchesPattern(executor, 'completed', input)).toBe(true);
+      expect(matchesPattern(executor, 'failed', input)).toBe(false);
+    });
+
+    test('should match PreCompact strategy', () => {
+      const input = createInput({
+        hook_event_name: 'PreCompact',
+        strategy: 'hybrid' as any,
+      });
+      expect(matchesPattern(executor, 'hybrid', input)).toBe(true);
+      expect(matchesPattern(executor, 'llm', input)).toBe(false);
+    });
   });
 
   describe('execute', () => {

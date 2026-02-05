@@ -162,6 +162,17 @@ assistants -p "Continue from where we left off" --resume abc123
 | `/skill <name>` | Execute a skill |
 | `/connectors` | List available connectors |
 
+### Hooks Commands
+
+| Command | Description |
+|---------|-------------|
+| `/hooks` | Open interactive hooks panel |
+| `/hooks list` | List all hooks (native + user) |
+| `/hooks enable <id>` | Enable a hook |
+| `/hooks disable <id>` | Disable a hook |
+| `/hooks test <id>` | Test a hook with sample input |
+| `/hooks help` | Show hooks help |
+
 ### Advanced Commands
 
 | Command | Description |
@@ -274,36 +285,113 @@ Use with `/skill code-review src/auth.ts` or `$code-review src/auth.ts`.
 
 ## Hooks
 
-Hooks allow you to run scripts before/after tool execution:
+Hooks intercept agent behavior at key lifecycle points. Use them to validate inputs, block dangerous actions, log activity, or inject context.
+
+### Managing Hooks
+
+Use the interactive panel:
+```
+/hooks
+```
+
+Or manage via commands:
+```
+/hooks list           # List all hooks
+/hooks enable abc123  # Enable a hook by ID
+/hooks disable abc123 # Disable a hook
+/hooks test abc123    # Test a hook with sample input
+```
+
+### Hook Events
+
+| Event | When Triggered |
+|-------|----------------|
+| **PreToolUse** | Before any tool executes |
+| **PostToolUse** | After tool succeeds |
+| **PostToolUseFailure** | After tool fails |
+| **PermissionRequest** | When approval needed |
+| **UserPromptSubmit** | User sends message |
+| **SessionStart** | Session begins |
+| **SessionEnd** | Session ends |
+| **SubagentStart** | Subagent spawning |
+| **SubagentStop** | Subagent completes |
+| **PreCompact** | Before context compaction |
+| **Notification** | Notification sent |
+| **Stop** | Agent stopping |
+
+### Configuration
+
+Create `.assistants/hooks.json` in your project:
 
 ```json
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "./scripts/validate-command.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "./scripts/on-file-change.sh"
-          }
-        ]
-      }
-    ]
-  }
+  "PreToolUse": [
+    {
+      "matcher": "Bash|Edit|Write",
+      "hooks": [
+        {
+          "id": "validate-commands",
+          "name": "Validate dangerous commands",
+          "description": "Blocks rm -rf, sudo, etc.",
+          "type": "command",
+          "command": "./scripts/validate.sh",
+          "timeout": 5000,
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "prettier --write \"$INPUT_file_path\"",
+          "async": true
+        }
+      ]
+    }
+  ]
 }
 ```
+
+### Creating Hooks via Wizard
+
+Press `a` in the hooks panel to launch the interactive wizard:
+
+1. Select event type (PreToolUse, PostToolUse, etc.)
+2. Enter matcher pattern (regex or `*` for all)
+3. Choose hook type (command, prompt, agent)
+4. Enter command or prompt
+5. Set timeout and async options
+6. Choose save location (user, project, local)
+
+### Example: Block Dangerous Commands
+
+```bash
+#!/bin/bash
+# .assistants/scripts/validate.sh
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+
+if echo "$COMMAND" | grep -qE 'rm\s+-rf|sudo|shutdown'; then
+  echo "Blocked: dangerous command" >&2
+  exit 2  # Exit 2 = block
+fi
+
+exit 0  # Exit 0 = allow
+```
+
+### Native Hooks
+
+Built-in hooks that can be enabled/disabled:
+
+| Hook | Event | Description |
+|------|-------|-------------|
+| **scope-verification** | Stop | Verifies goals were met |
+
+Manage native hooks via `/hooks` panel or commands.
 
 ## Programmatic Usage
 

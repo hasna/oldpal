@@ -9,7 +9,7 @@
  */
 
 import { generateId } from '@hasna/assistants-shared';
-import type { StreamChunk, Tool } from '@hasna/assistants-shared';
+import type { StreamChunk, Tool, HookInput, HookOutput } from '@hasna/assistants-shared';
 import type { LLMClient } from '../llm/client';
 
 // ============================================
@@ -97,6 +97,8 @@ export interface SubagentManagerContext {
   getLLMClient: () => LLMClient | null;
   /** Get LLM config to create a new client for subagents (avoids sharing client) */
   getLLMConfig?: () => import('@hasna/assistants-shared').LLMConfig | null;
+  /** Fire a hook and return the result (optional - for SubagentStart/Stop hooks) */
+  fireHook?: (input: HookInput) => Promise<HookOutput | null>;
 }
 
 export interface SubagentLoopConfig {
@@ -247,6 +249,52 @@ export class SubagentManager {
     }
 
     const subagentId = generateId();
+
+    // Fire SubagentStart hook if available
+    if (this.context.fireHook) {
+      const hookInput: HookInput = {
+        session_id: config.parentSessionId,
+        hook_event_name: 'SubagentStart',
+        cwd: config.cwd,
+        subagent_id: subagentId,
+        parent_session_id: config.parentSessionId,
+        task: config.task,
+        allowed_tools: config.tools ?? this.config.defaultTools,
+        max_turns: config.maxTurns ?? this.config.maxTurns,
+        depth: config.depth,
+      };
+
+      const hookResult = await this.context.fireHook(hookInput);
+
+      // Hook can block subagent creation
+      if (hookResult && hookResult.continue === false) {
+        return {
+          success: false,
+          error: hookResult.stopReason || 'Blocked by SubagentStart hook',
+          turns: 0,
+          toolCalls: 0,
+        };
+      }
+
+      // Hook can modify allowed_tools via updatedInput
+      if (hookResult?.updatedInput?.allowed_tools) {
+        config = {
+          ...config,
+          tools: hookResult.updatedInput.allowed_tools as string[],
+        };
+      }
+
+      // Hook can add context via additionalContext
+      if (hookResult?.additionalContext) {
+        config = {
+          ...config,
+          context: config.context
+            ? `${config.context}\n\n${hookResult.additionalContext}`
+            : hookResult.additionalContext,
+        };
+      }
+    }
+
     const info: SubagentInfo = {
       id: subagentId,
       task: config.task,
@@ -298,7 +346,15 @@ export class SubagentManager {
       info.completedAt = Date.now();
       info.result = result;
 
-      return result;
+      // Fire SubagentStop hook
+      const finalResult = await this.fireSubagentStopHook(
+        subagentId,
+        config,
+        info,
+        result
+      );
+
+      return finalResult;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       info.status = 'failed';
@@ -309,7 +365,15 @@ export class SubagentManager {
         turns: 0,
         toolCalls: 0,
       };
-      return info.result;
+
+      // Fire SubagentStop hook for error case too
+      const finalResult = await this.fireSubagentStopHook(
+        subagentId,
+        config,
+        info,
+        info.result
+      );
+      return finalResult;
     } finally {
       this.activeSubagents.delete(subagentId);
     }
@@ -441,6 +505,57 @@ export class SubagentManager {
         toolCalls: 0,
       };
     }
+  }
+
+  /**
+   * Fire SubagentStop hook and return potentially modified result
+   */
+  private async fireSubagentStopHook(
+    subagentId: string,
+    config: SubagentConfig,
+    info: SubagentInfo,
+    result: SubagentResult
+  ): Promise<SubagentResult> {
+    if (!this.context.fireHook) {
+      return result;
+    }
+
+    const hookInput: HookInput = {
+      session_id: config.parentSessionId,
+      hook_event_name: 'SubagentStop',
+      cwd: config.cwd,
+      subagent_id: subagentId,
+      parent_session_id: config.parentSessionId,
+      status: info.status,
+      result: result.result,
+      error: result.error,
+      turns_used: result.turns,
+      tool_calls: result.toolCalls,
+      duration_ms: (info.completedAt ?? Date.now()) - info.startedAt,
+      task: config.task,
+    };
+
+    const hookResult = await this.context.fireHook(hookInput);
+
+    // Hook can block result from being used
+    if (hookResult && hookResult.continue === false) {
+      return {
+        success: false,
+        error: hookResult.stopReason || 'Result blocked by SubagentStop hook',
+        turns: result.turns,
+        toolCalls: result.toolCalls,
+      };
+    }
+
+    // Hook can modify the result via updatedInput
+    if (hookResult?.updatedInput?.result !== undefined) {
+      return {
+        ...result,
+        result: String(hookResult.updatedInput.result),
+      };
+    }
+
+    return result;
   }
 
   private createTimeout(ms: number, runner: SubagentRunner): Promise<SubagentResult> {

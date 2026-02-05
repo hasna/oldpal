@@ -88,6 +88,12 @@ export { HookExecutor } from './hooks/executor';
 export { NativeHookRegistry, nativeHookRegistry } from './hooks/native';
 export { ScopeContextManager } from './hooks/scope-context';
 export { createScopeVerificationHook, scopeVerificationHandler } from './hooks/scope-verification';
+export { HookStore } from './hooks/store';
+export { HookTester } from './hooks/tester';
+export { HookLogger } from './hooks/logger';
+export type { HookLocation, HookInfo } from './hooks/store';
+export type { HookTestResult } from './hooks/tester';
+export type { HookLogEntry } from './hooks/logger';
 
 // Verification Sessions
 export { VerificationSessionStore } from './sessions/verification';

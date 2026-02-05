@@ -138,6 +138,7 @@ export class AgentLoop {
   private extraSystemPrompt: string | null = null;
   private cwd: string;
   private sessionId: string;
+  private sessionStartTime: number = Date.now();
   private isRunning = false;
   private shouldStop = false;
   private systemPrompt: string | null = null;
@@ -512,10 +513,14 @@ export class AgentLoop {
 
       // Set up job completion notifications
       this.jobManager.onJobComplete((event) => {
-        // Notify via stream chunk
+        // Notify via stream chunk with hook support
         const statusEmoji = event.status === 'completed' ? '✓' : event.status === 'failed' ? '✗' : '⚠';
-        const message = `\n[Job ${event.status}] ${event.connector} (${event.jobId}): ${event.summary}\n`;
-        this.emit({ type: 'text', content: message });
+        void this.emitNotification({
+          type: 'job_complete',
+          title: `Job ${event.status} ${statusEmoji}`,
+          message: `${event.connector} (${event.jobId}): ${event.summary}`,
+          priority: event.status === 'failed' ? 'high' : 'normal',
+        });
       });
 
       // Register job tools
@@ -920,6 +925,32 @@ export class AgentLoop {
     if (!this.contextManager) return;
     try {
       const messagesBefore = this.context.getMessages();
+
+      // Fire PreCompact hook before attempting compaction
+      const preCompactInput = {
+        session_id: this.sessionId,
+        hook_event_name: 'PreCompact' as const,
+        cwd: this.cwd,
+        message_count: messagesBefore.length,
+        strategy: this.contextConfig?.summaryStrategy ?? 'llm',
+      };
+
+      const preCompactResult = await this.hookExecutor.execute(
+        this.hookLoader.getHooks('PreCompact'),
+        preCompactInput
+      );
+
+      // Hook can skip compaction
+      if (preCompactResult?.skip === true) {
+        return;
+      }
+
+      // Hook can modify strategy via updatedInput
+      if (preCompactResult?.updatedInput?.strategy) {
+        // Note: strategy modification is informational only - the actual strategy
+        // is set at initialization. Hooks can use this to log/track strategy changes.
+      }
+
       const result = await this.contextManager.processMessages(messagesBefore);
       if (!result.summarized) return;
 
@@ -1124,10 +1155,50 @@ export class AgentLoop {
         continue;
       }
 
-      if (preHookResult?.permissionDecision === 'ask') {
+      // If PreToolUse didn't make a decision, fire PermissionRequest hook
+      // This allows hooks to auto-approve/deny or fall through to user prompt
+      let finalPermissionDecision: 'allow' | 'deny' | 'ask' | undefined = preHookResult?.permissionDecision;
+      if (!finalPermissionDecision && !preHookResult?.continue) {
+        const permHookResult = await this.hookExecutor.execute(
+          this.hookLoader.getHooks('PermissionRequest'),
+          {
+            session_id: this.sessionId,
+            hook_event_name: 'PermissionRequest',
+            cwd: this.cwd,
+            tool_name: toolCall.name,
+            tool_input: toolCall.input,
+            permission_type: 'tool_execution',
+          }
+        );
+        if (permHookResult?.permissionDecision) {
+          finalPermissionDecision = permHookResult.permissionDecision;
+        }
+        // Handle PermissionRequest hook decision to deny
+        if (permHookResult?.permissionDecision === 'deny' || permHookResult?.continue === false) {
+          const blockedResult: ToolResult = {
+            toolCallId: toolCall.id,
+            content: `Tool call denied: ${permHookResult.stopReason || 'Blocked by permission hook'}`,
+            isError: true,
+            toolName: toolCall.name,
+          };
+          this.emit({ type: 'tool_result', toolResult: blockedResult });
+          await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+            session_id: this.sessionId,
+            hook_event_name: 'PostToolUseFailure',
+            cwd: this.cwd,
+            tool_name: toolCall.name,
+            tool_input: toolCall.input,
+            tool_result: blockedResult.content,
+          });
+          results.push(blockedResult);
+          continue;
+        }
+      }
+
+      if (finalPermissionDecision === 'ask' || preHookResult?.permissionDecision === 'ask') {
         const askResult: ToolResult = {
           toolCallId: toolCall.id,
-          content: `Tool call requires approval: ${preHookResult.stopReason || 'Approval required'}`,
+          content: `Tool call requires approval: ${preHookResult?.stopReason || 'Approval required'}`,
           isError: true,
           toolName: toolCall.name,
         };
@@ -1397,6 +1468,43 @@ export class AgentLoop {
   }
 
   /**
+   * Emit a notification with hook support
+   * Fires Notification hook first, which can suppress or modify the notification
+   */
+  async emitNotification(params: {
+    type: string;
+    title: string;
+    message: string;
+    priority?: 'low' | 'normal' | 'high';
+  }): Promise<void> {
+    // Fire Notification hook
+    const hookResult = await this.hookExecutor.execute(
+      this.hookLoader.getHooks('Notification'),
+      {
+        session_id: this.sessionId,
+        hook_event_name: 'Notification',
+        cwd: this.cwd,
+        notification_type: params.type,
+        title: params.title,
+        message: params.message,
+        priority: params.priority || 'normal',
+      }
+    );
+
+    // If hook suppresses the notification, don't emit
+    if (hookResult?.suppress) {
+      return;
+    }
+
+    // Apply any modifications from hook
+    const finalTitle = (hookResult?.updatedInput?.title as string) || params.title;
+    const finalMessage = (hookResult?.updatedInput?.message as string) || params.message;
+
+    // Emit the notification as a text chunk
+    this.emit({ type: 'text', content: `\n[${finalTitle}] ${finalMessage}\n` });
+  }
+
+  /**
    * Stop the current processing
    */
   stop(): void {
@@ -1408,6 +1516,9 @@ export class AgentLoop {
    * Shutdown background systems and timers
    */
   shutdown(): void {
+    // Fire SessionEnd hook (fire-and-forget for backwards compatibility)
+    this.fireSessionEndHook('shutdown').catch(() => {});
+
     this.shouldStop = true;
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
@@ -1421,6 +1532,50 @@ export class AgentLoop {
     this.memoryManager?.close();
     this.memoryManager = null;
     this.memoryInjector = null;
+  }
+
+  /**
+   * Async shutdown that waits for SessionEnd hook
+   */
+  async shutdownAsync(reason: string = 'shutdown'): Promise<void> {
+    await this.fireSessionEndHook(reason);
+    this.shutdown();
+  }
+
+  /**
+   * Fire SessionEnd hook with session statistics
+   */
+  private async fireSessionEndHook(reason: string): Promise<void> {
+    const messages = this.context.getMessages();
+    const tokenUsage = this.getTokenUsage();
+
+    // Count tool calls from all messages
+    let toolCallCount = 0;
+    for (const msg of messages) {
+      if (msg.toolCalls) {
+        toolCallCount += msg.toolCalls.length;
+      }
+    }
+
+    const hookInput = {
+      session_id: this.sessionId,
+      hook_event_name: 'SessionEnd' as const,
+      cwd: this.cwd,
+      reason,
+      duration_ms: Date.now() - this.sessionStartTime,
+      message_count: messages.length,
+      tool_calls: toolCallCount,
+      token_usage: {
+        input: tokenUsage.inputTokens,
+        output: tokenUsage.outputTokens,
+        total: tokenUsage.totalTokens,
+      },
+    };
+
+    await this.hookExecutor.execute(
+      this.hookLoader.getHooks('SessionEnd'),
+      hookInput
+    );
   }
 
   /**
@@ -2133,6 +2288,11 @@ export class AgentLoop {
       getTools: () => this.toolRegistry.getTools(),
       getParentAllowedTools: () => this.getEffectiveAllowedTools(),
       getLLMClient: () => this.llmClient,
+      fireHook: async (input) => {
+        // Fire SubagentStart/SubagentStop hooks
+        const hooks = this.hookLoader.getHooks(input.hook_event_name);
+        return this.hookExecutor.execute(hooks, input);
+      },
     };
 
     // Use subagent config from AssistantsConfig, with fallbacks to defaults

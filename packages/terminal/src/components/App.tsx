@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
 import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, type SessionInfo, type RecoverableSession } from '@hasna/assistants-core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector } from '@hasna/assistants-shared';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
@@ -19,6 +19,7 @@ import { RecoveryPanel } from './RecoveryPanel';
 import { ConnectorsPanel } from './ConnectorsPanel';
 import { TasksPanel } from './TasksPanel';
 import { AssistantsPanel } from './AssistantsPanel';
+import { HooksPanel } from './HooksPanel';
 import type { QueuedMessage } from './appTypes';
 import {
   getTasks,
@@ -30,8 +31,11 @@ import {
   setPaused,
   startTask,
   updateTask,
+  HookStore,
+  nativeHookRegistry,
   type Task,
   type TaskPriority,
+  type TaskCreateOptions,
 } from '@hasna/assistants-core';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
@@ -106,7 +110,7 @@ export function App({ cwd, version }: AppProps) {
   const [showSessionSelector, setShowSessionSelector] = useState(false);
 
   // Recovery state for crashed sessions
-  const [recoverableSession, setRecoverableSession] = useState<RecoverableSession | null>(null);
+  const [recoverableSessions, setRecoverableSessions] = useState<RecoverableSession[]>([]);
   const [showRecoveryPanel, setShowRecoveryPanel] = useState(false);
 
   // Connectors panel state
@@ -122,6 +126,11 @@ export function App({ cwd, version }: AppProps) {
 
   // Assistants panel state
   const [showAssistantsPanel, setShowAssistantsPanel] = useState(false);
+
+  // Hooks panel state
+  const [showHooksPanel, setShowHooksPanel] = useState(false);
+  const [hooksConfig, setHooksConfig] = useState<HookConfig>({});
+  const hookStoreRef = useRef<HookStore | null>(null);
 
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
@@ -583,6 +592,14 @@ export function App({ cwd, version }: AppProps) {
       } else if (chunk.panel === 'assistants') {
         // Show assistants panel
         setShowAssistantsPanel(true);
+      } else if (chunk.panel === 'hooks') {
+        // Load hooks and show panel
+        if (!hookStoreRef.current) {
+          hookStoreRef.current = new HookStore(cwd);
+        }
+        const hooks = hookStoreRef.current.loadAll();
+        setHooksConfig(hooks);
+        setShowHooksPanel(true);
       }
     }
   }, [registry, exit, finalizeResponse, resetTurnState, cwd]);
@@ -660,26 +677,32 @@ export function App({ cwd, version }: AppProps) {
   }, [cwd, registry, handleChunk, finalizeResponse, resetTurnState, loadSessionMetadata, beginAskUser]);
 
   // Handle recovery panel actions
-  const handleRecover = useCallback(() => {
+  const handleRecover = useCallback((session: RecoverableSession) => {
     setShowRecoveryPanel(false);
-    createSessionFromRecovery(recoverableSession).catch((err) => {
+    // Clear recovery state for sessions we're not recovering
+    for (const s of recoverableSessions) {
+      if (s.sessionId !== session.sessionId) {
+        clearRecoveryState(s.sessionId);
+      }
+    }
+    createSessionFromRecovery(session).catch((err) => {
       setError(err instanceof Error ? err.message : String(err));
       setIsInitializing(false);
     });
-  }, [recoverableSession, createSessionFromRecovery]);
+  }, [recoverableSessions, createSessionFromRecovery]);
 
-  const handleDiscardRecovery = useCallback(() => {
-    // Clear recovery state for the discarded session
-    if (recoverableSession) {
-      clearRecoveryState(recoverableSession.sessionId);
+  const handleStartFresh = useCallback(() => {
+    // Clear recovery state for all discarded sessions
+    for (const session of recoverableSessions) {
+      clearRecoveryState(session.sessionId);
     }
     setShowRecoveryPanel(false);
-    setRecoverableSession(null);
+    setRecoverableSessions([]);
     createSessionFromRecovery(null).catch((err) => {
       setError(err instanceof Error ? err.message : String(err));
       setIsInitializing(false);
     });
-  }, [recoverableSession, createSessionFromRecovery]);
+  }, [recoverableSessions, createSessionFromRecovery]);
 
   // Initialize first session
   useEffect(() => {
@@ -700,10 +723,10 @@ export function App({ cwd, version }: AppProps) {
     const initSession = async () => {
       try {
         // Check for recoverable sessions first
-        const recoverableSessions = findRecoverableSessions();
-        if (recoverableSessions.length > 0 && !recoverableSession) {
-          // Show recovery panel for the most recent recoverable session
-          setRecoverableSession(recoverableSessions[0]);
+        const foundSessions = findRecoverableSessions();
+        if (foundSessions.length > 0 && recoverableSessions.length === 0) {
+          // Show recovery panel listing all recoverable sessions
+          setRecoverableSessions(foundSessions);
           setShowRecoveryPanel(true);
           initStateRef.current = 'idle'; // Allow re-entry after user decision
           return;
@@ -726,7 +749,7 @@ export function App({ cwd, version }: AppProps) {
     return () => {
       cancelled = true;
     };
-  }, [cwd, registry, showRecoveryPanel, recoverableSession, createSessionFromRecovery]);
+  }, [cwd, registry, showRecoveryPanel, recoverableSessions, createSessionFromRecovery]);
 
   // Separate effect for component mount/unmount lifecycle
   // This ensures registry is only closed when component truly unmounts
@@ -1259,13 +1282,13 @@ export function App({ cwd, version }: AppProps) {
   }
 
   // Show recovery panel for crashed sessions
-  if (showRecoveryPanel && recoverableSession) {
+  if (showRecoveryPanel && recoverableSessions.length > 0) {
     return (
       <Box flexDirection="column" padding={1}>
         <RecoveryPanel
-          session={recoverableSession}
+          sessions={recoverableSessions}
           onRecover={handleRecover}
-          onDiscard={handleDiscardRecovery}
+          onStartFresh={handleStartFresh}
         />
       </Box>
     );
@@ -1320,8 +1343,8 @@ export function App({ cwd, version }: AppProps) {
 
   // Show tasks panel
   if (showTasksPanel) {
-    const handleTasksAdd = async (description: string, priority: TaskPriority) => {
-      await addTask(cwd, description, priority);
+    const handleTasksAdd = async (options: TaskCreateOptions) => {
+      await addTask(cwd, options);
       setTasksList(await getTasks(cwd));
     };
 
@@ -1431,6 +1454,62 @@ export function App({ cwd, version }: AppProps) {
           onUpdate={handleAssistantUpdate}
           onDelete={handleAssistantDelete}
           onCancel={() => setShowAssistantsPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show hooks panel
+  if (showHooksPanel) {
+    const handleHookToggle = (event: HookEvent, hookId: string, enabled: boolean) => {
+      if (!hookStoreRef.current) {
+        hookStoreRef.current = new HookStore(cwd);
+      }
+      hookStoreRef.current.setEnabled(hookId, enabled);
+      const hooks = hookStoreRef.current.loadAll();
+      setHooksConfig(hooks);
+    };
+
+    const handleHookDelete = async (event: HookEvent, hookId: string) => {
+      if (!hookStoreRef.current) {
+        hookStoreRef.current = new HookStore(cwd);
+      }
+      hookStoreRef.current.removeHook(hookId);
+      const hooks = hookStoreRef.current.loadAll();
+      setHooksConfig(hooks);
+    };
+
+    const handleHookAdd = async (
+      event: HookEvent,
+      handler: HookHandler,
+      location: 'user' | 'project' | 'local',
+      matcher?: string
+    ) => {
+      if (!hookStoreRef.current) {
+        hookStoreRef.current = new HookStore(cwd);
+      }
+      hookStoreRef.current.addHook(event, handler, location, matcher);
+      const hooks = hookStoreRef.current.loadAll();
+      setHooksConfig(hooks);
+    };
+
+    const handleNativeHookToggle = (hookId: string, enabled: boolean) => {
+      nativeHookRegistry.setEnabled(hookId, enabled);
+    };
+
+    // Get native hooks
+    const nativeHooks = nativeHookRegistry.listFlat();
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <HooksPanel
+          hooks={hooksConfig}
+          nativeHooks={nativeHooks}
+          onToggle={handleHookToggle}
+          onToggleNative={handleNativeHookToggle}
+          onDelete={handleHookDelete}
+          onAdd={handleHookAdd}
+          onCancel={() => setShowHooksPanel(false)}
         />
       </Box>
     );

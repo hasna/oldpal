@@ -3,6 +3,8 @@ import type { LLMClient } from '../llm/client';
 import { existsSync } from 'fs';
 import { generateId, sleep } from '@hasna/assistants-shared';
 import { getRuntime } from '../runtime';
+import { HookLogger } from './logger';
+import { backgroundProcessManager } from './background';
 
 function killSpawnedProcess(proc: { kill: () => void }): void {
   proc.kill();
@@ -16,6 +18,7 @@ type AgentRunner = (hook: HookHandler, input: HookInput, timeout: number) => Pro
 export class HookExecutor {
   private llmClient?: LLMClient;
   private agentRunner?: AgentRunner;
+  private logger?: HookLogger;
 
   setLLMClient(client: LLMClient): void {
     this.llmClient = client;
@@ -23,6 +26,10 @@ export class HookExecutor {
 
   setAgentRunner(runner: AgentRunner): void {
     this.agentRunner = runner;
+  }
+
+  setLogger(logger: HookLogger): void {
+    this.logger = logger;
   }
 
   /**
@@ -33,6 +40,8 @@ export class HookExecutor {
       return null;
     }
 
+    let mergedInput: Record<string, unknown> | undefined;
+
     for (const matcher of matchers) {
       // Check if matcher matches the input
       if (!this.matchesPattern(matcher.matcher, input)) {
@@ -41,6 +50,11 @@ export class HookExecutor {
 
       // Execute all hooks in this matcher
       for (const hook of matcher.hooks) {
+        // Skip disabled hooks (enabled defaults to true if not specified)
+        if (hook.enabled === false) {
+          continue;
+        }
+
         const result = await this.executeHook(hook, input);
 
         // If hook returns a blocking result, stop processing
@@ -52,7 +66,20 @@ export class HookExecutor {
         if (result?.permissionDecision) {
           return result;
         }
+
+        // If hook returns updated input, merge it (later hooks can override earlier)
+        if (result?.updatedInput) {
+          mergedInput = {
+            ...(mergedInput || {}),
+            ...result.updatedInput,
+          };
+        }
       }
+    }
+
+    // Return merged updated input if any hooks modified it
+    if (mergedInput) {
+      return { continue: true, updatedInput: mergedInput };
     }
 
     return null;
@@ -74,6 +101,7 @@ export class HookExecutor {
       case 'PreToolUse':
       case 'PostToolUse':
       case 'PostToolUseFailure':
+      case 'PermissionRequest':
         value = input.tool_name;
         break;
       case 'SessionStart':
@@ -81,6 +109,21 @@ export class HookExecutor {
         break;
       case 'SessionEnd':
         value = input.reason as string;
+        break;
+      case 'Notification':
+        value = input.notification_type as string;
+        break;
+      case 'SubagentStart':
+        // Match on task pattern for subagent hooks
+        value = input.task as string;
+        break;
+      case 'SubagentStop':
+        // Match on status pattern for subagent stop hooks (completed, failed, timeout)
+        value = input.status as string;
+        break;
+      case 'PreCompact':
+        // Match on strategy pattern for compaction hooks (llm, hybrid)
+        value = input.strategy as string;
         break;
       default:
         return true; // Events without matchers always match
@@ -105,19 +148,34 @@ export class HookExecutor {
    */
   private async executeHook(hook: HookHandler, input: HookInput): Promise<HookOutput | null> {
     const timeout = hook.timeout || 30000;
+    const startTime = Date.now();
 
     try {
+      let result: HookOutput | null = null;
       switch (hook.type) {
         case 'command':
-          return await this.executeCommandHook(hook, input, timeout);
+          result = await this.executeCommandHook(hook, input, timeout);
+          break;
         case 'prompt':
-          return await this.executePromptHook(hook, input, timeout);
+          result = await this.executePromptHook(hook, input, timeout);
+          break;
         case 'agent':
-          return await this.executeAgentHook(hook, input, timeout);
+          result = await this.executeAgentHook(hook, input, timeout);
+          break;
         default:
           return null;
       }
+
+      // Log successful execution
+      const durationMs = Date.now() - startTime;
+      this.logger?.logExecution(hook, input, result, durationMs);
+
+      return result;
     } catch (error) {
+      // Log failed execution
+      const durationMs = Date.now() - startTime;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger?.logExecution(hook, input, null, durationMs, undefined, errorMsg);
       console.error(`Hook execution error:`, error);
       return null;
     }
@@ -132,6 +190,11 @@ export class HookExecutor {
     timeout: number
   ): Promise<HookOutput | null> {
     if (!hook.command) return null;
+
+    // Handle async hooks - fire and forget
+    if (hook.async) {
+      return this.executeAsyncCommandHook(hook, input, timeout);
+    }
 
     try {
       const runtime = getRuntime();
@@ -199,6 +262,67 @@ export class HookExecutor {
       return null;
     } catch (error) {
       console.error(`Command hook error:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Execute an async command hook (fire and forget)
+   */
+  private executeAsyncCommandHook(
+    hook: HookHandler,
+    input: HookInput,
+    timeout: number
+  ): HookOutput | null {
+    if (!hook.command) return null;
+
+    try {
+      const runtime = getRuntime();
+      const cwd = input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd();
+      const isWindows = process.platform === 'win32';
+      const shellBinary = isWindows ? 'cmd' : (runtime.which('bash') || 'sh');
+      const shellArgs = isWindows ? ['/c', hook.command] : ['-lc', hook.command];
+
+      const proc = runtime.spawn([shellBinary, ...shellArgs], {
+        cwd,
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      // Track the background process
+      const bgId = backgroundProcessManager.track(hook.id || 'unknown', proc, timeout);
+
+      // Write input as JSON to stdin (don't await)
+      const inputData = new TextEncoder().encode(JSON.stringify(input));
+      const stdin = proc.stdin as unknown as {
+        getWriter?: () => { write: (chunk: Uint8Array) => Promise<void> | void; close: () => Promise<void> | void };
+        write?: (chunk: Uint8Array) => Promise<void> | void;
+        end?: () => Promise<void> | void;
+      } | null;
+      if (stdin?.getWriter) {
+        const writer = stdin.getWriter();
+        void Promise.resolve(writer.write(inputData)).then(() => writer.close());
+      } else if (stdin?.write) {
+        void Promise.resolve(stdin.write(inputData)).then(() => stdin.end?.());
+      }
+
+      // Set up cleanup when process exits
+      void proc.exited.then((exitCode) => {
+        backgroundProcessManager.remove(bgId);
+        if (exitCode !== 0 && exitCode !== 2) {
+          // Log non-zero exit but don't fail
+          console.debug(`Async hook ${hook.id || hook.command} exited with code ${exitCode}`);
+        }
+      }).catch((err) => {
+        backgroundProcessManager.remove(bgId);
+        console.debug(`Async hook ${hook.id || hook.command} error:`, err);
+      });
+
+      // Return immediately - async hooks don't block
+      return { continue: true };
+    } catch (error) {
+      console.error(`Async command hook error:`, error);
       return null;
     }
   }

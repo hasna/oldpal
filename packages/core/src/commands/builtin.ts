@@ -37,7 +37,7 @@ import {
 } from '../projects/store';
 import { buildProjectContext } from '../projects/context';
 import { VerificationSessionStore } from '../sessions/verification';
-import { nativeHookRegistry } from '../hooks';
+import { nativeHookRegistry, HookStore, HookTester } from '../hooks';
 import { createSkill, type SkillScope } from '../skills/create';
 import {
   listJobs,
@@ -176,6 +176,7 @@ export class BuiltinCommands {
     loader.register(this.skillCommand());
     loader.register(this.skillsCommand(loader));
     loader.register(this.memoryCommand());
+    loader.register(this.hooksCommand());
     loader.register(this.feedbackCommand());
     loader.register(this.scheduleCommand());
     loader.register(this.schedulesCommand());
@@ -526,6 +527,199 @@ export class BuiltinCommands {
         }
 
         context.emit('text', 'Unknown /assistant command. Use /assistant help for options.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /hooks - Manage hooks (interactive panel)
+   */
+  private hooksCommand(): Command {
+    return {
+      name: 'hooks',
+      description: 'Manage hooks (view, enable, disable)',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const [action, ...rest] = args.trim().split(/\s+/).filter(Boolean);
+        const hookId = rest[0];
+
+        // Show interactive panel for no args or 'ui' command
+        if (!action || action === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'hooks' };
+        }
+
+        // Get hooks from context
+        const hooks = context.getHooks?.() ?? {};
+
+        // /hooks list - List all hooks
+        if (action === 'list') {
+          const events = Object.keys(hooks);
+          const nativeHooks = nativeHookRegistry.listFlat();
+
+          if (events.length === 0 && nativeHooks.length === 0) {
+            context.emit('text', '\nNo hooks configured.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // Show native hooks first
+          if (nativeHooks.length > 0) {
+            context.emit('text', '\n**Native Hooks**\n\n');
+            for (const { hook, event, enabled } of nativeHooks) {
+              const status = enabled ? '[on]' : '[off]';
+              context.emit('text', `  ${status} ${hook.name || hook.id} (${event})\n`);
+              context.emit('text', `       id: ${hook.id}\n`);
+              if (hook.description) {
+                context.emit('text', `       ${hook.description}\n`);
+              }
+            }
+          }
+
+          // Show user hooks
+          if (events.length > 0) {
+            context.emit('text', '\n**User Hooks**\n\n');
+            for (const event of events) {
+              const matchers = hooks[event] ?? [];
+              const hookCount = matchers.reduce((sum, m) => sum + m.hooks.length, 0);
+              context.emit('text', `**${event}** (${hookCount} hook${hookCount !== 1 ? 's' : ''})\n`);
+              for (const matcher of matchers) {
+                for (const hook of matcher.hooks) {
+                  const status = hook.enabled !== false ? '[on]' : '[off]';
+                  const name = hook.name || hook.command?.slice(0, 25) || hook.type;
+                  const matcherStr = matcher.matcher ? `@${matcher.matcher}` : '';
+                  context.emit('text', `  ${status} ${name} ${matcherStr}\n`);
+                  if (hook.id) {
+                    context.emit('text', `       id: ${hook.id}\n`);
+                  }
+                }
+              }
+            }
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /hooks enable <id> - Enable a hook
+        if (action === 'enable') {
+          if (!hookId) {
+            context.emit('text', 'Usage: /hooks enable <hook-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          // Try native hooks first
+          if (nativeHookRegistry.getHook(hookId)) {
+            nativeHookRegistry.setEnabled(hookId, true);
+            context.emit('text', `Native hook ${hookId} enabled.\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          // Fall back to user hooks
+          const result = await context.setHookEnabled?.(hookId, true);
+          if (result) {
+            context.emit('text', `Hook ${hookId} enabled.\n`);
+          } else {
+            context.emit('text', `Hook ${hookId} not found.\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /hooks disable <id> - Disable a hook
+        if (action === 'disable') {
+          if (!hookId) {
+            context.emit('text', 'Usage: /hooks disable <hook-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          // Try native hooks first
+          if (nativeHookRegistry.getHook(hookId)) {
+            nativeHookRegistry.setEnabled(hookId, false);
+            context.emit('text', `Native hook ${hookId} disabled.\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+          // Fall back to user hooks
+          const result = await context.setHookEnabled?.(hookId, false);
+          if (result) {
+            context.emit('text', `Hook ${hookId} disabled.\n`);
+          } else {
+            context.emit('text', `Hook ${hookId} not found.\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /hooks test <id> - Test a hook with sample input
+        if (action === 'test') {
+          if (!hookId) {
+            context.emit('text', 'Usage: /hooks test <hook-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // Find the hook by ID
+          const store = new HookStore(context.cwd);
+          const hookInfo = store.getHook(hookId);
+
+          if (!hookInfo) {
+            context.emit('text', `Hook '${hookId}' not found.\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // Test the hook
+          const tester = new HookTester(context.cwd, context.sessionId);
+          context.emit('text', `\n**Testing hook:** ${hookInfo.handler.name || hookId} (${hookInfo.event})\n`);
+          context.emit('text', `${'━'.repeat(50)}\n`);
+
+          const sampleInput = HookTester.getSampleInput(hookInfo.event);
+          context.emit('text', `**Input:** ${JSON.stringify(sampleInput, null, 2)}\n\n`);
+
+          const result = await tester.test(hookInfo.handler, hookInfo.event);
+
+          context.emit('text', `**Exit code:** ${result.exitCode ?? 'N/A'}\n`);
+          if (result.stdout) {
+            context.emit('text', `**Stdout:**\n\`\`\`\n${result.stdout}\n\`\`\`\n`);
+          } else {
+            context.emit('text', `**Stdout:** (empty)\n`);
+          }
+          if (result.stderr) {
+            context.emit('text', `**Stderr:**\n\`\`\`\n${result.stderr}\n\`\`\`\n`);
+          } else {
+            context.emit('text', `**Stderr:** (empty)\n`);
+          }
+          context.emit('text', `\n**Result:** ${result.action}\n`);
+          if (result.reason) {
+            context.emit('text', `**Reason:** ${result.reason}\n`);
+          }
+          if (result.error) {
+            context.emit('text', `**Error:** ${result.error}\n`);
+          }
+          context.emit('text', `**Duration:** ${result.durationMs}ms\n`);
+
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /hooks help
+        if (action === 'help') {
+          context.emit('text', '\n## Hook Commands\n\n');
+          context.emit('text', '/hooks                        Open interactive hooks panel\n');
+          context.emit('text', '/hooks list                   List all hooks\n');
+          context.emit('text', '/hooks enable <id>            Enable a hook\n');
+          context.emit('text', '/hooks disable <id>           Disable a hook\n');
+          context.emit('text', '/hooks test <id>              Test a hook with sample input\n');
+          context.emit('text', '/hooks help                   Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', 'Unknown /hooks command. Use /hooks help for options.\n');
         context.emit('done');
         return { handled: true };
       },

@@ -124,12 +124,78 @@ export class NativeHookRegistry {
   }
 
   /**
+   * Enable or disable a native hook
+   */
+  setEnabled(hookId: string, enabled: boolean): boolean {
+    // Find the hook
+    let found = false;
+    for (const hooks of this.hooks.values()) {
+      const hook = hooks.find((h) => h.id === hookId);
+      if (hook) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      return false;
+    }
+
+    // Update config based on hook ID
+    if (hookId === 'scope-verification') {
+      this.config.scopeVerification = {
+        ...this.config.scopeVerification,
+        enabled,
+      };
+    }
+
+    return true;
+  }
+
+  /**
+   * Check if a native hook is enabled
+   */
+  isEnabled(hookId: string): boolean {
+    return !this.isHookDisabled(hookId);
+  }
+
+  /**
+   * Get a specific native hook by ID
+   */
+  getHook(hookId: string): NativeHook | null {
+    for (const hooks of this.hooks.values()) {
+      const hook = hooks.find((h) => h.id === hookId);
+      if (hook) {
+        return hook;
+      }
+    }
+    return null;
+  }
+
+  /**
    * List all registered native hooks
    */
   listAll(): { event: HookEvent; hooks: NativeHook[] }[] {
     const result: { event: HookEvent; hooks: NativeHook[] }[] = [];
     for (const [event, hooks] of this.hooks.entries()) {
       result.push({ event, hooks });
+    }
+    return result;
+  }
+
+  /**
+   * List all native hooks as a flat array with enabled status
+   */
+  listFlat(): Array<{ hook: NativeHook; event: HookEvent; enabled: boolean }> {
+    const result: Array<{ hook: NativeHook; event: HookEvent; enabled: boolean }> = [];
+    for (const [event, hooks] of this.hooks.entries()) {
+      for (const hook of hooks) {
+        result.push({
+          hook,
+          event,
+          enabled: this.isEnabled(hook.id),
+        });
+      }
     }
     return result;
   }

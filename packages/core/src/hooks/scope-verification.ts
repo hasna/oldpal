@@ -209,6 +209,8 @@ Please continue and:
 export function createScopeVerificationHook(): NativeHook {
   return {
     id: 'scope-verification',
+    name: 'Scope Verification',
+    description: 'Verifies user goals were met before stopping the session',
     event: 'Stop',
     priority: 100, // Run after other Stop hooks
     handler: scopeVerificationHandler,

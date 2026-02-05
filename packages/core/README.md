@@ -142,25 +142,180 @@ const expandedPrompt = await executor.execute('code-review', 'src/main.ts');
 
 ### Hooks
 
-Hooks allow validation and modification of tool execution.
+Hooks allow you to intercept and modify agent behavior at key lifecycle points. They can validate inputs, block actions, inject context, or perform cleanup.
+
+#### Hook Events
+
+| Event | Trigger | Use Cases |
+|-------|---------|-----------|
+| **PreToolUse** | Before a tool executes | Validate inputs, block dangerous commands |
+| **PostToolUse** | After tool completes successfully | Log results, modify output |
+| **PostToolUseFailure** | After tool fails | Error handling, retry logic |
+| **PermissionRequest** | When user approval needed | Auto-approve, auto-deny patterns |
+| **UserPromptSubmit** | When user sends a message | Input sanitization, context injection |
+| **SessionStart** | When a new session begins | Initialize state, log session |
+| **SessionEnd** | When session ends | Cleanup, analytics, summary |
+| **SubagentStart** | When spawning a subagent | Validate task, modify config |
+| **SubagentStop** | When subagent completes | Process results, cleanup |
+| **PreCompact** | Before context compaction | Skip/delay compaction |
+| **Notification** | When notification sent | Custom delivery, filtering |
+| **Stop** | When agent is stopping | Goal verification, cleanup |
+
+#### Hook Types
+
+| Type | Description |
+|------|-------------|
+| **command** | Execute a shell command. Input passed as JSON via stdin. Exit 0 = allow, Exit 2 = block |
+| **prompt** | Single-turn LLM query. Must respond with `{"allow": boolean, "reason": string}` |
+| **agent** | Multi-turn agent with tools. Must respond with ALLOW or DENY |
+
+#### Configuration
+
+Hooks are stored in JSON files that are loaded from multiple locations:
+- `~/.assistants/hooks.json` - Global user hooks
+- `.assistants/hooks.json` - Project-level hooks
+- `.assistants/hooks.local.json` - Local hooks (gitignored)
+
+```json
+{
+  "PreToolUse": [
+    {
+      "matcher": "Bash|Edit|Write",
+      "hooks": [
+        {
+          "id": "validate-dangerous",
+          "name": "Validate dangerous commands",
+          "type": "command",
+          "command": "./scripts/validate.sh",
+          "timeout": 5000,
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "prettier --write \"$INPUT_file_path\"",
+          "async": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Hook Input
+
+Hooks receive a JSON object on stdin with context:
 
 ```typescript
-import { HookLoader, HookExecutor } from '@hasna/assistants-core';
+interface HookInput {
+  session_id: string;
+  hook_event_name: string;
+  cwd: string;
+  // Event-specific fields:
+  tool_name?: string;        // PreToolUse, PostToolUse, PermissionRequest
+  tool_input?: object;       // PreToolUse, PostToolUse
+  tool_result?: object;      // PostToolUse, PostToolUseFailure
+  error?: string;            // PostToolUseFailure
+  user_prompt?: string;      // UserPromptSubmit
+  notification_type?: string; // Notification
+  subagent_id?: string;      // SubagentStart, SubagentStop
+  task?: string;             // SubagentStart
+  status?: string;           // SubagentStop
+  strategy?: string;         // PreCompact
+  reason?: string;           // SessionEnd, Stop
+}
+```
 
-const loader = new HookLoader([
-  '~/.assistants/hooks.json',
-  './.assistants/hooks.json',
-]);
+#### Hook Output
 
+Hooks can return JSON to control execution:
+
+```typescript
+interface HookOutput {
+  continue?: boolean;           // false = block
+  stopReason?: string;         // Message when blocked
+  systemMessage?: string;      // Inject into conversation
+  additionalContext?: string;  // Add to context
+  permissionDecision?: 'allow' | 'deny' | 'ask';  // PermissionRequest
+  updatedInput?: object;       // Modify tool input
+  skip?: boolean;              // PreCompact - skip compaction
+}
+```
+
+#### Example: Block Dangerous Commands
+
+```bash
+#!/bin/bash
+# validate.sh - Block dangerous Bash commands
+
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+
+# Block rm -rf, sudo, etc.
+if echo "$COMMAND" | grep -qE 'rm\s+-rf|sudo|shutdown|reboot'; then
+  echo "Destructive command blocked" >&2
+  exit 2
+fi
+
+exit 0
+```
+
+#### Programmatic Usage
+
+```typescript
+import { HookLoader, HookExecutor, HookStore, HookTester } from '@hasna/assistants-core';
+
+// Load hooks
+const loader = new HookLoader(process.cwd());
 await loader.initialize();
 
-const executor = new HookExecutor(loader);
+// Execute hooks
+const executor = new HookExecutor();
+const result = await executor.execute(
+  loader.getHooks('PreToolUse'),
+  { session_id: 'abc', hook_event_name: 'PreToolUse', cwd: '/app', tool_name: 'Bash', tool_input: { command: 'ls' } }
+);
 
-// Run pre-tool hooks
-const preResult = await executor.runPreToolHooks('Bash', { command: 'ls' });
-if (!preResult.allowed) {
-  console.log('Blocked:', preResult.reason);
+if (result?.continue === false) {
+  console.log('Blocked:', result.stopReason);
 }
+
+// Manage hooks
+const store = new HookStore(process.cwd());
+store.addHook('PreToolUse', {
+  type: 'command',
+  command: './validate.sh',
+  name: 'Validate commands',
+}, 'project', 'Bash');
+
+// Test hooks
+const tester = new HookTester(process.cwd());
+const testResult = await tester.test(hook, 'PreToolUse');
+console.log(testResult.action); // 'ALLOW', 'BLOCK', 'MODIFY', or 'ERROR'
+```
+
+#### Native Hooks
+
+Native hooks are built-in hooks that cannot be deleted but can be enabled/disabled:
+
+| Hook | Event | Description |
+|------|-------|-------------|
+| **scope-verification** | Stop | Verifies user goals were met before stopping |
+
+```typescript
+import { nativeHookRegistry } from '@hasna/assistants-core';
+
+// Disable native hook
+nativeHookRegistry.setEnabled('scope-verification', false);
+
+// List native hooks
+const hooks = nativeHookRegistry.listFlat();
 ```
 
 ## Configuration

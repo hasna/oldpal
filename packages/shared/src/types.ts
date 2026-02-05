@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -214,6 +214,11 @@ export type HookEvent =
   | 'PreToolUse'
   | 'PostToolUse'
   | 'PostToolUseFailure'
+  | 'PermissionRequest'
+  | 'Notification'
+  | 'SubagentStart'
+  | 'SubagentStop'
+  | 'PreCompact'
   | 'Stop';
 
 export interface HookConfig {
@@ -226,6 +231,10 @@ export interface HookMatcher {
 }
 
 export interface HookHandler {
+  id?: string; // Unique ID (auto-generated if not provided)
+  name?: string; // Human-readable name
+  description?: string; // What this hook does
+  enabled?: boolean; // Whether hook is active (default true)
   type: 'command' | 'prompt' | 'agent';
   command?: string;
   prompt?: string;
@@ -252,6 +261,8 @@ export interface HookOutput {
   additionalContext?: string;
   permissionDecision?: 'allow' | 'deny' | 'ask';
   updatedInput?: Record<string, unknown>;
+  suppress?: boolean; // For Notification hook - suppress the notification
+  skip?: boolean; // For PreCompact hook - skip the compaction
 }
 
 // ============================================
@@ -271,6 +282,8 @@ export type NativeHookHandler = (
  */
 export interface NativeHook {
   id: string;
+  name?: string;
+  description?: string;
   event: HookEvent;
   priority: number; // Lower = runs first
   handler: NativeHookHandler;

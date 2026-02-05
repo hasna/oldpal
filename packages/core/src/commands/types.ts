@@ -1,4 +1,4 @@
-import type { Tool, TokenUsage, EnergyState, VoiceState } from '@hasna/assistants-shared';
+import type { Tool, TokenUsage, EnergyState, VoiceState, HookConfig } from '@hasna/assistants-shared';
 import type { RecordOptions } from '../voice/recorder';
 import type { ErrorStats } from '../errors';
 import type { ContextInfo, ContextProcessResult } from '../context';
@@ -88,6 +88,8 @@ export interface CommandContext {
   getSecretsManager?: () => SecretsManager | null;
   getMessagesManager?: () => MessagesManager | null;
   getMemoryManager?: () => GlobalMemoryManager | null;
+  getHooks?: () => HookConfig;
+  setHookEnabled?: (hookId: string, enabled: boolean) => Promise<boolean>;
   refreshIdentityContext?: () => Promise<void>;
   refreshSkills?: () => Promise<void>;
   switchAssistant?: (assistantId: string) => Promise<void>;
@@ -121,7 +123,7 @@ export interface CommandResult {
   /** Session number to switch to (1-based) */
   sessionNumber?: number;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks';
   /** Initial value for panel (e.g., connector name) */
   panelInitialValue?: string;
 }
