@@ -71,6 +71,23 @@ const DEFAULT_CONFIG: AssistantsConfig = {
     summaryMaxTokens: 2000,
     maxMessages: 500,
     preserveLastToolCalls: 5,
+    injection: {
+      enabled: true,
+      maxTokens: 200,
+      format: 'full',
+      injections: {
+        datetime: { enabled: true, format: 'ISO', includeTimezone: true },
+        timezone: { enabled: true },
+        cwd: { enabled: true, truncate: 100 },
+        project: { enabled: true, includePackageJson: false, includeGitInfo: false },
+        os: { enabled: false },
+        locale: { enabled: false },
+        git: { enabled: false, includeBranch: true, includeStatus: false, includeRecentCommits: 0 },
+        username: { enabled: false },
+        custom: { enabled: false, text: '' },
+        envVars: { enabled: false, allowed: ['NODE_ENV'] },
+      },
+    },
   },
   energy: {
     enabled: true,
@@ -133,6 +150,49 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       maxAgeDays: 90,
     },
   },
+  memory: {
+    enabled: true,
+    injection: {
+      enabled: true,
+      maxTokens: 500,
+      minImportance: 5,
+      categories: ['preference', 'fact'],
+      refreshInterval: 5,
+    },
+    storage: {
+      maxEntries: 1000,
+    },
+    scopes: {
+      globalEnabled: true,
+      sharedEnabled: true,
+      privateEnabled: true,
+    },
+  },
+  subagents: {
+    maxDepth: 3,
+    maxConcurrent: 5,
+    maxTurns: 10,
+    defaultTimeoutMs: 120_000, // 2 minutes
+    defaultTools: [
+      'read',
+      'glob',
+      'grep',
+      'bash',
+      'web_search',
+      'web_fetch',
+    ],
+    forbiddenTools: [
+      'agent_spawn',      // Prevent recursive spawning at max depth
+      'agent_delegate',   // Prevent delegation at max depth
+      'wallet_get',       // No wallet access
+      'wallet_list',
+      'secrets_get',      // No secrets access
+      'secrets_list',
+      'schedule_create',  // No scheduling
+      'schedule_update',
+      'schedule_delete',
+    ],
+  },
 };
 
 function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig>): AssistantsConfig {
@@ -186,6 +246,14 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
     context: {
       ...(base.context || {}),
       ...(override.context || {}),
+      injection: {
+        ...(base.context?.injection || {}),
+        ...(override.context?.injection || {}),
+        injections: {
+          ...(base.context?.injection?.injections || {}),
+          ...(override.context?.injection?.injections || {}),
+        },
+      },
     },
     energy: {
       ...(base.energy || {}),
@@ -275,6 +343,29 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
         ...(base.messages?.storage || {}),
         ...(override.messages?.storage || {}),
       },
+    },
+    memory: {
+      ...(base.memory || {}),
+      ...(override.memory || {}),
+      injection: {
+        ...(base.memory?.injection || {}),
+        ...(override.memory?.injection || {}),
+      },
+      storage: {
+        ...(base.memory?.storage || {}),
+        ...(override.memory?.storage || {}),
+      },
+      scopes: {
+        ...(base.memory?.scopes || {}),
+        ...(override.memory?.scopes || {}),
+      },
+    },
+    subagents: {
+      ...(base.subagents || {}),
+      ...(override.subagents || {}),
+      // Arrays are replaced, not merged
+      defaultTools: override.subagents?.defaultTools ?? base.subagents?.defaultTools,
+      forbiddenTools: override.subagents?.forbiddenTools ?? base.subagents?.forbiddenTools,
     },
   };
 }

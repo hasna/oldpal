@@ -402,6 +402,64 @@ export interface AssistantsConfig {
   secrets?: SecretsConfig;
   jobs?: JobsConfig;
   messages?: MessagesConfig;
+  memory?: MemoryConfigShared;
+  subagents?: SubagentConfigShared;
+}
+
+/**
+ * Subagent configuration for AssistantsConfig (shared types)
+ * Controls limits and behavior of spawned subagents
+ */
+export interface SubagentConfigShared {
+  /** Maximum recursion depth for nested subagents (default: 3) */
+  maxDepth?: number;
+  /** Maximum concurrent subagents per parent (default: 5) */
+  maxConcurrent?: number;
+  /** Maximum turns per subagent (default: 10, max: 25) */
+  maxTurns?: number;
+  /** Default timeout in milliseconds (default: 120000 = 2 minutes) */
+  defaultTimeoutMs?: number;
+  /** Default tools for subagents if not specified */
+  defaultTools?: string[];
+  /** Tools that subagents cannot use (security) */
+  forbiddenTools?: string[];
+}
+
+/**
+ * Memory configuration for AssistantsConfig (shared types)
+ */
+export interface MemoryConfigShared {
+  /** Whether memory system is enabled (default: true) */
+  enabled?: boolean;
+  /** Memory injection settings */
+  injection?: {
+    /** Whether auto-injection is enabled (default: true) */
+    enabled?: boolean;
+    /** Maximum tokens for injected memories (default: 500) */
+    maxTokens?: number;
+    /** Minimum importance to include (default: 5) */
+    minImportance?: number;
+    /** Categories to include (default: ['preference', 'fact']) */
+    categories?: ('preference' | 'fact' | 'knowledge' | 'history')[];
+    /** Refresh interval in turns (default: 5) */
+    refreshInterval?: number;
+  };
+  /** Storage settings */
+  storage?: {
+    /** Maximum number of memory entries (default: 1000) */
+    maxEntries?: number;
+    /** Default TTL in milliseconds for new entries */
+    defaultTTL?: number;
+  };
+  /** Scope settings */
+  scopes?: {
+    /** Whether global scope is enabled (default: true) */
+    globalEnabled?: boolean;
+    /** Whether shared scope is enabled (default: true) */
+    sharedEnabled?: boolean;
+    /** Whether private scope is enabled (default: true) */
+    privateEnabled?: boolean;
+  };
 }
 
 export interface LLMConfig {
@@ -597,6 +655,35 @@ export interface ContextConfig {
    * Default: 5
    */
   preserveLastToolCalls?: number;
+  /**
+   * Configuration for automatic context injection (datetime, cwd, etc.)
+   */
+  injection?: ContextInjectionConfigShared;
+}
+
+/**
+ * Context injection configuration (shared types)
+ */
+export interface ContextInjectionConfigShared {
+  /** Whether context injection is enabled (default: true) */
+  enabled?: boolean;
+  /** Maximum tokens for injected context (default: 200) */
+  maxTokens?: number;
+  /** Output format: "full" for markdown sections, "compact" for single line */
+  format?: 'full' | 'compact';
+  /** Individual injection type configurations */
+  injections?: {
+    datetime?: { enabled?: boolean; format?: 'ISO' | 'relative' | 'short'; includeTimezone?: boolean };
+    timezone?: { enabled?: boolean };
+    cwd?: { enabled?: boolean; truncate?: number };
+    project?: { enabled?: boolean; includePackageJson?: boolean; includeGitInfo?: boolean };
+    os?: { enabled?: boolean };
+    locale?: { enabled?: boolean };
+    git?: { enabled?: boolean; includeBranch?: boolean; includeStatus?: boolean; includeRecentCommits?: number };
+    username?: { enabled?: boolean };
+    custom?: { enabled?: boolean; text?: string };
+    envVars?: { enabled?: boolean; allowed?: string[] };
+  };
 }
 
 export interface EnergyCosts {
@@ -706,7 +793,7 @@ export interface InboxConfig {
   enabled?: boolean;
   /** Email provider: 'ses' or 'resend' (default: 'ses') */
   provider?: 'ses' | 'resend';
-  /** Email domain (e.g., "mail.hasna.com") */
+  /** Email domain (e.g., "mail.example.com") */
   domain?: string;
   /** Email address format (default: "{agent-name}@{domain}") */
   addressFormat?: string;
