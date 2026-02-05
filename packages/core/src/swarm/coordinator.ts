@@ -714,11 +714,12 @@ Maximum ${this.config.maxTasks} tasks.`;
         throw new Error(result.error || 'Task failed');
       }
     } finally {
-      // Remove from active agents when done
+      // Remove from active agents when done (but keep assignedAgentId for history)
       if (realSubagentId && this.state) {
         this.state.activeAgents.delete(realSubagentId);
       }
-      task.assignedAgentId = undefined;
+      // Note: We intentionally keep task.assignedAgentId so status displays can show
+      // which agent executed the task even after completion
     }
   }
 
