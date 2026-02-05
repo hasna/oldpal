@@ -154,8 +154,20 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
     message = `${prompt}\n\nIMPORTANT: Your response MUST be valid JSON conforming to this schema:\n${jsonSchema}`;
   }
 
-  // Send the message and wait for completion
-  await client.send(message);
+  try {
+    // Send the message and wait for completion
+    await client.send(message);
+  } catch (error) {
+    // Capture any thrown errors
+    hadError = true;
+    errorMessage = error instanceof Error ? error.message : String(error);
+    if (outputFormat === 'text') {
+      process.stderr.write(`Error: ${errorMessage}\n`);
+    }
+  } finally {
+    // Always disconnect the client to clean up resources
+    client.disconnect();
+  }
 
   // Output final result based on format
   if (outputFormat === 'json') {
@@ -186,9 +198,6 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
     }
   }
   // stream-json already output everything
-
-  // Cleanup
-  client.disconnect();
 
   // Return result object (let caller decide exit behavior)
   const headlessResult: HeadlessResult = {
