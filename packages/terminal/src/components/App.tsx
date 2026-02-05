@@ -884,13 +884,13 @@ export function App({ cwd, version }: AppProps) {
     return trimActivityLogByLines(activityLog, wrapChars, renderWidth, activityBudget);
   }, [activityLog, wrapChars, renderWidth, dynamicBudget, streamingLineCount]);
 
-  // Process queue when not processing
+  // Process queue when not busy (not processing and no pending tools)
   // queueFlushTrigger forces re-evaluation when processing completes (done/error)
   useEffect(() => {
-    if (!isProcessing && activeQueue.length > 0 && activeInline.length === 0) {
+    if (!isBusy && activeQueue.length > 0 && activeInline.length === 0) {
       processQueue();
     }
-  }, [isProcessing, activeQueue.length, activeInline.length, processQueue, queueFlushTrigger]);
+  }, [isBusy, activeQueue.length, activeInline.length, processQueue, queueFlushTrigger]);
 
   // Native terminal scrolling handles scroll position automatically
 

@@ -142,27 +142,131 @@ async function build() {
  * Published packages should include proper .d.ts files.
  */
 
-// Core types (bundled from @hasna/assistants-core)
-export declare class AgentLoop {
-  constructor(options: AgentLoopOptions);
+// ============================================================================
+// Core Client
+// ============================================================================
+
+export declare class EmbeddedClient {
+  constructor(cwd: string, options?: EmbeddedClientOptions);
   initialize(): Promise<void>;
-  process(message: string): Promise<void>;
+  send(message: string): Promise<void>;
   stop(): void;
+  disconnect(): void;
+  onChunk(callback: (chunk: StreamChunk) => void): void;
+  onError(callback: (error: Error) => void): void;
+  getSessionId(): string;
+  getTokenUsage(): TokenUsage | undefined;
+  getModel(): string | null;
 }
 
-export interface AgentLoopOptions {
-  cwd?: string;
+export interface EmbeddedClientOptions {
   sessionId?: string;
-  llmClient?: any;
+  initialMessages?: Message[];
+  systemPrompt?: string;
   allowedTools?: string[];
-  onChunk?: (chunk: StreamChunk) => void;
+  startedAt?: string;
 }
+
+// ============================================================================
+// Headless Mode
+// ============================================================================
+
+export interface HeadlessOptions {
+  prompt: string;
+  cwd: string;
+  outputFormat: 'text' | 'json' | 'stream-json';
+  allowedTools?: string[];
+  systemPrompt?: string;
+  jsonSchema?: string;
+  continue?: boolean;
+  resume?: string | null;
+  cwdProvided?: boolean;
+}
+
+export interface HeadlessResult {
+  success: boolean;
+  result: string;
+  sessionId: string;
+  usage?: TokenUsage;
+  toolCalls: Array<{ name: string; input: Record<string, unknown> }>;
+  error?: string;
+  structuredOutput?: unknown;
+}
+
+export declare function runHeadless(options: HeadlessOptions): Promise<HeadlessResult>;
+
+// ============================================================================
+// CLI Utilities
+// ============================================================================
+
+export interface ParsedOptions {
+  command: string | undefined;
+  cwd: string;
+  prompt?: string;
+  outputFormat: 'text' | 'json' | 'stream-json';
+  allowedTools?: string[];
+  systemPrompt?: string;
+  jsonSchema?: string;
+  continue: boolean;
+  resume?: string | null;
+  cwdProvided: boolean;
+}
+
+export declare function parseArgs(args?: string[]): ParsedOptions;
+
+// ============================================================================
+// Shared Types
+// ============================================================================
 
 export interface StreamChunk {
-  type: 'text' | 'tool_use' | 'tool_result' | 'usage' | 'error' | 'done';
+  type: 'text' | 'tool_use' | 'tool_result' | 'usage' | 'error' | 'done' | 'exit' | 'show_panel';
   content?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;
+  error?: string;
+  usage?: TokenUsage;
+  panel?: string;
+  panelValue?: string;
+}
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  maxContextTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
+}
+
+export interface Tool {
+  name: string;
+  description: string;
+  parameters: ToolParameters;
+}
+
+export interface ToolParameters {
+  type: 'object';
+  properties: Record<string, ToolProperty>;
+  required?: string[];
+}
+
+export interface ToolProperty {
+  type: string | string[];
+  description: string;
+  enum?: string[];
+  items?: ToolProperty;
+  default?: unknown;
+  properties?: Record<string, ToolProperty>;
+  required?: string[];
 }
 
 export interface ToolCall {
@@ -172,27 +276,97 @@ export interface ToolCall {
 }
 
 export interface ToolResult {
-  id: string;
-  result: string;
-  isError?: boolean;
-}
-
-export interface Message {
-  role: 'user' | 'assistant';
+  toolCallId: string;
   content: string;
+  rawContent?: string;
+  truncated?: boolean;
+  isError?: boolean;
+  toolName?: string;
 }
 
-// Terminal-specific exports
-export declare function startTerminal(options?: {
-  cwd?: string;
-  sessionId?: string;
-}): Promise<void>;
+export interface AssistantsConfig {
+  llm: LLMConfig;
+  voice?: VoiceConfig;
+  connectors?: string[];
+  skills?: string[];
+  hooks?: Record<string, unknown>;
+  scheduler?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+  energy?: Record<string, unknown>;
+  memory?: Record<string, unknown>;
+}
 
-export declare function startHeadless(options?: {
-  cwd?: string;
-  sessionId?: string;
-  onChunk?: (chunk: StreamChunk) => void;
-}): Promise<{ agent: AgentLoop; process: (message: string) => Promise<void>; stop: () => void }>;
+export interface LLMConfig {
+  provider: 'anthropic' | 'openai';
+  model: string;
+  apiKey?: string;
+  maxTokens?: number;
+}
+
+export interface VoiceConfig {
+  enabled: boolean;
+  stt: { provider: string; model?: string; language?: string };
+  tts: { provider: string; voiceId?: string };
+  wake?: { enabled: boolean; word: string };
+  autoListen?: boolean;
+}
+
+// ============================================================================
+// Session Storage
+// ============================================================================
+
+export interface SessionData {
+  id: string;
+  cwd: string;
+  messages: Message[];
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface SavedSessionInfo {
+  id: string;
+  cwd: string;
+  startedAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export declare const SessionStorage: {
+  saveSession(id: string, data: SessionData): void;
+  loadSession(id: string): SessionData | null;
+  listSessions(): SavedSessionInfo[];
+  deleteSession(id: string): void;
+  getLatestSession(): SavedSessionInfo | null;
+};
+
+export declare const Logger: {
+  info(message: string, ...args: unknown[]): void;
+  warn(message: string, ...args: unknown[]): void;
+  error(message: string, ...args: unknown[]): void;
+  debug(message: string, ...args: unknown[]): void;
+};
+
+export declare function initAssistantsDir(cwd: string): Promise<void>;
+
+// ============================================================================
+// Feature Detection
+// ============================================================================
+
+export interface FeatureAvailability {
+  aws: boolean;
+  elevenlabs: boolean;
+  openai: boolean;
+  exa: boolean;
+  systemVoice: boolean;
+}
+
+export declare function isAWSConfigured(): boolean;
+export declare function isElevenLabsConfigured(): boolean;
+export declare function isOpenAIConfigured(): boolean;
+export declare function isExaConfigured(): boolean;
+export declare function isSystemVoiceAvailable(): boolean;
+export declare function getFeatureAvailability(): FeatureAvailability;
+export declare function getFeatureStatusMessage(): string;
 `;
     await Bun.write(join(DIST, 'lib.d.ts'), fallbackDeclaration);
     console.log('  Generated fallback lib.d.ts');

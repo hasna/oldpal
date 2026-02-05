@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CronExpressionParser } from 'cron-parser';
 import { db } from '@/db';
 import { schedules, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
@@ -44,9 +45,18 @@ function computeNextRun(schedule: z.infer<typeof createScheduleSchema>): Date | 
     return new Date(now + randomDelay);
   }
 
-  // For cron, we would need a cron parser library - for now return 1 minute ahead
+  // Parse cron expression and get next execution time
   if (schedule.scheduleKind === 'cron' && schedule.scheduleCron) {
-    return new Date(now + 60000);
+    try {
+      const expression = CronExpressionParser.parse(schedule.scheduleCron, {
+        currentDate: new Date(now),
+        tz: schedule.scheduleTimezone || 'UTC',
+      });
+      return expression.next().toDate();
+    } catch {
+      // Invalid cron expression - return null (schedule won't run)
+      return null;
+    }
   }
 
   return null;

@@ -107,7 +107,7 @@ describe('runHeadless', () => {
       { type: 'done' },
     ];
 
-    await runHeadless({
+    const result = await runHeadless({
       prompt: 'Test',
       cwd: '/tmp',
       outputFormat: 'json',
@@ -121,19 +121,20 @@ describe('runHeadless', () => {
     expect(latestMessage).toContain('IMPORTANT:');
     expect(disconnected).toBe(true);
 
+    // Check return value
+    expect(result.success).toBe(true);
+    expect(result.result).toBe('{"ok":true}');
+    expect(result.toolCalls.length).toBe(1);
+    expect(result.structuredOutput).toEqual({ ok: true });
+
     console.log = originalLog;
   });
 
-  test('stream-json outputs events and exits on error', async () => {
+  test('stream-json outputs events and returns success=false on error', async () => {
     const originalWrite = process.stdout.write;
-    const originalExit = process.exit;
     let stdout = '';
-    let exitCode: number | null = null;
     (process.stdout as any).write = (chunk: any) => {
       stdout += String(chunk);
-    };
-    (process as any).exit = (code: number) => {
-      exitCode = code;
     };
 
     mockChunks = [
@@ -142,7 +143,7 @@ describe('runHeadless', () => {
       { type: 'done' },
     ];
 
-    await runHeadless({
+    const result = await runHeadless({
       prompt: 'Test',
       cwd: '/tmp',
       outputFormat: 'stream-json',
@@ -150,10 +151,11 @@ describe('runHeadless', () => {
 
     expect(stdout).toContain('text_delta');
     expect(stdout).toContain('tool_result');
-    expect(exitCode).toBe(1);
+    // Check return value indicates failure
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('boom');
 
     process.stdout.write = originalWrite;
-    process.exit = originalExit;
   });
 
   test('throws for missing resume session', async () => {
@@ -230,13 +232,16 @@ describe('runHeadless', () => {
       const originalWrite = process.stdout.write;
       (process.stdout as any).write = () => true;
 
-      // Should not throw - just start a new session
-      await expect(runHeadless({
+      // Should not throw - just start a new session and return HeadlessResult
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'text',
         continue: true,
-      })).resolves.toBeUndefined();
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe('ok');
 
       process.stdout.write = originalWrite;
     });
@@ -299,16 +304,11 @@ describe('runHeadless', () => {
   });
 
   describe('JSON output format', () => {
-    test('tool_result error adds error field and exits with code 1', async () => {
+    test('tool_result error adds error field and returns success=false', async () => {
       const originalLog = console.log;
-      const originalExit = process.exit;
       let captured = '';
-      let exitCode: number | null = null;
       console.log = (msg?: any) => {
         captured = String(msg ?? '');
-      };
-      (process as any).exit = (code: number) => {
-        exitCode = code;
       };
 
       mockChunks = [
@@ -317,7 +317,7 @@ describe('runHeadless', () => {
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'json',
@@ -325,22 +325,18 @@ describe('runHeadless', () => {
 
       const parsed = JSON.parse(captured);
       expect(parsed.error).toBe('Tool failed');
-      expect(exitCode).toBe(1);
+      // Check return value indicates failure
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Tool failed');
 
       console.log = originalLog;
-      process.exit = originalExit;
     });
 
-    test('error chunk adds error field and exits with code 1', async () => {
+    test('error chunk adds error field and returns success=false', async () => {
       const originalLog = console.log;
-      const originalExit = process.exit;
       let captured = '';
-      let exitCode: number | null = null;
       console.log = (msg?: any) => {
         captured = String(msg ?? '');
-      };
-      (process as any).exit = (code: number) => {
-        exitCode = code;
       };
 
       mockChunks = [
@@ -349,7 +345,7 @@ describe('runHeadless', () => {
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'json',
@@ -357,10 +353,11 @@ describe('runHeadless', () => {
 
       const parsed = JSON.parse(captured);
       expect(parsed.error).toBe('API rate limit exceeded');
-      expect(exitCode).toBe(1);
+      // Check return value indicates failure
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('API rate limit exceeded');
 
       console.log = originalLog;
-      process.exit = originalExit;
     });
 
     test('usage is included in JSON output', async () => {
@@ -404,17 +401,21 @@ describe('runHeadless', () => {
         { type: 'done' },
       ];
 
-      // Should not throw
-      await expect(runHeadless({
+      // Should not throw - returns HeadlessResult
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'json',
         jsonSchema: '{"type":"object"}',
-      })).resolves.toBeUndefined();
+      });
 
       const parsed = JSON.parse(captured);
       expect(parsed.result).toBe('This is not valid JSON at all');
       expect(parsed.structured_output).toBeUndefined();
+
+      // Return value should also have undefined structuredOutput
+      expect(result.success).toBe(true);
+      expect(result.structuredOutput).toBeUndefined();
 
       console.log = originalLog;
     });
@@ -431,16 +432,20 @@ describe('runHeadless', () => {
         { type: 'done' },
       ];
 
-      await expect(runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'json',
         jsonSchema: '{"type":"object"}',
-      })).resolves.toBeUndefined();
+      });
 
       const parsed = JSON.parse(captured);
       expect(parsed.result).toBe('{"incomplete": true');
       expect(parsed.structured_output).toBeUndefined();
+
+      // Return value should also have undefined structuredOutput
+      expect(result.success).toBe(true);
+      expect(result.structuredOutput).toBeUndefined();
 
       console.log = originalLog;
     });
@@ -511,13 +516,11 @@ describe('runHeadless', () => {
 
     test('emits error event with correct shape', async () => {
       const originalWrite = process.stdout.write;
-      const originalExit = process.exit;
       let stdout = '';
       (process.stdout as any).write = (chunk: any) => {
         stdout += String(chunk);
         return true;
       };
-      (process as any).exit = () => {};
 
       mockChunks = [
         { type: 'text', content: 'partial' },
@@ -525,14 +528,13 @@ describe('runHeadless', () => {
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'stream-json',
       });
 
       process.stdout.write = originalWrite;
-      process.exit = originalExit;
 
       const lines = stdout.trim().split('\n').map((line) => JSON.parse(line));
 
@@ -541,6 +543,10 @@ describe('runHeadless', () => {
       expect(errorEvent.type).toBe('error');
       expect(errorEvent.error).toBe('Connection lost');
       expect(typeof errorEvent.timestamp).toBe('number');
+
+      // Check return value indicates failure
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Connection lost');
     });
 
     test('emits text_delta events for text chunks', async () => {
@@ -607,27 +613,24 @@ describe('runHeadless', () => {
 
     test('emits tool_result events with correct shape', async () => {
       const originalWrite = process.stdout.write;
-      const originalExit = process.exit;
       let stdout = '';
       (process.stdout as any).write = (chunk: any) => {
         stdout += String(chunk);
         return true;
       };
-      (process as any).exit = () => {};
 
       mockChunks = [
         { type: 'tool_result', toolResult: { toolCallId: 'call-1', content: 'file contents', isError: false } },
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'stream-json',
       });
 
       process.stdout.write = originalWrite;
-      process.exit = originalExit;
 
       const lines = stdout.trim().split('\n').map((line) => JSON.parse(line));
 
@@ -637,6 +640,9 @@ describe('runHeadless', () => {
       expect(toolResultEvent.tool_result.content).toBe('file contents');
       expect(toolResultEvent.tool_result.is_error).toBe(false);
       expect(typeof toolResultEvent.timestamp).toBe('number');
+
+      // Non-error tool result should not affect success
+      expect(result.success).toBe(true);
     });
   });
 
@@ -725,14 +731,12 @@ describe('runHeadless', () => {
     test('writes tool_result errors to stderr', async () => {
       const originalStdoutWrite = process.stdout.write;
       const originalStderrWrite = process.stderr.write;
-      const originalExit = process.exit;
       const stderrWrites: string[] = [];
       (process.stdout as any).write = () => true;
       (process.stderr as any).write = (chunk: any) => {
         stderrWrites.push(String(chunk));
         return true;
       };
-      (process as any).exit = () => {};
 
       mockChunks = [
         { type: 'text', content: 'partial' },
@@ -740,7 +744,7 @@ describe('runHeadless', () => {
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'text',
@@ -748,30 +752,28 @@ describe('runHeadless', () => {
 
       process.stdout.write = originalStdoutWrite;
       process.stderr.write = originalStderrWrite;
-      process.exit = originalExit;
 
       // Error should be written to stderr
       const stderrOutput = stderrWrites.join('');
       expect(stderrOutput).toContain('Error: Command failed');
+
+      // Check return value indicates failure
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Command failed');
     });
 
-    test('exits with code 1 on tool_result error', async () => {
+    test('returns success=false on tool_result error', async () => {
       const originalWrite = process.stdout.write;
       const originalStderrWrite = process.stderr.write;
-      const originalExit = process.exit;
-      let exitCode: number | null = null;
       (process.stdout as any).write = () => true;
       (process.stderr as any).write = () => true;
-      (process as any).exit = (code: number) => {
-        exitCode = code;
-      };
 
       mockChunks = [
         { type: 'tool_result', toolResult: { toolCallId: 't1', content: 'Error', isError: true } },
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'text',
@@ -779,29 +781,27 @@ describe('runHeadless', () => {
 
       process.stdout.write = originalWrite;
       process.stderr.write = originalStderrWrite;
-      process.exit = originalExit;
 
-      expect(exitCode).toBe(1);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Error');
     });
 
     test('writes error chunks to stderr in text mode', async () => {
       const originalStdoutWrite = process.stdout.write;
       const originalStderrWrite = process.stderr.write;
-      const originalExit = process.exit;
       const stderrWrites: string[] = [];
       (process.stdout as any).write = () => true;
       (process.stderr as any).write = (chunk: any) => {
         stderrWrites.push(String(chunk));
         return true;
       };
-      (process as any).exit = () => {};
 
       mockChunks = [
         { type: 'error', error: 'API Error occurred' },
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'text',
@@ -809,10 +809,13 @@ describe('runHeadless', () => {
 
       process.stdout.write = originalStdoutWrite;
       process.stderr.write = originalStderrWrite;
-      process.exit = originalExit;
 
       const stderrOutput = stderrWrites.join('');
       expect(stderrOutput).toContain('Error: API Error occurred');
+
+      // Check return value indicates failure
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('API Error occurred');
     });
   });
 
@@ -918,23 +921,18 @@ describe('runHeadless', () => {
   });
 
   describe('client.onError', () => {
-    test('client error triggers exit code 1', async () => {
+    test('client error returns success=false', async () => {
       const originalLog = console.log;
       const originalError = console.error;
-      const originalExit = process.exit;
-      let exitCode: number | null = null;
       console.log = () => {};
       console.error = () => {};
-      (process as any).exit = (code: number) => {
-        exitCode = code;
-      };
 
       mockClientError = new Error('Network connection lost');
       mockChunks = [
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'json',
@@ -942,28 +940,26 @@ describe('runHeadless', () => {
 
       console.log = originalLog;
       console.error = originalError;
-      process.exit = originalExit;
 
-      expect(exitCode).toBe(1);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Network connection lost');
     });
 
     test('client error outputs error message in text mode', async () => {
       const originalWrite = process.stdout.write;
       const originalError = console.error;
-      const originalExit = process.exit;
       let errorOutput = '';
       (process.stdout as any).write = () => true;
       console.error = (msg?: any) => {
         errorOutput += String(msg ?? '');
       };
-      (process as any).exit = () => {};
 
       mockClientError = new Error('API key invalid');
       mockChunks = [
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'text',
@@ -971,36 +967,125 @@ describe('runHeadless', () => {
 
       process.stdout.write = originalWrite;
       console.error = originalError;
-      process.exit = originalExit;
 
       expect(errorOutput).toContain('API key invalid');
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('API key invalid');
     });
 
     test('client error outputs JSON error in json mode', async () => {
       const originalError = console.error;
-      const originalExit = process.exit;
       let errorOutput = '';
       console.error = (msg?: any) => {
         errorOutput += String(msg ?? '');
       };
-      (process as any).exit = () => {};
 
       mockClientError = new Error('Rate limit exceeded');
       mockChunks = [
         { type: 'done' },
       ];
 
-      await runHeadless({
+      const result = await runHeadless({
         prompt: 'Test',
         cwd: '/tmp',
         outputFormat: 'json',
       });
 
       console.error = originalError;
-      process.exit = originalExit;
 
       const parsed = JSON.parse(errorOutput);
       expect(parsed.error).toBe('Rate limit exceeded');
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Rate limit exceeded');
+    });
+  });
+
+  describe('HeadlessResult return value', () => {
+    test('includes sessionId in result', async () => {
+      const originalWrite = process.stdout.write;
+      (process.stdout as any).write = () => true;
+
+      mockChunks = [
+        { type: 'text', content: 'hello' },
+        { type: 'done' },
+      ];
+
+      const result = await runHeadless({
+        prompt: 'Test',
+        cwd: '/tmp',
+        outputFormat: 'text',
+      });
+
+      process.stdout.write = originalWrite;
+
+      expect(result.sessionId).toBe('session-new');
+    });
+
+    test('includes usage in result', async () => {
+      const originalWrite = process.stdout.write;
+      (process.stdout as any).write = () => true;
+
+      mockChunks = [
+        { type: 'text', content: 'hello' },
+        { type: 'done' },
+      ];
+
+      const result = await runHeadless({
+        prompt: 'Test',
+        cwd: '/tmp',
+        outputFormat: 'text',
+      });
+
+      process.stdout.write = originalWrite;
+
+      expect(result.usage).toBeDefined();
+      expect(result.usage?.inputTokens).toBe(1);
+      expect(result.usage?.outputTokens).toBe(2);
+      expect(result.usage?.totalTokens).toBe(3);
+    });
+
+    test('includes toolCalls in result', async () => {
+      const originalWrite = process.stdout.write;
+      (process.stdout as any).write = () => true;
+
+      mockChunks = [
+        { type: 'tool_use', toolCall: { id: 't1', name: 'Bash', input: { command: 'ls' } } },
+        { type: 'tool_use', toolCall: { id: 't2', name: 'Read', input: { file: 'test.txt' } } },
+        { type: 'done' },
+      ];
+
+      const result = await runHeadless({
+        prompt: 'Test',
+        cwd: '/tmp',
+        outputFormat: 'text',
+      });
+
+      process.stdout.write = originalWrite;
+
+      expect(result.toolCalls.length).toBe(2);
+      expect(result.toolCalls[0].name).toBe('Bash');
+      expect(result.toolCalls[1].name).toBe('Read');
+    });
+
+    test('success is true when no errors occur', async () => {
+      const originalWrite = process.stdout.write;
+      (process.stdout as any).write = () => true;
+
+      mockChunks = [
+        { type: 'text', content: 'All good' },
+        { type: 'done' },
+      ];
+
+      const result = await runHeadless({
+        prompt: 'Test',
+        cwd: '/tmp',
+        outputFormat: 'text',
+      });
+
+      process.stdout.write = originalWrite;
+
+      expect(result.success).toBe(true);
+      expect(result.error).toBeUndefined();
     });
   });
 });

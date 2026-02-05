@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
+import { CronExpressionParser } from 'cron-parser';
 import { db } from '@/db';
 import { schedules, agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
@@ -18,6 +19,7 @@ interface ScheduleConfig {
   scheduleMaxInterval?: number | null;
   scheduleUnit?: string | null;
   scheduleCron?: string | null;
+  scheduleTimezone?: string | null;
 }
 
 function computeNextRun(schedule: ScheduleConfig): Date | null {
@@ -43,9 +45,18 @@ function computeNextRun(schedule: ScheduleConfig): Date | null {
     return new Date(now + randomDelay);
   }
 
-  // For cron, we would need a cron parser library - for now return 1 minute ahead
+  // Parse cron expression and get next execution time
   if (schedule.scheduleKind === 'cron' && schedule.scheduleCron) {
-    return new Date(now + 60000);
+    try {
+      const expression = CronExpressionParser.parse(schedule.scheduleCron, {
+        currentDate: new Date(now),
+        tz: schedule.scheduleTimezone || 'UTC',
+      });
+      return expression.next().toDate();
+    } catch {
+      // Invalid cron expression - return null (schedule won't run)
+      return null;
+    }
   }
 
   return null;
@@ -164,7 +175,8 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
       data.scheduleInterval !== undefined ||
       data.scheduleMinInterval !== undefined ||
       data.scheduleMaxInterval !== undefined ||
-      data.scheduleUnit !== undefined;
+      data.scheduleUnit !== undefined ||
+      data.scheduleTimezone !== undefined;
 
     if (needsRecalc) {
       // Merge existing schedule with updates to get full config
@@ -176,6 +188,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
         scheduleMaxInterval: data.scheduleMaxInterval !== undefined ? data.scheduleMaxInterval : existing.scheduleMaxInterval,
         scheduleUnit: data.scheduleUnit !== undefined ? data.scheduleUnit : existing.scheduleUnit,
         scheduleCron: data.scheduleCron !== undefined ? data.scheduleCron : existing.scheduleCron,
+        scheduleTimezone: data.scheduleTimezone !== undefined ? data.scheduleTimezone : existing.scheduleTimezone,
       };
       updateData.nextRunAt = computeNextRun(mergedConfig);
     }
