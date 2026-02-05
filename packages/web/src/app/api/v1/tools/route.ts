@@ -276,8 +276,9 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
       properties: {
         key: { type: 'string', description: 'Unique identifier for this memory (e.g., "user.timezone")' },
         value: { type: 'string', description: 'The information to remember' },
-        category: { type: 'string', description: 'Type of memory', enum: ['preference', 'fact', 'knowledge'] },
+        category: { type: 'string', description: 'Type of memory', enum: ['preference', 'fact', 'knowledge', 'history'] },
         scope: { type: 'string', description: 'Memory scope', enum: ['global', 'shared', 'private'], default: 'private' },
+        scopeId: { type: 'string', description: 'Optional scope identifier for shared/private memories' },
         importance: { type: 'number', description: 'Importance score (1-10)', default: 5 },
         summary: { type: 'string', description: 'Optional short summary for quick recall' },
         tags: { type: 'array', description: 'Optional tags for categorization' },

@@ -41,8 +41,8 @@ export const memorySaveTool: Tool = {
       },
       category: {
         type: 'string',
-        enum: ['preference', 'fact', 'knowledge'],
-        description: 'Type of memory: preference (user settings), fact (known truths), knowledge (learned info)',
+        enum: ['preference', 'fact', 'knowledge', 'history'],
+        description: 'Type of memory: preference (user settings), fact (known truths), knowledge (learned info), history (past events)',
       },
       scope: {
         type: 'string',
