@@ -1,0 +1,8 @@
+{
+  "id": "771",
+  "subject": "Fix connector command discovery (show full command list)",
+  "description": "Connectors panel only shows 'help' command for many connectors. Improve connector discovery by parsing help output robustly (subcommands sections, indentation variants) and/or invoking connector CLI help recursively to build full command list. Add tests with fixture outputs.",
+  "status": "pending",
+  "created": "2026-02-05T09:10:28.985Z",
+  "updated": "2026-02-05T09:10:48.225Z"
+}

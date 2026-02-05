@@ -1,0 +1,8 @@
+{
+  "id": "795",
+  "subject": "Add config_get/config_set tools",
+  "description": "Introduce tools to read/update config values (project/global) so agents can support /config via tool calls. Enforce safe fields and write to config files with validation.",
+  "status": "pending",
+  "created": "2026-02-05T09:25:22.106Z",
+  "updated": "2026-02-05T09:25:22.106Z"
+}

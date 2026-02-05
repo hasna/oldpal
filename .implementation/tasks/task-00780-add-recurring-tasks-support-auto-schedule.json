@@ -1,0 +1,8 @@
+{
+  "id": "780",
+  "subject": "Add recurring tasks support (auto schedule)",
+  "description": "Allow tasks to be recurring (daily/weekly/cron). Decide best implementation (integrate with scheduler or add recurrence metadata + job runner) so recurring tasks auto-create new instances on schedule. Add UI and API support.",
+  "status": "pending",
+  "created": "2026-02-05T09:13:15.816Z",
+  "updated": "2026-02-05T09:13:15.816Z"
+}

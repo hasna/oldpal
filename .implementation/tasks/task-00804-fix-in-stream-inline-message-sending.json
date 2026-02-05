@@ -1,0 +1,14 @@
+{
+  "id": "804",
+  "subject": "Fix in-stream/inline message sending",
+  "description": "Investigate inline send path: Input.tsx triggers onSubmit(...,'inline') from autocomplete; ensure inlinePending/pendingSendsRef handled and inline messages are sent when allowed. Confirm inline send not blocked by hasPendingTools incorrectly, and queued messages resume after inline. Add tests for inline/in-stream message delivery.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "bug",
+    "terminal",
+    "inline"
+  ],
+  "created": "2026-02-05T09:59:33.728Z",
+  "updated": "2026-02-05T09:59:33.728Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "783",
+  "subject": "Audit memory persistence + tenant isolation in web",
+  "description": "Core memory uses local SQLite; in web/server context this may be ephemeral and 'global' scope could leak across users. Audit web memory backend, ensure per-user/org namespace (scopeId) and persistence (Postgres or configured storage). Update docs/config accordingly.",
+  "status": "pending",
+  "created": "2026-02-05T09:17:13.600Z",
+  "updated": "2026-02-05T09:17:13.600Z"
+}

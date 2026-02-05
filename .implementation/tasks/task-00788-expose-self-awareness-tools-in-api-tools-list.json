@@ -1,0 +1,8 @@
+{
+  "id": "788",
+  "subject": "Expose self-awareness tools in API tools list",
+  "description": "Add context_get, context_stats, whoami, identity_get, energy_status, resource_limits tool metadata to /api/v1/tools so agents can introspect when invoking /status, /whoami, /context, etc.",
+  "status": "pending",
+  "created": "2026-02-05T09:21:40.346Z",
+  "updated": "2026-02-05T09:21:40.346Z"
+}

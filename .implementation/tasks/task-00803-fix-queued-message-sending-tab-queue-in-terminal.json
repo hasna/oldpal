@@ -1,0 +1,14 @@
+{
+  "id": "803",
+  "subject": "Fix queued message sending (Tab queue) in terminal",
+  "description": "Investigate queued message flow: Input.tsx only queues when isProcessing; consider isBusy/hasPendingTools so Tab queues during tool calls. In App.tsx, ensure processQueue waits for pending tools and flushes after stop/interrupt. Verify queueFlushTrigger updates on completion. Add tests for queued messages.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "bug",
+    "terminal",
+    "queue"
+  ],
+  "created": "2026-02-05T09:59:30.106Z",
+  "updated": "2026-02-05T09:59:30.106Z"
+}

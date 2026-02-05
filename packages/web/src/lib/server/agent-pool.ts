@@ -73,7 +73,7 @@ async function createSession(sessionId: string): Promise<SessionRecord> {
     sessionId,
     allowedTools: agentSettings?.allowedTools,
     systemPrompt: agentSettings?.systemPrompt,
-    // TODO: model selection support would need to be wired through here
+    model: agentSettings?.model,
   });
   await client.initialize();
   const record: SessionRecord = {

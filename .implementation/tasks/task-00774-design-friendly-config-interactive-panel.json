@@ -1,0 +1,8 @@
+{
+  "id": "774",
+  "subject": "Design friendly /config interactive panel",
+  "description": "Current /config UX is not user-friendly. Build an interactive panel/wizard similar to /assistants to view/edit project/global config with clear sections and validation.",
+  "status": "pending",
+  "created": "2026-02-05T09:11:21.481Z",
+  "updated": "2026-02-05T09:11:21.481Z"
+}

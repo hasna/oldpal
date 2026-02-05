@@ -1,0 +1,8 @@
+{
+  "id": "785",
+  "subject": "Audit /commands for required tool coverage",
+  "description": "Go through every built-in /command and map required tools. Ensure each command either has a corresponding tool available to agents or clearly disables itself when the feature is off. Add tests that tool registry + /api/v1/tools expose the needed tools for enabled features.",
+  "status": "pending",
+  "created": "2026-02-05T09:19:05.338Z",
+  "updated": "2026-02-05T09:19:05.338Z"
+}

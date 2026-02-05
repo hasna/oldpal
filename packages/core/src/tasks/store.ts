@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import { generateId } from '@hasna/assistants-shared';
-import type { Task, TaskPriority, TaskStatus, TaskStoreData } from './types';
+import type { Task, TaskPriority, TaskStatus, TaskStoreData, TaskCreateOptions } from './types';
 import { PRIORITY_ORDER } from './types';
 
 const TASKS_DIR = '.assistants/tasks';
@@ -77,20 +77,57 @@ export async function getTask(cwd: string, id: string): Promise<Task | null> {
  */
 export async function addTask(
   cwd: string,
-  description: string,
+  options: TaskCreateOptions | string,
   priority: TaskPriority = 'normal',
   projectId?: string
 ): Promise<Task> {
   const data = await loadTaskStore(cwd);
   const now = Date.now();
+
+  // Support both old (description, priority, projectId) and new (options object) signatures
+  const opts: TaskCreateOptions =
+    typeof options === 'string'
+      ? { description: options, priority, projectId }
+      : options;
+
   const task: Task = {
     id: generateId(),
-    description: description.trim(),
+    description: opts.description.trim(),
     status: 'pending',
-    priority,
+    priority: opts.priority ?? 'normal',
     createdAt: now,
-    projectId,
+    projectId: opts.projectId,
+    blockedBy: opts.blockedBy?.length ? opts.blockedBy : undefined,
+    blocks: opts.blocks?.length ? opts.blocks : undefined,
+    assignee: opts.assignee || undefined,
   };
+
+  // If this task blocks other tasks, update those tasks' blockedBy arrays
+  if (opts.blocks?.length) {
+    for (const blockedId of opts.blocks) {
+      const blockedTask = data.tasks.find((t) => t.id === blockedId);
+      if (blockedTask) {
+        blockedTask.blockedBy = blockedTask.blockedBy || [];
+        if (!blockedTask.blockedBy.includes(task.id)) {
+          blockedTask.blockedBy.push(task.id);
+        }
+      }
+    }
+  }
+
+  // If this task is blocked by others, update those tasks' blocks arrays
+  if (opts.blockedBy?.length) {
+    for (const blockingId of opts.blockedBy) {
+      const blockingTask = data.tasks.find((t) => t.id === blockingId);
+      if (blockingTask) {
+        blockingTask.blocks = blockingTask.blocks || [];
+        if (!blockingTask.blocks.includes(task.id)) {
+          blockingTask.blocks.push(task.id);
+        }
+      }
+    }
+  }
+
   data.tasks.push(task);
   await saveTaskStore(cwd, data);
   return task;
@@ -160,7 +197,24 @@ export async function clearCompletedTasks(cwd: string): Promise<number> {
  */
 export async function getNextTask(cwd: string): Promise<Task | null> {
   const data = await loadTaskStore(cwd);
-  const pending = data.tasks.filter((t) => t.status === 'pending');
+
+  // Get completed task IDs for checking blockers
+  const completedIds = new Set(
+    data.tasks
+      .filter((t) => t.status === 'completed')
+      .map((t) => t.id)
+  );
+
+  // Filter to pending tasks that are not blocked
+  const pending = data.tasks.filter((t) => {
+    if (t.status !== 'pending') return false;
+    // If task has blockers, check if all blockers are completed
+    if (t.blockedBy?.length) {
+      return t.blockedBy.every((blockerId) => completedIds.has(blockerId));
+    }
+    return true;
+  });
+
   if (pending.length === 0) return null;
 
   // Sort by priority (high first), then by creation time (oldest first)

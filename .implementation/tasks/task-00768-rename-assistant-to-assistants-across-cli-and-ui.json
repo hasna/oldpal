@@ -1,0 +1,8 @@
+{
+  "id": "768",
+  "subject": "Rename /assistant to /assistants across CLI and UI",
+  "description": "Change slash command name to /assistants (and keep /assistant as deprecated alias if desired). Update built-in command registration, help text, autocomplete list, docs, and any references so only /assistants is shown.",
+  "status": "pending",
+  "created": "2026-02-05T09:09:55.960Z",
+  "updated": "2026-02-05T09:09:55.960Z"
+}

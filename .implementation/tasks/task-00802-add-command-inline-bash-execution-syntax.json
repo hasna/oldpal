@@ -1,0 +1,8 @@
+{
+  "id": "802",
+  "subject": "Add ![command] inline bash execution syntax",
+  "description": "Support running bash commands directly from chat using ![command] prefix (e.g., ![bun install -g @hasna/connect-notion@latest --no-cache]). Define parsing, safety/confirmation rules, and integrate with bash tool execution.",
+  "status": "pending",
+  "created": "2026-02-05T09:52:24.286Z",
+  "updated": "2026-02-05T09:52:24.286Z"
+}

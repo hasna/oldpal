@@ -19,6 +19,21 @@ export interface Task {
   result?: string;
   error?: string;
   projectId?: string; // Optional association with project
+  blockedBy?: string[]; // Task IDs that must complete before this task can start
+  blocks?: string[]; // Task IDs that are blocked by this task
+  assignee?: string; // Agent or user assigned to this task
+}
+
+/**
+ * Options for creating a new task
+ */
+export interface TaskCreateOptions {
+  description: string;
+  priority?: TaskPriority;
+  projectId?: string;
+  blockedBy?: string[];
+  blocks?: string[];
+  assignee?: string;
 }
 
 /**

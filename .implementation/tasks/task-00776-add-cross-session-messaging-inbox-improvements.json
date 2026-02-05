@@ -1,0 +1,8 @@
+{
+  "id": "776",
+  "subject": "Add cross-session messaging + inbox improvements",
+  "description": "Enable agents/users to send messages across sessions via inbox. Inbox should be scrollable, support selection, and allow injecting messages into a session as queued or in-stream messages. Support agent-to-agent messages and user replies.",
+  "status": "pending",
+  "created": "2026-02-05T09:11:46.020Z",
+  "updated": "2026-02-05T09:11:46.020Z"
+}

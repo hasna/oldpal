@@ -1,0 +1,8 @@
+{
+  "id": "777",
+  "subject": "Rework /summarize to use altask summary agent",
+  "description": "Keep /compact as-is. Change /summarize to dispatch a background summary task (altask agent) in a separate session, then post the summary back into the current session via cross-session messaging/inbox.",
+  "status": "pending",
+  "created": "2026-02-05T09:11:56.236Z",
+  "updated": "2026-02-05T09:11:56.236Z"
+}

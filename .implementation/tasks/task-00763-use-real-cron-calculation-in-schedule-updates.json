@@ -1,0 +1,8 @@
+{
+  "id": "763",
+  "subject": "Use real cron calculation in schedule updates",
+  "description": "packages/web/src/app/api/v1/schedules/[id]/route.ts also uses placeholder cron nextRunAt. Share cron parsing utility with schedules/route.ts so updates compute correct nextRunAt with timezone.",
+  "status": "pending",
+  "created": "2026-02-05T09:02:26.469Z",
+  "updated": "2026-02-05T09:02:26.469Z"
+}

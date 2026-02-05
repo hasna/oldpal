@@ -1,0 +1,8 @@
+{
+  "id": "792",
+  "subject": "Add identity management tools",
+  "description": "Create tools for identity_list/create/update/delete/switch/templates to match /identity command functionality. Expose via /api/v1/tools and add tests.",
+  "status": "pending",
+  "created": "2026-02-05T09:24:47.489Z",
+  "updated": "2026-02-05T09:24:47.489Z"
+}

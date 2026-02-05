@@ -1,0 +1,8 @@
+{
+  "id": "786",
+  "subject": "Expose project/plan tools in API tools list",
+  "description": "Add project_* and plan_* tool metadata to /api/v1/tools so agents can discover and use project/plan operations (project_list/get/create/update/delete, plan_list/get/create/add_step/update_step/complete_step/etc.).",
+  "status": "pending",
+  "created": "2026-02-05T09:21:17.393Z",
+  "updated": "2026-02-05T09:21:17.393Z"
+}

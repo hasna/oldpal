@@ -1,0 +1,8 @@
+{
+  "id": "770",
+  "subject": "Improve session recovery UX (single prompt with list + start fresh)",
+  "description": "Recovery prompt currently cycles through sessions. Replace with a single recovery panel listing all recoverable sessions and a 'Start fresh' option. Allow selecting which session to resume; avoid repeated yes/no prompts.",
+  "status": "pending",
+  "created": "2026-02-05T09:10:17.116Z",
+  "updated": "2026-02-05T09:10:17.116Z"
+}

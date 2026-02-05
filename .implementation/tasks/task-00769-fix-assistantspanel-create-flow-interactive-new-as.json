@@ -1,0 +1,8 @@
+{
+  "id": "769",
+  "subject": "Fix AssistantsPanel create flow (interactive new assistant)",
+  "description": "Investigate why interactive assistant creation doesn't persist or show up. Verify assistant manager initialization, createAssistant errors, and UI state refresh. Add regression test for creating via panel.",
+  "status": "pending",
+  "created": "2026-02-05T09:10:05.427Z",
+  "updated": "2026-02-05T09:10:05.427Z"
+}

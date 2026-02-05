@@ -32,6 +32,8 @@ export class EmbeddedClient implements AssistantClient {
       initialMessages?: Message[];
       systemPrompt?: string;
       allowedTools?: string[];
+      /** Override the model from config (e.g., agent-specific model selection) */
+      model?: string;
       startedAt?: string;
       agentFactory?: (options: ConstructorParameters<typeof AgentLoop>[0]) => AgentLoop;
     }
@@ -54,6 +56,7 @@ export class EmbeddedClient implements AssistantClient {
       sessionId,
       allowedTools: options?.allowedTools,
       extraSystemPrompt: options?.systemPrompt,
+      model: options?.model,
       onChunk: (chunk) => {
         for (const callback of this.chunkCallbacks) {
           callback(chunk);

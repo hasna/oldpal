@@ -1,0 +1,8 @@
+{
+  "id": "791",
+  "subject": "Add assistant management tools",
+  "description": "Create tools for assistant_list/create/update/delete/switch so agents can manage assistants programmatically (align with /assistant command). Expose in /api/v1/tools and add tests.",
+  "status": "pending",
+  "created": "2026-02-05T09:24:37.726Z",
+  "updated": "2026-02-05T09:24:37.726Z"
+}

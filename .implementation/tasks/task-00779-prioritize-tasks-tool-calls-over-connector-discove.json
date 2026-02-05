@@ -1,0 +1,8 @@
+{
+  "id": "779",
+  "subject": "Prioritize /tasks tool calls over connector discovery",
+  "description": "Agent should check task tool calls first and avoid scanning connectors when /tasks is requested. Audit command routing/dispatch order so /tasks uses task system reliably before connector discovery.",
+  "status": "pending",
+  "created": "2026-02-05T09:12:52.667Z",
+  "updated": "2026-02-05T09:12:52.667Z"
+}

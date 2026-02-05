@@ -1,0 +1,8 @@
+{
+  "id": "800",
+  "subject": "Add energy_rest tool",
+  "description": "Create a tool to recharge energy (energy_rest/recharge) so agents can perform /rest via tool calls. Expose in /api/v1/tools and add tests.",
+  "status": "pending",
+  "created": "2026-02-05T09:27:35.608Z",
+  "updated": "2026-02-05T09:27:35.608Z"
+}

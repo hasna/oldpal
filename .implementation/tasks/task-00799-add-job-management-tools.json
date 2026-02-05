@@ -1,0 +1,8 @@
+{
+  "id": "799",
+  "subject": "Add job management tools",
+  "description": "Create tools for job_list (session/all), job_cancel, and job_clear to match /jobs command capabilities. Expose via /api/v1/tools and add tests.",
+  "status": "pending",
+  "created": "2026-02-05T09:27:24.132Z",
+  "updated": "2026-02-05T09:27:24.132Z"
+}

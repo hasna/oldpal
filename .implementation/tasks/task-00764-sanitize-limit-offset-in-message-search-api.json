@@ -1,0 +1,8 @@
+{
+  "id": "764",
+  "subject": "Sanitize limit/offset in message search API",
+  "description": "packages/web/src/app/api/v1/search/messages/route.ts uses parseInt without fallback; NaN leads to invalid limit/offset. Clamp/validate to defaults similar to other endpoints.",
+  "status": "pending",
+  "created": "2026-02-05T09:02:49.839Z",
+  "updated": "2026-02-05T09:02:49.839Z"
+}

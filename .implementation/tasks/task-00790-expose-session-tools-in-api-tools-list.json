@@ -1,0 +1,8 @@
+{
+  "id": "790",
+  "subject": "Expose session tools in API tools list",
+  "description": "Add session_info, session_list, session_create, session_update, session_delete tool metadata to /api/v1/tools so agents can handle /session command via tool calls.",
+  "status": "pending",
+  "created": "2026-02-05T09:24:22.787Z",
+  "updated": "2026-02-05T09:24:22.787Z"
+}

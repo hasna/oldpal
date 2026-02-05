@@ -1,0 +1,8 @@
+{
+  "id": "787",
+  "subject": "Expose skill tools in API tools list",
+  "description": "Add skill_list, skill_read, and skill_execute tool metadata to /api/v1/tools so agents can discover and invoke skills via tools (in addition to /skills endpoints).",
+  "status": "pending",
+  "created": "2026-02-05T09:21:31.331Z",
+  "updated": "2026-02-05T09:21:31.331Z"
+}

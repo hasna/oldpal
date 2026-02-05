@@ -1,0 +1,8 @@
+{
+  "id": "765",
+  "subject": "Sanitize notifications limit parameter",
+  "description": "GET /api/v1/notifications uses Math.min(parseInt(...), 50) without fallback; NaN yields invalid limit. Clamp to default when NaN.",
+  "status": "pending",
+  "created": "2026-02-05T09:03:15.820Z",
+  "updated": "2026-02-05T09:03:15.820Z"
+}

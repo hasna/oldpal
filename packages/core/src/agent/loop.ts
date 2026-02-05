@@ -90,6 +90,8 @@ export interface AgentLoopOptions {
   allowedTools?: string[];
   extraSystemPrompt?: string;
   llmClient?: LLMClient;
+  /** Override the model from config (e.g., agent-specific model selection) */
+  model?: string;
   onChunk?: (chunk: StreamChunk) => void;
   onToolStart?: (toolCall: ToolCall) => void;
   onToolEnd?: (toolCall: ToolCall, result: ToolResult) => void;
@@ -166,6 +168,7 @@ export class AgentLoop {
   private assistantId: string | null = null;
   private askUserHandler: AskUserHandler | null = null;
   private sessionContextOptions: { userId: string; queryFn: SessionQueryFunctions } | null = null;
+  private modelOverride: string | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -193,6 +196,7 @@ export class AgentLoop {
     this.allowedTools = this.normalizeAllowedTools(options.allowedTools);
     this.extraSystemPrompt = options.extraSystemPrompt || null;
     this.llmClient = options.llmClient ?? null;
+    this.modelOverride = options.model || null;
     this.sessionContextOptions = options.sessionContext || null;
 
     this.onChunk = options.onChunk;
@@ -211,6 +215,16 @@ export class AgentLoop {
       ensureConfigDir(this.sessionId),
     ]);
     this.config = config;
+    // Apply model override if provided (e.g., agent-specific model selection)
+    if (this.modelOverride) {
+      this.config = {
+        ...this.config,
+        llm: {
+          ...this.config.llm,
+          model: this.modelOverride,
+        },
+      };
+    }
     configureLimits(this.config.validation);
     this.toolRegistry.setValidationConfig(this.config.validation);
     this.contextConfig = this.buildContextConfig(this.config);

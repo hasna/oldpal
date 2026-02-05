@@ -1,0 +1,8 @@
+{
+  "id": "793",
+  "subject": "Add context management tools",
+  "description": "Add tools for context_list/add/remove/clear (project context entries) so agents can manage /context via tool calls. Expose in /api/v1/tools and add tests.",
+  "status": "pending",
+  "created": "2026-02-05T09:25:00.531Z",
+  "updated": "2026-02-05T09:25:00.531Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "797",
+  "subject": "Add voice control tools",
+  "description": "Create tools for voice_enable/voice_disable/voice_status/voice_say/voice_listen/voice_stop to match /voice, /say, /listen commands. Expose in /api/v1/tools and add tests.",
+  "status": "pending",
+  "created": "2026-02-05T09:25:43.987Z",
+  "updated": "2026-02-05T09:25:43.987Z"
+}

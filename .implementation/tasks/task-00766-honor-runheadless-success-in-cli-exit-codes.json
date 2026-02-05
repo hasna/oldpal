@@ -1,0 +1,8 @@
+{
+  "id": "766",
+  "subject": "Honor runHeadless success in CLI exit codes",
+  "description": "runHeadless now returns HeadlessResult instead of exiting. Update CLI entrypoints to check result.success and exit with non-zero on errors (tool_error or chunk error) while preserving output behavior.",
+  "status": "pending",
+  "created": "2026-02-05T09:04:57.603Z",
+  "updated": "2026-02-05T09:04:57.603Z"
+}

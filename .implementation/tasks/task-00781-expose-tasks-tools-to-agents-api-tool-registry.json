@@ -1,0 +1,8 @@
+{
+  "id": "781",
+  "subject": "Expose tasks tools to agents (API + tool registry)",
+  "description": "Core has tasks_list/get/add/next/complete/fail/status tools, but /api/v1/tools does not list them. Expose tasks tools in web API/tool metadata and ensure they are registered/available in agent tool selection so agents can see and invoke task tool calls.",
+  "status": "pending",
+  "created": "2026-02-05T09:14:18.115Z",
+  "updated": "2026-02-05T09:14:18.115Z"
+}

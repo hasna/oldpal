@@ -1,0 +1,8 @@
+{
+  "id": "773",
+  "subject": "Make input box separators solid (not dotted)",
+  "description": "Terminal input area border/separators appear dotted. Identify where the top/bottom lines are rendered and switch to a solid line glyph (e.g., ─ or -) with light gray color. Verify on both interactive and headless views.",
+  "status": "pending",
+  "created": "2026-02-05T09:11:09.578Z",
+  "updated": "2026-02-05T09:11:09.578Z"
+}

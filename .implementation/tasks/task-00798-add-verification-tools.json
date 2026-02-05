@@ -1,0 +1,8 @@
+{
+  "id": "798",
+  "subject": "Add verification tools",
+  "description": "Create tools for verification_list, verification_get, verification_enable, verification_disable, verification_status to match /verification command. Expose in /api/v1/tools and add tests.",
+  "status": "pending",
+  "created": "2026-02-05T09:27:11.439Z",
+  "updated": "2026-02-05T09:27:11.439Z"
+}

@@ -4,6 +4,49 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 804 | Fix in-stream/inline message sending | pending | - | - |
+| 803 | Fix queued message sending (Tab queue) i | pending | - | - |
+| 802 | Add ![command] inline bash execution syn | pending | - | - |
+| 801 | Add model_list/model_set tools | pending | - | - |
+| 800 | Add energy_rest tool | pending | - | - |
+| 799 | Add job management tools | pending | - | - |
+| 798 | Add verification tools | pending | - | - |
+| 797 | Add voice control tools | pending | - | - |
+| 796 | Add security_log tool | pending | - | - |
+| 795 | Add config_get/config_set tools | pending | - | - |
+| 794 | Add connectors_list tool | pending | - | - |
+| 793 | Add context management tools | pending | - | - |
+| 792 | Add identity management tools | pending | - | - |
+| 791 | Add assistant management tools | pending | - | - |
+| 790 | Expose session tools in API tools list | pending | - | - |
+| 789 | Expose job_status/job_result tools in AP | pending | - | - |
+| 788 | Expose self-awareness tools in API tools | pending | - | - |
+| 787 | Expose skill tools in API tools list | pending | - | - |
+| 786 | Expose project/plan tools in API tools l | pending | - | - |
+| 785 | Audit /commands for required tool covera | pending | - | - |
+| 784 | Expose wallet/secrets/messages/inbox too | pending | - | - |
+| 783 | Audit memory persistence + tenant isolat | pending | - | - |
+| 782 | Ensure agents prioritize tasks tool call | pending | - | - |
+| 781 | Expose tasks tools to agents (API + tool | pending | - | - |
+| 780 | Add recurring tasks support (auto schedu | pending | - | - |
+| 779 | Prioritize /tasks tool calls over connec | pending | - | - |
+| 778 | Improve /tasks add flow (blocked-by, blo | pending | - | - |
+| 777 | Rework /summarize to use altask summary  | pending | - | - |
+| 776 | Add cross-session messaging + inbox impr | pending | - | - |
+| 775 | Improve /identity, /wallet, /secrets int | pending | - | - |
+| 774 | Design friendly /config interactive pane | pending | - | - |
+| 773 | Make input box separators solid (not dot | pending | - | - |
+| 772 | Paginate connectors list UI (max 5 + Vie | pending | - | - |
+| 771 | Fix connector command discovery (show fu | pending | - | - |
+| 770 | Improve session recovery UX (single prom | pending | - | - |
+| 769 | Fix AssistantsPanel create flow (interac | pending | - | - |
+| 768 | Rename /assistant to /assistants across  | pending | - | - |
+| 767 | Update headless tests for new runHeadles | pending | - | - |
+| 766 | Honor runHeadless success in CLI exit co | pending | - | - |
+| 765 | Sanitize notifications limit parameter | pending | - | - |
+| 764 | Sanitize limit/offset in message search  | pending | - | - |
+| 763 | Use real cron calculation in schedule up | pending | - | - |
+| 762 | Implement real cron nextRunAt calculatio | pending | - | - |
 | 761 | Implement actual schedule execution on m | pending | - | - |
 | 760 | Validate upload type parameter | pending | - | - |
 | 759 | Handle parseArgs errors in terminal inde | pending | - | - |

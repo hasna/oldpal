@@ -1,0 +1,8 @@
+{
+  "id": "772",
+  "subject": "Paginate connectors list UI (max 5 + View more)",
+  "description": "Connectors panel should show at most 5 connectors/commands at a time with a 'View more' row and scrolling behavior similar to slash command autocomplete. Implement virtualized paging for connectors and for command lists.",
+  "status": "pending",
+  "created": "2026-02-05T09:10:59.118Z",
+  "updated": "2026-02-05T09:10:59.118Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "789",
+  "subject": "Expose job_status/job_result tools in API tools list",
+  "description": "Add job_status and job_result tool metadata to /api/v1/tools so agents can monitor background connector jobs used by /jobs and connector executions.",
+  "status": "pending",
+  "created": "2026-02-05T09:21:53.340Z",
+  "updated": "2026-02-05T09:21:53.340Z"
+}

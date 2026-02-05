@@ -1,0 +1,8 @@
+{
+  "id": "778",
+  "subject": "Improve /tasks add flow (blocked-by, blocks, project, assignee)",
+  "description": "In terminal /tasks add UI, add fields for blocked-by and is-blocking, project selection (if available), and assignee selection (agents). Make inputs robust and consistent with existing task data model.",
+  "status": "pending",
+  "created": "2026-02-05T09:12:35.456Z",
+  "updated": "2026-02-05T09:12:35.456Z"
+}

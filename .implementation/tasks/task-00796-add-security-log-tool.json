@@ -1,0 +1,8 @@
+{
+  "id": "796",
+  "subject": "Add security_log tool",
+  "description": "Expose security log retrieval as a tool (security_log/list) so agents can access /security-log data programmatically. Add API tool metadata and tests.",
+  "status": "pending",
+  "created": "2026-02-05T09:25:33.343Z",
+  "updated": "2026-02-05T09:25:33.343Z"
+}

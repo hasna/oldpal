@@ -1,0 +1,8 @@
+{
+  "id": "767",
+  "subject": "Update headless tests for new runHeadless return type",
+  "description": "runHeadless now returns HeadlessResult. Update terminal headless tests to assert return value and exit behavior, and add coverage for result.success false when tool/error chunks occur.",
+  "status": "pending",
+  "created": "2026-02-05T09:05:06.130Z",
+  "updated": "2026-02-05T09:05:06.130Z"
+}

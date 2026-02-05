@@ -1,0 +1,8 @@
+{
+  "id": "794",
+  "subject": "Add connectors_list tool",
+  "description": "Provide a tool to list discovered connectors and their commands (used by /connectors). Expose via /api/v1/tools so agents can discover connector capabilities without relying on CLI UI.",
+  "status": "pending",
+  "created": "2026-02-05T09:25:12.033Z",
+  "updated": "2026-02-05T09:25:12.033Z"
+}
