@@ -7,6 +7,18 @@ export type { Runtime, FileHandle, SpawnOptions, SpawnResult, ShellResult, Shell
 // Agent
 export { AgentLoop } from './agent/loop';
 export { AgentContext } from './agent/context';
+export { SubagentManager } from './agent/subagent-manager';
+export type {
+  SubagentConfig,
+  SubagentResult,
+  SubagentInfo,
+  SubagentJob,
+  SubagentJobStatus,
+  SubagentManagerConfig,
+  SubagentManagerContext,
+  SubagentLoopConfig,
+  SubagentRunner,
+} from './agent/subagent-manager';
 
 // Tools
 export { ToolRegistry } from './tools/registry';
@@ -50,6 +62,16 @@ export {
   registerSelfAwarenessTools,
   type SelfAwarenessContext,
 } from './tools/self-awareness';
+export {
+  agentTools,
+  agentSpawnTool,
+  agentListTool,
+  agentDelegateTool,
+  agentJobStatusTool,
+  createAgentToolExecutors,
+  registerAgentTools,
+  type AgentToolContext,
+} from './tools/agents';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';
@@ -73,6 +95,36 @@ export { VerificationSessionStore } from './sessions/verification';
 // Memory
 export { MemoryStore } from './memory/store';
 export { SessionManager } from './memory/sessions';
+export { GlobalMemoryManager } from './memory/global-memory';
+export { MemoryInjector, buildContextInjection } from './memory/injector';
+export type {
+  MemoryScope,
+  MemoryCategory,
+  MemorySource,
+  Memory,
+  MemoryOptions,
+  MemoryQuery,
+  MemoryQueryResult,
+  MemoryStats,
+  MemoryInjectionConfig,
+  MemoryInjectionResult,
+  MemoryAccessAction,
+  MemoryAccessLog,
+  MemoryConfig,
+} from './memory/types';
+export { DEFAULT_MEMORY_CONFIG } from './memory/types';
+export {
+  memoryTools,
+  memorySaveTool,
+  memoryRecallTool,
+  memoryForgetTool,
+  memoryListTool,
+  memoryUpdateTool,
+  memoryStatsTool,
+  createMemoryToolExecutors,
+  registerMemoryTools,
+} from './tools/memory';
+export type { MemoryToolContext } from './tools/memory';
 
 // Context
 export * from './context';
@@ -99,8 +151,21 @@ export * from './migration';
 
 // LLM
 export type { LLMClient } from './llm/client';
-export { createLLMClient } from './llm/client';
+export { createLLMClient, ProviderMismatchError } from './llm/client';
 export { AnthropicClient } from './llm/anthropic';
+export { OpenAIClient } from './llm/openai';
+export {
+  MODELS,
+  getModelById,
+  getModelsByProvider,
+  getProviderForModel,
+  isValidModel,
+  getAllModelIds,
+  getModelDisplayName,
+  formatModelInfo,
+  getModelsGroupedByProvider,
+} from './llm/models';
+export type { ModelDefinition } from './llm/models';
 
 // Config
 export { loadConfig, getConfigPath } from './config';

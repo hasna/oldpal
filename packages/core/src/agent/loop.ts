@@ -4,11 +4,13 @@ import { join } from 'path';
 import { AgentContext } from './context';
 import {
   ContextManager,
+  ContextInjector,
   HybridSummarizer,
   LLMSummarizer,
   TokenCounter,
   type ContextConfig,
   type ContextInfo,
+  type ContextInjectionConfig,
 } from '../context';
 import { ToolRegistry } from '../tools/registry';
 import { ConnectorBridge } from '../tools/connector';
@@ -66,6 +68,10 @@ import { createMessagesManager, registerMessagesTools, type MessagesManager } fr
 import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
 import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
 import { registerSelfAwarenessTools } from '../tools/self-awareness';
+import { registerMemoryTools } from '../tools/memory';
+import { registerAgentTools } from '../tools/agents';
+import { GlobalMemoryManager, MemoryInjector, type MemoryConfig } from '../memory';
+import { SubagentManager, type SubagentManagerContext, type SubagentResult, type SubagentLoopConfig } from './subagent-manager';
 
 export interface AgentLoopOptions {
   config?: AssistantsConfig;
@@ -84,6 +90,8 @@ export interface AgentLoopOptions {
     userId: string;
     queryFn: SessionQueryFunctions;
   };
+  /** Subagent depth level (0 = root agent, used internally) */
+  depth?: number;
 }
 
 /**
@@ -135,7 +143,14 @@ export class AgentLoop {
   private secretsManager: SecretsManager | null = null;
   private jobManager: JobManager | null = null;
   private messagesManager: MessagesManager | null = null;
+  private memoryManager: GlobalMemoryManager | null = null;
+  private memoryInjector: MemoryInjector | null = null;
+  private contextInjector: ContextInjector | null = null;
+  private pendingContextInjection: string | null = null;
+  private subagentManager: SubagentManager | null = null;
+  private depth: number = 0;
   private pendingMessagesContext: string | null = null;
+  private pendingMemoryContext: string | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
   private activeProjectId: string | null = null;
@@ -153,6 +168,7 @@ export class AgentLoop {
     this.cwd = options.cwd || process.cwd();
     this.sessionId = options.sessionId || generateId();
     this.assistantId = options.assistantId || null;
+    this.depth = options.depth ?? 0;
     this.context = new AgentContext();
     this.toolRegistry = new ToolRegistry();
     this.toolRegistry.setErrorAggregator(this.errorAggregator);
@@ -193,6 +209,11 @@ export class AgentLoop {
     this.builtinCommands.updateTokenUsage({ maxContextTokens: this.contextConfig.maxContextTokens });
     if (this.config.voice) {
       this.voiceManager = new VoiceManager(this.config.voice);
+    }
+    // Initialize context injector if enabled
+    const injectionConfig = this.config.context?.injection;
+    if (injectionConfig?.enabled !== false) {
+      this.contextInjector = new ContextInjector(this.cwd, injectionConfig as Partial<ContextInjectionConfig>);
     }
     await this.initializeIdentitySystem();
 
@@ -316,6 +337,45 @@ export class AgentLoop {
       registerMessagesTools(this.toolRegistry, () => this.messagesManager);
     }
 
+    // Initialize memory system if enabled
+    const memoryConfig = this.config?.memory;
+    if (memoryConfig?.enabled !== false) {
+      const assistant = this.assistantManager?.getActive();
+      const agentScopeId = assistant?.id || this.sessionId;
+      this.memoryManager = new GlobalMemoryManager({
+        defaultScope: 'private',
+        scopeId: agentScopeId,
+        sessionId: this.sessionId,
+        config: {
+          enabled: memoryConfig?.enabled ?? true,
+          injection: {
+            enabled: memoryConfig?.injection?.enabled ?? true,
+            maxTokens: memoryConfig?.injection?.maxTokens ?? 500,
+            minImportance: memoryConfig?.injection?.minImportance ?? 5,
+            categories: memoryConfig?.injection?.categories ?? ['preference', 'fact'],
+            refreshInterval: memoryConfig?.injection?.refreshInterval ?? 5,
+          },
+          storage: {
+            maxEntries: memoryConfig?.storage?.maxEntries ?? 1000,
+            defaultTTL: memoryConfig?.storage?.defaultTTL,
+          },
+          scopes: {
+            globalEnabled: memoryConfig?.scopes?.globalEnabled ?? true,
+            sharedEnabled: memoryConfig?.scopes?.sharedEnabled ?? true,
+            privateEnabled: memoryConfig?.scopes?.privateEnabled ?? true,
+          },
+        },
+      });
+      this.memoryInjector = new MemoryInjector(this.memoryManager, {
+        enabled: memoryConfig?.injection?.enabled ?? true,
+        maxTokens: memoryConfig?.injection?.maxTokens ?? 500,
+        minImportance: memoryConfig?.injection?.minImportance ?? 5,
+        categories: memoryConfig?.injection?.categories ?? ['preference', 'fact'],
+        refreshInterval: memoryConfig?.injection?.refreshInterval ?? 5,
+      });
+      registerMemoryTools(this.toolRegistry, () => this.memoryManager);
+    }
+
     // Register session tools if session context is provided
     if (this.sessionContextOptions) {
       registerSessionTools(this.toolRegistry, () => {
@@ -344,6 +404,16 @@ export class AgentLoop {
       getWalletManager: () => this.walletManager,
       sessionId: this.sessionId,
       model: this.config?.llm?.model,
+    });
+
+    // Initialize subagent manager and register agent tools
+    this.initializeSubagentManager();
+    registerAgentTools(this.toolRegistry, {
+      getSubagentManager: () => this.subagentManager,
+      getAssistantManager: () => this.assistantManager,
+      getDepth: () => this.depth,
+      getCwd: () => this.cwd,
+      getSessionId: () => this.sessionId,
     });
 
     // Initialize jobs system if enabled
@@ -434,6 +504,10 @@ export class AgentLoop {
     try {
       // Inject pending messages before processing
       await this.injectPendingMessages();
+      // Inject relevant memories based on user message
+      await this.injectMemoryContext(userMessage);
+      // Inject environment context (datetime, cwd, etc.)
+      await this.injectContextInfo();
     } catch (error) {
       // If injection fails, reset isRunning before re-throwing
       this.isRunning = false;
@@ -480,6 +554,9 @@ export class AgentLoop {
 
       const explicitToolResult = await this.handleExplicitToolCommand(userMessage);
       if (explicitToolResult) {
+        // Clear pending context - explicit tool commands bypass the LLM
+        this.pendingMemoryContext = null;
+        this.pendingContextInjection = null;
         return explicitToolResult;
       }
 
@@ -491,6 +568,9 @@ export class AgentLoop {
         if (command) {
           const commandResult = await this.handleCommand(userMessage);
           if (commandResult.handled) {
+            // Clear pending context - commands bypass the LLM
+            this.pendingMemoryContext = null;
+            this.pendingContextInjection = null;
             if (commandResult.clearConversation) {
               this.resetContext();
             }
@@ -511,10 +591,18 @@ export class AgentLoop {
           }
         } else if (skill) {
           const handled = await this.handleSkillInvocation(userMessage);
-          if (handled) return { ok: true, summary: `Executed ${userMessage}` };
+          if (handled) {
+            // Clear pending context - skills handle their own context
+            this.pendingMemoryContext = null;
+            this.pendingContextInjection = null;
+            return { ok: true, summary: `Executed ${userMessage}` };
+          }
         } else {
           const commandResult = await this.handleCommand(userMessage);
           if (commandResult.handled) {
+            // Clear pending context - commands bypass the LLM
+            this.pendingMemoryContext = null;
+            this.pendingContextInjection = null;
             if (commandResult.showPanel) {
               this.emit({
                 type: 'show_panel',
@@ -1062,6 +1150,7 @@ export class AgentLoop {
       getWalletManager: () => this.walletManager,
       getSecretsManager: () => this.secretsManager,
       getMessagesManager: () => this.messagesManager,
+      getMemoryManager: () => this.memoryManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
           this.identityContext = await this.identityManager.buildSystemPromptContext();
@@ -1075,6 +1164,9 @@ export class AgentLoop {
       },
       switchIdentity: async (identityId: string) => {
         await this.switchIdentity(identityId);
+      },
+      switchModel: async (modelId: string) => {
+        await this.switchModel(modelId);
       },
       getActiveProjectId: () => this.activeProjectId,
       setActiveProjectId: (projectId: string | null) => {
@@ -1235,6 +1327,10 @@ export class AgentLoop {
     this.energyManager?.stop();
     this.voiceManager?.stopSpeaking();
     this.voiceManager?.stopListening();
+    // Close memory database connection
+    this.memoryManager?.close();
+    this.memoryManager = null;
+    this.memoryInjector = null;
   }
 
   /**
@@ -1287,6 +1383,66 @@ export class AgentLoop {
     }
     await this.identityManager.switchIdentity(identityId);
     this.identityContext = await this.identityManager.buildSystemPromptContext();
+  }
+
+  /**
+   * Switch to a different model at runtime
+   */
+  private async switchModel(modelId: string): Promise<void> {
+    if (!this.config) {
+      throw new Error('Agent not initialized');
+    }
+
+    // Import dynamically to avoid circular dependency
+    const { getModelById, getProviderForModel } = await import('../llm/models');
+
+    const modelDef = getModelById(modelId);
+    if (!modelDef) {
+      throw new Error(`Unknown model: ${modelId}. Use /model list to see available models.`);
+    }
+
+    const provider = getProviderForModel(modelId);
+    if (!provider) {
+      throw new Error(`Cannot determine provider for model: ${modelId}`);
+    }
+
+    // Create new LLM client with the new model
+    const newConfig = {
+      ...this.config.llm,
+      provider,
+      model: modelId,
+    };
+
+    this.llmClient = await createLLMClient(newConfig);
+    this.hookExecutor.setLLMClient(this.llmClient);
+
+    // Recompute context config with new model's context window
+    // This allows expanding when switching to a larger model
+    if (this.contextConfig) {
+      const limits = getLimits();
+      // Use config's maxContextTokens if set, otherwise use the model's context window
+      const configuredMax = this.config.context?.maxContextTokens ?? modelDef.contextWindow;
+      // Cap at both validation limits and model's actual context window
+      const newMaxContextTokens = Math.max(
+        1000,
+        Math.min(configuredMax, limits.maxTotalContextTokens, modelDef.contextWindow)
+      );
+
+      this.contextConfig.maxContextTokens = newMaxContextTokens;
+
+      // Also update targetContextTokens to stay proportional (85% of max)
+      const configuredTarget = this.config.context?.targetContextTokens;
+      if (!configuredTarget) {
+        this.contextConfig.targetContextTokens = Math.floor(newMaxContextTokens * 0.85);
+      } else {
+        // Keep configured target but cap at new max
+        this.contextConfig.targetContextTokens = Math.min(configuredTarget, newMaxContextTokens);
+      }
+
+      this.builtinCommands.updateTokenUsage({
+        maxContextTokens: this.contextConfig.maxContextTokens,
+      });
+    }
   }
 
   /**
@@ -1537,6 +1693,60 @@ export class AgentLoop {
     }
   }
 
+  /**
+   * Inject relevant memories into context at turn start
+   */
+  private async injectMemoryContext(userMessage: string): Promise<void> {
+    if (!this.memoryInjector || !this.memoryInjector.isEnabled()) return;
+
+    try {
+      // Remove previous memory context if it exists
+      if (this.pendingMemoryContext) {
+        const previous = this.pendingMemoryContext.trim();
+        this.context.removeSystemMessages((content) => content.trim() === previous);
+        this.pendingMemoryContext = null;
+      }
+
+      // Prepare new memory injection based on user's message
+      const result = await this.memoryInjector.prepareInjection(userMessage);
+      if (result.content) {
+        this.pendingMemoryContext = result.content;
+        // Memory context will be added via buildSystemPrompt
+      }
+    } catch (error) {
+      // Log but don't fail - memory injection is non-critical
+      console.error('Failed to inject memory context:', error);
+      this.pendingMemoryContext = null;
+    }
+  }
+
+  /**
+   * Inject environment context (datetime, cwd, project, etc.) at turn start
+   */
+  private async injectContextInfo(): Promise<void> {
+    if (!this.contextInjector || !this.contextInjector.isEnabled()) return;
+
+    try {
+      // Remove previous context injection if it exists
+      if (this.pendingContextInjection) {
+        const previous = this.pendingContextInjection.trim();
+        this.context.removeSystemMessages((content) => content.trim() === previous);
+        this.pendingContextInjection = null;
+      }
+
+      // Prepare new context injection
+      const result = await this.contextInjector.prepareInjection();
+      if (result.content) {
+        this.pendingContextInjection = result.content;
+        // Context injection will be added via buildSystemPrompt
+      }
+    } catch (error) {
+      // Log but don't fail - context injection is non-critical
+      console.error('Failed to inject context info:', error);
+      this.pendingContextInjection = null;
+    }
+  }
+
   private startHeartbeat(): void {
     if (!this.config) return;
     if (this.config.scheduler?.enabled === false) return;
@@ -1666,6 +1876,11 @@ export class AgentLoop {
   private resetContext(): void {
     const maxMessages = this.contextConfig?.maxMessages ?? 100;
     this.context = new AgentContext(maxMessages);
+
+    // Clear pending injections to prevent stale context
+    this.pendingContextInjection = null;
+    this.pendingMemoryContext = null;
+
     if (this.systemPrompt) {
       this.context.addSystemMessage(this.systemPrompt);
     }
@@ -1704,6 +1919,16 @@ export class AgentLoop {
 
     if (this.identityContext) {
       parts.push(`## Your Identity\n${this.identityContext}`);
+    }
+
+    // Add context injection if available (datetime, cwd, project, etc.)
+    if (this.pendingContextInjection) {
+      parts.push(this.pendingContextInjection);
+    }
+
+    // Add memory injection if available
+    if (this.pendingMemoryContext) {
+      parts.push(this.pendingMemoryContext);
     }
 
     for (const msg of messages) {
@@ -1803,6 +2028,105 @@ export class AgentLoop {
     } catch {
       return this.llmClient;
     }
+  }
+
+  /**
+   * Initialize the subagent manager for spawning child agents
+   */
+  private initializeSubagentManager(): void {
+    const context: SubagentManagerContext = {
+      createSubagentLoop: (config) => this.createSubagentLoop(config),
+      getTools: () => this.toolRegistry.getTools(),
+      getLLMClient: () => this.llmClient,
+    };
+
+    // Use subagent config from AssistantsConfig, with fallbacks to defaults
+    const subagentConfig = this.config?.subagents ?? {};
+
+    this.subagentManager = new SubagentManager(
+      {
+        maxDepth: subagentConfig.maxDepth,
+        maxConcurrent: subagentConfig.maxConcurrent,
+        maxTurns: subagentConfig.maxTurns,
+        defaultTimeoutMs: subagentConfig.defaultTimeoutMs,
+        defaultTools: subagentConfig.defaultTools,
+        forbiddenTools: subagentConfig.forbiddenTools,
+      },
+      context
+    );
+  }
+
+  /**
+   * Create a subagent loop for spawning
+   */
+  private async createSubagentLoop(config: SubagentLoopConfig): Promise<{
+    run: () => Promise<SubagentResult>;
+    stop: () => void;
+  }> {
+    let response = '';
+    let turns = 0;
+    let toolCalls = 0;
+    let stopped = false;
+
+    const subagent = new AgentLoop({
+      cwd: config.cwd,
+      sessionId: config.sessionId,
+      allowedTools: config.tools,
+      depth: config.depth,
+      llmClient: config.llmClient,
+      extraSystemPrompt: `You are a subagent spawned to complete a specific task.
+
+Task: ${config.task}
+
+${config.context ? `Context:\n${config.context}\n\n` : ''}
+Complete this task and provide a clear summary of what you found or accomplished.
+Be concise but thorough. Focus only on this task.`,
+      onChunk: (chunk) => {
+        if (chunk.type === 'text' && chunk.content) {
+          response += chunk.content;
+        }
+        if (chunk.type === 'tool_use') {
+          toolCalls++;
+        }
+        config.onChunk?.(chunk);
+      },
+    });
+
+    await subagent.initialize();
+
+    return {
+      run: async (): Promise<SubagentResult> => {
+        try {
+          // Process the task - process() already handles the full agentic loop
+          // including tool calls and multi-turn conversation internally
+          await subagent.process(config.task);
+
+          // Count actual turns from messages
+          const messages = subagent.getContext().getMessages();
+          turns = messages.filter((m) => m.role === 'assistant').length;
+
+          return {
+            success: true,
+            result: response.trim(),
+            turns,
+            toolCalls,
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+            turns,
+            toolCalls,
+          };
+        } finally {
+          subagent.shutdown();
+        }
+      },
+      stop: () => {
+        stopped = true;
+        subagent.stop();
+      },
+    };
   }
 
   /**
