@@ -40,6 +40,13 @@ export class JobManager {
   }
 
   /**
+   * Get the session ID for this job manager
+   */
+  getSessionId(): string {
+    return this.sessionId;
+  }
+
+  /**
    * Check if jobs system is enabled
    */
   isEnabled(): boolean {

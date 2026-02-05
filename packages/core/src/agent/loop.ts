@@ -13,7 +13,16 @@ import {
   type ContextInjectionConfig,
 } from '../context';
 import { ToolRegistry } from '../tools/registry';
-import { ConnectorBridge } from '../tools/connector';
+import { ConnectorBridge, registerConnectorsListTool } from '../tools/connector';
+import { registerConfigTools } from '../tools/config';
+import { registerAssistantTools } from '../tools/assistant';
+import { registerIdentityTools } from '../tools/identity';
+import { registerModelTools } from '../tools/model';
+import { registerEnergyTools } from '../tools/energy';
+import { registerContextEntryTools } from '../tools/context-entries';
+import { registerSecurityTools } from '../tools/security';
+import { getSecurityLogger } from '../security/logger';
+import { registerVerificationTools } from '../tools/verification';
 import { BashTool } from '../tools/bash';
 import { FilesystemTools } from '../tools/filesystem';
 import { WebTools } from '../tools/web';
@@ -404,6 +413,73 @@ export class AgentLoop {
       getWalletManager: () => this.walletManager,
       sessionId: this.sessionId,
       model: this.config?.llm?.model,
+    });
+
+    // Register connectors list tool
+    registerConnectorsListTool(this.toolRegistry, {
+      getConnectorBridge: () => this.connectorBridge,
+    });
+
+    // Register config tools
+    registerConfigTools(this.toolRegistry, {
+      cwd: this.cwd,
+    });
+
+    // Register assistant management tools
+    registerAssistantTools(this.toolRegistry, {
+      getAssistantManager: () => this.assistantManager,
+    });
+
+    // Register identity management tools
+    registerIdentityTools(this.toolRegistry, {
+      getIdentityManager: () => this.identityManager,
+    });
+
+    // Register model management tools
+    registerModelTools(this.toolRegistry, {
+      getModel: () => this.getModel(),
+      switchModel: async (modelId: string) => this.switchModel(modelId),
+    });
+
+    // Register energy tools
+    registerEnergyTools(this.toolRegistry, {
+      getEnergyManager: () => this.energyManager,
+      getEnergyState: () => this.getEnergyState(),
+      restEnergy: (amount?: number) => {
+        if (this.energyManager) {
+          this.energyManager.rest(amount);
+          this.refreshEnergyEffects();
+        }
+      },
+    });
+
+    // Register context entry tools
+    registerContextEntryTools(this.toolRegistry, {
+      cwd: this.cwd,
+      getActiveProjectId: () => this.activeProjectId,
+      setProjectContext: (content: string | null) => {
+        this.setProjectContext(content);
+      },
+      getConnectors: () => this.connectorBridge.getConnectors().map((c: { name: string; description?: string; cli?: string; tools?: Array<{ name: string; description: string }> }) => ({
+        name: c.name,
+        description: c.description,
+        cli: c.cli,
+        commands: c.tools?.map((t: { name: string; description: string }) => ({
+          name: t.name,
+          description: t.description,
+        })),
+      })),
+    });
+
+    // Register security tools
+    registerSecurityTools(this.toolRegistry, {
+      getSecurityLogger,
+      sessionId: this.sessionId,
+    });
+
+    // Register verification tools
+    registerVerificationTools(this.toolRegistry, {
+      sessionId: this.sessionId,
     });
 
     // Initialize subagent manager and register agent tools

@@ -762,3 +762,102 @@ export class ConnectorBridge {
 export const __test__ = {
   resolveTimeout,
 };
+
+// ============================================
+// Connectors List Tool
+// ============================================
+
+export const connectorsListTool: Tool = {
+  name: 'connectors_list',
+  description: 'List all discovered connectors and their available commands. Use this to discover what connectors are available and what operations they support.',
+  parameters: {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: 'Optional: filter to a specific connector by name',
+      },
+      verbose: {
+        type: 'boolean',
+        description: 'Optional: include detailed command information (default: false)',
+      },
+    },
+    required: [],
+  },
+};
+
+export interface ConnectorListContext {
+  getConnectorBridge: () => ConnectorBridge | null;
+}
+
+export function createConnectorsListExecutor(
+  context: ConnectorListContext
+): ToolExecutor {
+  return async (input: Record<string, unknown>): Promise<string> => {
+    const bridge = context.getConnectorBridge();
+    if (!bridge) {
+      return JSON.stringify({
+        error: 'Connector discovery not available',
+        connectors: [],
+      });
+    }
+
+    const connectors = bridge.getConnectors();
+    const filterName = input.name as string | undefined;
+    const verbose = input.verbose === true;
+
+    const filtered = filterName
+      ? connectors.filter((c) => c.name.toLowerCase() === filterName.toLowerCase())
+      : connectors;
+
+    if (filtered.length === 0 && filterName) {
+      return JSON.stringify({
+        error: `Connector '${filterName}' not found`,
+        available: connectors.map((c) => c.name),
+      });
+    }
+
+    const result = filtered.map((connector) => {
+      const base: Record<string, unknown> = {
+        name: connector.name,
+        description: connector.description,
+        commands: verbose
+          ? connector.commands.map((cmd) => ({
+              name: cmd.name,
+              description: cmd.description,
+              args: cmd.args.map((a) => ({
+                name: a.name,
+                description: a.description,
+                required: a.required,
+                type: a.type,
+              })),
+              options: cmd.options.map((o) => ({
+                name: o.name,
+                description: o.description,
+                type: o.type,
+                default: o.default,
+              })),
+            }))
+          : connector.commands.map((cmd) => cmd.name),
+      };
+      return base;
+    });
+
+    return JSON.stringify(
+      {
+        count: result.length,
+        connectors: result,
+      },
+      null,
+      2
+    );
+  };
+}
+
+export function registerConnectorsListTool(
+  registry: ToolRegistry,
+  context: ConnectorListContext
+): void {
+  const executor = createConnectorsListExecutor(context);
+  registry.register(connectorsListTool, executor);
+}

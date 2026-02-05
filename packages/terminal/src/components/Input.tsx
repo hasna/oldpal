@@ -26,6 +26,7 @@ const COMMANDS = [
   { name: '/init', description: 'initialize assistants in project' },
   { name: '/memory', description: 'show what AI remembers' },
   { name: '/context', description: 'manage injected project context' },
+  { name: '/hooks', description: 'manage hooks (list, add, remove, test)' },
   // Projects and plans
   { name: '/projects', description: 'manage projects in this folder' },
   { name: '/plans', description: 'manage project plans' },
@@ -36,7 +37,7 @@ const COMMANDS = [
   { name: '/pause', description: 'pause a scheduled command' },
   { name: '/resume', description: 'resume a scheduled command' },
   // Identity and assistant
-  { name: '/assistant', description: 'switch or list assistants' },
+  { name: '/assistants', description: 'switch or list assistants' },
   { name: '/identity', description: 'manage agent identity' },
   { name: '/whoami', description: 'show current identity' },
   // Voice features

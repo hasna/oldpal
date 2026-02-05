@@ -24,6 +24,10 @@ export function createJobTools(getJobManager: () => JobManager | null): Array<{ 
       tool: jobListTool,
       executor: createJobListExecutor(getJobManager),
     },
+    {
+      tool: jobClearTool,
+      executor: createJobClearExecutor(getJobManager),
+    },
   ];
 }
 
@@ -277,4 +281,34 @@ function formatAge(ms: number): string {
   if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
   return `${days}d`;
+}
+
+/**
+ * job_clear - Clear completed jobs for current session
+ */
+const jobClearTool: Tool = {
+  name: 'job_clear',
+  description: 'Clear completed, failed, timed out, or cancelled jobs for the current session. Running and pending jobs are not affected.',
+  parameters: {
+    type: 'object',
+    properties: {},
+  },
+};
+
+function createJobClearExecutor(getJobManager: () => JobManager | null): ToolExecutor {
+  return async (): Promise<string> => {
+    const manager = getJobManager();
+    if (!manager) {
+      return 'Jobs system is not enabled';
+    }
+
+    const sessionId = manager.getSessionId();
+    const cleaned = await cleanupSessionJobs(sessionId);
+
+    if (cleaned === 0) {
+      return 'No completed jobs to clear';
+    }
+
+    return `Cleared ${cleaned} completed job(s)`;
+  };
 }
