@@ -1,6 +1,6 @@
 {
   "name": "@hasna/assistants",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "AI assistant that runs in your terminal - powered by Claude",
   "license": "MIT",
   "type": "module",
