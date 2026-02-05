@@ -126,6 +126,8 @@ interface ConnectorsPanelProps {
   onCheckAuth: (connector: Connector) => Promise<ConnectorStatus>;
   /** Callback to get detailed command info (runs <cli> <command> --help) */
   onGetCommandHelp?: (connector: Connector, command: string) => Promise<string>;
+  /** Callback to load full connector commands (runs full discovery) */
+  onLoadCommands?: (connectorName: string) => Promise<Connector | null>;
   /** Close the panel */
   onClose: () => void;
 }
@@ -138,6 +140,7 @@ export function ConnectorsPanel({
   initialConnector,
   onCheckAuth,
   onGetCommandHelp,
+  onLoadCommands,
   onClose,
 }: ConnectorsPanelProps) {
   const [mode, setMode] = useState<ViewMode>('list');
@@ -148,6 +151,8 @@ export function ConnectorsPanel({
   const [isLoadingHelp, setIsLoadingHelp] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingCommands, setIsLoadingCommands] = useState(false);
+  const [loadedConnectors, setLoadedConnectors] = useState<Map<string, Connector>>(new Map());
 
   // Filter and sort connectors based on search query
   const filteredConnectors = useMemo(() => {
@@ -206,10 +211,44 @@ export function ConnectorsPanel({
     loadStatuses();
   }, [connectors, onCheckAuth]);
 
-  const currentConnector = filteredConnectors[connectorIndex];
+  const baseConnector = filteredConnectors[connectorIndex];
+  // Use loaded connector if available (has full command list)
+  const currentConnector = baseConnector
+    ? (loadedConnectors.get(baseConnector.name) || baseConnector)
+    : undefined;
   const currentCommands = currentConnector?.commands || [];
   const currentCommand = currentCommands[commandIndex];
   const currentStatus = currentConnector ? authStatuses.get(currentConnector.name) : undefined;
+
+  // Load commands when entering detail view
+  const loadConnectorCommands = useCallback(async (connector: Connector) => {
+    if (!onLoadCommands) return;
+    if (loadedConnectors.has(connector.name)) return;
+
+    // Check if connector only has minimal commands (like just "help")
+    const needsLoad = connector.commands.length <= 1 ||
+      (connector.commands.length === 1 && connector.commands[0].name === 'help');
+    if (!needsLoad) return;
+
+    setIsLoadingCommands(true);
+    try {
+      const loaded = await onLoadCommands(connector.name);
+      if (loaded) {
+        setLoadedConnectors((prev) => new Map(prev).set(connector.name, loaded));
+      }
+    } catch {
+      // Ignore load errors
+    } finally {
+      setIsLoadingCommands(false);
+    }
+  }, [onLoadCommands, loadedConnectors]);
+
+  // Load commands when entering detail view
+  useEffect(() => {
+    if (mode === 'detail' && baseConnector) {
+      loadConnectorCommands(baseConnector);
+    }
+  }, [mode, baseConnector, loadConnectorCommands]);
 
   // Load command help when entering command detail view
   const loadCommandHelp = useCallback(async () => {
@@ -512,7 +551,11 @@ export function ConnectorsPanel({
             )}
           </Box>
 
-          {currentCommands.length === 0 ? (
+          {isLoadingCommands ? (
+            <Box paddingBottom={1}>
+              <Text color="yellow">Loading commands...</Text>
+            </Box>
+          ) : currentCommands.length === 0 ? (
             <Box paddingBottom={1}>
               <Text dimColor>No commands discovered</Text>
             </Box>

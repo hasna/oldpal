@@ -83,6 +83,8 @@ import { registerAgentRegistryTools } from '../tools/agent-registry';
 import { registerCapabilityTools } from '../tools/capabilities';
 import { registerVoiceTools } from '../tools/voice';
 import { registerTaskTools } from '../tools/tasks';
+import { registerSwarmTools, type SwarmToolContext } from '../tools/swarm';
+import { SwarmCoordinator, type SwarmCoordinatorContext } from '../swarm/coordinator';
 import { GlobalMemoryManager, MemoryInjector, type MemoryConfig } from '../memory';
 import { SubagentManager, type SubagentManagerContext, type SubagentResult, type SubagentLoopConfig } from './subagent-manager';
 import { BudgetTracker, type BudgetScope } from '../budget';
@@ -197,6 +199,7 @@ export class AgentLoop {
   private onCapabilityViolation?: (result: CapabilityEnforcementResult, context: string) => void;
   private registryService: AgentRegistryService | null = null;
   private registeredAgentId: string | null = null;
+  private swarmCoordinator: SwarmCoordinator | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -596,6 +599,12 @@ export class AgentLoop {
     // Register agent registry tools (for querying running agents)
     registerAgentRegistryTools(this.toolRegistry, {
       getRegistryService: () => this.registryService,
+    });
+
+    // Register swarm tools for multi-agent orchestration
+    registerSwarmTools(this.toolRegistry, {
+      getSwarmCoordinator: () => this.getOrCreateSwarmCoordinator(),
+      isSwarmEnabled: () => this.subagentManager !== null,
     });
 
     // Register capability tools (for querying agent capabilities)
@@ -2826,6 +2835,30 @@ export class AgentLoop {
       },
       context
     );
+  }
+
+  /**
+   * Get or create the swarm coordinator for multi-agent orchestration
+   */
+  private getOrCreateSwarmCoordinator(): SwarmCoordinator | null {
+    if (!this.subagentManager) {
+      return null;
+    }
+
+    if (!this.swarmCoordinator) {
+      const context: SwarmCoordinatorContext = {
+        subagentManager: this.subagentManager,
+        registry: this.registryService ?? undefined,
+        sessionId: this.sessionId,
+        cwd: this.cwd,
+        depth: this.depth,
+        onChunk: this.onChunk,
+      };
+
+      this.swarmCoordinator = new SwarmCoordinator({}, context);
+    }
+
+    return this.swarmCoordinator;
   }
 
   /**

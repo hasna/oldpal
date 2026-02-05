@@ -17,6 +17,7 @@ import type { MessagesManager } from '../messages';
 import {
   saveSchedule,
   listSchedules,
+  getSchedule,
   deleteSchedule,
   updateSchedule,
   computeNextRun,
@@ -5610,7 +5611,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
   }
 
   /**
-   * /schedules - List all schedules
+   * /schedules - List schedules for current session
    */
   private schedulesCommand(): Command {
     return {
@@ -5621,18 +5622,21 @@ Please summarize the last interaction and suggest 2-3 next steps.
       content: '',
       handler: async (args, context) => {
         const trimmed = args.trim().toLowerCase();
+        const showAll = trimmed.includes('--all');
+        const cleanedArgs = trimmed.replace('--all', '').trim();
 
         // Show interactive panel for no args or 'ui' command
-        if (!trimmed || trimmed === 'ui') {
+        if (!cleanedArgs || cleanedArgs === 'ui') {
           context.emit('done');
           return { handled: true, showPanel: 'schedules' };
         }
 
         // Text-based list for 'list' or '--list'
-        if (trimmed === 'list' || trimmed === '--list') {
-          const schedules = await listSchedules(context.cwd);
+        if (cleanedArgs === 'list' || cleanedArgs === '--list') {
+          // By default only show schedules for current session + global
+          const schedules = await listSchedules(context.cwd, showAll ? { global: true } : { sessionId: context.sessionId });
           if (schedules.length === 0) {
-            context.emit('text', 'No schedules found.\n');
+            context.emit('text', showAll ? 'No schedules found.\n' : 'No schedules found for this session.\n');
             context.emit('done');
             return { handled: true };
           }
@@ -5657,7 +5661,8 @@ Please summarize the last interaction and suggest 2-3 next steps.
         context.emit('text', 'Usage:\n');
         context.emit('text', '  /schedules           Open interactive panel\n');
         context.emit('text', '  /schedules ui        Open interactive panel\n');
-        context.emit('text', '  /schedules list      Show text table (scripting)\n');
+        context.emit('text', '  /schedules list      Show text table (this session)\n');
+        context.emit('text', '  /schedules list --all  Show all schedules\n');
         context.emit('text', '  /schedule <time> <cmd>  Create a schedule\n');
         context.emit('text', '  /unschedule <id>     Delete a schedule\n');
         context.emit('text', '  /pause <id>          Pause a schedule\n');
@@ -5686,6 +5691,21 @@ Please summarize the last interaction and suggest 2-3 next steps.
           return { handled: true };
         }
 
+        // Check schedule ownership
+        const schedule = await getSchedule(context.cwd, id);
+        if (!schedule) {
+          context.emit('text', `Schedule ${id} not found.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Allow if schedule is global (no sessionId) or owned by current session
+        if (schedule.sessionId && schedule.sessionId !== context.sessionId) {
+          context.emit('text', `Schedule ${id} belongs to another session. Cannot delete.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
         const ok = await deleteSchedule(context.cwd, id);
         context.emit('text', ok ? `Deleted schedule ${id}.\n` : `Schedule ${id} not found.\n`);
         context.emit('done');
@@ -5707,9 +5727,10 @@ Please summarize the last interaction and suggest 2-3 next steps.
       handler: async (args, context) => {
         const id = args.trim();
         if (!id) {
-          const schedules = await listSchedules(context.cwd);
+          // Only show schedules owned by this session or global
+          const schedules = await listSchedules(context.cwd, { sessionId: context.sessionId });
           if (schedules.length === 0) {
-            context.emit('text', 'No schedules found.\n');
+            context.emit('text', 'No schedules found for this session.\n');
           } else {
             const lines = schedules
               .sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))
@@ -5720,8 +5741,23 @@ Please summarize the last interaction and suggest 2-3 next steps.
           return { handled: true };
         }
 
-        const updated = await updateSchedule(context.cwd, id, (schedule) => ({
-          ...schedule,
+        // Check schedule ownership
+        const schedule = await getSchedule(context.cwd, id);
+        if (!schedule) {
+          context.emit('text', `Schedule ${id} not found.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Allow if schedule is global (no sessionId) or owned by current session
+        if (schedule.sessionId && schedule.sessionId !== context.sessionId) {
+          context.emit('text', `Schedule ${id} belongs to another session. Cannot pause.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        const updated = await updateSchedule(context.cwd, id, (s) => ({
+          ...s,
           status: 'paused',
           updatedAt: Date.now(),
         }));
@@ -5745,9 +5781,10 @@ Please summarize the last interaction and suggest 2-3 next steps.
       handler: async (args, context) => {
         const id = args.trim();
         if (!id) {
-          const schedules = await listSchedules(context.cwd);
+          // Only show schedules owned by this session or global
+          const schedules = await listSchedules(context.cwd, { sessionId: context.sessionId });
           if (schedules.length === 0) {
-            context.emit('text', 'No schedules found.\n');
+            context.emit('text', 'No schedules found for this session.\n');
           } else {
             const lines = schedules
               .sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))
@@ -5758,14 +5795,29 @@ Please summarize the last interaction and suggest 2-3 next steps.
           return { handled: true };
         }
 
+        // Check schedule ownership
+        const schedule = await getSchedule(context.cwd, id);
+        if (!schedule) {
+          context.emit('text', `Schedule ${id} not found.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Allow if schedule is global (no sessionId) or owned by current session
+        if (schedule.sessionId && schedule.sessionId !== context.sessionId) {
+          context.emit('text', `Schedule ${id} belongs to another session. Cannot resume.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
         let computedNext: number | undefined;
-        const updated = await updateSchedule(context.cwd, id, (schedule) => {
-          computedNext = computeNextRun(schedule, Date.now());
+        const updated = await updateSchedule(context.cwd, id, (s) => {
+          computedNext = computeNextRun(s, Date.now());
           if (!computedNext) {
-            return schedule;
+            return s;
           }
           return {
-            ...schedule,
+            ...s,
             status: 'active',
             updatedAt: Date.now(),
             nextRunAt: computedNext,

@@ -6,7 +6,7 @@
 
 export * from './types';
 export { SwarmCoordinator } from './coordinator';
-export type { SwarmCoordinatorContext } from './coordinator';
+export type { SwarmCoordinatorContext, ApprovalDecision } from './coordinator';
 export {
   TaskGraph,
   TaskGraphScheduler,

@@ -1,6 +1,7 @@
 export {
   listSchedules,
   saveSchedule,
+  getSchedule,
   deleteSchedule,
   computeNextRun,
   getDueSchedules,

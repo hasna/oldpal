@@ -76,6 +76,17 @@ export async function saveSchedule(cwd: string, schedule: ScheduledCommand): Pro
   await writeFile(path, JSON.stringify(schedule, null, 2), 'utf-8');
 }
 
+export async function getSchedule(cwd: string, id: string): Promise<ScheduledCommand | null> {
+  try {
+    const path = schedulePath(cwd, id);
+    if (!path) return null;
+    const raw = await readFile(path, 'utf-8');
+    return JSON.parse(raw) as ScheduledCommand;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteSchedule(cwd: string, id: string): Promise<boolean> {
   try {
     const path = schedulePath(cwd, id);

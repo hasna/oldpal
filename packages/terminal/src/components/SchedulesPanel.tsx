@@ -35,6 +35,22 @@ const KIND_LABELS: Record<string, string> = {
   interval: 'Interval',
 };
 
+const ACTION_ICONS: Record<string, string> = {
+  command: '⌘',
+  message: '💬',
+};
+
+/**
+ * Get display text for a schedule action (command or message)
+ */
+function getActionDisplay(schedule: ScheduledCommand): { type: string; content: string } {
+  const actionType = schedule.actionType || 'command';
+  if (actionType === 'message' && schedule.message) {
+    return { type: 'message', content: schedule.message };
+  }
+  return { type: 'command', content: schedule.command };
+}
+
 /**
  * Format relative time for display
  */
@@ -245,6 +261,8 @@ export function SchedulesPanel({
 
   // Delete confirmation mode
   if (mode === 'delete-confirm') {
+    const action = selectedSchedule ? getActionDisplay(selectedSchedule) : { type: 'command', content: '' };
+    const displayContent = action.content.slice(0, 50) + (action.content.length > 50 ? '...' : '');
     return (
       <Box flexDirection="column" paddingY={1}>
         <Box marginBottom={1}>
@@ -252,8 +270,7 @@ export function SchedulesPanel({
         </Box>
         <Box marginBottom={1}>
           <Text>
-            Delete schedule: &quot;{selectedSchedule?.command.slice(0, 50)}
-            {(selectedSchedule?.command.length || 0) > 50 ? '...' : ''}&quot;?
+            Delete {action.type}: &quot;{displayContent}&quot;?
           </Text>
         </Box>
         <Box marginTop={1}>
@@ -299,6 +316,11 @@ export function SchedulesPanel({
             <Text>{getScheduleDescription(s)}</Text>
           </Box>
 
+          <Box>
+            <Text bold>Action Type: </Text>
+            <Text>{ACTION_ICONS[s.actionType || 'command']} {s.actionType || 'command'}</Text>
+          </Box>
+
           {s.description && (
             <Box>
               <Text bold>Description: </Text>
@@ -306,20 +328,23 @@ export function SchedulesPanel({
             </Box>
           )}
 
-          <Box marginTop={1}>
-            <Text bold>Command: </Text>
-          </Box>
-          <Box marginLeft={2}>
-            <Text wrap="wrap" color="cyan">{s.command}</Text>
-          </Box>
-
-          {s.message && (
+          {/* Show command or message based on action type */}
+          {(s.actionType || 'command') === 'command' ? (
+            <>
+              <Box marginTop={1}>
+                <Text bold>Command: </Text>
+              </Box>
+              <Box marginLeft={2}>
+                <Text wrap="wrap" color="cyan">{s.command}</Text>
+              </Box>
+            </>
+          ) : (
             <>
               <Box marginTop={1}>
                 <Text bold>Message: </Text>
               </Box>
               <Box marginLeft={2}>
-                <Text wrap="wrap">{s.message}</Text>
+                <Text wrap="wrap" color="magenta">{s.message || '(empty)'}</Text>
               </Box>
             </>
           )}
@@ -406,7 +431,9 @@ export function SchedulesPanel({
             const statusIcon = STATUS_ICONS[schedule.status];
             const statusColor = STATUS_COLORS[schedule.status];
             const nextRun = formatRelativeTime(schedule.nextRunAt);
-            const command = schedule.command.slice(0, 35) + (schedule.command.length > 35 ? '...' : '');
+            const action = getActionDisplay(schedule);
+            const actionIcon = ACTION_ICONS[action.type];
+            const content = action.content.slice(0, 30) + (action.content.length > 30 ? '...' : '');
             const kindLabel = KIND_LABELS[schedule.schedule.kind] || schedule.schedule.kind;
 
             return (
@@ -414,7 +441,7 @@ export function SchedulesPanel({
                 <Text inverse={isSelected} dimColor={!isSelected && schedule.status === 'completed'}>
                   <Text color={statusColor}>{statusIcon}</Text>
                   {' '}
-                  {index + 1}. {command.padEnd(37)} {kindLabel.padEnd(10)} {nextRun}
+                  {actionIcon} {index + 1}. {content.padEnd(32)} {kindLabel.padEnd(10)} {nextRun}
                 </Text>
               </Box>
             );
@@ -425,9 +452,14 @@ export function SchedulesPanel({
       {/* Selected schedule preview */}
       {sortedSchedules.length > 0 && selectedSchedule && (
         <Box marginTop={1} flexDirection="column">
-          <Text dimColor>
-            <Text bold>Command:</Text> {selectedSchedule.command}
-          </Text>
+          {(() => {
+            const action = getActionDisplay(selectedSchedule);
+            return (
+              <Text dimColor>
+                <Text bold>{action.type === 'message' ? 'Message:' : 'Command:'}</Text> {action.content}
+              </Text>
+            );
+          })()}
           <Text dimColor>
             <Text bold>Schedule:</Text> {getScheduleDescription(selectedSchedule)}
           </Text>

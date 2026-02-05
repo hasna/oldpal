@@ -30,6 +30,11 @@ import type {
 import { DEFAULT_SWARM_CONFIG, ROLE_SYSTEM_PROMPTS } from './types';
 
 /**
+ * Approval decision from user
+ */
+export type ApprovalDecision = 'approve' | 'abort' | 'edit';
+
+/**
  * Context required by the SwarmCoordinator
  */
 export interface SwarmCoordinatorContext {
@@ -45,6 +50,8 @@ export interface SwarmCoordinatorContext {
   depth: number;
   /** Stream chunk callback */
   onChunk?: (chunk: StreamChunk) => void;
+  /** Handler for plan approval (required when autoApprove=false) */
+  onPlanApproval?: (plan: SwarmPlan) => Promise<{ decision: ApprovalDecision; editedPlan?: SwarmPlan }>;
 }
 
 /**
@@ -56,6 +63,9 @@ export class SwarmCoordinator {
   private state: SwarmState | null = null;
   private listeners: Set<SwarmEventListener> = new Set();
   private stopped = false;
+  private swarmTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+  private budgetExceeded = false;
+  private timeoutExceeded = false;
 
   constructor(
     config: Partial<SwarmConfig>,
@@ -63,6 +73,63 @@ export class SwarmCoordinator {
   ) {
     this.config = { ...DEFAULT_SWARM_CONFIG, ...config };
     this.context = context;
+  }
+
+  /**
+   * Check if token budget is exceeded
+   */
+  private checkTokenBudget(): boolean {
+    if (this.config.tokenBudget <= 0 || !this.state) return false;
+    return this.state.metrics.tokensUsed >= this.config.tokenBudget;
+  }
+
+  /**
+   * Get remaining token budget
+   */
+  private getRemainingBudget(): number {
+    if (this.config.tokenBudget <= 0 || !this.state) return Infinity;
+    return Math.max(0, this.config.tokenBudget - this.state.metrics.tokensUsed);
+  }
+
+  /**
+   * Handle budget exceeded
+   */
+  private handleBudgetExceeded(): void {
+    if (this.budgetExceeded) return;
+    this.budgetExceeded = true;
+    this.streamText(`\n⚠️ Token budget exceeded (${this.state?.metrics.tokensUsed} / ${this.config.tokenBudget})\n`);
+    this.stop();
+  }
+
+  /**
+   * Handle timeout exceeded
+   */
+  private handleTimeoutExceeded(): void {
+    if (this.timeoutExceeded) return;
+    this.timeoutExceeded = true;
+    const elapsed = this.state ? Date.now() - this.state.startedAt : 0;
+    this.streamText(`\n⚠️ Swarm timeout exceeded after ${Math.round(elapsed / 1000)}s (limit: ${Math.round(this.config.swarmTimeoutMs / 1000)}s)\n`);
+    this.stop();
+  }
+
+  /**
+   * Start the swarm timeout timer
+   */
+  private startTimeoutTimer(): void {
+    if (this.config.swarmTimeoutMs <= 0) return;
+    this.swarmTimeoutTimer = setTimeout(() => {
+      this.handleTimeoutExceeded();
+    }, this.config.swarmTimeoutMs);
+  }
+
+  /**
+   * Clear the swarm timeout timer
+   */
+  private clearTimeoutTimer(): void {
+    if (this.swarmTimeoutTimer) {
+      clearTimeout(this.swarmTimeoutTimer);
+      this.swarmTimeoutTimer = null;
+    }
   }
 
   /**
@@ -168,9 +235,22 @@ export class SwarmCoordinator {
       metrics: this.createEmptyMetrics(),
     };
     this.stopped = false;
+    this.budgetExceeded = false;
+    this.timeoutExceeded = false;
+
+    // Start timeout timer
+    this.startTimeoutTimer();
 
     this.emit('swarm:started');
     this.streamText(`\n🐝 Starting swarm for: ${input.goal}\n`);
+
+    // Show budget/timeout info if configured
+    if (config.tokenBudget > 0) {
+      this.streamText(`📊 Token budget: ${config.tokenBudget}\n`);
+    }
+    if (config.swarmTimeoutMs > 0) {
+      this.streamText(`⏱️ Timeout: ${Math.round(config.swarmTimeoutMs / 1000)}s\n`);
+    }
 
     const startTime = Date.now();
 
@@ -196,12 +276,47 @@ export class SwarmCoordinator {
 
       this.streamText(`\n📋 Plan created with ${plan.tasks.length} tasks\n`);
 
+      // Display plan summary
+      for (const task of plan.tasks) {
+        this.streamText(`  ${task.priority}. ${task.description}\n`);
+      }
+
       // Phase 2: Approval (unless auto-approve)
       if (!config.autoApprove) {
-        // In CLI mode, we'd prompt user here
-        // For now, auto-approve (this will be enhanced in swarm status UI task)
-        plan.approved = true;
-        plan.approvedAt = Date.now();
+        if (this.context.onPlanApproval) {
+          this.streamText('\n⏳ Waiting for plan approval...\n');
+          const { decision, editedPlan } = await this.context.onPlanApproval(plan);
+
+          if (decision === 'abort') {
+            this.updateStatus('cancelled');
+            this.emit('swarm:cancelled');
+            this.streamText('\n🛑 Plan aborted by user\n');
+            return {
+              success: false,
+              error: 'Plan aborted by user',
+              taskResults: {},
+              metrics: this.state.metrics,
+              durationMs: Date.now() - startTime,
+            };
+          }
+
+          if (decision === 'edit' && editedPlan) {
+            plan = editedPlan;
+            this.state.plan = plan;
+            this.state.metrics.totalTasks = plan.tasks.length;
+            this.state.metrics.replans++;
+            this.streamText('\n📝 Plan updated with edits\n');
+          }
+
+          plan.approved = true;
+          plan.approvedAt = Date.now();
+          this.streamText('\n✓ Plan approved\n');
+        } else {
+          // No approval handler, auto-approve with warning
+          this.streamText('\n⚠️ No approval handler set, auto-approving plan\n');
+          plan.approved = true;
+          plan.approvedAt = Date.now();
+        }
       } else {
         plan.approved = true;
         plan.approvedAt = Date.now();
@@ -227,17 +342,57 @@ export class SwarmCoordinator {
       }
 
       // Complete
+      // Clear timeout timer
+      this.clearTimeoutTimer();
+
+      // Set end timestamp
+      this.state.endedAt = Date.now();
+
+      // Determine final status based on task results
+      const hasFailedTasks = this.state.metrics.failedTasks > 0;
+      const hasBlockedTasks = this.state.plan?.tasks.some(t => t.status === 'blocked') ?? false;
+
       if (!this.stopped) {
-        this.updateStatus('completed');
-        this.emit('swarm:completed');
+        if (hasFailedTasks || hasBlockedTasks) {
+          this.updateStatus('failed');
+          this.emit('swarm:failed');
+        } else {
+          this.updateStatus('completed');
+          this.emit('swarm:completed');
+        }
       }
 
       const result = this.buildResult(startTime);
-      this.streamText(`\n✅ Swarm completed in ${Math.round(result.durationMs / 1000)}s\n`);
+
+      // Show appropriate completion message
+      if (this.budgetExceeded) {
+        this.streamText(`\n⚠️ Swarm stopped: Token budget exceeded (${result.metrics.tokensUsed} / ${this.config.tokenBudget})\n`);
+      } else if (this.timeoutExceeded) {
+        this.streamText(`\n⚠️ Swarm stopped: Timeout exceeded after ${Math.round(result.durationMs / 1000)}s\n`);
+      } else if (this.stopped) {
+        this.streamText(`\n🛑 Swarm cancelled\n`);
+      } else if (hasFailedTasks || hasBlockedTasks) {
+        this.streamText(`\n❌ Swarm failed with ${result.metrics.failedTasks} failed task(s) in ${Math.round(result.durationMs / 1000)}s\n`);
+      } else {
+        this.streamText(`\n✅ Swarm completed in ${Math.round(result.durationMs / 1000)}s\n`);
+      }
+
+      // Show final metrics
+      if (this.config.tokenBudget > 0) {
+        this.streamText(`📊 Tokens used: ${result.metrics.tokensUsed} / ${this.config.tokenBudget}\n`);
+      }
 
       return result;
 
     } catch (error) {
+      // Clear timeout timer on error
+      this.clearTimeoutTimer();
+
+      // Set end timestamp
+      if (this.state) {
+        this.state.endedAt = Date.now();
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.state.errors.push(errorMessage);
       this.updateStatus('failed');
@@ -260,7 +415,9 @@ export class SwarmCoordinator {
    */
   stop(): void {
     this.stopped = true;
+    this.clearTimeoutTimer();
     if (this.state && this.isRunning()) {
+      this.state.endedAt = Date.now();
       this.updateStatus('cancelled');
       this.emit('swarm:cancelled');
       this.streamText('\n🛑 Swarm cancelled\n');
@@ -469,6 +626,11 @@ Maximum ${this.config.maxTasks} tasks.`;
   }
 
   private async executeTask(task: SwarmTask): Promise<void> {
+    // Check if we should stop due to budget/timeout before starting
+    if (this.stopped || this.budgetExceeded || this.timeoutExceeded) {
+      throw new Error('Swarm execution stopped');
+    }
+
     // Build task prompt with context from dependencies
     const dependencyContext = this.buildDependencyContext(task);
     const taskPrompt = `${task.description}\n\n${dependencyContext}`;
@@ -476,27 +638,51 @@ Maximum ${this.config.maxTasks} tasks.`;
     // Select tools
     const tools = task.requiredTools || this.config.workerTools;
 
-    const result = await this.spawnAgent({
-      role: task.role,
-      task: taskPrompt,
-      tools,
-    });
+    // Generate agent ID for this task
+    const agentId = generateId();
+    task.assignedAgentId = agentId;
 
-    // Store result
-    task.result = result;
+    // Track active agent
     if (this.state) {
-      this.state.taskResults.set(task.id, result);
+      this.state.activeAgents.add(agentId);
     }
 
-    // Update metrics
-    if (this.state) {
-      this.state.metrics.tokensUsed += 0; // TODO: Track from subagent
-      this.state.metrics.toolCalls += result.toolCalls;
-      this.state.metrics.llmCalls++;
-    }
+    try {
+      const result = await this.spawnAgent({
+        role: task.role,
+        task: taskPrompt,
+        tools,
+        agentId,
+      });
 
-    if (!result.success) {
-      throw new Error(result.error || 'Task failed');
+      // Store result
+      task.result = result;
+      if (this.state) {
+        this.state.taskResults.set(task.id, result);
+      }
+
+      // Update metrics
+      if (this.state) {
+        // tokensUsed will be added to SubagentResult in task #1098
+        this.state.metrics.tokensUsed += (result as SubagentResult & { tokensUsed?: number }).tokensUsed || 0;
+        this.state.metrics.toolCalls += result.toolCalls;
+        this.state.metrics.llmCalls++;
+
+        // Check token budget after each task
+        if (this.checkTokenBudget()) {
+          this.handleBudgetExceeded();
+        }
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Task failed');
+      }
+    } finally {
+      // Remove from active agents when done
+      if (this.state) {
+        this.state.activeAgents.delete(agentId);
+      }
+      task.assignedAgentId = undefined;
     }
   }
 
@@ -581,12 +767,16 @@ Maximum ${this.config.maxTasks} tasks.`;
   // ============================================
 
   private async runAggregator(goal: string): Promise<string> {
-    const completedTasks = this.state?.plan?.tasks.filter(t => t.status === 'completed') || [];
-    if (completedTasks.length === 0) {
-      return 'No tasks completed';
+    const allTasks = this.state?.plan?.tasks || [];
+    const completedTasks = allTasks.filter(t => t.status === 'completed');
+    const failedTasks = allTasks.filter(t => t.status === 'failed');
+    const blockedTasks = allTasks.filter(t => t.status === 'blocked');
+
+    if (completedTasks.length === 0 && failedTasks.length === 0) {
+      return 'No tasks were executed';
     }
 
-    const aggregatePrompt = this.buildAggregatorPrompt(goal, completedTasks);
+    const aggregatePrompt = this.buildAggregatorPrompt(goal, completedTasks, failedTasks, blockedTasks);
 
     const result = await this.spawnAgent({
       role: 'aggregator',
@@ -597,13 +787,49 @@ Maximum ${this.config.maxTasks} tasks.`;
     return result.result || 'Failed to aggregate results';
   }
 
-  private buildAggregatorPrompt(goal: string, tasks: SwarmTask[]): string {
-    const taskSummaries = tasks.map(task => {
-      const result = this.state?.taskResults.get(task.id);
-      return `[${task.description}]\n${result?.result || 'No result'}`;
-    }).join('\n\n---\n\n');
+  private buildAggregatorPrompt(
+    goal: string,
+    completedTasks: SwarmTask[],
+    failedTasks: SwarmTask[],
+    blockedTasks: SwarmTask[]
+  ): string {
+    let prompt = `Original goal: ${goal}\n\n`;
 
-    return `Original goal: ${goal}\n\nCompleted task results:\n\n${taskSummaries}\n\nSynthesize these results into a comprehensive final answer.`;
+    // Add completed task results
+    if (completedTasks.length > 0) {
+      const completedSummaries = completedTasks.map(task => {
+        const result = this.state?.taskResults.get(task.id);
+        return `[${task.description}]\n${result?.result || 'No result'}`;
+      }).join('\n\n---\n\n');
+
+      prompt += `COMPLETED TASKS (${completedTasks.length}):\n\n${completedSummaries}\n\n`;
+    }
+
+    // Add failed task information
+    if (failedTasks.length > 0) {
+      const failedSummaries = failedTasks.map(task => {
+        const result = this.state?.taskResults.get(task.id);
+        return `[${task.description}]\nError: ${result?.error || 'Unknown error'}`;
+      }).join('\n\n');
+
+      prompt += `FAILED TASKS (${failedTasks.length}):\n\n${failedSummaries}\n\n`;
+    }
+
+    // Add blocked task information
+    if (blockedTasks.length > 0) {
+      const blockedSummaries = blockedTasks.map(task =>
+        `[${task.description}] - Blocked by dependencies`
+      ).join('\n');
+
+      prompt += `BLOCKED TASKS (${blockedTasks.length}):\n\n${blockedSummaries}\n\n`;
+    }
+
+    prompt += `Synthesize these results into a comprehensive final answer. `;
+    if (failedTasks.length > 0 || blockedTasks.length > 0) {
+      prompt += `Note the tasks that failed or were blocked and explain how this affects the overall result.`;
+    }
+
+    return prompt;
   }
 
   // ============================================
@@ -614,8 +840,9 @@ Maximum ${this.config.maxTasks} tasks.`;
     role: SwarmRole;
     task: string;
     tools: string[];
+    agentId?: string;
   }): Promise<SubagentResult> {
-    const { role, task, tools } = params;
+    const { role, task, tools, agentId } = params;
 
     // Build system prompt
     const systemPrompt = ROLE_SYSTEM_PROMPTS[role];
@@ -639,6 +866,13 @@ Maximum ${this.config.maxTasks} tasks.`;
       }
     }
 
+    // Track agent in state's activeAgents if this is an internal spawn (planner/critic/aggregator)
+    const effectiveAgentId = agentId || generateId();
+    const trackInternally = !agentId; // Only track if we generated the ID (internal agents)
+    if (trackInternally && this.state) {
+      this.state.activeAgents.add(effectiveAgentId);
+    }
+
     const config: SubagentConfig = {
       task: fullTask,
       tools: filteredTools,
@@ -648,7 +882,14 @@ Maximum ${this.config.maxTasks} tasks.`;
       cwd: this.context.cwd,
     };
 
-    return this.context.subagentManager.spawn(config);
+    try {
+      return await this.context.subagentManager.spawn(config);
+    } finally {
+      // Remove internal agents from activeAgents when done
+      if (trackInternally && this.state) {
+        this.state.activeAgents.delete(effectiveAgentId);
+      }
+    }
   }
 
   // ============================================

@@ -689,8 +689,9 @@ export function App({ cwd, version }: AppProps) {
       exit();
     } else if (chunk.type === 'usage' && chunk.usage) {
       setTokenUsage(chunk.usage);
-      // Track tokens for current turn
-      setCurrentTurnTokens((prev) => prev + (chunk.usage?.outputTokens || 0));
+      // Track tokens for current turn (both input and output)
+      const turnTokens = (chunk.usage?.inputTokens || 0) + (chunk.usage?.outputTokens || 0);
+      setCurrentTurnTokens((prev) => prev + turnTokens);
     } else if (chunk.type === 'done') {
       const shouldSkip = skipNextDoneRef.current;
       skipNextDoneRef.current = false;
@@ -738,8 +739,8 @@ export function App({ cwd, version }: AppProps) {
           });
         });
       } else if (chunk.panel === 'schedules') {
-        // Load schedules and show panel
-        listSchedules(cwd).then((schedules) => {
+        // Load schedules for current session + global and show panel
+        listSchedules(cwd, { sessionId: activeSessionId || undefined }).then((schedules) => {
           setSchedulesList(schedules);
           setShowSchedulesPanel(true);
         });
@@ -1694,6 +1695,23 @@ export function App({ cwd, version }: AppProps) {
       return connectorBridgeRef.current.getCommandHelp(connector, command);
     };
 
+    const handleLoadCommands = async (connectorName: string) => {
+      if (!connectorBridgeRef.current) {
+        return null;
+      }
+      // Run full discovery for this specific connector
+      const discovered = await connectorBridgeRef.current.discover([connectorName]);
+      const connector = discovered.find((c) => c.name === connectorName);
+      if (connector) {
+        // Update the connectors list with the discovered connector
+        setConnectors((prev) => {
+          const updated = prev.map((c) => c.name === connectorName ? connector : c);
+          return updated;
+        });
+      }
+      return connector || null;
+    };
+
     return (
       <Box flexDirection="column" padding={1}>
         <ConnectorsPanel
@@ -1701,6 +1719,7 @@ export function App({ cwd, version }: AppProps) {
           initialConnector={connectorsPanelInitial}
           onCheckAuth={handleCheckAuth}
           onGetCommandHelp={handleGetCommandHelp}
+          onLoadCommands={handleLoadCommands}
           onClose={() => {
             setShowConnectorsPanel(false);
             setConnectorsPanelInitial(undefined);
@@ -1772,13 +1791,16 @@ export function App({ cwd, version }: AppProps) {
 
   // Show schedules panel
   if (showSchedulesPanel) {
+    // Session-scoped schedule list options
+    const scheduleListOpts = { sessionId: activeSessionId || undefined };
+
     const handleSchedulePause = async (id: string) => {
       await updateSchedule(cwd, id, (schedule) => ({
         ...schedule,
         status: 'paused',
         updatedAt: Date.now(),
       }));
-      setSchedulesList(await listSchedules(cwd));
+      setSchedulesList(await listSchedules(cwd, scheduleListOpts));
     };
 
     const handleScheduleResume = async (id: string) => {
@@ -1791,24 +1813,31 @@ export function App({ cwd, version }: AppProps) {
           nextRunAt: nextRun,
         };
       });
-      setSchedulesList(await listSchedules(cwd));
+      setSchedulesList(await listSchedules(cwd, scheduleListOpts));
     };
 
     const handleScheduleDelete = async (id: string) => {
       await deleteSchedule(cwd, id);
-      setSchedulesList(await listSchedules(cwd));
+      setSchedulesList(await listSchedules(cwd, scheduleListOpts));
     };
 
     const handleScheduleRun = async (id: string) => {
       const schedule = schedulesList.find((s) => s.id === id);
       if (schedule && activeSession) {
-        // Execute the command now
-        await activeSession.client.send(schedule.command);
+        // Execute based on action type
+        const actionType = schedule.actionType || 'command';
+        if (actionType === 'message' && schedule.message) {
+          // Send the message content
+          await activeSession.client.send(schedule.message);
+        } else {
+          // Execute the command
+          await activeSession.client.send(schedule.command);
+        }
       }
     };
 
     const handleScheduleRefresh = async () => {
-      setSchedulesList(await listSchedules(cwd));
+      setSchedulesList(await listSchedules(cwd, scheduleListOpts));
     };
 
     return (
