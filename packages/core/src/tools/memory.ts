@@ -36,8 +36,8 @@ export const memorySaveTool: Tool = {
         description: 'Unique identifier for this memory (e.g., "user.timezone", "project.stack")',
       },
       value: {
-        type: 'string',
-        description: 'The information to remember (can be text, JSON, or structured data)',
+        type: ['string', 'number', 'boolean', 'object'],
+        description: 'The information to remember. Can be a string, number, boolean, or object.',
       },
       category: {
         type: 'string',
@@ -224,7 +224,7 @@ export const memoryImportTool: Tool = {
           description: 'A memory entry to import',
           properties: {
             key: { type: 'string', description: 'Unique identifier for the memory' },
-            value: { type: 'string', description: 'The information to store' },
+            value: { type: ['string', 'number', 'boolean', 'object'], description: 'The information to store. Can be a string, number, boolean, or object.' },
             category: {
               type: 'string',
               enum: ['preference', 'fact', 'knowledge', 'history'],

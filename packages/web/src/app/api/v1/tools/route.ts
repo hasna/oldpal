@@ -275,7 +275,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
       type: 'object',
       properties: {
         key: { type: 'string', description: 'Unique identifier for this memory (e.g., "user.timezone")' },
-        value: { type: 'string', description: 'The information to remember' },
+        value: { type: ['string', 'number', 'boolean', 'object'], description: 'The information to remember. Can be a string, number, boolean, or object.' },
         category: { type: 'string', description: 'Type of memory', enum: ['preference', 'fact', 'knowledge', 'history'] },
         scope: { type: 'string', description: 'Memory scope', enum: ['global', 'shared', 'private'], default: 'private' },
         scopeId: { type: 'string', description: 'Optional scope identifier for shared/private memories' },
@@ -377,7 +377,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
             type: 'object',
             properties: {
               key: { type: 'string', description: 'Unique identifier' },
-              value: { type: 'string', description: 'The information to store' },
+              value: { type: ['string', 'number', 'boolean', 'object'], description: 'The information to store. Can be a string, number, boolean, or object.' },
               category: { type: 'string', enum: ['preference', 'fact', 'knowledge', 'history'] },
               scope: { type: 'string', enum: ['global', 'shared', 'private'] },
               scopeId: { type: 'string', description: 'Scope identifier' },
