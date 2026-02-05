@@ -14,3 +14,4 @@ export * from './schedule-executions';
 export * from './login-history';
 export * from './notifications';
 export * from './identities';
+export * from './api-keys';
