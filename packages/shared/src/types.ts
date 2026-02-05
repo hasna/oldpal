@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'agents';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -125,6 +125,12 @@ export interface Connector {
   description: string;
   commands: ConnectorCommand[];
   auth?: ConnectorAuth;
+  /** Auto-generated tags derived from commands and description */
+  tags?: string[];
+  /** Last time this connector was used (ISO timestamp) */
+  lastUsedAt?: string;
+  /** Usage count for ranking */
+  usageCount?: number;
 }
 
 export interface ConnectorCommand {
@@ -402,7 +408,7 @@ export interface SessionInfo {
 export interface AssistantsConfig {
   llm: LLMConfig;
   voice?: VoiceConfig;
-  connectors?: string[];
+  connectors?: string[] | ConnectorsConfigShared;
   skills?: string[];
   hooks?: HookConfig;
   scheduler?: SchedulerConfig;
@@ -417,6 +423,172 @@ export interface AssistantsConfig {
   messages?: MessagesConfig;
   memory?: MemoryConfigShared;
   subagents?: SubagentConfigShared;
+  input?: InputConfig;
+  budget?: BudgetConfig;
+  guardrails?: GuardrailsConfigShared;
+  capabilities?: CapabilitiesConfigShared;
+}
+
+/**
+ * Budget configuration for resource limits
+ * Controls token, time, and tool-call limits per session/agent/swarm
+ */
+export interface BudgetConfig {
+  /** Whether budget enforcement is enabled (default: false) */
+  enabled?: boolean;
+  /** Session-level limits */
+  session?: BudgetLimits;
+  /** Per-agent limits (for multi-agent scenarios) */
+  agent?: BudgetLimits;
+  /** Swarm-level limits (aggregate across all agents) */
+  swarm?: BudgetLimits;
+  /** Action to take when budget is exceeded */
+  onExceeded?: 'warn' | 'pause' | 'stop';
+  /** Whether to persist budget state across restarts */
+  persist?: boolean;
+}
+
+/**
+ * Budget limits specification
+ */
+export interface BudgetLimits {
+  /** Maximum input tokens per period */
+  maxInputTokens?: number;
+  /** Maximum output tokens per period */
+  maxOutputTokens?: number;
+  /** Maximum total tokens per period */
+  maxTotalTokens?: number;
+  /** Maximum LLM API calls per period */
+  maxLlmCalls?: number;
+  /** Maximum tool calls per period */
+  maxToolCalls?: number;
+  /** Maximum execution time in milliseconds per period */
+  maxDurationMs?: number;
+  /** Period for rolling limits (e.g., 'session', 'hour', 'day') */
+  period?: 'session' | 'hour' | 'day';
+}
+
+/**
+ * Budget usage tracking state
+ */
+export interface BudgetUsage {
+  /** Input tokens consumed */
+  inputTokens: number;
+  /** Output tokens consumed */
+  outputTokens: number;
+  /** Total tokens consumed */
+  totalTokens: number;
+  /** Number of LLM API calls */
+  llmCalls: number;
+  /** Number of tool calls */
+  toolCalls: number;
+  /** Execution time in milliseconds */
+  durationMs: number;
+  /** When the current period started */
+  periodStartedAt: string;
+  /** When usage was last updated */
+  lastUpdatedAt: string;
+}
+
+/**
+ * Input handling configuration
+ * Controls how large pastes and input are handled in terminal and web UIs
+ */
+export interface InputConfig {
+  /** Paste handling settings */
+  paste?: PasteConfig;
+}
+
+/**
+ * Paste handling configuration
+ */
+export interface PasteConfig {
+  /** Whether large paste handling is enabled (default: true) */
+  enabled?: boolean;
+  /** Paste detection thresholds */
+  thresholds?: {
+    /** Character threshold for large paste detection (default: 500) */
+    chars?: number;
+    /** Word threshold for large paste detection (default: 100) */
+    words?: number;
+    /** Line threshold for large paste detection (default: 20) */
+    lines?: number;
+  };
+  /**
+   * Display mode when large paste is detected
+   * - 'placeholder': Show summary placeholder (default)
+   * - 'preview': Show collapsed preview with expand option
+   * - 'confirm': Ask user to confirm before accepting
+   * - 'inline': No special handling, show full content
+   */
+  mode?: 'placeholder' | 'preview' | 'confirm' | 'inline';
+}
+
+/**
+ * Guardrails configuration for security and safety policies
+ * Controls tool access, data sensitivity, and approval requirements
+ */
+export interface GuardrailsConfigShared {
+  /** Whether guardrails enforcement is enabled (default: false) */
+  enabled?: boolean;
+  /** Default action when no policy matches */
+  defaultAction?: 'allow' | 'deny' | 'require_approval' | 'warn';
+  /** Whether to log all policy evaluations */
+  logEvaluations?: boolean;
+  /** Whether to persist policy state */
+  persist?: boolean;
+}
+
+/**
+ * Capabilities configuration for agent permissions and limits
+ * Controls orchestration rights, tool access, and resource constraints
+ */
+export interface CapabilitiesConfigShared {
+  /** Whether capability enforcement is enabled (default: false) */
+  enabled?: boolean;
+  /** Orchestration level preset: 'none' | 'limited' | 'standard' | 'full' | 'coordinator' */
+  orchestrationLevel?: 'none' | 'limited' | 'standard' | 'full' | 'coordinator';
+  /** Maximum concurrent subagents this agent can spawn */
+  maxConcurrentSubagents?: number;
+  /** Maximum subagent depth (nesting level) */
+  maxSubagentDepth?: number;
+  /** Tool access policy: 'allow_all' | 'allow_list' | 'deny_list' */
+  toolPolicy?: 'allow_all' | 'allow_list' | 'deny_list';
+  /** Allowed tool patterns (when policy is 'allow_list') */
+  allowedTools?: string[];
+  /** Denied tool patterns (when policy is 'deny_list') */
+  deniedTools?: string[];
+  /** Whether to persist capability state */
+  persist?: boolean;
+}
+
+/**
+ * Connectors configuration for AssistantsConfig
+ * Controls how connector tools are registered and exposed to the LLM
+ */
+export interface ConnectorsConfigShared {
+  /** List of connector names to enable (empty = auto-discover all) */
+  enabled?: string[];
+  /**
+   * Maximum number of connector tools to register in LLM context.
+   * When exceeded, only `connector_execute` and `connectors_search` are available.
+   * Set to 0 for unlimited (default behavior).
+   * Recommended: 5-10 for optimal context usage.
+   * Default: 0 (unlimited)
+   */
+  maxToolsInContext?: number;
+  /**
+   * Whether to use dynamic binding (register tools on demand after search).
+   * When true, connector tools are only registered after user explicitly
+   * selects them via connectors_search or connector tool name.
+   * Default: false
+   */
+  dynamicBinding?: boolean;
+  /**
+   * Priority connectors that are always registered regardless of limit.
+   * These connectors will have their tools available immediately.
+   */
+  priorityConnectors?: string[];
 }
 
 /**
@@ -516,6 +688,16 @@ export interface VoiceState {
   isListening: boolean;
   sttProvider?: string;
   ttsProvider?: string;
+}
+
+export type HeartbeatAgentState = 'idle' | 'processing' | 'waiting_input' | 'error' | 'stopped';
+
+export interface HeartbeatState {
+  enabled: boolean;
+  state: HeartbeatAgentState;
+  lastActivity: string;
+  uptimeSeconds: number;
+  isStale: boolean;
 }
 
 // ============================================
