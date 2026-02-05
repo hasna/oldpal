@@ -85,6 +85,14 @@ function enableSynchronizedOutput(): () => void {
 // Parse CLI arguments
 const options = parseArgs(process.argv);
 
+// Handle parsing errors
+if (options.errors.length > 0) {
+  for (const error of options.errors) {
+    console.error(`Error: ${error}`);
+  }
+  process.exit(1);
+}
+
 // Handle version
 if (options.version) {
   console.log(`assistants v${VERSION}`);
