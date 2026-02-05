@@ -16,8 +16,8 @@
     "paths": {
       "@hasna/assistants-core": ["./packages/core/src"],
       "@hasna/assistants-core/*": ["./packages/core/src/*"],
-      "@hasna/assistants-terminal": ["./packages/terminal/src"],
-      "@hasna/assistants-terminal/*": ["./packages/terminal/src/*"],
+      "@hasna/assistants": ["./packages/terminal/src"],
+      "@hasna/assistants/*": ["./packages/terminal/src/*"],
       "@hasna/assistants-shared": ["./packages/shared/src"],
       "@hasna/assistants-shared/*": ["./packages/shared/src/*"],
       "@hasna/assistants-web": ["./packages/web/src"],

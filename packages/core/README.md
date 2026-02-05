@@ -364,7 +364,7 @@ These features require additional configuration:
 
 ## Related Packages
 
-- **@hasna/assistants-terminal** - Terminal UI built on this core
+- **@hasna/assistants** - Terminal UI built on this core
 - **@hasna/assistants-shared** - Shared types and utilities
 - **@hasna/runtime-bun** - Bun runtime implementation
 

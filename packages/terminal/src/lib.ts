@@ -1,12 +1,12 @@
 /**
- * @hasna/assistants-terminal - Library exports
+ * @hasna/assistants - Library exports
  *
  * This module provides the public API for programmatic usage of the terminal assistant.
  * For CLI usage, run the `assistants` command directly.
  *
  * @example
  * ```typescript
- * import { EmbeddedClient, runHeadless } from '@hasna/assistants-terminal';
+ * import { EmbeddedClient, runHeadless } from '@hasna/assistants';
  *
  * // Option 1: Use EmbeddedClient for full control
  * const client = new EmbeddedClient(process.cwd(), {

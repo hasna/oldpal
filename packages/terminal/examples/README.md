@@ -1,6 +1,6 @@
 # Examples
 
-These examples demonstrate how to use `@hasna/assistants-terminal` programmatically.
+These examples demonstrate how to use `@hasna/assistants` programmatically.
 
 ## Prerequisites
 

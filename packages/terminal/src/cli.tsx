@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 /**
- * CLI entry point for @hasna/assistants-terminal
+ * CLI entry point for @hasna/assistants
  *
  * This file is the executable entry point for the `assistants` and `ast` commands.
- * For programmatic usage, import from '@hasna/assistants-terminal' instead.
+ * For programmatic usage, import from '@hasna/assistants' instead.
  */
 
 // Initialize Bun runtime before any core imports

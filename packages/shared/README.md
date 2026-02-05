@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Shared types and utilities for the Hasna Assistants ecosystem. This package provides TypeScript type definitions used across `@hasna/assistants-core` and `@hasna/assistants-terminal`.
+Shared types and utilities for the Hasna Assistants ecosystem. This package provides TypeScript type definitions used across `@hasna/assistants-core` and `@hasna/assistants`.
 
 ## Installation
 

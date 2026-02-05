@@ -1,0 +1,8 @@
+{
+  "id": "760",
+  "subject": "Validate upload type parameter",
+  "description": "POST /api/v1/upload accepts arbitrary 'type' values and treats them as attachments. Validate allowed types (avatar/attachment) and reject unknown values to prevent unintended directories/behavior. Add tests for invalid type.",
+  "status": "pending",
+  "created": "2026-02-05T09:01:31.414Z",
+  "updated": "2026-02-05T09:01:31.414Z"
+}

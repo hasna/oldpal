@@ -1,0 +1,8 @@
+{
+  "id": "757",
+  "subject": "Add headless CLI option tests",
+  "description": "Add tests for parseArgs/runHeadless covering --print, --output-format, --json-schema, --continue/--resume precedence, and --cwd handling. Include regression for missing flag values (errors array).",
+  "status": "pending",
+  "created": "2026-02-05T08:59:05.786Z",
+  "updated": "2026-02-05T08:59:05.786Z"
+}

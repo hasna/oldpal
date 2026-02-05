@@ -1,0 +1,8 @@
+{
+  "id": "758",
+  "subject": "Wire agent model selection into web agent pool",
+  "description": "packages/web/src/lib/server/agent-pool.ts fetches agent.model but doesn't pass it to EmbeddedClient/AgentLoop. Add model option support end-to-end (client options, AgentLoop config, LLM creation) or remove unused field. Ensure model selection honored for web sessions.",
+  "status": "pending",
+  "created": "2026-02-05T09:00:57.222Z",
+  "updated": "2026-02-05T09:00:57.222Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "754",
+  "subject": "Avoid process.exit in runHeadless (library API)",
+  "description": "runHeadless is exported for programmatic use but currently calls process.exit(1) on errors. Replace with throw/return status and let CLI decide exit codes. Ensure CLI still exits with non-zero on errors.",
+  "status": "pending",
+  "created": "2026-02-05T08:58:38.371Z",
+  "updated": "2026-02-05T08:58:38.371Z"
+}

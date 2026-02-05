@@ -1,0 +1,8 @@
+{
+  "id": "759",
+  "subject": "Handle parseArgs errors in terminal index entrypoint",
+  "description": "packages/terminal/src/index.tsx parses args but ignores options.errors. Add error handling (print errors and exit non-zero) to match cli/main.ts behavior.",
+  "status": "pending",
+  "created": "2026-02-05T09:01:15.133Z",
+  "updated": "2026-02-05T09:01:15.133Z"
+}

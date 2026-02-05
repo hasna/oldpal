@@ -1,0 +1,8 @@
+{
+  "id": "756",
+  "subject": "Handle parseArgs errors in CLI entrypoint",
+  "description": "packages/terminal/src/cli.tsx uses parseArgs but ignores options.errors. Add error handling (print errors, exit non-zero) to match main.ts behavior.",
+  "status": "pending",
+  "created": "2026-02-05T08:58:56.679Z",
+  "updated": "2026-02-05T08:58:56.679Z"
+}

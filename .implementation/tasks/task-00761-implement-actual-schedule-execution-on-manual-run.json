@@ -1,0 +1,8 @@
+{
+  "id": "761",
+  "subject": "Implement actual schedule execution on manual run",
+  "description": "POST /api/v1/schedules/[id]/run currently inserts a 'success' execution record without running the schedule command. Wire into scheduler/runner so manual run executes the command and records real status/duration/results.",
+  "status": "pending",
+  "created": "2026-02-05T09:01:50.283Z",
+  "updated": "2026-02-05T09:01:50.283Z"
+}

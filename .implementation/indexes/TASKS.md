@@ -4,6 +4,14 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 761 | Implement actual schedule execution on m | pending | - | - |
+| 760 | Validate upload type parameter | pending | - | - |
+| 759 | Handle parseArgs errors in terminal inde | pending | - | - |
+| 758 | Wire agent model selection into web agen | pending | - | - |
+| 757 | Add headless CLI option tests | pending | - | - |
+| 756 | Handle parseArgs errors in CLI entrypoin | pending | - | - |
+| 755 | Ensure runHeadless disconnects on errors | pending | - | - |
+| 754 | Avoid process.exit in runHeadless (libra | pending | - | - |
 | 753 | Align package versions after rename | pending | - | - |
 | 752 | Remove private core/shared runtime deps  | pending | - | - |
 | 751 | Fix fallback .d.ts generation in termina | pending | - | - |
