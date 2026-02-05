@@ -1,4 +1,4 @@
-import type { AssistantClient, StreamChunk, Tool, Skill, Message, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
+import type { AssistantClient, StreamChunk, Tool, Skill, Message, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, HeartbeatState } from '@hasna/assistants-shared';
 import { generateId } from '@hasna/assistants-shared';
 import { AgentLoop } from './agent/loop';
 import type { AskUserHandler } from './tools/ask-user';
@@ -315,6 +315,16 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get current heartbeat state
+   */
+  getHeartbeatState(): HeartbeatState | null {
+    if (typeof (this.agent as any).getHeartbeatState === 'function') {
+      return (this.agent as any).getHeartbeatState();
+    }
+    return null;
+  }
+
+  /**
    * Get current assistant/identity info
    */
   getIdentityInfo(): ActiveIdentityInfo | null {
@@ -350,6 +360,31 @@ export class EmbeddedClient implements AssistantClient {
   async refreshIdentityContext(): Promise<void> {
     if (typeof (this.agent as any).refreshIdentityContext === 'function') {
       await (this.agent as any).refreshIdentityContext();
+    }
+  }
+
+  /**
+   * Get the messages manager
+   */
+  getMessagesManager(): any {
+    if (typeof (this.agent as any).getMessagesManager === 'function') {
+      return (this.agent as any).getMessagesManager();
+    }
+    return null;
+  }
+
+  /**
+   * Add a system message to the conversation context
+   */
+  addSystemMessage(content: string): void {
+    if (typeof (this.agent as any).addSystemMessage === 'function') {
+      (this.agent as any).addSystemMessage(content);
+    } else {
+      // Fallback: add to context directly
+      const context = this.agent.getContext();
+      if (typeof (context as any).addSystemMessage === 'function') {
+        (context as any).addSystemMessage(content);
+      }
     }
   }
 

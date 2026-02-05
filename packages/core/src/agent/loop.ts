@@ -1,4 +1,4 @@
-import type { Message, Tool, StreamChunk, ToolCall, ToolResult, AssistantsConfig, ScheduledCommand, VoiceState, ActiveIdentityInfo } from '@hasna/assistants-shared';
+import type { Message, Tool, StreamChunk, ToolCall, ToolResult, AssistantsConfig, ScheduledCommand, VoiceState, ActiveIdentityInfo, HeartbeatState } from '@hasna/assistants-shared';
 import { generateId } from '@hasna/assistants-shared';
 import { join } from 'path';
 import { AgentContext } from './context';
@@ -79,8 +79,17 @@ import { registerProjectTools, type ProjectToolContext } from '../tools/projects
 import { registerSelfAwarenessTools } from '../tools/self-awareness';
 import { registerMemoryTools } from '../tools/memory';
 import { registerAgentTools } from '../tools/agents';
+import { registerAgentRegistryTools } from '../tools/agent-registry';
+import { registerCapabilityTools } from '../tools/capabilities';
+import { registerVoiceTools } from '../tools/voice';
+import { registerTaskTools } from '../tools/tasks';
 import { GlobalMemoryManager, MemoryInjector, type MemoryConfig } from '../memory';
 import { SubagentManager, type SubagentManagerContext, type SubagentResult, type SubagentLoopConfig } from './subagent-manager';
+import { BudgetTracker, type BudgetScope } from '../budget';
+import { PolicyEvaluator, type GuardrailsConfig, type PolicyEvaluationResult } from '../guardrails';
+import { getGlobalRegistry, type AgentRegistryService, type RegisteredAgent, type AgentType } from '../registry';
+import { CapabilityEnforcer, type CapabilityEnforcementResult } from '../capabilities';
+import type { BudgetConfig, CapabilitiesConfigShared } from '@hasna/assistants-shared';
 
 export interface AgentLoopOptions {
   config?: AssistantsConfig;
@@ -103,6 +112,14 @@ export interface AgentLoopOptions {
   };
   /** Subagent depth level (0 = root agent, used internally) */
   depth?: number;
+  /** Budget configuration for resource limits */
+  budgetConfig?: BudgetConfig;
+  /** Callback when budget warning/exceeded occurs */
+  onBudgetWarning?: (warning: string) => void;
+  /** Guardrails configuration for security policies */
+  guardrailsConfig?: GuardrailsConfig;
+  /** Callback when guardrails violation occurs */
+  onGuardrailsViolation?: (result: PolicyEvaluationResult, toolName: string) => void;
 }
 
 /**
@@ -170,12 +187,23 @@ export class AgentLoop {
   private askUserHandler: AskUserHandler | null = null;
   private sessionContextOptions: { userId: string; queryFn: SessionQueryFunctions } | null = null;
   private modelOverride: string | null = null;
+  private budgetTracker: BudgetTracker | null = null;
+  private budgetConfig: BudgetConfig | null = null;
+  private policyEvaluator: PolicyEvaluator | null = null;
+  private guardrailsConfig: GuardrailsConfig | null = null;
+  private onGuardrailsViolation?: (result: PolicyEvaluationResult, toolName: string) => void;
+  private capabilityEnforcer: CapabilityEnforcer | null = null;
+  private capabilitiesConfig: CapabilitiesConfigShared | null = null;
+  private onCapabilityViolation?: (result: CapabilityEnforcementResult, context: string) => void;
+  private registryService: AgentRegistryService | null = null;
+  private registeredAgentId: string | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
   private onToolStart?: (toolCall: ToolCall) => void;
   private onToolEnd?: (toolCall: ToolCall, result: ToolResult) => void;
   private onTokenUsage?: (usage: TokenUsage) => void;
+  private onBudgetWarning?: (warning: string) => void;
 
   constructor(options: AgentLoopOptions = {}) {
     this.cwd = options.cwd || process.cwd();
@@ -204,6 +232,20 @@ export class AgentLoop {
     this.onToolStart = options.onToolStart;
     this.onToolEnd = options.onToolEnd;
     this.onTokenUsage = options.onTokenUsage;
+    this.onBudgetWarning = options.onBudgetWarning;
+    this.budgetConfig = options.budgetConfig || null;
+    this.guardrailsConfig = options.guardrailsConfig || null;
+    this.onGuardrailsViolation = options.onGuardrailsViolation;
+
+    // Initialize budget tracker if config provided
+    if (this.budgetConfig) {
+      this.budgetTracker = new BudgetTracker(this.sessionId, this.budgetConfig);
+    }
+
+    // Initialize policy evaluator if config provided
+    if (this.guardrailsConfig) {
+      this.policyEvaluator = new PolicyEvaluator(this.guardrailsConfig);
+    }
   }
 
   /**
@@ -234,6 +276,32 @@ export class AgentLoop {
     if (this.config.voice) {
       this.voiceManager = new VoiceManager(this.config.voice);
     }
+    // Initialize budget tracker from config if not already set via options
+    if (!this.budgetTracker && this.config.budget) {
+      this.budgetConfig = this.config.budget;
+      this.budgetTracker = new BudgetTracker(this.sessionId, this.budgetConfig);
+    } else if (this.budgetTracker && this.config.budget) {
+      // Merge config budget with options budget (options take precedence)
+      this.budgetConfig = { ...this.config.budget, ...this.budgetConfig };
+      this.budgetTracker.updateConfig(this.budgetConfig);
+    }
+    // Initialize guardrails evaluator from config if not already set via options
+    if (!this.policyEvaluator && this.config.guardrails) {
+      this.guardrailsConfig = this.config.guardrails as GuardrailsConfig;
+      this.policyEvaluator = new PolicyEvaluator(this.guardrailsConfig);
+    } else if (this.policyEvaluator && this.config.guardrails) {
+      // Merge config guardrails with options guardrails (options take precedence)
+      this.guardrailsConfig = { ...this.config.guardrails, ...this.guardrailsConfig } as GuardrailsConfig;
+      this.policyEvaluator.updateConfig(this.guardrailsConfig);
+    }
+    // Initialize capability enforcer from config
+    if (!this.capabilityEnforcer && this.config.capabilities) {
+      this.capabilitiesConfig = this.config.capabilities as CapabilitiesConfigShared;
+      this.capabilityEnforcer = new CapabilityEnforcer(this.capabilitiesConfig);
+    } else if (this.capabilityEnforcer && this.config.capabilities) {
+      this.capabilitiesConfig = { ...this.config.capabilities, ...this.capabilitiesConfig } as CapabilitiesConfigShared;
+      this.capabilityEnforcer.updateConfig(this.capabilitiesConfig);
+    }
     // Initialize context injector if enabled
     const injectionConfig = this.config.context?.injection;
     if (injectionConfig?.enabled !== false) {
@@ -241,19 +309,31 @@ export class AgentLoop {
     }
     await this.initializeIdentitySystem();
 
-    const connectorNames =
-      this.config.connectors && this.config.connectors.length > 0 && !this.config.connectors.includes('*')
-        ? this.config.connectors
-        : undefined;
+    // Normalize connectors config to extract enabled list
+    const connectorsConfig = this.config.connectors;
+    let connectorNames: string[] | undefined;
+    if (connectorsConfig) {
+      if (Array.isArray(connectorsConfig)) {
+        // String array format (backwards compatible)
+        connectorNames = connectorsConfig.length > 0 && !connectorsConfig.includes('*')
+          ? connectorsConfig
+          : undefined;
+      } else if (connectorsConfig.enabled && connectorsConfig.enabled.length > 0) {
+        // Object format with enabled list
+        connectorNames = !connectorsConfig.enabled.includes('*')
+          ? connectorsConfig.enabled
+          : undefined;
+      }
+    }
 
     // Fast discovery (PATH scan only) so connector tools are available immediately.
     this.connectorBridge.fastDiscover(connectorNames);
-    this.connectorBridge.registerAll(this.toolRegistry);
+    this.connectorBridge.registerAll(this.toolRegistry, connectorsConfig);
 
     // Start connector discovery in the background so chat can start immediately.
     this.connectorDiscovery = this.connectorBridge.discover(connectorNames)
       .then(() => {
-        this.connectorBridge.registerAll(this.toolRegistry);
+        this.connectorBridge.registerAll(this.toolRegistry, connectorsConfig);
       })
       .catch(() => {});
 
@@ -417,6 +497,12 @@ export class AgentLoop {
       cwd: this.cwd,
     }));
 
+    // Register task tools (always available for task queue management)
+    registerTaskTools(this.toolRegistry, {
+      cwd: this.cwd,
+      projectId: this.activeProjectId ?? undefined,
+    });
+
     // Register self-awareness tools (always available for agent introspection)
     registerSelfAwarenessTools(this.toolRegistry, {
       getContextManager: () => this.contextManager,
@@ -505,6 +591,26 @@ export class AgentLoop {
       getDepth: () => this.depth,
       getCwd: () => this.cwd,
       getSessionId: () => this.sessionId,
+    });
+
+    // Register agent registry tools (for querying running agents)
+    registerAgentRegistryTools(this.toolRegistry, {
+      getRegistryService: () => this.registryService,
+    });
+
+    // Register capability tools (for querying agent capabilities)
+    registerCapabilityTools(this.toolRegistry, {
+      getCapabilities: () => this.capabilityEnforcer?.getResolvedCapabilities() ?? null,
+      isEnabled: () => this.capabilityEnforcer?.isEnabled() ?? false,
+      getOrchestrationLevel: () => this.capabilityEnforcer?.getResolvedCapabilities()?.orchestration.level ?? null,
+      getToolPolicy: () => this.capabilityEnforcer?.getResolvedCapabilities()?.tools.policy ?? null,
+      getAllowedTools: () => this.allowedTools ? Array.from(this.allowedTools) : null,
+      getDeniedTools: () => this.capabilitiesConfig?.deniedTools ?? null,
+    });
+
+    // Register voice tools (available when voice manager is configured)
+    registerVoiceTools(this.toolRegistry, {
+      getVoiceManager: () => this.voiceManager,
     });
 
     // Initialize jobs system if enabled
@@ -804,6 +910,12 @@ export class AgentLoop {
     try {
       while (turn < maxTurns && !this.shouldStop) {
         turn++;
+
+        // Check budget before starting a new turn
+        if (this.isBudgetExceeded() && this.budgetConfig?.onExceeded === 'stop') {
+          this.onBudgetWarning?.('Budget exceeded - stopping before turn ' + turn);
+          break;
+        }
 
         await this.maybeSummarizeContext();
 
@@ -1109,6 +1221,129 @@ export class AgentLoop {
         continue;
       }
 
+      // Check guardrails policy if enabled
+      if (this.policyEvaluator?.isEnabled()) {
+        const policyResult = this.policyEvaluator.evaluateToolUse({
+          toolName: toolCall.name,
+          toolInput: toolCall.input as Record<string, unknown>,
+          depth: this.depth,
+        });
+
+        // Handle warnings (log them - they don't block execution)
+        if (policyResult.warnings.length > 0) {
+          for (const warning of policyResult.warnings) {
+            // Use the callback if available, otherwise warnings are silent
+            this.onGuardrailsViolation?.(policyResult, toolCall.name);
+          }
+        }
+
+        // If denied, block the tool call
+        if (!policyResult.allowed && policyResult.action === 'deny') {
+          const reason = policyResult.reasons.join('; ') || 'Blocked by guardrails policy';
+          const blockedResult: ToolResult = {
+            toolCallId: toolCall.id,
+            content: `Tool call denied by guardrails: ${reason}`,
+            isError: true,
+            toolName: toolCall.name,
+          };
+          this.emit({ type: 'tool_result', toolResult: blockedResult });
+          this.onGuardrailsViolation?.(policyResult, toolCall.name);
+          await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+            session_id: this.sessionId,
+            hook_event_name: 'PostToolUseFailure',
+            cwd: this.cwd,
+            tool_name: toolCall.name,
+            tool_input: toolCall.input,
+            tool_result: blockedResult.content,
+          });
+          results.push(blockedResult);
+          continue;
+        }
+
+        // If requires approval, emit the need for approval
+        if (policyResult.requiresApproval) {
+          const reason = policyResult.reasons.join('; ') || 'Requires approval per guardrails policy';
+          const approvalResult: ToolResult = {
+            toolCallId: toolCall.id,
+            content: `Tool call requires approval: ${reason}`,
+            isError: true,
+            toolName: toolCall.name,
+          };
+          this.emit({ type: 'tool_result', toolResult: approvalResult });
+          this.onGuardrailsViolation?.(policyResult, toolCall.name);
+          await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+            session_id: this.sessionId,
+            hook_event_name: 'PostToolUseFailure',
+            cwd: this.cwd,
+            tool_name: toolCall.name,
+            tool_input: toolCall.input,
+            tool_result: approvalResult.content,
+          });
+          results.push(approvalResult);
+          continue;
+        }
+      }
+
+      // Check capability enforcement if enabled
+      if (this.capabilityEnforcer?.isEnabled()) {
+        const capResult = this.capabilityEnforcer.canUseTool(toolCall.name, {
+          depth: this.depth,
+          sessionId: this.sessionId,
+          agentId: this.registeredAgentId || undefined,
+        });
+
+        // Handle warnings
+        if (capResult.warnings.length > 0) {
+          for (const warning of capResult.warnings) {
+            this.emit({ type: 'text', content: `\n[Capability Warning] ${warning}\n` });
+          }
+        }
+
+        // If not allowed, block the tool call
+        if (!capResult.allowed) {
+          const blockedResult: ToolResult = {
+            toolCallId: toolCall.id,
+            content: `Tool call denied by capabilities: ${capResult.reason}`,
+            isError: true,
+            toolName: toolCall.name,
+          };
+          this.emit({ type: 'tool_result', toolResult: blockedResult });
+          this.onCapabilityViolation?.(capResult, `tool:${toolCall.name}`);
+          await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+            session_id: this.sessionId,
+            hook_event_name: 'PostToolUseFailure',
+            cwd: this.cwd,
+            tool_name: toolCall.name,
+            tool_input: toolCall.input,
+            tool_result: blockedResult.content,
+          });
+          results.push(blockedResult);
+          continue;
+        }
+
+        // If requires approval, emit the need for approval
+        if (capResult.requiresApproval) {
+          const approvalResult: ToolResult = {
+            toolCallId: toolCall.id,
+            content: `Tool call requires approval: ${capResult.reason}`,
+            isError: true,
+            toolName: toolCall.name,
+          };
+          this.emit({ type: 'tool_result', toolResult: approvalResult });
+          this.onCapabilityViolation?.(capResult, `tool:${toolCall.name}`);
+          await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+            session_id: this.sessionId,
+            hook_event_name: 'PostToolUseFailure',
+            cwd: this.cwd,
+            tool_name: toolCall.name,
+            tool_input: toolCall.input,
+            tool_result: approvalResult.content,
+          });
+          results.push(approvalResult);
+          continue;
+        }
+      }
+
       // Run PreToolUse hooks
       const preHookResult = await this.hookExecutor.execute(
         this.hookLoader.getHooks('PreToolUse'),
@@ -1222,8 +1457,20 @@ export class AgentLoop {
       this.pendingToolCalls.set(toolCall.id, toolCall.name);
       this.onToolStart?.(toolCall);
 
-      // Execute the tool
+      // Execute the tool with timing
+      const toolStartTime = Date.now();
       const result = await this.toolRegistry.execute(toolCall);
+      const toolDuration = Date.now() - toolStartTime;
+
+      // Record tool call in budget tracker
+      this.recordToolCallBudget(toolDuration);
+
+      // If stop was triggered during tool execution, skip processing the result
+      // This prevents late tool results from contaminating the conversation
+      if (this.shouldStop) {
+        this.pendingToolCalls.delete(toolCall.id);
+        break;
+      }
 
       // Emit tool end
       this.onToolEnd?.(toolCall, result);
@@ -1248,6 +1495,9 @@ export class AgentLoop {
       results.push(result);
 
       this.pendingToolCalls.delete(toolCall.id);
+
+      // Update registry load after tool completion
+      this.updateRegistryLoad();
     }
 
     return results;
@@ -1373,6 +1623,13 @@ export class AgentLoop {
           this.refreshEnergyEffects();
         }
       },
+      refreshConnectors: async () => {
+        const connectors = await this.connectorBridge.refresh();
+        return {
+          count: connectors.length,
+          names: connectors.map(c => c.name),
+        };
+      },
       clearMessages: () => {
         this.resetContext();
       },
@@ -1390,6 +1647,58 @@ export class AgentLoop {
         }
       },
       getErrorStats: () => this.errorAggregator.getStats(),
+      budgetConfig: this.budgetConfig || undefined,
+      setBudgetEnabled: (enabled: boolean) => {
+        if (this.budgetTracker) {
+          this.budgetTracker.setEnabled(enabled);
+        } else if (enabled && this.budgetConfig) {
+          // Create tracker if enabling and we have config
+          this.budgetTracker = new BudgetTracker(this.sessionId, this.budgetConfig);
+          this.budgetTracker.setEnabled(true);
+        }
+      },
+      resetBudget: (scope?: BudgetScope) => {
+        if (!this.budgetTracker) return;
+        if (scope) {
+          this.budgetTracker.resetUsage(scope);
+        } else {
+          this.budgetTracker.resetAll();
+        }
+      },
+      guardrailsConfig: this.guardrailsConfig || undefined,
+      setGuardrailsEnabled: (enabled: boolean) => {
+        if (this.policyEvaluator) {
+          this.policyEvaluator.setEnabled(enabled);
+        } else if (enabled && this.guardrailsConfig) {
+          // Create evaluator if enabling and we have config
+          this.policyEvaluator = new PolicyEvaluator(this.guardrailsConfig);
+          this.policyEvaluator.setEnabled(true);
+        }
+      },
+      addGuardrailsPolicy: (policy) => {
+        if (this.policyEvaluator) {
+          this.policyEvaluator.addPolicy(policy);
+        } else {
+          // Create evaluator with this policy
+          this.guardrailsConfig = {
+            enabled: true,
+            policies: [policy],
+            defaultAction: 'allow',
+          };
+          this.policyEvaluator = new PolicyEvaluator(this.guardrailsConfig);
+        }
+      },
+      removeGuardrailsPolicy: (policyId: string) => {
+        if (this.policyEvaluator) {
+          this.policyEvaluator.removePolicy(policyId);
+        }
+      },
+      setGuardrailsDefaultAction: (action) => {
+        if (this.policyEvaluator) {
+          const config = this.policyEvaluator.getConfig();
+          this.policyEvaluator.updateConfig({ ...config, defaultAction: action });
+        }
+      },
     };
 
     const result = await this.commandExecutor.execute(message, context);
@@ -1509,6 +1818,8 @@ export class AgentLoop {
    */
   stop(): void {
     this.shouldStop = true;
+    // Clear pending tool calls so late results don't contaminate state
+    this.pendingToolCalls.clear();
     this.setHeartbeatState('stopped');
   }
 
@@ -1525,6 +1836,8 @@ export class AgentLoop {
       this.heartbeatTimer = null;
     }
     this.heartbeatManager?.stop();
+    // Deregister from registry
+    this.deregisterFromRegistry();
     this.energyManager?.stop();
     this.voiceManager?.stopSpeaking();
     this.voiceManager?.stopListening();
@@ -1590,6 +1903,28 @@ export class AgentLoop {
    */
   getVoiceState(): VoiceState | null {
     return this.voiceManager?.getState() ?? null;
+  }
+
+  /**
+   * Get current heartbeat state
+   */
+  getHeartbeatState(): HeartbeatState | null {
+    if (!this.heartbeatManager || this.config?.heartbeat?.enabled === false) {
+      return null;
+    }
+
+    const staleThresholdMs = this.config?.heartbeat?.staleThresholdMs ?? 120000;
+    const lastActivity = this.heartbeatManager.getLastActivity();
+    const age = Date.now() - lastActivity;
+    const stats = this.heartbeatManager.getStats();
+
+    return {
+      enabled: true,
+      state: this.heartbeatManager.getState(),
+      lastActivity: new Date(lastActivity).toISOString(),
+      uptimeSeconds: stats.uptimeSeconds,
+      isStale: age > staleThresholdMs,
+    };
   }
 
   getAssistantId(): string | null {
@@ -1761,6 +2096,77 @@ export class AgentLoop {
   updateTokenUsage(usage: Partial<TokenUsage>): void {
     this.builtinCommands.updateTokenUsage(usage);
     this.onTokenUsage?.(this.builtinCommands.getTokenUsage());
+
+    // Track budget usage
+    if (this.budgetTracker && (usage.inputTokens || usage.outputTokens)) {
+      this.budgetTracker.recordLlmCall(
+        usage.inputTokens || 0,
+        usage.outputTokens || 0,
+        0 // Duration tracked separately
+      );
+      this.checkBudgetWarnings();
+    }
+  }
+
+  /**
+   * Record a tool call in the budget tracker
+   */
+  private recordToolCallBudget(durationMs: number): void {
+    if (this.budgetTracker) {
+      this.budgetTracker.recordToolCall(durationMs);
+      this.checkBudgetWarnings();
+    }
+  }
+
+  /**
+   * Check budget limits and emit warnings
+   */
+  private checkBudgetWarnings(): void {
+    if (!this.budgetTracker || !this.budgetTracker.isEnabled()) return;
+
+    const status = this.budgetTracker.checkBudget('session');
+
+    // Collect all warnings
+    const warnings: string[] = [];
+    for (const [metric, check] of Object.entries(status.checks)) {
+      if (check?.warning) {
+        warnings.push(check.warning);
+      }
+    }
+
+    // Emit warnings
+    if (warnings.length > 0) {
+      this.onBudgetWarning?.(warnings.join('; '));
+    }
+
+    // Check if exceeded and handle based on onExceeded config
+    if (status.overallExceeded) {
+      const onExceeded = this.budgetConfig?.onExceeded || 'warn';
+      if (onExceeded === 'stop') {
+        this.onBudgetWarning?.('Budget exceeded - stopping agent');
+        this.stop();
+      } else if (onExceeded === 'pause') {
+        this.onBudgetWarning?.('Budget exceeded - pausing (requires user approval to continue)');
+        // Pause could be implemented with a flag that requires user input to continue
+        // For now, we just warn
+      }
+    }
+  }
+
+  /**
+   * Check if budget is exceeded (can be used before starting a turn)
+   */
+  isBudgetExceeded(): boolean {
+    if (!this.budgetTracker || !this.budgetTracker.isEnabled()) return false;
+    return this.budgetTracker.isExceeded('session');
+  }
+
+  /**
+   * Get current budget status
+   */
+  getBudgetStatus() {
+    if (!this.budgetTracker) return null;
+    return this.budgetTracker.getSummary();
   }
 
   /**
@@ -1829,11 +2235,116 @@ export class AgentLoop {
 
     this.heartbeatManager.onHeartbeat((heartbeat) => {
       void this.persistHeartbeat(heartbeat);
+      // Also send heartbeat to registry
+      if (this.registeredAgentId && this.registryService) {
+        this.registryService.heartbeat(this.registeredAgentId);
+      }
     });
 
     this.heartbeatManager.start(this.sessionId);
     this.heartbeatManager.setState('idle');
     void this.checkRecovery();
+
+    // Register agent in registry
+    this.registerInRegistry();
+  }
+
+  /**
+   * Register this agent in the global registry
+   */
+  private registerInRegistry(): void {
+    try {
+      this.registryService = getGlobalRegistry();
+      if (!this.registryService.isEnabled()) return;
+
+      // Cleanup stale agents on startup (from previous crashed sessions)
+      this.registryService.cleanupStaleAgents();
+
+      // Determine agent type based on depth
+      const agentType: AgentType = this.depth > 0 ? 'subagent' : 'assistant';
+
+      // Get tools and skills for capability registration
+      const tools = this.toolRegistry.getTools().map((t: Tool) => t.name);
+      const skills = this.skillLoader.getSkills().map((s) => s.name);
+
+      // Register the agent
+      const agentName = this.assistantManager?.getActive()?.name ||
+        this.identityManager?.getActive()?.profile?.displayName ||
+        `Agent ${this.sessionId.slice(0, 8)}`;
+      const agent = this.registryService.register({
+        id: `agent_${this.sessionId}`,
+        name: agentName,
+        type: agentType,
+        sessionId: this.sessionId,
+        capabilities: {
+          tools,
+          skills,
+          models: [this.config?.llm?.model || 'claude-sonnet-4-20250514'],
+          tags: this.depth > 0 ? ['subagent'] : ['main'],
+          maxConcurrent: 5,
+          maxDepth: this.config?.subagents?.maxDepth ?? 3,
+        },
+        metadata: {
+          cwd: this.cwd,
+          assistantId: this.assistantId,
+          depth: this.depth,
+        },
+      });
+
+      this.registeredAgentId = agent.id;
+    } catch {
+      // Registry registration failed, non-critical
+    }
+  }
+
+  /**
+   * Deregister this agent from the global registry
+   */
+  private deregisterFromRegistry(): void {
+    if (!this.registeredAgentId || !this.registryService) return;
+
+    try {
+      this.registryService.deregister(this.registeredAgentId);
+      this.registeredAgentId = null;
+    } catch {
+      // Deregistration failed, non-critical
+    }
+  }
+
+  /**
+   * Update agent status in registry
+   */
+  private updateRegistryStatus(state: AgentState, taskDescription?: string): void {
+    if (!this.registeredAgentId || !this.registryService) return;
+
+    try {
+      this.registryService.updateStatus(this.registeredAgentId, {
+        state,
+        currentTask: state === 'processing' ? 'processing_message' : undefined,
+        taskDescription,
+        uptime: Math.floor((Date.now() - this.sessionStartTime) / 1000),
+      });
+    } catch {
+      // Status update failed, non-critical
+    }
+  }
+
+  /**
+   * Update agent load in registry
+   */
+  private updateRegistryLoad(): void {
+    if (!this.registeredAgentId || !this.registryService) return;
+
+    try {
+      const stats = this.builtinCommands.getTokenUsage();
+      this.registryService.updateLoad(this.registeredAgentId, {
+        activeTasks: this.pendingToolCalls.size,
+        tokensUsed: stats.inputTokens + stats.outputTokens,
+        currentDepth: this.depth,
+      });
+    } catch {
+      // Load update failed, non-critical
+    }
   }
 
   private async persistHeartbeat(heartbeat: Heartbeat): Promise<void> {
@@ -1863,6 +2374,12 @@ export class AgentLoop {
 
   private setHeartbeatState(state: AgentState): void {
     this.heartbeatManager?.setState(state);
+    // Also update registry
+    this.updateRegistryStatus(state);
+    // Update load when state changes
+    if (state === 'processing') {
+      this.updateRegistryLoad();
+    }
   }
 
   private recordHeartbeatActivity(type: 'message' | 'tool' | 'error'): void {
