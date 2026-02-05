@@ -1,8 +1,122 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
+import TextInput from 'ink-text-input';
 import type { Connector, ConnectorCommand, ConnectorStatus } from '@hasna/assistants-shared';
 
 type ViewMode = 'list' | 'detail' | 'command';
+
+// Maximum visible items in lists before pagination kicks in
+const MAX_VISIBLE_ITEMS = 10;
+
+/**
+ * Simple fuzzy match function
+ * Returns true if all characters in the query appear in order in the text
+ */
+function fuzzyMatch(text: string, query: string): boolean {
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+
+  let textIdx = 0;
+  for (const char of lowerQuery) {
+    const foundIdx = lowerText.indexOf(char, textIdx);
+    if (foundIdx === -1) return false;
+    textIdx = foundIdx + 1;
+  }
+  return true;
+}
+
+/**
+ * Score a connector based on search query
+ * Higher score = better match
+ * Returns 0 if no match
+ */
+function scoreConnector(connector: Connector, query: string): number {
+  if (!query) return 1; // No query = show all
+
+  const lowerQuery = query.toLowerCase();
+  let score = 0;
+
+  // Exact name match
+  if (connector.name.toLowerCase() === lowerQuery) {
+    score += 100;
+  }
+  // Name starts with query
+  else if (connector.name.toLowerCase().startsWith(lowerQuery)) {
+    score += 50;
+  }
+  // Name contains query
+  else if (connector.name.toLowerCase().includes(lowerQuery)) {
+    score += 30;
+  }
+  // Fuzzy name match
+  else if (fuzzyMatch(connector.name, query)) {
+    score += 10;
+  }
+
+  // Description contains query
+  if (connector.description?.toLowerCase().includes(lowerQuery)) {
+    score += 20;
+  }
+
+  // Command names match
+  if (connector.commands) {
+    for (const cmd of connector.commands) {
+      if (cmd.name.toLowerCase().includes(lowerQuery)) {
+        score += 15;
+        break;
+      }
+      if (cmd.description?.toLowerCase().includes(lowerQuery)) {
+        score += 5;
+      }
+    }
+  }
+
+  return score;
+}
+
+/**
+ * Calculate the visible window range for paginated lists
+ * Keeps the selected item centered when possible
+ */
+function getVisibleRange(
+  selectedIndex: number,
+  totalItems: number,
+  maxVisible: number = MAX_VISIBLE_ITEMS
+): { start: number; end: number; hasMore: { above: number; below: number } } {
+  if (totalItems <= maxVisible) {
+    return {
+      start: 0,
+      end: totalItems,
+      hasMore: { above: 0, below: 0 },
+    };
+  }
+
+  // Try to center the selected item
+  const halfWindow = Math.floor(maxVisible / 2);
+  let start = selectedIndex - halfWindow;
+  let end = selectedIndex + (maxVisible - halfWindow);
+
+  // Adjust if we're near the beginning
+  if (start < 0) {
+    start = 0;
+    end = maxVisible;
+  }
+
+  // Adjust if we're near the end
+  if (end > totalItems) {
+    end = totalItems;
+    start = Math.max(0, totalItems - maxVisible);
+  }
+
+  return {
+    start,
+    end,
+    hasMore: {
+      above: start,
+      below: totalItems - end,
+    },
+  };
+}
 
 interface ConnectorsPanelProps {
   connectors: Connector[];
@@ -32,11 +146,35 @@ export function ConnectorsPanel({
   const [authStatuses, setAuthStatuses] = useState<Map<string, ConnectorStatus>>(new Map());
   const [commandHelp, setCommandHelp] = useState<string | null>(null);
   const [isLoadingHelp, setIsLoadingHelp] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Filter and sort connectors based on search query
+  const filteredConnectors = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return connectors;
+    }
+
+    const scored = connectors
+      .map((connector) => ({
+        connector,
+        score: scoreConnector(connector, searchQuery),
+      }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    return scored.map(({ connector }) => connector);
+  }, [connectors, searchQuery]);
+
+  // Reset index when filtered results change
+  useEffect(() => {
+    setConnectorIndex(0);
+  }, [searchQuery]);
 
   // Jump to initial connector if specified
   useEffect(() => {
     if (initialConnector) {
-      const idx = connectors.findIndex(
+      const idx = filteredConnectors.findIndex(
         (c) => c.name.toLowerCase() === initialConnector.toLowerCase()
       );
       if (idx !== -1) {
@@ -44,7 +182,7 @@ export function ConnectorsPanel({
         setMode('detail');
       }
     }
-  }, [initialConnector, connectors]);
+  }, [initialConnector, filteredConnectors]);
 
   // Load auth statuses on mount
   useEffect(() => {
@@ -68,7 +206,7 @@ export function ConnectorsPanel({
     loadStatuses();
   }, [connectors, onCheckAuth]);
 
-  const currentConnector = connectors[connectorIndex];
+  const currentConnector = filteredConnectors[connectorIndex];
   const currentCommands = currentConnector?.commands || [];
   const currentCommand = currentCommands[commandIndex];
   const currentStatus = currentConnector ? authStatuses.get(currentConnector.name) : undefined;
@@ -100,8 +238,38 @@ export function ConnectorsPanel({
 
   // Keyboard navigation
   useInput((input, key) => {
+    // When in search mode, only handle escape and enter
+    if (isSearching) {
+      if (key.escape) {
+        if (searchQuery) {
+          setSearchQuery('');
+        } else {
+          setIsSearching(false);
+        }
+        return;
+      }
+      if (key.return && filteredConnectors.length > 0) {
+        setIsSearching(false);
+        setMode('detail');
+        setCommandIndex(0);
+        return;
+      }
+      // Don't process other keys in search mode - TextInput handles them
+      return;
+    }
+
+    // Start search with / key
+    if (input === '/' && mode === 'list') {
+      setIsSearching(true);
+      return;
+    }
+
     // Exit with q or Escape at top level
     if (input === 'q' || (key.escape && mode === 'list')) {
+      if (searchQuery) {
+        setSearchQuery('');
+        return;
+      }
       onClose();
       return;
     }
@@ -120,7 +288,7 @@ export function ConnectorsPanel({
 
     // Enter to drill down
     if (key.return) {
-      if (mode === 'list') {
+      if (mode === 'list' && filteredConnectors.length > 0) {
         setMode('detail');
         setCommandIndex(0);
       } else if (mode === 'detail' && currentCommands.length > 0) {
@@ -131,8 +299,8 @@ export function ConnectorsPanel({
 
     // Arrow navigation
     if (key.upArrow) {
-      if (mode === 'list') {
-        setConnectorIndex((prev) => (prev === 0 ? connectors.length - 1 : prev - 1));
+      if (mode === 'list' && filteredConnectors.length > 0) {
+        setConnectorIndex((prev) => (prev === 0 ? filteredConnectors.length - 1 : prev - 1));
       } else if (mode === 'detail') {
         setCommandIndex((prev) => (prev === 0 ? currentCommands.length - 1 : prev - 1));
       }
@@ -140,18 +308,18 @@ export function ConnectorsPanel({
     }
 
     if (key.downArrow) {
-      if (mode === 'list') {
-        setConnectorIndex((prev) => (prev === connectors.length - 1 ? 0 : prev + 1));
+      if (mode === 'list' && filteredConnectors.length > 0) {
+        setConnectorIndex((prev) => (prev === filteredConnectors.length - 1 ? 0 : prev + 1));
       } else if (mode === 'detail') {
         setCommandIndex((prev) => (prev === currentCommands.length - 1 ? 0 : prev + 1));
       }
       return;
     }
 
-    // Number keys for quick selection
+    // Number keys for quick selection (only when not searching)
     const num = parseInt(input, 10);
     if (!isNaN(num) && num >= 1) {
-      if (mode === 'list' && num <= connectors.length) {
+      if (mode === 'list' && num <= filteredConnectors.length) {
         setConnectorIndex(num - 1);
       } else if (mode === 'detail' && num <= currentCommands.length) {
         setCommandIndex(num - 1);
@@ -166,6 +334,21 @@ export function ConnectorsPanel({
     if (status.authenticated) return { icon: '✓', color: 'green' };
     return { icon: '○', color: 'yellow' };
   };
+
+  // Calculate visible range for connector list
+  const connectorRange = useMemo(
+    () => getVisibleRange(connectorIndex, filteredConnectors.length),
+    [connectorIndex, filteredConnectors.length]
+  );
+
+  // Calculate visible range for commands list
+  const commandRange = useMemo(
+    () => getVisibleRange(commandIndex, currentCommands.length),
+    [commandIndex, currentCommands.length]
+  );
+
+  // Get visible connectors
+  const visibleConnectors = filteredConnectors.slice(connectorRange.start, connectorRange.end);
 
   // Empty state
   if (connectors.length === 0) {
@@ -324,6 +507,9 @@ export function ConnectorsPanel({
 
           <Box marginTop={1} marginBottom={1}>
             <Text bold>Commands:</Text>
+            {currentCommands.length > MAX_VISIBLE_ITEMS && (
+              <Text dimColor> ({commandIndex + 1}/{currentCommands.length})</Text>
+            )}
           </Box>
 
           {currentCommands.length === 0 ? (
@@ -331,22 +517,37 @@ export function ConnectorsPanel({
               <Text dimColor>No commands discovered</Text>
             </Box>
           ) : (
-            currentCommands.map((cmd, idx) => {
-              const isSelected = idx === commandIndex;
-              const prefix = isSelected ? '> ' : '  ';
-              const displayName = cmd.name.padEnd(20);
-
-              return (
-                <Box key={cmd.name} paddingY={0}>
-                  <Text
-                    inverse={isSelected}
-                    dimColor={!isSelected}
-                  >
-                    {prefix}{idx + 1}. {displayName} {cmd.description}
-                  </Text>
+            <>
+              {commandRange.hasMore.above > 0 && (
+                <Box paddingY={0}>
+                  <Text dimColor>  ↑ {commandRange.hasMore.above} more above</Text>
                 </Box>
-              );
-            })
+              )}
+
+              {currentCommands.slice(commandRange.start, commandRange.end).map((cmd, visibleIdx) => {
+                const actualIdx = commandRange.start + visibleIdx;
+                const isSelected = actualIdx === commandIndex;
+                const prefix = isSelected ? '> ' : '  ';
+                const displayName = cmd.name.padEnd(20);
+
+                return (
+                  <Box key={cmd.name} paddingY={0}>
+                    <Text
+                      inverse={isSelected}
+                      dimColor={!isSelected}
+                    >
+                      {prefix}{actualIdx + 1}. {displayName} {cmd.description}
+                    </Text>
+                  </Box>
+                );
+              })}
+
+              {commandRange.hasMore.below > 0 && (
+                <Box paddingY={0}>
+                  <Text dimColor>  ↓ {commandRange.hasMore.below} more below</Text>
+                </Box>
+              )}
+            </>
           )}
         </Box>
 
@@ -364,7 +565,35 @@ export function ConnectorsPanel({
     <Box flexDirection="column" paddingY={1}>
       <Box marginBottom={1}>
         <Text bold color="cyan">Connectors</Text>
+        {filteredConnectors.length > 0 && (
+          <Text dimColor>
+            {' '}({connectorIndex + 1}/{filteredConnectors.length}
+            {searchQuery && ` matching "${searchQuery}"`}
+            {connectors.length !== filteredConnectors.length && ` of ${connectors.length} total`})
+          </Text>
+        )}
       </Box>
+
+      {/* Search input */}
+      {isSearching && (
+        <Box marginBottom={1}>
+          <Text color="yellow">Search: </Text>
+          <TextInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Type to filter..."
+          />
+        </Box>
+      )}
+
+      {/* Search indicator when not in search mode but query exists */}
+      {!isSearching && searchQuery && (
+        <Box marginBottom={1}>
+          <Text dimColor>Filter: </Text>
+          <Text color="yellow">{searchQuery}</Text>
+          <Text dimColor> (Esc to clear)</Text>
+        </Box>
+      )}
 
       <Box
         flexDirection="column"
@@ -372,39 +601,62 @@ export function ConnectorsPanel({
         borderColor="gray"
         paddingX={1}
       >
-        {connectors.map((connector, idx) => {
-          const isSelected = idx === connectorIndex;
-          const status = getStatusIcon(authStatuses.get(connector.name));
-          const cmdCount = connector.commands?.length || 0;
-          const prefix = isSelected ? '> ' : '  ';
-          const nameDisplay = connector.name.padEnd(16);
+        {filteredConnectors.length === 0 ? (
+          <Box paddingY={1}>
+            <Text dimColor>
+              No connectors matching "{searchQuery}"
+            </Text>
+          </Box>
+        ) : (
+          <>
+            {connectorRange.hasMore.above > 0 && (
+              <Box paddingY={0}>
+                <Text dimColor>  ↑ {connectorRange.hasMore.above} more above</Text>
+              </Box>
+            )}
 
-          return (
-            <Box key={connector.name} paddingY={0}>
-              <Text
-                inverse={isSelected}
-                dimColor={!isSelected}
-              >
-                {prefix}
-              </Text>
-              <Text color={status.color} inverse={isSelected}>
-                {status.icon}
-              </Text>
-              <Text
-                inverse={isSelected}
-                dimColor={!isSelected}
-              >
-                {' '}{nameDisplay} {cmdCount.toString().padStart(2)} cmd{cmdCount !== 1 ? 's' : ' '}
-              </Text>
-              <Text
-                inverse={isSelected}
-                dimColor
-              >
-                {' '}{connector.description?.slice(0, 30) || ''}
-              </Text>
-            </Box>
-          );
-        })}
+            {visibleConnectors.map((connector, visibleIdx) => {
+              const actualIdx = connectorRange.start + visibleIdx;
+              const isSelected = actualIdx === connectorIndex;
+              const status = getStatusIcon(authStatuses.get(connector.name));
+              const cmdCount = connector.commands?.length || 0;
+              const prefix = isSelected ? '> ' : '  ';
+              const nameDisplay = connector.name.padEnd(16);
+
+              return (
+                <Box key={connector.name} paddingY={0}>
+                  <Text
+                    inverse={isSelected}
+                    dimColor={!isSelected}
+                  >
+                    {prefix}
+                  </Text>
+                  <Text color={status.color} inverse={isSelected}>
+                    {status.icon}
+                  </Text>
+                  <Text
+                    inverse={isSelected}
+                    dimColor={!isSelected}
+                  >
+                    {' '}{nameDisplay} {cmdCount.toString().padStart(2)} cmd{cmdCount !== 1 ? 's' : ' '}
+                  </Text>
+                  <Text
+                    inverse={isSelected}
+                    dimColor
+                  >
+                    {' '}{connector.description?.slice(0, 30) || ''}
+                  </Text>
+                </Box>
+              );
+            })}
+
+            {connectorRange.hasMore.below > 0 && (
+              <Box paddingY={0}>
+                <Text dimColor>  ↓ {connectorRange.hasMore.below} more below</Text>
+              </Box>
+            )}
+          </>
+        )}
       </Box>
 
       <Box marginTop={1}>
@@ -419,7 +671,7 @@ export function ConnectorsPanel({
 
       <Box marginTop={1}>
         <Text dimColor>
-          ↑↓ navigate | Enter view | q quit | 1-{connectors.length} jump
+          ↑↓ navigate | Enter view | / search | q quit
         </Text>
       </Box>
     </Box>

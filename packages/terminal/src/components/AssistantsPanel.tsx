@@ -20,6 +20,8 @@ interface AssistantsPanelProps {
   onUpdate: (id: string, updates: Partial<{ name: string; description: string; settings: Record<string, unknown> }>) => Promise<void>;
   onDelete: (assistantId: string) => Promise<void>;
   onCancel: () => void;
+  error?: string | null;
+  onClearError?: () => void;
 }
 
 /**
@@ -55,6 +57,8 @@ export function AssistantsPanel({
   onUpdate,
   onDelete,
   onCancel,
+  error,
+  onClearError,
 }: AssistantsPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mode, setMode] = useState<Mode>('list');
@@ -95,6 +99,7 @@ export function AssistantsPanel({
 
     // New assistant
     if (input === 'n' || input === 'N') {
+      onClearError?.();
       resetForm();
       setMode('create');
       return;
@@ -103,6 +108,7 @@ export function AssistantsPanel({
     // Edit assistant
     if (input === 'e' || input === 'E') {
       if (assistants.length > 0 && selectedIndex < assistants.length) {
+        onClearError?.();
         const assistant = assistants[selectedIndex];
         setEditingAssistant(assistant);
         setNewName(assistant.name);
@@ -121,6 +127,7 @@ export function AssistantsPanel({
     // Delete assistant
     if (input === 'd' || input === 'D') {
       if (assistants.length > 0 && selectedIndex < assistants.length) {
+        onClearError?.();
         setMode('delete-confirm');
       }
       return;
@@ -128,12 +135,14 @@ export function AssistantsPanel({
 
     // Escape: cancel
     if (key.escape) {
+      onClearError?.();
       onCancel();
       return;
     }
 
     // Enter: select/switch assistant
     if (key.return) {
+      onClearError?.();
       if (selectedIndex === assistants.length) {
         // "New assistant" option
         resetForm();
@@ -541,6 +550,12 @@ export function AssistantsPanel({
         <Text bold>Assistants</Text>
         <Text dimColor>[n]ew [e]dit [d]elete</Text>
       </Box>
+
+      {error && (
+        <Box marginBottom={1}>
+          <Text color="red">Error: {error}</Text>
+        </Box>
+      )}
 
       <Box
         flexDirection="column"

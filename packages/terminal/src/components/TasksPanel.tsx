@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
-import type { Task, TaskPriority, TaskStatus } from '@hasna/assistants-core';
+import type { Task, TaskPriority, TaskStatus, TaskCreateOptions } from '@hasna/assistants-core';
 
 interface TasksPanelProps {
   tasks: Task[];
   paused: boolean;
-  onAdd: (description: string, priority: TaskPriority) => Promise<void>;
+  onAdd: (options: TaskCreateOptions) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onRun: (id: string) => Promise<void>;
   onClearPending: () => Promise<void>;
@@ -17,6 +17,7 @@ interface TasksPanelProps {
 }
 
 type Mode = 'list' | 'create' | 'delete-confirm' | 'priority-select';
+type CreateField = 'description' | 'priority' | 'blockedBy' | 'blocks' | 'assignee';
 
 const STATUS_ICONS: Record<TaskStatus, string> = {
   pending: '○',
@@ -82,31 +83,104 @@ export function TasksPanel({
   const [mode, setMode] = useState<Mode>('list');
   const [newDescription, setNewDescription] = useState('');
   const [newPriority, setNewPriority] = useState<TaskPriority>('normal');
+  const [newBlockedBy, setNewBlockedBy] = useState<string[]>([]);
+  const [newBlocks, setNewBlocks] = useState<string[]>([]);
+  const [newAssignee, setNewAssignee] = useState('');
+  const [createField, setCreateField] = useState<CreateField>('description');
+  const [blockedByIndex, setBlockedByIndex] = useState(0);
+  const [blocksIndex, setBlocksIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get pending/in_progress tasks that can be selected as blockers
+  const selectableTasks = tasks.filter((t) => t.status === 'pending' || t.status === 'in_progress');
 
   useEffect(() => {
     setSelectedIndex((prev) => Math.min(prev, Math.max(0, tasks.length)));
   }, [tasks.length]);
 
   useInput((input, key) => {
-    // In create mode, handle text input
+    // In create mode, handle navigation between fields
     if (mode === 'create') {
       if (key.escape) {
         setMode('list');
         setNewDescription('');
         setNewPriority('normal');
+        setNewBlockedBy([]);
+        setNewBlocks([]);
+        setNewAssignee('');
+        setCreateField('description');
         return;
       }
-      // Tab to cycle priority
-      if (key.tab) {
-        setNewPriority((prev) => {
-          if (prev === 'normal') return 'high';
-          if (prev === 'high') return 'low';
-          return 'normal';
-        });
+
+      // Tab to move to next field
+      if (key.tab && !key.shift) {
+        const fields: CreateField[] = ['description', 'priority', 'blockedBy', 'blocks', 'assignee'];
+        const currentIndex = fields.indexOf(createField);
+        const nextIndex = (currentIndex + 1) % fields.length;
+        setCreateField(fields[nextIndex]);
         return;
       }
-      // Text input handled by TextInput component
+
+      // Shift+Tab to move to previous field
+      if (key.tab && key.shift) {
+        const fields: CreateField[] = ['description', 'priority', 'blockedBy', 'blocks', 'assignee'];
+        const currentIndex = fields.indexOf(createField);
+        const prevIndex = currentIndex === 0 ? fields.length - 1 : currentIndex - 1;
+        setCreateField(fields[prevIndex]);
+        return;
+      }
+
+      // Handle priority field
+      if (createField === 'priority') {
+        if (key.leftArrow || input === 'h') {
+          setNewPriority((prev) => (prev === 'low' ? 'normal' : prev === 'normal' ? 'high' : 'high'));
+        } else if (key.rightArrow || input === 'l') {
+          setNewPriority((prev) => (prev === 'high' ? 'normal' : prev === 'normal' ? 'low' : 'low'));
+        }
+        return;
+      }
+
+      // Handle blockedBy field - select tasks to be blocked by
+      if (createField === 'blockedBy') {
+        if (selectableTasks.length > 0) {
+          if (key.upArrow) {
+            setBlockedByIndex((prev) => (prev === 0 ? selectableTasks.length - 1 : prev - 1));
+          } else if (key.downArrow) {
+            setBlockedByIndex((prev) => (prev === selectableTasks.length - 1 ? 0 : prev + 1));
+          } else if (input === ' ' || key.return) {
+            // Toggle selection
+            const taskId = selectableTasks[blockedByIndex]?.id;
+            if (taskId) {
+              setNewBlockedBy((prev) =>
+                prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+              );
+            }
+          }
+        }
+        return;
+      }
+
+      // Handle blocks field - select tasks that this task blocks
+      if (createField === 'blocks') {
+        if (selectableTasks.length > 0) {
+          if (key.upArrow) {
+            setBlocksIndex((prev) => (prev === 0 ? selectableTasks.length - 1 : prev - 1));
+          } else if (key.downArrow) {
+            setBlocksIndex((prev) => (prev === selectableTasks.length - 1 ? 0 : prev + 1));
+          } else if (input === ' ' || key.return) {
+            // Toggle selection
+            const taskId = selectableTasks[blocksIndex]?.id;
+            if (taskId) {
+              setNewBlocks((prev) =>
+                prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+              );
+            }
+          }
+        }
+        return;
+      }
+
+      // Text input handled by TextInput component for description and assignee
       return;
     }
 
@@ -271,42 +345,155 @@ export function TasksPanel({
     if (!newDescription.trim()) return;
     setIsSubmitting(true);
     try {
-      await onAdd(newDescription.trim(), newPriority);
+      await onAdd({
+        description: newDescription.trim(),
+        priority: newPriority,
+        blockedBy: newBlockedBy.length > 0 ? newBlockedBy : undefined,
+        blocks: newBlocks.length > 0 ? newBlocks : undefined,
+        assignee: newAssignee.trim() || undefined,
+      });
       setNewDescription('');
       setNewPriority('normal');
+      setNewBlockedBy([]);
+      setNewBlocks([]);
+      setNewAssignee('');
+      setCreateField('description');
       setMode('list');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const getTaskLabel = (taskId: string): string => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return taskId;
+    const desc = task.description.slice(0, 30) + (task.description.length > 30 ? '...' : '');
+    return desc;
+  };
+
   // Create mode UI
   if (mode === 'create') {
+    const isFieldActive = (field: CreateField) => createField === field;
+
     return (
       <Box flexDirection="column" paddingY={1}>
         <Box marginBottom={1}>
           <Text bold color="cyan">Add New Task</Text>
         </Box>
 
-        <Box flexDirection="column">
+        <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} paddingY={0}>
+          {/* Description field */}
           <Box>
-            <Text>Task: </Text>
-            <TextInput
-              value={newDescription}
-              onChange={setNewDescription}
-              onSubmit={handleCreateSubmit}
-              placeholder="What needs to be done..."
-            />
+            <Text inverse={isFieldActive('description')} color={isFieldActive('description') ? 'cyan' : undefined}>
+              Task:{' '}
+            </Text>
+            {isFieldActive('description') ? (
+              <TextInput
+                value={newDescription}
+                onChange={setNewDescription}
+                onSubmit={handleCreateSubmit}
+                placeholder="What needs to be done..."
+              />
+            ) : (
+              <Text dimColor={!newDescription}>{newDescription || '(empty)'}</Text>
+            )}
           </Box>
-          <Box marginTop={1}>
-            <Text>Priority: </Text>
+
+          {/* Priority field */}
+          <Box marginTop={0}>
+            <Text inverse={isFieldActive('priority')} color={isFieldActive('priority') ? 'cyan' : undefined}>
+              Priority:{' '}
+            </Text>
             <Text color={PRIORITY_COLORS[newPriority]}>
               {PRIORITY_ICONS[newPriority]} {newPriority}
             </Text>
+            {isFieldActive('priority') && <Text dimColor> (←/→ to change)</Text>}
           </Box>
-          <Box marginTop={1}>
-            <Text dimColor>Enter to add | Tab to change priority | Esc to cancel</Text>
+
+          {/* Blocked By field */}
+          <Box marginTop={0} flexDirection="column">
+            <Box>
+              <Text inverse={isFieldActive('blockedBy')} color={isFieldActive('blockedBy') ? 'cyan' : undefined}>
+                Blocked by:{' '}
+              </Text>
+              {newBlockedBy.length > 0 ? (
+                <Text>{newBlockedBy.map((id) => getTaskLabel(id)).join(', ')}</Text>
+              ) : (
+                <Text dimColor>(none)</Text>
+              )}
+            </Box>
+            {isFieldActive('blockedBy') && selectableTasks.length > 0 && (
+              <Box flexDirection="column" marginLeft={2}>
+                {selectableTasks.map((task, idx) => {
+                  const isSelected = newBlockedBy.includes(task.id);
+                  const isCursor = idx === blockedByIndex;
+                  const desc = task.description.slice(0, 35) + (task.description.length > 35 ? '...' : '');
+                  return (
+                    <Text key={task.id} inverse={isCursor}>
+                      {isSelected ? '[x]' : '[ ]'} {desc}
+                    </Text>
+                  );
+                })}
+                <Text dimColor>↑/↓ navigate, Space to toggle</Text>
+              </Box>
+            )}
+            {isFieldActive('blockedBy') && selectableTasks.length === 0 && (
+              <Box marginLeft={2}><Text dimColor>No tasks available to select</Text></Box>
+            )}
           </Box>
+
+          {/* Blocks field */}
+          <Box marginTop={0} flexDirection="column">
+            <Box>
+              <Text inverse={isFieldActive('blocks')} color={isFieldActive('blocks') ? 'cyan' : undefined}>
+                Blocks:{' '}
+              </Text>
+              {newBlocks.length > 0 ? (
+                <Text>{newBlocks.map((id) => getTaskLabel(id)).join(', ')}</Text>
+              ) : (
+                <Text dimColor>(none)</Text>
+              )}
+            </Box>
+            {isFieldActive('blocks') && selectableTasks.length > 0 && (
+              <Box flexDirection="column" marginLeft={2}>
+                {selectableTasks.map((task, idx) => {
+                  const isSelected = newBlocks.includes(task.id);
+                  const isCursor = idx === blocksIndex;
+                  const desc = task.description.slice(0, 35) + (task.description.length > 35 ? '...' : '');
+                  return (
+                    <Text key={task.id} inverse={isCursor}>
+                      {isSelected ? '[x]' : '[ ]'} {desc}
+                    </Text>
+                  );
+                })}
+                <Text dimColor>↑/↓ navigate, Space to toggle</Text>
+              </Box>
+            )}
+            {isFieldActive('blocks') && selectableTasks.length === 0 && (
+              <Box marginLeft={2}><Text dimColor>No tasks available to select</Text></Box>
+            )}
+          </Box>
+
+          {/* Assignee field */}
+          <Box marginTop={0}>
+            <Text inverse={isFieldActive('assignee')} color={isFieldActive('assignee') ? 'cyan' : undefined}>
+              Assignee:{' '}
+            </Text>
+            {isFieldActive('assignee') ? (
+              <TextInput
+                value={newAssignee}
+                onChange={setNewAssignee}
+                onSubmit={handleCreateSubmit}
+                placeholder="agent name or leave empty"
+              />
+            ) : (
+              <Text dimColor={!newAssignee}>{newAssignee || '(unassigned)'}</Text>
+            )}
+          </Box>
+        </Box>
+
+        <Box marginTop={1}>
+          <Text dimColor>Tab/Shift+Tab: switch field | Enter: add task | Esc: cancel</Text>
         </Box>
 
         {isSubmitting && (
