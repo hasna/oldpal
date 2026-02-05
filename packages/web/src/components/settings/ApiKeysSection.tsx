@@ -65,6 +65,7 @@ export function ApiKeysSection() {
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
 
   const fetchKeys = async () => {
+    setError(''); // Clear stale errors before fetching
     try {
       const response = await fetchWithAuth('/api/v1/users/me/api-keys');
       const data = await response.json();
@@ -215,7 +216,10 @@ export function ApiKeysSection() {
               Manage API keys for programmatic access to your account
             </CardDescription>
           </div>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog
+            open={isCreateDialogOpen}
+            onOpenChange={(open) => (open ? setIsCreateDialogOpen(true) : handleCloseCreateDialog())}
+          >
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="h-4 w-4 mr-2" />
