@@ -4,8 +4,72 @@ import { hash, verify } from '@node-rs/argon2';
 const API_KEY_PREFIX = 'sk_live_';
 const API_KEY_LENGTH = 32; // 32 bytes = 256 bits of entropy
 
-// HMAC key for indexed lookups - should be set via environment variable in production
-const HMAC_KEY = process.env.API_KEY_HMAC_SECRET || 'default-dev-hmac-key-change-in-production';
+// HMAC key for indexed lookups - MUST be set via environment variable in production
+const DEFAULT_DEV_KEY = 'default-dev-hmac-key-change-in-production';
+const HMAC_KEY = process.env.API_KEY_HMAC_SECRET || DEFAULT_DEV_KEY;
+
+/**
+ * Check if the HMAC secret is properly configured
+ * Returns true if using a secure custom secret, false if using default
+ */
+export function isHmacSecretConfigured(): boolean {
+  return process.env.API_KEY_HMAC_SECRET !== undefined &&
+         process.env.API_KEY_HMAC_SECRET !== DEFAULT_DEV_KEY &&
+         process.env.API_KEY_HMAC_SECRET.length >= 32;
+}
+
+/**
+ * Check if we're running in production mode
+ */
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+/**
+ * Validate API key HMAC configuration
+ * Should be called at application startup
+ *
+ * @throws Error if in production without proper HMAC secret
+ * @returns { valid: boolean; warning?: string }
+ */
+export function validateApiKeyConfig(): { valid: boolean; warning?: string; error?: string } {
+  if (isHmacSecretConfigured()) {
+    return { valid: true };
+  }
+
+  if (isProduction()) {
+    return {
+      valid: false,
+      error: 'CRITICAL: API_KEY_HMAC_SECRET is not configured or using default value. ' +
+             'API key authentication is disabled in production. ' +
+             'Set API_KEY_HMAC_SECRET environment variable to a secure random string (minimum 32 characters).',
+    };
+  }
+
+  // Development mode with default key - log warning but allow
+  return {
+    valid: true,
+    warning: 'WARNING: Using default HMAC key for API key authentication. ' +
+             'This is only acceptable for development. ' +
+             'Set API_KEY_HMAC_SECRET environment variable before deploying to production.',
+  };
+}
+
+// Log warning/error at module load time
+const configValidation = validateApiKeyConfig();
+if (configValidation.error) {
+  console.error(`[API KEY AUTH] ${configValidation.error}`);
+} else if (configValidation.warning) {
+  console.warn(`[API KEY AUTH] ${configValidation.warning}`);
+}
+
+/**
+ * Check if API key authentication is available
+ * Disabled in production without proper HMAC configuration
+ */
+export function isApiKeyAuthEnabled(): boolean {
+  return isHmacSecretConfigured() || !isProduction();
+}
 
 const ARGON2_OPTIONS = {
   memoryCost: 65536,

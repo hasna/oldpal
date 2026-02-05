@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken, type TokenPayload } from './jwt';
-import { isValidApiKeyFormat, verifyApiKey, checkRateLimit, clearRateLimit, generateKeyLookupHash } from './api-key';
+import { isValidApiKeyFormat, verifyApiKey, checkRateLimit, clearRateLimit, generateKeyLookupHash, isApiKeyAuthEnabled } from './api-key';
 import { ApiError, UnauthorizedError, ForbiddenError, TooManyRequestsError } from '../api/errors';
 import { errorResponse, type ApiResponse } from '../api/response';
 import { db } from '@/db';
@@ -204,8 +204,16 @@ function getClientIP(request: NextRequest): string {
  * Authenticate using API key (sk_live_... format)
  * Returns user payload and permissions if valid, null otherwise
  * Includes rate limiting by IP and key prefix to prevent brute force attacks
+ *
+ * NOTE: In production, API key auth is disabled if API_KEY_HMAC_SECRET is not configured
  */
 async function authenticateWithApiKey(apiKeyValue: string, clientIP: string): Promise<ApiKeyAuthResult | null> {
+  // Check if API key auth is enabled (disabled in production without HMAC secret)
+  if (!isApiKeyAuthEnabled()) {
+    console.warn('[Auth] API key authentication is disabled in production - API_KEY_HMAC_SECRET not configured');
+    return null;
+  }
+
   if (!isValidApiKeyFormat(apiKeyValue)) {
     return null;
   }
