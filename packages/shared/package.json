@@ -1,6 +1,7 @@
 {
   "name": "@hasna/assistants-shared",
   "version": "1.0.1",
+  "private": true,
   "description": "Shared types and utilities for the Hasna Assistants ecosystem",
   "license": "MIT",
   "type": "module",
@@ -36,9 +37,6 @@
     "types",
     "typescript"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",

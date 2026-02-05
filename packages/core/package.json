@@ -1,6 +1,7 @@
 {
   "name": "@hasna/assistants-core",
   "version": "1.0.1",
+  "private": true,
   "description": "Core runtime library for building AI assistants with Claude",
   "license": "MIT",
   "type": "module",
@@ -43,9 +44,6 @@
     "tools",
     "llm"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test --timeout 60000",
