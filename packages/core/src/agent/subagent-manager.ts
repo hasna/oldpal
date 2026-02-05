@@ -50,6 +50,8 @@ export interface SubagentResult {
   toolCalls: number;
   /** Total tokens used (input + output) */
   tokensUsed?: number;
+  /** The unique ID of the subagent that produced this result */
+  subagentId?: string;
 }
 
 export interface SubagentInfo {
@@ -239,6 +241,8 @@ export class SubagentManager {
    * Spawn a subagent synchronously
    */
   async spawn(config: SubagentConfig): Promise<SubagentResult> {
+    const subagentId = generateId();
+
     // Check limits
     const canSpawnResult = this.canSpawn(config.depth);
     if (!canSpawnResult.allowed) {
@@ -247,10 +251,9 @@ export class SubagentManager {
         error: canSpawnResult.reason,
         turns: 0,
         toolCalls: 0,
+        subagentId,
       };
     }
-
-    const subagentId = generateId();
 
     // Fire SubagentStart hook if available
     if (this.context.fireHook) {
@@ -275,6 +278,7 @@ export class SubagentManager {
           error: hookResult.stopReason || 'Blocked by SubagentStart hook',
           turns: 0,
           toolCalls: 0,
+          subagentId,
         };
       }
 
@@ -334,7 +338,7 @@ export class SubagentManager {
       // Run with timeout
       const result = await Promise.race([
         runner.run(),
-        this.createTimeout(this.config.defaultTimeoutMs, runner),
+        this.createTimeout(this.config.defaultTimeoutMs, runner, subagentId),
       ]);
 
       // Update info - detect timeout from error message
@@ -366,6 +370,7 @@ export class SubagentManager {
         error: errorMessage,
         turns: 0,
         toolCalls: 0,
+        subagentId,
       };
 
       // Fire SubagentStop hook for error case too
@@ -518,8 +523,11 @@ export class SubagentManager {
     info: SubagentInfo,
     result: SubagentResult
   ): Promise<SubagentResult> {
+    // Always ensure subagentId is included
+    const resultWithId = { ...result, subagentId };
+
     if (!this.context.fireHook) {
-      return result;
+      return resultWithId;
     }
 
     const hookInput: HookInput = {
@@ -546,21 +554,22 @@ export class SubagentManager {
         error: hookResult.stopReason || 'Result blocked by SubagentStop hook',
         turns: result.turns,
         toolCalls: result.toolCalls,
+        subagentId,
       };
     }
 
     // Hook can modify the result via updatedInput
     if (hookResult?.updatedInput?.result !== undefined) {
       return {
-        ...result,
+        ...resultWithId,
         result: String(hookResult.updatedInput.result),
       };
     }
 
-    return result;
+    return resultWithId;
   }
 
-  private createTimeout(ms: number, runner: SubagentRunner): Promise<SubagentResult> {
+  private createTimeout(ms: number, runner: SubagentRunner, subagentId: string): Promise<SubagentResult> {
     return new Promise((resolve) => {
       setTimeout(() => {
         runner.stop();
@@ -569,6 +578,7 @@ export class SubagentManager {
           error: `Subagent timed out after ${Math.round(ms / 1000)} seconds`,
           turns: 0,
           toolCalls: 0,
+          subagentId,
         });
       }, ms);
     });

@@ -435,6 +435,7 @@ export class SwarmCoordinator {
       role: 'planner',
       task: prompt,
       tools: this.config.plannerTools,
+      trackInternal: true,
     });
 
     if (!result.success || !result.result) {
@@ -657,22 +658,24 @@ Maximum ${this.config.maxTasks} tasks.`;
     // Select tools
     const tools = task.requiredTools || this.config.workerTools;
 
-    // Generate agent ID for this task
-    const agentId = generateId();
-    task.assignedAgentId = agentId;
-
-    // Track active agent
-    if (this.state) {
-      this.state.activeAgents.add(agentId);
-    }
+    // Track the real subagentId once we have it from spawn result
+    let realSubagentId: string | undefined;
 
     try {
       const result = await this.spawnAgent({
         role: task.role,
         task: taskPrompt,
         tools,
-        agentId,
       });
+
+      // Use the real subagentId from the spawn result for tracking
+      realSubagentId = result.subagentId;
+      if (realSubagentId) {
+        task.assignedAgentId = realSubagentId;
+        if (this.state) {
+          this.state.activeAgents.add(realSubagentId);
+        }
+      }
 
       // Store result
       task.result = result;
@@ -697,8 +700,8 @@ Maximum ${this.config.maxTasks} tasks.`;
       }
     } finally {
       // Remove from active agents when done
-      if (this.state) {
-        this.state.activeAgents.delete(agentId);
+      if (realSubagentId && this.state) {
+        this.state.activeAgents.delete(realSubagentId);
       }
       task.assignedAgentId = undefined;
     }
@@ -743,6 +746,7 @@ Maximum ${this.config.maxTasks} tasks.`;
         role: 'critic',
         task: reviewPrompt,
         tools: this.config.criticTools,
+        trackInternal: true,
       });
 
       if (result.success && result.result) {
@@ -836,6 +840,7 @@ Maximum ${this.config.maxTasks} tasks.`;
       role: 'aggregator',
       task: aggregatePrompt,
       tools: [], // Aggregator typically doesn't need tools
+      trackInternal: true,
     });
 
     return result.result || 'Failed to aggregate results';
@@ -894,9 +899,10 @@ Maximum ${this.config.maxTasks} tasks.`;
     role: SwarmRole;
     task: string;
     tools: string[];
-    agentId?: string;
+    /** If true, track this agent in activeAgents (for internal planner/critic/aggregator agents) */
+    trackInternal?: boolean;
   }): Promise<SubagentResult> {
-    const { role, task, tools, agentId } = params;
+    const { role, task, tools, trackInternal } = params;
 
     // Build system prompt
     const systemPrompt = ROLE_SYSTEM_PROMPTS[role];
@@ -920,13 +926,6 @@ Maximum ${this.config.maxTasks} tasks.`;
       }
     }
 
-    // Track agent in state's activeAgents if this is an internal spawn (planner/critic/aggregator)
-    const effectiveAgentId = agentId || generateId();
-    const trackInternally = !agentId; // Only track if we generated the ID (internal agents)
-    if (trackInternally && this.state) {
-      this.state.activeAgents.add(effectiveAgentId);
-    }
-
     const config: SubagentConfig = {
       task: fullTask,
       tools: filteredTools,
@@ -936,14 +935,16 @@ Maximum ${this.config.maxTasks} tasks.`;
       cwd: this.context.cwd,
     };
 
-    try {
-      return await this.context.subagentManager.spawn(config);
-    } finally {
-      // Remove internal agents from activeAgents when done
-      if (trackInternally && this.state) {
-        this.state.activeAgents.delete(effectiveAgentId);
-      }
+    const result = await this.context.subagentManager.spawn(config);
+
+    // Track internal agents using the real subagentId from spawn result
+    if (trackInternal && result.subagentId && this.state) {
+      this.state.activeAgents.add(result.subagentId);
+      // Note: Internal agents complete synchronously, so remove immediately after spawn returns
+      this.state.activeAgents.delete(result.subagentId);
     }
+
+    return result;
   }
 
   // ============================================
