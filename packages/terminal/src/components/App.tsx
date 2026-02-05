@@ -38,6 +38,8 @@ const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
 
 function formatElapsedDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  // Show "<1s" for very quick responses (sub-second)
+  if (totalSeconds === 0) return '<1s';
   if (totalSeconds < 60) return `${totalSeconds}s`;
   const mins = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
