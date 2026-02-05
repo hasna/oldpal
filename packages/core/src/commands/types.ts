@@ -7,6 +7,7 @@ import type { InboxManager } from '../inbox';
 import type { WalletManager } from '../wallet';
 import type { SecretsManager } from '../secrets';
 import type { MessagesManager } from '../messages';
+import type { GlobalMemoryManager } from '../memory';
 
 // Re-export TokenUsage from shared
 export type { TokenUsage } from '@hasna/assistants-shared';
@@ -84,10 +85,12 @@ export interface CommandContext {
   getWalletManager?: () => WalletManager | null;
   getSecretsManager?: () => SecretsManager | null;
   getMessagesManager?: () => MessagesManager | null;
+  getMemoryManager?: () => GlobalMemoryManager | null;
   refreshIdentityContext?: () => Promise<void>;
   refreshSkills?: () => Promise<void>;
   switchAssistant?: (assistantId: string) => Promise<void>;
   switchIdentity?: (identityId: string) => Promise<void>;
+  switchModel?: (modelId: string) => Promise<void>;
   getActiveProjectId?: () => string | null;
   setActiveProjectId?: (projectId: string | null) => void;
   setProjectContext?: (content: string | null) => void;
