@@ -2,19 +2,24 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A powerful AI assistant that runs in your terminal. Built with [Ink](https://github.com/vadimdemedes/ink) and powered by [Claude](https://www.anthropic.com/claude).
+A general-purpose AI assistant that runs in your terminal. Built with [Ink](https://github.com/vadimdemedes/ink) and powered by [Claude](https://www.anthropic.com/claude).
+
+**Not just for coding** - while it excels at development workflows, this assistant helps with research, writing, task management, automation, and any task you need assistance with.
 
 ## Features
 
+- General-purpose assistant for any task
 - Interactive chat with Claude AI
 - Execute bash commands with approval
 - Read, write, and edit files
 - Fetch and search web content
-- Custom skills and hooks
+- Custom skills and hooks for domain-specific workflows
 - Project and plan management
+- Memory and context persistence across sessions
 - Session history and resumption
+- Identity management for different contexts
 - Voice input/output (optional)
-- Connectors for external services
+- Connectors for external services (Notion, Gmail, Linear, etc.)
 
 ## Installation
 

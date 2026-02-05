@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { ToolResult } from '@hasna/assistants-shared';
-import { truncateToolResult } from '../src/components/toolDisplay';
+import {
+  truncateToolResult,
+  truncateToolResultWithInfo,
+  parseErrorInfo,
+  formatErrorConcise,
+  formatTruncationInfo,
+} from '../src/components/toolDisplay';
 
 function makeResult(overrides: Partial<ToolResult>): ToolResult {
   return {
@@ -15,17 +21,23 @@ function makeResult(overrides: Partial<ToolResult>): ToolResult {
 describe('truncateToolResult', () => {
   test('returns verbose content with ansi stripped and tabs expanded', () => {
     const result = makeResult({
-      content: 'ok',
+      content: '\u001b[31mHello\tWorld\u001b[0m',
       rawContent: '\u001b[31mHello\tWorld\u001b[0m',
     });
     const output = truncateToolResult(result, 15, 3000, { verbose: true });
     expect(output).toBe('Hello  World');
   });
 
-  test('formats common error messages', () => {
-    expect(truncateToolResult(makeResult({ isError: true, content: 'ENOENT: no such file' }))).toBe('⚠ File not found');
-    expect(truncateToolResult(makeResult({ isError: true, content: 'EACCES permission denied' }))).toBe('⚠ Permission denied');
-    expect(truncateToolResult(makeResult({ isError: true, content: 'ETIMEDOUT: timeout' }))).toBe('⚠ Request timed out');
+  test('formats common error messages with hints', () => {
+    const enoent = truncateToolResult(makeResult({ isError: true, content: 'ENOENT: no such file' }));
+    expect(enoent).toContain('File or directory not found');
+    expect(enoent).toContain('→'); // includes hint
+
+    const eacces = truncateToolResult(makeResult({ isError: true, content: 'EACCES permission denied' }));
+    expect(eacces).toContain('Permission denied');
+
+    const etimedout = truncateToolResult(makeResult({ isError: true, content: 'ETIMEDOUT: timeout' }));
+    expect(etimedout).toContain('timed out');
   });
 
   test('formats schedule results', () => {
@@ -86,7 +98,160 @@ describe('truncateToolResult', () => {
   test('falls back to truncation with prefix for errors', () => {
     const content = Array.from({ length: 5 }, (_, i) => `line-${i}`).join('\n');
     const output = truncateToolResult(makeResult({ toolName: 'unknown', content, isError: true }), 3, 20);
-    expect(output.startsWith('Error:')).toBe(true);
-    expect(output).toContain('...');
+    // Errors now get formatted with parseErrorInfo, which provides concise messages
+    expect(output).toContain('✗');
+  });
+});
+
+describe('parseErrorInfo', () => {
+  test('parses file not found errors', () => {
+    const info = parseErrorInfo('ENOENT: no such file or directory');
+    expect(info.type).toBe('not_found');
+    expect(info.message).toBe('File or directory not found');
+    expect(info.hint).toContain('path');
+  });
+
+  test('parses permission denied errors', () => {
+    const info = parseErrorInfo('EACCES: permission denied');
+    expect(info.type).toBe('permission');
+    expect(info.message).toBe('Permission denied');
+  });
+
+  test('parses timeout errors', () => {
+    const info = parseErrorInfo('Request timed out after 30s');
+    expect(info.type).toBe('timeout');
+    expect(info.message).toBe('Request timed out');
+    expect(info.hint?.toLowerCase()).toContain('try again');
+  });
+
+  test('parses connection refused errors', () => {
+    const info = parseErrorInfo('ECONNREFUSED: connection refused');
+    expect(info.type).toBe('connection_refused');
+    expect(info.message).toBe('Connection refused');
+  });
+
+  test('parses HTTP errors', () => {
+    const info401 = parseErrorInfo('HTTP 401 Unauthorized');
+    expect(info401.type).toBe('http');
+    expect(info401.message).toBe('Unauthorized');
+    expect(info401.exitCode).toBe(401);
+
+    const info404 = parseErrorInfo('HTTP 404 Not Found');
+    expect(info404.message).toBe('Not found');
+    expect(info404.exitCode).toBe(404);
+  });
+
+  test('parses command not found errors', () => {
+    const info = parseErrorInfo('bash: foo: command not found');
+    expect(info.type).toBe('command_not_found');
+    expect(info.message).toBe('Command not found');
+    expect(info.exitCode).toBe(127);
+  });
+
+  test('extracts exit codes', () => {
+    const info = parseErrorInfo('Process exited with code 1');
+    expect(info.exitCode).toBe(1);
+
+    const info2 = parseErrorInfo('exit code: 42');
+    expect(info2.exitCode).toBe(42);
+  });
+
+  test('parses tool denied errors', () => {
+    const info = parseErrorInfo('Tool call denied: bash not allowed');
+    expect(info.type).toBe('denied');
+    expect(info.message).toBe('Tool call denied');
+  });
+});
+
+describe('formatErrorConcise', () => {
+  test('formats error with message and hint', () => {
+    const output = formatErrorConcise('ENOENT: no such file');
+    expect(output).toContain('✗');
+    expect(output).toContain('File or directory not found');
+    expect(output).toContain('→');
+  });
+
+  test('includes exit code when present', () => {
+    const output = formatErrorConcise('Process exited with code 1');
+    expect(output).toContain('[1]');
+  });
+
+  test('formats HTTP errors with code', () => {
+    const output = formatErrorConcise('HTTP 403 Forbidden');
+    expect(output).toContain('[403]');
+    expect(output).toContain('Forbidden');
+  });
+});
+
+describe('formatTruncationInfo', () => {
+  test('returns empty string when not truncated', () => {
+    const info = formatTruncationInfo({
+      wasTruncated: false,
+      originalLines: 10,
+      displayedLines: 10,
+      originalChars: 100,
+      displayedChars: 100,
+    });
+    expect(info).toBe('');
+  });
+
+  test('shows line truncation info', () => {
+    const info = formatTruncationInfo({
+      wasTruncated: true,
+      originalLines: 100,
+      displayedLines: 15,
+      originalChars: 1000,
+      displayedChars: 1000,
+    });
+    expect(info).toContain('100→15 lines');
+  });
+
+  test('shows char truncation info', () => {
+    const info = formatTruncationInfo({
+      wasTruncated: true,
+      originalLines: 10,
+      displayedLines: 10,
+      originalChars: 5000,
+      displayedChars: 400,
+    });
+    expect(info).toContain('5000→400 chars');
+  });
+
+  test('shows both line and char truncation', () => {
+    const info = formatTruncationInfo({
+      wasTruncated: true,
+      originalLines: 50,
+      displayedLines: 15,
+      originalChars: 5000,
+      displayedChars: 400,
+    });
+    expect(info).toContain('50→15 lines');
+    expect(info).toContain('5000→400 chars');
+  });
+});
+
+describe('truncateToolResultWithInfo', () => {
+  test('returns truncation metadata', () => {
+    const content = Array.from({ length: 30 }, (_, i) => `line-${i}`).join('\n');
+    const result = truncateToolResultWithInfo(
+      makeResult({ toolName: 'unknown', content }),
+      15,
+      3000
+    );
+    expect(result.truncation.wasTruncated).toBe(true);
+    expect(result.truncation.originalLines).toBe(30);
+    expect(result.truncation.displayedLines).toBe(15);
+    expect(result.content).toContain('truncated');
+  });
+
+  test('reports no truncation for small content', () => {
+    const result = truncateToolResultWithInfo(
+      makeResult({ toolName: 'unknown', content: 'short' }),
+      15,
+      3000
+    );
+    expect(result.truncation.wasTruncated).toBe(false);
+    expect(result.truncation.originalLines).toBe(1);
+    expect(result.truncation.displayedLines).toBe(1);
   });
 });
