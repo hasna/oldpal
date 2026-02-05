@@ -394,6 +394,16 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the inbox manager
+   */
+  getInboxManager(): any {
+    if (typeof (this.agent as any).getInboxManager === 'function') {
+      return (this.agent as any).getInboxManager();
+    }
+    return null;
+  }
+
+  /**
    * Get the active project ID
    */
   getActiveProjectId(): string | null {

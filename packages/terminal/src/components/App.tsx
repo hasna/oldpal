@@ -30,7 +30,9 @@ import { ProjectsPanel } from './ProjectsPanel';
 import { PlansPanel } from './PlansPanel';
 import { WalletPanel } from './WalletPanel';
 import { SecretsPanel } from './SecretsPanel';
+import { InboxPanel } from './InboxPanel';
 import type { QueuedMessage } from './appTypes';
+import type { Email, EmailListItem } from '@hasna/assistants-shared';
 import {
   getTasks,
   addTask,
@@ -267,6 +269,11 @@ export function App({ cwd, version }: AppProps) {
   const [showSecretsPanel, setShowSecretsPanel] = useState(false);
   const [secretsList, setSecretsList] = useState<Array<{ name: string; scope: 'global' | 'agent'; createdAt?: string; updatedAt?: string }>>([]);
   const [secretsError, setSecretsError] = useState<string | null>(null);
+
+  // Inbox panel state
+  const [showInboxPanel, setShowInboxPanel] = useState(false);
+  const [inboxEmails, setInboxEmails] = useState<EmailListItem[]>([]);
+  const [inboxError, setInboxError] = useState<string | null>(null);
 
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
@@ -878,6 +885,22 @@ export function App({ cwd, version }: AppProps) {
         } else {
           setSecretsError('Secrets not enabled. Configure secrets in config.json.');
           setShowSecretsPanel(true);
+        }
+      } else if (chunk.panel === 'inbox') {
+        // Load inbox emails and show panel
+        const inboxManager = registry.getActiveSession()?.client.getInboxManager?.();
+        if (inboxManager) {
+          inboxManager.list({ limit: 50 }).then((emails: EmailListItem[]) => {
+            setInboxEmails(emails);
+            setInboxError(null);
+            setShowInboxPanel(true);
+          }).catch((err: Error) => {
+            setInboxError(err instanceof Error ? err.message : String(err));
+            setShowInboxPanel(true);
+          });
+        } else {
+          setInboxError('Inbox not enabled. Configure inbox in config.json.');
+          setShowInboxPanel(true);
         }
       }
     }
@@ -2290,6 +2313,75 @@ export function App({ cwd, version }: AppProps) {
           onDelete={handleSecretsDelete}
           onClose={() => setShowSecretsPanel(false)}
           error={secretsError}
+        />
+      </Box>
+    );
+  }
+
+  // Show inbox panel
+  if (showInboxPanel) {
+    const inboxManager = activeSession?.client.getInboxManager?.();
+
+    const handleInboxRead = async (id: string): Promise<Email> => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      const email = await inboxManager.read(id);
+      if (!email) throw new Error('Email not found');
+      // Refresh list to update read status
+      const emails = await inboxManager.list({ limit: 50 });
+      setInboxEmails(emails);
+      return email;
+    };
+
+    const handleInboxDelete = async (id: string) => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      // Note: InboxManager doesn't have a delete method currently
+      // This is a placeholder for when it's implemented
+      throw new Error('Delete not implemented yet');
+    };
+
+    const handleInboxFetch = async (): Promise<number> => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      const count = await inboxManager.fetch({ limit: 20 });
+      // Refresh list after fetch
+      const emails = await inboxManager.list({ limit: 50 });
+      setInboxEmails(emails);
+      return count;
+    };
+
+    const handleInboxMarkRead = async (id: string) => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      await inboxManager.markRead(id);
+      // Refresh list
+      const emails = await inboxManager.list({ limit: 50 });
+      setInboxEmails(emails);
+    };
+
+    const handleInboxMarkUnread = async (id: string) => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      await inboxManager.markUnread(id);
+      // Refresh list
+      const emails = await inboxManager.list({ limit: 50 });
+      setInboxEmails(emails);
+    };
+
+    const handleInboxReply = (id: string) => {
+      // Close panel and send a prompt to compose a reply
+      setShowInboxPanel(false);
+      activeSession?.client.send(`/inbox reply ${id}`);
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <InboxPanel
+          emails={inboxEmails}
+          onRead={handleInboxRead}
+          onDelete={handleInboxDelete}
+          onFetch={handleInboxFetch}
+          onMarkRead={handleInboxMarkRead}
+          onMarkUnread={handleInboxMarkUnread}
+          onReply={handleInboxReply}
+          onClose={() => setShowInboxPanel(false)}
+          error={inboxError}
         />
       </Box>
     );

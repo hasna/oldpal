@@ -1594,10 +1594,16 @@ export class BuiltinCommands {
         }
 
         const parts = splitArgs(args);
-        const subcommand = parts[0]?.toLowerCase() || 'list';
+        const subcommand = parts[0]?.toLowerCase();
 
-        // /inbox or /inbox list
-        if (subcommand === 'list' || (!parts[0] && !args.trim())) {
+        // /inbox (no args) - show interactive panel
+        if (!subcommand || !args.trim()) {
+          context.emit('done');
+          return { handled: true, showPanel: 'inbox' as const };
+        }
+
+        // /inbox list - text-based list output
+        if (subcommand === 'list') {
           const unreadOnly = parts.includes('--unread') || parts.includes('-u');
           const limitArg = parts.find((p) => p.match(/^\d+$/));
           const limit = limitArg ? parseInt(limitArg, 10) : 20;
