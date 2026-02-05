@@ -1,0 +1,16 @@
+{
+  "id": "873",
+  "subject": "Swarm agent selection via registry",
+  "description": "Select agents per task based on capability, heartbeat status, tool scopes, and load. Produce assignment plan; fallback when no suitable agent available.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "872"
+  ],
+  "created": "2026-02-05T12:51:37.832Z",
+  "updated": "2026-02-05T12:51:37.832Z"
+}

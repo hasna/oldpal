@@ -1,0 +1,15 @@
+{
+  "id": "863",
+  "subject": "Guardrails policy schema",
+  "description": "Define guardrails policy model (tool allow/deny, max depth, data sensitivity rules, approval requirements). Document defaults and precedence.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "guardrails"
+  ],
+  "blockedBy": [
+    "839"
+  ],
+  "created": "2026-02-05T12:45:28.281Z",
+  "updated": "2026-02-05T12:45:28.281Z"
+}

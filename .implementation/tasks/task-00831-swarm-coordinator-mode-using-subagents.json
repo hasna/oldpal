@@ -1,0 +1,13 @@
+{
+  "id": "831",
+  "subject": "Swarm coordinator mode using subagents",
+  "description": "Implement a swarm coordinator that spawns subagents (planner/worker/critic) via SubagentManager, distributes tasks, and aggregates responses. Add /swarm command + API hooks, configurable concurrency and tool scopes.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "created": "2026-02-05T10:53:43.991Z",
+  "updated": "2026-02-05T10:53:43.991Z"
+}

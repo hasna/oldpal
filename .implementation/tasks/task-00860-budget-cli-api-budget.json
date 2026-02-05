@@ -1,0 +1,16 @@
+{
+  "id": "860",
+  "subject": "Budget CLI/API (/budget)",
+  "description": "Implement /budget command + API endpoints to view/update budgets. Enforce scope checks and audit changes.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "budget",
+    "tools"
+  ],
+  "blockedBy": [
+    "857"
+  ],
+  "created": "2026-02-05T12:45:13.761Z",
+  "updated": "2026-02-05T12:45:13.761Z"
+}

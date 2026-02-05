@@ -1,0 +1,13 @@
+{
+  "id": "839",
+  "subject": "Plan swarm foundations: agent registry + capability model + budgets/guardrails",
+  "description": "Enter plan mode: audit current agent/subagent APIs, heartbeat, tasks, inbox, and config. Produce a phased plan (data model, tools/API, UI, enforcement). Define dependency graph and risks.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "plan",
+    "swarm"
+  ],
+  "created": "2026-02-05T12:41:38.219Z",
+  "updated": "2026-02-05T12:41:38.219Z"
+}

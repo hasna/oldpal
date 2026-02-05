@@ -1,0 +1,16 @@
+{
+  "id": "878",
+  "subject": "Swarm status UI",
+  "description": "Show swarm status (active agents, task progress, failures, ETA) in terminal and web. Provide drill-down into per-task logs.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "ux"
+  ],
+  "blockedBy": [
+    "874"
+  ],
+  "created": "2026-02-05T12:52:04.393Z",
+  "updated": "2026-02-05T12:52:04.393Z"
+}

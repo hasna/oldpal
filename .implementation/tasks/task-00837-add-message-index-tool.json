@@ -1,0 +1,13 @@
+{
+  "id": "837",
+  "subject": "Add message_index tool",
+  "description": "Expose a message_index tool that returns message ids, timestamps, roles, and short topic/title (first 8-12 words). Enables precise referencing, partial summarization, and targeted retrieval.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "tools",
+    "context"
+  ],
+  "created": "2026-02-05T12:31:52.095Z",
+  "updated": "2026-02-05T12:31:52.095Z"
+}

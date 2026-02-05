@@ -1,0 +1,13 @@
+{
+  "id": "823",
+  "subject": "Harden filesystem tools against path traversal",
+  "description": "Ensure read/write/glob/grep enforce workspace boundaries (or configured allowlist) and resolve symlinks safely. Reject paths that escape allowed roots. Add tests for traversal attempts.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "filesystem"
+  ],
+  "created": "2026-02-05T10:52:28.265Z",
+  "updated": "2026-02-05T10:52:28.265Z"
+}

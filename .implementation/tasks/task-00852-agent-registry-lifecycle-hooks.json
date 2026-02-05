@@ -1,0 +1,16 @@
+{
+  "id": "852",
+  "subject": "Agent registry lifecycle hooks",
+  "description": "Wire registry updates on agent spawn/stop, session switch, tool use, and heartbeat changes. Ensure cleanup on crash/recovery.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "851"
+  ],
+  "created": "2026-02-05T12:44:36.200Z",
+  "updated": "2026-02-05T12:44:36.200Z"
+}

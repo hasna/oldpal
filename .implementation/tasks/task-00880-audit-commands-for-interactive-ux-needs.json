@@ -1,0 +1,14 @@
+{
+  "id": "880",
+  "subject": "Audit /commands for interactive UX needs",
+  "description": "Inventory all /commands and classify which should be interactive vs single-shot output. Propose UX patterns (list + detail, keyboard nav, timers). Produce a command-by-command plan.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "commands",
+    "plan"
+  ],
+  "created": "2026-02-05T14:25:02.974Z",
+  "updated": "2026-02-05T14:25:02.974Z"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "830",
+  "subject": "Connector metadata indexing + tags",
+  "description": "Build a cached connector index (name, description, commands, tags, lastUsed) to enable fast search and ranking. Populate tags from CLI help or manifest. Use index for connectors_search and UI sorting.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "connectors",
+    "search"
+  ],
+  "created": "2026-02-05T10:53:31.430Z",
+  "updated": "2026-02-05T10:53:31.430Z"
+}

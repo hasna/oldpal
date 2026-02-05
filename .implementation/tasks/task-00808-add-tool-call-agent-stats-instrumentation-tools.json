@@ -1,0 +1,14 @@
+{
+  "id": "808",
+  "subject": "Add tool-call/agent stats instrumentation + tools",
+  "description": "Add per-session stats for tool calls: count, success/failure, avg/median duration, time between tool calls, last tool latency, and tokens/steps. Expose via internal stats module and new tools (/stats, tool_stats) + API surface so agents can query in real time. Add UI/terminal panel and tests.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "telemetry",
+    "tools",
+    "ux"
+  ],
+  "created": "2026-02-05T10:24:11.982Z",
+  "updated": "2026-02-05T10:24:11.982Z"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "875",
+  "subject": "Swarm results aggregation",
+  "description": "Merge subagent outputs into a single coherent response; dedupe, resolve conflicts, and carry forward partials. Attach confidence/coverage metadata.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm"
+  ],
+  "blockedBy": [
+    "874"
+  ],
+  "created": "2026-02-05T12:51:45.751Z",
+  "updated": "2026-02-05T12:51:45.751Z"
+}

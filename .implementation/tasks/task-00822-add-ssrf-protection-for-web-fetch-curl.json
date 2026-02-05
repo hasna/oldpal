@@ -1,0 +1,13 @@
+{
+  "id": "822",
+  "subject": "Add SSRF protection for web_fetch/curl",
+  "description": "Harden web_fetch/curl tools: block private/loopback/link-local IPs, file://, ftp://; enforce allowlist/denylist, DNS rebinding checks, and request timeouts. Add tests for blocked hosts.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "network"
+  ],
+  "created": "2026-02-05T10:52:21.581Z",
+  "updated": "2026-02-05T10:52:21.581Z"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "848",
+  "subject": "Capability enforcement in agent loop",
+  "description": "Enforce canOrchestrate/maxSubagents/tool allowlist/approval policy in agent loop and subagent spawning. Ensure violations are surfaced to user with clear error.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "846"
+  ],
+  "created": "2026-02-05T12:44:16.446Z",
+  "updated": "2026-02-05T12:44:16.446Z"
+}

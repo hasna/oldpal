@@ -1,0 +1,14 @@
+{
+  "id": "811",
+  "subject": "Show per-tool-call timers in UI",
+  "description": "Add per-tool-call elapsed time display (e.g., 1m 20s, 1h 21m 32s) for running tool calls; when complete, persist duration inside the tool-call box. Show in terminal and web tool call cards; update live until completion. Ensure friendly formatting and tests for duration formatting.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "tools",
+    "telemetry"
+  ],
+  "created": "2026-02-05T10:42:36.925Z",
+  "updated": "2026-02-05T10:43:17.453Z"
+}

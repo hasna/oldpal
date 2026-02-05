@@ -1,0 +1,16 @@
+{
+  "id": "854",
+  "subject": "Agent registry UI",
+  "description": "Add UI surfaces (terminal/web) to show active agents, status, and capabilities. Link to swarm view once available.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "ux"
+  ],
+  "blockedBy": [
+    "853"
+  ],
+  "created": "2026-02-05T12:44:46.200Z",
+  "updated": "2026-02-05T12:44:46.200Z"
+}

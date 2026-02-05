@@ -1,0 +1,13 @@
+{
+  "id": "870",
+  "subject": "Swarm decision policy spec",
+  "description": "Define auto-swarm triggers (complexity, parallelizable subtasks, risk), thresholds, and when to ask user vs auto-swarm. Include defaults and config knobs.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "plan"
+  ],
+  "created": "2026-02-05T12:51:23.514Z",
+  "updated": "2026-02-05T12:51:23.514Z"
+}

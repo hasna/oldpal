@@ -1,0 +1,16 @@
+{
+  "id": "856",
+  "subject": "Budget schema + scopes",
+  "description": "Define budget model: tokens, time, tool calls, max depth; scopes: session, agent, swarm. Include defaults and override precedence.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "budget",
+    "guardrails"
+  ],
+  "blockedBy": [
+    "839"
+  ],
+  "created": "2026-02-05T12:44:54.016Z",
+  "updated": "2026-02-05T12:44:54.016Z"
+}

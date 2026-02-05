@@ -1,0 +1,15 @@
+{
+  "id": "866",
+  "subject": "Guardrails enforcement in agent loop",
+  "description": "Enforce guardrails at runtime: block disallowed tool calls, require approvals, enforce max depth/recursion, and emit clear user-facing errors.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "guardrails"
+  ],
+  "blockedBy": [
+    "863"
+  ],
+  "created": "2026-02-05T12:45:43.034Z",
+  "updated": "2026-02-05T12:45:43.034Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "807",
+  "subject": "Add large-paste handling in input (web+terminal)",
+  "description": "Implement large-paste handling (web+terminal): when paste exceeds threshold, replace visible input with placeholder like 'Pasted 1,234 words / 8,901 chars' but keep raw payload for submit. Avoid Codex-style bug where placeholder replaces the payload and breaks slash commands. Provide preview/expand + cancel. Add tests for paste + submit correctness.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "input",
+    "paste"
+  ],
+  "created": "2026-02-05T10:23:22.677Z",
+  "updated": "2026-02-05T10:24:04.920Z"
+}

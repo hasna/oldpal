@@ -1,0 +1,15 @@
+{
+  "id": "871",
+  "subject": "Swarm decision policy enforcement",
+  "description": "Integrate decision policy into main agent loop: decide single-agent vs swarm. Enforce capability/budget/guardrails; include user-visible rationale for the choice.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm"
+  ],
+  "blockedBy": [
+    "870"
+  ],
+  "created": "2026-02-05T12:51:27.536Z",
+  "updated": "2026-02-05T12:51:27.536Z"
+}

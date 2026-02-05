@@ -1,0 +1,13 @@
+{
+  "id": "814",
+  "subject": "Unify active tool call display (queued/running/completed)",
+  "description": "Create a single active-tool panel that lists queued + running tool calls with status labels (queued/running/succeeded/failed) and counts. Replace scattered indicators so users always see current tool activity in one place. Tie into activityLog + tool results and keep ordering stable.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "tools"
+  ],
+  "created": "2026-02-05T10:47:23.526Z",
+  "updated": "2026-02-05T10:47:23.526Z"
+}

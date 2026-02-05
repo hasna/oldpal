@@ -1,0 +1,16 @@
+{
+  "id": "872",
+  "subject": "Swarm task graph construction",
+  "description": "Convert user request into a task DAG (blocked-by/blocks) with priorities, expected tools, and outputs. Map to /tasks model for execution.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "tasks"
+  ],
+  "blockedBy": [
+    "871"
+  ],
+  "created": "2026-02-05T12:51:33.253Z",
+  "updated": "2026-02-05T12:51:33.253Z"
+}

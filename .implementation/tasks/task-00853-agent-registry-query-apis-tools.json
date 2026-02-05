@@ -1,0 +1,17 @@
+{
+  "id": "853",
+  "subject": "Agent registry query APIs/tools",
+  "description": "Expose registry list/query in tools and API (filter by capability, status, session). Secure with scopes; add rate limits.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "tools"
+  ],
+  "blockedBy": [
+    "851",
+    "852"
+  ],
+  "created": "2026-02-05T12:44:40.462Z",
+  "updated": "2026-02-05T12:44:40.462Z"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "858",
+  "subject": "Budget enforcement in agent loop",
+  "description": "Enforce token/time limits in agent loop; stop or ask for approval when exceeded. Emit user-facing warnings before hitting limits.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "budget"
+  ],
+  "blockedBy": [
+    "856"
+  ],
+  "created": "2026-02-05T12:45:04.425Z",
+  "updated": "2026-02-05T12:45:04.425Z"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "826",
+  "subject": "Add connectors_search tool + pagination",
+  "description": "Extend connectors_list to support search, limit, offset, and includeCommands flag. Add new connectors_search tool for fuzzy search by name/description/command. Return total + page info; avoid returning full command lists by default.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "connectors",
+    "search"
+  ],
+  "created": "2026-02-05T10:52:58.083Z",
+  "updated": "2026-02-05T10:52:58.083Z"
+}

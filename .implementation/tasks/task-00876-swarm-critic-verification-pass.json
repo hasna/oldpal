@@ -1,0 +1,15 @@
+{
+  "id": "876",
+  "subject": "Swarm critic/verification pass",
+  "description": "Run a critic agent to validate aggregated results, check for conflicts/missing steps/unsafe actions, and produce fixes or follow-ups.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm"
+  ],
+  "blockedBy": [
+    "875"
+  ],
+  "created": "2026-02-05T12:51:52.151Z",
+  "updated": "2026-02-05T12:51:52.151Z"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "816",
+  "subject": "Improve tool call truncation messaging",
+  "description": "When tool outputs are truncated, show clear cutoff info (e.g., 'truncated at 400 chars / 8 lines') and a consistent 'expand to view full' hint. Ensure both terminal and web display consistent truncation messaging.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "ux",
+    "tools"
+  ],
+  "created": "2026-02-05T10:47:39.776Z",
+  "updated": "2026-02-05T10:47:39.776Z"
+}

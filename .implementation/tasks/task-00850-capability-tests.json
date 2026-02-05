@@ -1,0 +1,19 @@
+{
+  "id": "850",
+  "subject": "Capability tests",
+  "description": "Add tests for inheritance, defaults, enforcement (cannot orchestrate), and tool allow/deny. Cover API scope checks.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "tests"
+  ],
+  "blockedBy": [
+    "846",
+    "847",
+    "848",
+    "849"
+  ],
+  "created": "2026-02-05T12:44:26.742Z",
+  "updated": "2026-02-05T12:44:26.742Z"
+}

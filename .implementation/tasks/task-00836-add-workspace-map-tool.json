@@ -1,0 +1,13 @@
+{
+  "id": "836",
+  "subject": "Add workspace_map tool",
+  "description": "Provide a workspace_map tool that summarizes repo tree, git status, recent files, and project root. Include configurable depth and ignore rules. Use for spatial/context awareness in agents.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "tools",
+    "context"
+  ],
+  "created": "2026-02-05T12:31:43.607Z",
+  "updated": "2026-02-05T12:31:43.607Z"
+}

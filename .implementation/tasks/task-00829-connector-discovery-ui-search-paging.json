@@ -1,0 +1,13 @@
+{
+  "id": "829",
+  "subject": "Connector discovery UI search + paging",
+  "description": "Add search/filter + pagination to connectors UI (terminal panel + web). Show top N (e.g., 20) with View more; support fuzzy search by name/desc/commands. Avoid rendering all connectors at once.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "connectors",
+    "ui"
+  ],
+  "created": "2026-02-05T10:53:24.537Z",
+  "updated": "2026-02-05T10:53:24.537Z"
+}

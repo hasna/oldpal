@@ -1,0 +1,13 @@
+{
+  "id": "821",
+  "subject": "Enforce scoped API key permissions on tools/skills",
+  "description": "Switch /api/v1/tools and /api/v1/skills to withScopedApiKeyAuth (read:tools, read:skills). Ensure API keys without scopes are denied, JWT still allowed. Add tests for scope enforcement.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "auth"
+  ],
+  "created": "2026-02-05T10:52:10.196Z",
+  "updated": "2026-02-05T10:52:10.196Z"
+}

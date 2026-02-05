@@ -1,0 +1,13 @@
+{
+  "id": "818",
+  "subject": "Add recent tool usage summary for agent awareness",
+  "description": "Add a compact 'recent tools' summary (last 3-5 calls with duration/status) to help agents choose faster paths. Show in terminal status/detail panel and in web sidebar or inspector. Include counts for repeated tools.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "ux",
+    "agent"
+  ],
+  "created": "2026-02-05T10:47:53.851Z",
+  "updated": "2026-02-05T10:47:53.851Z"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "849",
+  "subject": "Capability tools/API + UI",
+  "description": "Expose capability read/update via tools and API; add UI/CLI controls (agents/identity). Ensure scope checks and audit log.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "tools"
+  ],
+  "blockedBy": [
+    "847"
+  ],
+  "created": "2026-02-05T12:44:22.800Z",
+  "updated": "2026-02-05T12:44:22.800Z"
+}

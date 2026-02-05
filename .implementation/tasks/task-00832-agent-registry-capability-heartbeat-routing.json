@@ -1,0 +1,13 @@
+{
+  "id": "832",
+  "subject": "Agent registry + capability/heartbeat routing",
+  "description": "Add an agent registry that tracks active agents, capabilities, tool scopes, and heartbeat state. Use for routing tasks in swarm mode and for UI status (online/idle/busy).",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "created": "2026-02-05T10:53:53.662Z",
+  "updated": "2026-02-05T10:53:53.662Z"
+}

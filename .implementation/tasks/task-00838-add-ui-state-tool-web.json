@@ -1,0 +1,14 @@
+{
+  "id": "838",
+  "subject": "Add ui_state tool (web)",
+  "description": "Expose a ui_state tool that returns current route, open panels/modals, selected items, filters/sorts, focus target, and scroll position. Enables agent spatial awareness for UI guidance.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "tools",
+    "context",
+    "web"
+  ],
+  "created": "2026-02-05T12:32:01.138Z",
+  "updated": "2026-02-05T12:32:01.138Z"
+}

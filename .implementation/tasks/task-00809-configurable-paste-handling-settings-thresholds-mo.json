@@ -1,0 +1,14 @@
+{
+  "id": "809",
+  "subject": "Configurable paste handling + settings (thresholds/modes)",
+  "description": "Add config for paste handling: thresholds by chars/lines/bytes, modes (inline placeholder, collapsed preview, ask-to-keep), and disable_paste_burst toggle. Expose in terminal config and web settings UI; ensure history/commands unaffected. Add docs + tests.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "ux",
+    "input",
+    "config"
+  ],
+  "created": "2026-02-05T10:27:07.004Z",
+  "updated": "2026-02-05T10:27:07.004Z"
+}

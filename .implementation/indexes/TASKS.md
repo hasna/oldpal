@@ -4,6 +4,87 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 885 | Interactive command UX guidelines | pending | - | 880 |
+| 884 | Interactive /checks panel (if command ex | pending | - | 880 |
+| 883 | Interactive /tasks panel enhancements | pending | - | 880 |
+| 882 | Schedules list table improvements | pending | - | 881 |
+| 881 | Interactive /schedules panel | pending | - | 880 |
+| 880 | Audit /commands for interactive UX needs | pending | - | - |
+| 879 | Swarm tests | pending | - | 870,871,872,873,874,875,876,877 |
+| 878 | Swarm status UI | pending | - | 874 |
+| 877 | Swarm post-back into main session | pending | - | 876 |
+| 876 | Swarm critic/verification pass | pending | - | 875 |
+| 875 | Swarm results aggregation | pending | - | 874 |
+| 874 | Swarm dispatcher (parallel execution + r | pending | - | 873 |
+| 873 | Swarm agent selection via registry | pending | - | 872 |
+| 872 | Swarm task graph construction | pending | - | 871 |
+| 871 | Swarm decision policy enforcement | pending | - | 870 |
+| 870 | Swarm decision policy spec | pending | - | - |
+| 869 | Guardrails tests | pending | - | 863,864,865,866,867 |
+| 868 | Guardrails UI | pending | - | 867 |
+| 867 | Guardrails CLI/API (/guardrails) | pending | - | 864 |
+| 866 | Guardrails enforcement in agent loop | pending | - | 863 |
+| 865 | Guardrails enforcement in tool registry | pending | - | 863 |
+| 864 | Guardrails persistence + config | pending | - | 863 |
+| 863 | Guardrails policy schema | pending | - | 839 |
+| 862 | Budget tests | pending | - | 856,857,858,859,860 |
+| 861 | Budget UI | pending | - | 860 |
+| 860 | Budget CLI/API (/budget) | pending | - | 857 |
+| 859 | Budget enforcement in tool dispatch | pending | - | 856 |
+| 858 | Budget enforcement in agent loop | pending | - | 856 |
+| 857 | Budget persistence + config | pending | - | 856 |
+| 856 | Budget schema + scopes | pending | - | 839 |
+| 855 | Agent registry tests | pending | - | 851,852,853 |
+| 854 | Agent registry UI | pending | - | 853 |
+| 853 | Agent registry query APIs/tools | pending | - | 851,852 |
+| 852 | Agent registry lifecycle hooks | pending | - | 851 |
+| 851 | Agent registry data model | pending | - | 839 |
+| 850 | Capability tests | pending | - | 846,847,848,849 |
+| 849 | Capability tools/API + UI | pending | - | 847 |
+| 848 | Capability enforcement in agent loop | pending | - | 846 |
+| 847 | Capability storage + migration | pending | - | 846 |
+| 846 | Capability schema + inheritance rules | pending | - | 839 |
+| 845 | UI for budgets/guardrails + docs | pending | - | 861,868 |
+| 844 | Add /guardrails command + policy engine | pending | - | 863,864,865,866,867,868,869 |
+| 843 | Add /budget command + budget model | pending | - | 856,857,858,859,860,861,862 |
+| 842 | Expose registry + capabilities via tools | pending | - | 840,841 |
+| 841 | Implement agent registry service | pending | - | 851,852,853,854,855 |
+| 840 | Define agent capability model | pending | - | 846,847,848,849,850 |
+| 839 | Plan swarm foundations: agent registry + | pending | - | - |
+| 838 | Add ui_state tool (web) | pending | - | - |
+| 837 | Add message_index tool | pending | - | - |
+| 836 | Add workspace_map tool | pending | - | - |
+| 835 | Add session_state tool | pending | - | - |
+| 834 | Shared swarm memory + knowledge base | pending | - | - |
+| 833 | Swarm task graph + dependency scheduler | pending | - | - |
+| 832 | Agent registry + capability/heartbeat ro | pending | - | - |
+| 831 | Swarm coordinator mode using subagents | pending | - | - |
+| 830 | Connector metadata indexing + tags | pending | - | - |
+| 829 | Connector discovery UI search + paging | pending | - | - |
+| 828 | Dynamic connector tool binding to reduce | pending | - | - |
+| 827 | Add tools_search API + tool registry ind | pending | - | - |
+| 826 | Add connectors_search tool + pagination | pending | - | - |
+| 825 | Add security headers + CSP | pending | - | - |
+| 824 | Add rate limits and request size limits  | pending | - | - |
+| 823 | Harden filesystem tools against path tra | pending | - | - |
+| 822 | Add SSRF protection for web_fetch/curl | pending | - | - |
+| 821 | Enforce scoped API key permissions on to | pending | - | - |
+| 820 | Require API_KEY_HMAC_SECRET in productio | pending | - | - |
+| 819 | Standardize tool status labels across vi | pending | - | - |
+| 818 | Add recent tool usage summary for agent  | pending | - | - |
+| 817 | Improve tool call error surfacing and re | pending | - | - |
+| 816 | Improve tool call truncation messaging | pending | - | - |
+| 815 | Add expandable tool call details (input/ | pending | - | - |
+| 814 | Unify active tool call display (queued/r | pending | - | - |
+| 813 | Remove session ID from terminal status l | pending | - | - |
+| 812 | Show heartbeat status indicator in UI | pending | - | - |
+| 811 | Show per-tool-call timers in UI | pending | - | - |
+| 810 | Clarify project positioning (general ass | pending | - | - |
+| 809 | Configurable paste handling + settings ( | pending | - | - |
+| 808 | Add tool-call/agent stats instrumentatio | pending | - | - |
+| 807 | Add large-paste handling in input (web+t | pending | - | - |
+| 806 | Prevent chat scroll reset on session URL | pending | - | - |
+| 805 | Fix chat view auto-scroll jumping to top | pending | - | - |
 | 804 | Fix in-stream/inline message sending | pending | - | - |
 | 803 | Fix queued message sending (Tab queue) i | pending | - | - |
 | 802 | Add ![command] inline bash execution syn | pending | - | - |

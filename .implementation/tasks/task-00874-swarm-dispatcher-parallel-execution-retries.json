@@ -1,0 +1,16 @@
+{
+  "id": "874",
+  "subject": "Swarm dispatcher (parallel execution + retries)",
+  "description": "Spawn subagents and dispatch tasks in parallel with backpressure, timeouts, and retries. Track status per task and surface failures.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "873"
+  ],
+  "created": "2026-02-05T12:51:42.136Z",
+  "updated": "2026-02-05T12:51:42.136Z"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "881",
+  "subject": "Interactive /schedules panel",
+  "description": "Replace text-only /schedules with interactive list + detail view. Support ↑/↓ navigation, Enter to view schedule details (full prompt, recurrence, last/next run, status), and Esc to exit.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "commands"
+  ],
+  "blockedBy": [
+    "880"
+  ],
+  "created": "2026-02-05T14:25:08.109Z",
+  "updated": "2026-02-05T14:25:08.109Z"
+}

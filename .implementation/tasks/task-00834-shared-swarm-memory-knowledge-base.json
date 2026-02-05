@@ -1,0 +1,13 @@
+{
+  "id": "834",
+  "subject": "Shared swarm memory + knowledge base",
+  "description": "Implement shared memory store for swarm agents (project-level knowledge base). Provide tools to read/write/search shared memory and inject relevant snippets into each agent context without duplication.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "memory"
+  ],
+  "created": "2026-02-05T10:54:15.622Z",
+  "updated": "2026-02-05T10:54:15.622Z"
+}

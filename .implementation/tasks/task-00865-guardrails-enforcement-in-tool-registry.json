@@ -1,0 +1,16 @@
+{
+  "id": "865",
+  "subject": "Guardrails enforcement in tool registry",
+  "description": "Filter/annotate tools based on guardrails policy (denylisted tools, approval-required tools). Ensure connectors/tools list respects policy.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "guardrails",
+    "tools"
+  ],
+  "blockedBy": [
+    "863"
+  ],
+  "created": "2026-02-05T12:45:38.984Z",
+  "updated": "2026-02-05T12:45:38.984Z"
+}

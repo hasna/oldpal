@@ -1,0 +1,15 @@
+{
+  "id": "857",
+  "subject": "Budget persistence + config",
+  "description": "Add storage for budgets (db + config), migrations, and defaults. Support per-identity/per-assistant overrides.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "budget"
+  ],
+  "blockedBy": [
+    "856"
+  ],
+  "created": "2026-02-05T12:44:59.347Z",
+  "updated": "2026-02-05T12:44:59.347Z"
+}

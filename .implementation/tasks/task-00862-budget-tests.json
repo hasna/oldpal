@@ -1,0 +1,20 @@
+{
+  "id": "862",
+  "subject": "Budget tests",
+  "description": "Add tests for budget enforcement thresholds, warnings, and override precedence.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "budget",
+    "tests"
+  ],
+  "blockedBy": [
+    "856",
+    "857",
+    "858",
+    "859",
+    "860"
+  ],
+  "created": "2026-02-05T12:45:24.328Z",
+  "updated": "2026-02-05T12:45:24.328Z"
+}

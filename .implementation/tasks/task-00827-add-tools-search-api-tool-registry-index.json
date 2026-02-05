@@ -1,0 +1,13 @@
+{
+  "id": "827",
+  "subject": "Add tools_search API + tool registry index",
+  "description": "Build tool registry index (built-in, connectors, skills) and expose tools_search endpoint/tool with query, category, tags, limit/offset. Use this to avoid dumping full tool lists into context. Add tests + docs.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "tools",
+    "search"
+  ],
+  "created": "2026-02-05T10:53:07.234Z",
+  "updated": "2026-02-05T10:53:07.234Z"
+}

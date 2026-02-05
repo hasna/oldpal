@@ -1,0 +1,16 @@
+{
+  "id": "882",
+  "subject": "Schedules list table improvements",
+  "description": "Update schedules list/table: show user-friendly next run countdown (e.g., '25m 7s remaining') that updates live; include explicit command column; hide full prompt in list view. Add tests for countdown formatting.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "commands"
+  ],
+  "blockedBy": [
+    "881"
+  ],
+  "created": "2026-02-05T14:25:14.300Z",
+  "updated": "2026-02-05T14:25:14.300Z"
+}

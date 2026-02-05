@@ -1,0 +1,13 @@
+{
+  "id": "819",
+  "subject": "Standardize tool status labels across views",
+  "description": "Ensure tool call UI consistently labels state (queued/running/succeeded/failed/cancelled) in both activity log and ToolCallPanel. Remove ambiguous icons-only display by adding short labels where space permits.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "ux",
+    "tools"
+  ],
+  "created": "2026-02-05T10:48:03.196Z",
+  "updated": "2026-02-05T10:48:03.196Z"
+}

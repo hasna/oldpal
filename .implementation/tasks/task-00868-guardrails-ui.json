@@ -1,0 +1,16 @@
+{
+  "id": "868",
+  "subject": "Guardrails UI",
+  "description": "Add terminal/web UI to view/edit guardrails, show active policy summary, and indicate when approvals are required.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "guardrails",
+    "ux"
+  ],
+  "blockedBy": [
+    "867"
+  ],
+  "created": "2026-02-05T12:45:50.443Z",
+  "updated": "2026-02-05T12:45:50.443Z"
+}

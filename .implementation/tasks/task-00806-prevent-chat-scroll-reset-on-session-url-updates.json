@@ -1,0 +1,14 @@
+{
+  "id": "806",
+  "subject": "Prevent chat scroll reset on session URL updates",
+  "description": "Investigate web chat scroll jumping to top; likely caused by router.replace on every response (X-Session-Id). Only update URL when sessionId actually changes and pass { scroll: false } to preserve scroll. Add regression test for scroll position after send/stream.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "bug",
+    "web",
+    "scroll"
+  ],
+  "created": "2026-02-05T10:12:56.420Z",
+  "updated": "2026-02-05T10:12:56.420Z"
+}

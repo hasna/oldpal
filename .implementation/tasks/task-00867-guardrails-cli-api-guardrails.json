@@ -1,0 +1,16 @@
+{
+  "id": "867",
+  "subject": "Guardrails CLI/API (/guardrails)",
+  "description": "Implement /guardrails command + API endpoints to view/update guardrails policies, with scope checks and audit log.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "guardrails",
+    "tools"
+  ],
+  "blockedBy": [
+    "864"
+  ],
+  "created": "2026-02-05T12:45:46.892Z",
+  "updated": "2026-02-05T12:45:46.892Z"
+}

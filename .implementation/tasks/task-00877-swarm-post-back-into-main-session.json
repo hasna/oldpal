@@ -1,0 +1,15 @@
+{
+  "id": "877",
+  "subject": "Swarm post-back into main session",
+  "description": "Inject structured summary + artifacts back into primary session/inbox, including task outcomes and links. Ensure ordering and user-visible final response.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm"
+  ],
+  "blockedBy": [
+    "876"
+  ],
+  "created": "2026-02-05T12:51:59.985Z",
+  "updated": "2026-02-05T12:51:59.985Z"
+}

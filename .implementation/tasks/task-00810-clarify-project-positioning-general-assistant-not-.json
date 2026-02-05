@@ -1,0 +1,13 @@
+{
+  "id": "810",
+  "subject": "Clarify project positioning (general assistant, not coding-only)",
+  "description": "Update docs/README/landing copy to state this assistant is a general-purpose assistant (toward AGI), not primarily a coding tool, while still supporting dev workflows. Ensure wording aligns across terminal and web help.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "docs",
+    "positioning"
+  ],
+  "created": "2026-02-05T10:42:30.669Z",
+  "updated": "2026-02-05T10:42:30.669Z"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "855",
+  "subject": "Agent registry tests",
+  "description": "Add tests for registry updates, stale cleanup, and query filters.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "tests"
+  ],
+  "blockedBy": [
+    "851",
+    "852",
+    "853"
+  ],
+  "created": "2026-02-05T12:44:50.038Z",
+  "updated": "2026-02-05T12:44:50.038Z"
+}

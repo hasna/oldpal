@@ -1,0 +1,16 @@
+{
+  "id": "883",
+  "subject": "Interactive /tasks panel enhancements",
+  "description": "Ensure /tasks uses interactive list+detail: ↑/↓ to navigate, Enter to view full task detail (description, blocked-by/blocks, assignee, project). Add timer fields if applicable and hide long fields in list view.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "commands"
+  ],
+  "blockedBy": [
+    "880"
+  ],
+  "created": "2026-02-05T14:25:19.748Z",
+  "updated": "2026-02-05T14:25:19.748Z"
+}

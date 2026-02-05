@@ -1,0 +1,17 @@
+{
+  "id": "842",
+  "subject": "Expose registry + capabilities via tools/API",
+  "description": "Add tools/endpoints to list agents, get capabilities, update capability flags, and query heartbeat state. Secure with scopes. Wire into /agents and /identity where relevant.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "tools"
+  ],
+  "blockedBy": [
+    "840",
+    "841"
+  ],
+  "created": "2026-02-05T12:41:59.457Z",
+  "updated": "2026-02-05T12:41:59.457Z"
+}

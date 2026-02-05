@@ -1,0 +1,16 @@
+{
+  "id": "884",
+  "subject": "Interactive /checks panel (if command exists)",
+  "description": "If /checks exists, implement interactive list + detail view with keyboard navigation. Show status, last run, duration, and full output on detail view. If /checks does not exist, propose a /checks command and add it as part of this task.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "ux",
+    "commands"
+  ],
+  "blockedBy": [
+    "880"
+  ],
+  "created": "2026-02-05T14:25:27.319Z",
+  "updated": "2026-02-05T14:25:27.319Z"
+}

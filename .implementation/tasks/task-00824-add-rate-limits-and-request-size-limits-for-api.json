@@ -1,0 +1,13 @@
+{
+  "id": "824",
+  "subject": "Add rate limits and request size limits for API",
+  "description": "Add per-user/IP rate limiting and max body size limits to API routes (chat, tools, skills, messages). Use shared store (Redis) for multi-instance. Add error responses + tests.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "api"
+  ],
+  "created": "2026-02-05T10:52:36.410Z",
+  "updated": "2026-02-05T10:52:36.410Z"
+}

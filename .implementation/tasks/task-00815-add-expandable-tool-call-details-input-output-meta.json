@@ -1,0 +1,13 @@
+{
+  "id": "815",
+  "subject": "Add expandable tool call details (input/output/metadata)",
+  "description": "In tool call UI (terminal + web), add expand/collapse per call to reveal full input, output, and metadata (exit code, files changed, bytes, duration). Default collapsed with one-line summary; expand on key/click. Keep existing verbose mode but integrate with expand state.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "tools"
+  ],
+  "created": "2026-02-05T10:47:30.699Z",
+  "updated": "2026-02-05T10:47:30.699Z"
+}

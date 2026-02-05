@@ -1,0 +1,13 @@
+{
+  "id": "825",
+  "subject": "Add security headers + CSP",
+  "description": "Add standard security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy) for web app and API responses. Ensure CSP allows required assets and is tested.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "security",
+    "web"
+  ],
+  "created": "2026-02-05T10:52:49.044Z",
+  "updated": "2026-02-05T10:52:49.044Z"
+}

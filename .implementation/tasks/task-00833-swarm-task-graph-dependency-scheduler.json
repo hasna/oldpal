@@ -1,0 +1,13 @@
+{
+  "id": "833",
+  "subject": "Swarm task graph + dependency scheduler",
+  "description": "Add task-graph execution for swarm: tasks with deps, parallelism, retries, and aggregation. Integrate with /tasks (blocked-by/blocks) and schedule subagents accordingly.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "tasks"
+  ],
+  "created": "2026-02-05T10:54:05.925Z",
+  "updated": "2026-02-05T10:54:05.925Z"
+}

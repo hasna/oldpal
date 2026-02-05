@@ -1,0 +1,20 @@
+{
+  "id": "840",
+  "subject": "Define agent capability model",
+  "description": "(Umbrella) Capability model definition complete after schema + storage + enforcement + tooling. See tasks 846-850.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "846",
+    "847",
+    "848",
+    "849",
+    "850"
+  ],
+  "created": "2026-02-05T12:41:41.790Z",
+  "updated": "2026-02-05T12:45:57.821Z"
+}

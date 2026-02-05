@@ -1,0 +1,13 @@
+{
+  "id": "817",
+  "subject": "Improve tool call error surfacing and retry hints",
+  "description": "For failed tool calls, show a concise error line (reason/exit code) and a retry hint or next action. Use clear status colors/icons in terminal and web. Ensure error info is visible without expanding.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "ux",
+    "tools"
+  ],
+  "created": "2026-02-05T10:47:45.622Z",
+  "updated": "2026-02-05T10:47:45.622Z"
+}

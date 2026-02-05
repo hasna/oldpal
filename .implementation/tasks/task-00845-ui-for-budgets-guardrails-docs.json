@@ -1,0 +1,17 @@
+{
+  "id": "845",
+  "subject": "UI for budgets/guardrails + docs",
+  "description": "Add web + terminal UI to view/edit budgets and guardrails, with clear status indicators. Update docs/help to explain policies, defaults, and enforcement behavior.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "ux",
+    "docs"
+  ],
+  "blockedBy": [
+    "861",
+    "868"
+  ],
+  "created": "2026-02-05T12:42:15.569Z",
+  "updated": "2026-02-05T12:46:16.438Z"
+}

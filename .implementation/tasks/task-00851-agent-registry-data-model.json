@@ -1,0 +1,16 @@
+{
+  "id": "851",
+  "subject": "Agent registry data model",
+  "description": "Define registry record shape (agentId, sessionId, role, capabilities, tool scopes, heartbeat status, current task). Decide in-memory vs persisted, TTL, and update cadence.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "839"
+  ],
+  "created": "2026-02-05T12:44:30.381Z",
+  "updated": "2026-02-05T12:44:30.381Z"
+}

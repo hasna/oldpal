@@ -1,0 +1,16 @@
+{
+  "id": "885",
+  "subject": "Interactive command UX guidelines",
+  "description": "Define a shared interaction pattern for interactive /commands (list+detail, keyboard shortcuts, exit), reusable components, and accessibility. Apply to schedules/tasks/checks and future commands.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "ux",
+    "commands"
+  ],
+  "blockedBy": [
+    "880"
+  ],
+  "created": "2026-02-05T14:25:32.803Z",
+  "updated": "2026-02-05T14:25:32.803Z"
+}

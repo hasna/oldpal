@@ -1,0 +1,16 @@
+{
+  "id": "846",
+  "subject": "Capability schema + inheritance rules",
+  "description": "Define capability fields (canOrchestrate, maxSubagents, allowedTools, budget caps, approval policy) and inheritance order (assistant → identity → session override). Document defaults and conflict resolution.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "839"
+  ],
+  "created": "2026-02-05T12:44:06.815Z",
+  "updated": "2026-02-05T12:44:06.815Z"
+}

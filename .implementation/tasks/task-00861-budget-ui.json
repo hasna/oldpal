@@ -1,0 +1,16 @@
+{
+  "id": "861",
+  "subject": "Budget UI",
+  "description": "Add terminal/web UI to view/edit budgets, show warnings, and indicate remaining budget. Provide friendly presets.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "budget",
+    "ux"
+  ],
+  "blockedBy": [
+    "860"
+  ],
+  "created": "2026-02-05T12:45:18.761Z",
+  "updated": "2026-02-05T12:45:18.761Z"
+}

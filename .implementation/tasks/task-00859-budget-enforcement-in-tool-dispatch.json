@@ -1,0 +1,16 @@
+{
+  "id": "859",
+  "subject": "Budget enforcement in tool dispatch",
+  "description": "Track per-tool call counts and durations; deny or require confirmation when budget exceeded. Integrate with tool registry and job manager.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "budget",
+    "tools"
+  ],
+  "blockedBy": [
+    "856"
+  ],
+  "created": "2026-02-05T12:45:08.859Z",
+  "updated": "2026-02-05T12:45:08.859Z"
+}

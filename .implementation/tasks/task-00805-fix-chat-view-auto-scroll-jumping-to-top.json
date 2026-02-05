@@ -1,0 +1,14 @@
+{
+  "id": "805",
+  "subject": "Fix chat view auto-scroll jumping to top",
+  "description": "Investigate terminal/web chat scroll behavior: view jumps to first message unexpectedly (scrolls to top). Identify triggers (new message render, layout/resize, focus, virtualization) and fix to preserve scroll position. Add regression test for scroll retention.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "bug",
+    "ui",
+    "scroll"
+  ],
+  "created": "2026-02-05T10:09:50.370Z",
+  "updated": "2026-02-05T10:09:50.370Z"
+}

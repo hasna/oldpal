@@ -1,0 +1,16 @@
+{
+  "id": "847",
+  "subject": "Capability storage + migration",
+  "description": "Decide storage for capabilities (db tables + config overrides). Add migrations, serialization, and config defaults. Ensure backward compatibility for existing identities/assistants.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "846"
+  ],
+  "created": "2026-02-05T12:44:12.829Z",
+  "updated": "2026-02-05T12:44:12.829Z"
+}

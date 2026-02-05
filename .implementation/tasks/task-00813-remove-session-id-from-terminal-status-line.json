@@ -1,0 +1,13 @@
+{
+  "id": "813",
+  "subject": "Remove session ID from terminal status line",
+  "description": "Do not display sessionId in the terminal Status bar; keep session index/count and other indicators. Update tests/snapshots if needed.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "ux",
+    "terminal"
+  ],
+  "created": "2026-02-05T10:45:06.677Z",
+  "updated": "2026-02-05T10:45:06.677Z"
+}

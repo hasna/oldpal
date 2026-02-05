@@ -1,0 +1,15 @@
+{
+  "id": "864",
+  "subject": "Guardrails persistence + config",
+  "description": "Add storage/migrations for guardrails policies; support per-identity/per-assistant overrides and environment defaults.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "guardrails"
+  ],
+  "blockedBy": [
+    "863"
+  ],
+  "created": "2026-02-05T12:45:33.507Z",
+  "updated": "2026-02-05T12:45:33.507Z"
+}

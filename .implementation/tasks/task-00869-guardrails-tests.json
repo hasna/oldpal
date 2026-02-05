@@ -1,0 +1,20 @@
+{
+  "id": "869",
+  "subject": "Guardrails tests",
+  "description": "Add tests for policy evaluation, tool blocking, approval flows, and precedence/overrides.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "guardrails",
+    "tests"
+  ],
+  "blockedBy": [
+    "863",
+    "864",
+    "865",
+    "866",
+    "867"
+  ],
+  "created": "2026-02-05T12:45:54.097Z",
+  "updated": "2026-02-05T12:45:54.097Z"
+}

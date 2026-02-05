@@ -1,0 +1,13 @@
+{
+  "id": "828",
+  "subject": "Dynamic connector tool binding to reduce context",
+  "description": "Reduce tool list bloat when many connectors exist: register a generic connector_execute tool (connector, command, args) and only bind per-connector tools on demand (after connectors_search or explicit selection). Add config for max connector tools in LLM context.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "connectors",
+    "context"
+  ],
+  "created": "2026-02-05T10:53:15.107Z",
+  "updated": "2026-02-05T10:53:15.107Z"
+}

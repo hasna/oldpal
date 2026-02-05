@@ -1,0 +1,20 @@
+{
+  "id": "841",
+  "subject": "Implement agent registry service",
+  "description": "(Umbrella) Agent registry complete after data model, lifecycle hooks, APIs, UI, tests. See tasks 851-855.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "blockedBy": [
+    "851",
+    "852",
+    "853",
+    "854",
+    "855"
+  ],
+  "created": "2026-02-05T12:41:53.449Z",
+  "updated": "2026-02-05T12:46:03.137Z"
+}
