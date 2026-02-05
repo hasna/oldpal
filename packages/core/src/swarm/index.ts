@@ -83,6 +83,49 @@ export type {
   AggregatedResult,
   AggregatorConfig,
 } from './aggregator';
+export {
+  SwarmCritic,
+  createSwarmCritic,
+  DEFAULT_CRITIC_CONFIG,
+} from './critic';
+export type {
+  IssueSeverity,
+  IssueCategory,
+  CriticIssue,
+  FollowUpAction,
+  CriticReview,
+  CriticConfig,
+} from './critic';
+export {
+  SwarmPostback,
+  createSwarmPostback,
+  DEFAULT_POSTBACK_CONFIG,
+} from './postback';
+export type {
+  ArtifactType,
+  SwarmArtifact,
+  TaskOutcome,
+  PostbackFormat,
+  PostbackMessage,
+  PostbackStructuredData,
+  PostbackConfig,
+} from './postback';
+export {
+  SwarmStatusProvider,
+  createSwarmStatusProvider,
+  DEFAULT_STATUS_CONFIG,
+} from './status';
+export type {
+  SwarmAgentStatus,
+  SwarmTaskDisplayStatus,
+  ProgressBarStyle,
+  SwarmStatusSummary,
+  TaskLogEntry,
+  TaskDetail,
+  StatusUpdateEvent,
+  StatusUpdateListener,
+  StatusProviderConfig,
+} from './status';
 export type {
   TaskOutput,
   ExtendedTaskDefinition,
