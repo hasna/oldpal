@@ -53,6 +53,8 @@ export interface SwarmCoordinatorContext {
   onChunk?: (chunk: StreamChunk) => void;
   /** Handler for plan approval (required when autoApprove=false) */
   onPlanApproval?: (plan: SwarmPlan) => Promise<{ decision: ApprovalDecision; editedPlan?: SwarmPlan }>;
+  /** Get available tool names (for config validation) */
+  getAvailableTools?: () => string[];
 }
 
 /**
@@ -228,6 +230,9 @@ export class SwarmCoordinator {
     // Apply input config overrides
     const config = { ...this.config, ...input.config };
     this.config = config;
+
+    // Validate tool name lists (warn about unknown tools)
+    this.validateToolLists(config);
 
     // Initialize state
     const swarmId = generateId();
@@ -972,6 +977,37 @@ Maximum ${this.config.maxTasks} tasks.`;
   // ============================================
   // Helpers
   // ============================================
+
+  /**
+   * Validate tool name lists in config and warn about unknown tools
+   */
+  private validateToolLists(config: SwarmConfig): void {
+    if (!this.context.getAvailableTools) {
+      return; // Skip validation if no tool info available
+    }
+
+    const availableTools = new Set(this.context.getAvailableTools());
+    const warnings: string[] = [];
+
+    const validateList = (tools: string[], listName: string) => {
+      const unknown = tools.filter(t => !availableTools.has(t));
+      if (unknown.length > 0) {
+        warnings.push(`${listName}: ${unknown.join(', ')}`);
+      }
+    };
+
+    validateList(config.plannerTools, 'plannerTools');
+    validateList(config.workerTools, 'workerTools');
+    validateList(config.criticTools, 'criticTools');
+    // Note: forbiddenTools might intentionally list tools that don't exist yet, so don't warn
+
+    if (warnings.length > 0) {
+      this.streamText(`⚠️ Unknown tool names in config (will be filtered out):\n`);
+      for (const warning of warnings) {
+        this.streamText(`  - ${warning}\n`);
+      }
+    }
+  }
 
   private updateStatus(status: SwarmStatus): void {
     if (this.state) {

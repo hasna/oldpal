@@ -2854,6 +2854,7 @@ export class AgentLoop {
         cwd: this.cwd,
         depth: this.depth,
         onChunk: this.onChunk,
+        getAvailableTools: () => this.toolRegistry.getTools().map(t => t.name),
       };
 
       this.swarmCoordinator = new SwarmCoordinator({}, context);
