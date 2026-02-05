@@ -11,3 +11,4 @@ export {
 } from './store';
 
 export { parseCronExpression, getNextCronRun } from './cron';
+export { formatRelativeTime, formatAbsoluteTime } from './format';
