@@ -32,12 +32,15 @@ function getGlobalSkillsDir(): string {
 
 /**
  * Derive category from file path
+ * Normalizes path separators for cross-platform support (Windows uses \)
  */
 function deriveCategory(filePath: string): string {
-  if (filePath.includes('shared/skills')) {
+  // Normalize path separators for consistent checks
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  if (normalizedPath.includes('shared/skills')) {
     return 'shared';
   }
-  if (filePath.includes('.assistants/skills')) {
+  if (normalizedPath.includes('.assistants/skills')) {
     return 'project';
   }
   return 'other';
