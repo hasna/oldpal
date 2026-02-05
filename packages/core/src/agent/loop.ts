@@ -2041,6 +2041,7 @@ export class AgentLoop {
     const context: SubagentManagerContext = {
       createSubagentLoop: (config) => this.createSubagentLoop(config),
       getTools: () => this.toolRegistry.getTools(),
+      getParentAllowedTools: () => this.getEffectiveAllowedTools(),
       getLLMClient: () => this.llmClient,
     };
 

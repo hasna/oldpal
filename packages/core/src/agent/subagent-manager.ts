@@ -91,6 +91,8 @@ export interface SubagentManagerContext {
   createSubagentLoop: (config: SubagentLoopConfig) => Promise<SubagentRunner>;
   /** Get available tools */
   getTools: () => Tool[];
+  /** Get parent's allowed tools (null = all allowed) */
+  getParentAllowedTools: () => Set<string> | null;
   /** Get LLM client (for reference only - subagents should create their own) */
   getLLMClient: () => LLMClient | null;
   /** Get LLM config to create a new client for subagents (avoids sharing client) */
@@ -199,7 +201,7 @@ export class SubagentManager {
   }
 
   /**
-   * Filter tools for subagent based on depth and configuration
+   * Filter tools for subagent based on depth, configuration, and parent restrictions
    */
   filterToolsForSubagent(requestedTools: string[] | undefined, depth: number): string[] {
     // Start with requested tools or defaults
@@ -218,6 +220,13 @@ export class SubagentManager {
     // Validate against available tools
     const availableTools = new Set(this.context.getTools().map((t) => t.name));
     tools = tools.filter((tool) => availableTools.has(tool));
+
+    // SECURITY: Intersect with parent's allowed tools to prevent privilege escalation
+    // A subagent should never have access to tools its parent doesn't have
+    const parentAllowed = this.context.getParentAllowedTools();
+    if (parentAllowed) {
+      tools = tools.filter((tool) => parentAllowed.has(tool.toLowerCase()));
+    }
 
     return tools;
   }
