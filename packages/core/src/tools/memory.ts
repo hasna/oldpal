@@ -230,6 +230,15 @@ export const memoryImportTool: Tool = {
               enum: ['preference', 'fact', 'knowledge', 'history'],
               description: 'Type of memory',
             },
+            scope: {
+              type: 'string',
+              enum: ['global', 'shared', 'private'],
+              description: 'Memory scope (default: private)',
+            },
+            scopeId: {
+              type: 'string',
+              description: 'Scope identifier for shared/private memories',
+            },
             importance: { type: 'number', description: 'Importance level 1-10' },
             summary: { type: 'string', description: 'Short summary' },
             tags: {
@@ -781,6 +790,7 @@ export function createMemoryToolExecutors(
           value: unknown;
           category: MemoryCategory;
           scope?: MemoryScope;
+          scopeId?: string;
           importance?: number;
           summary?: string;
           tags?: string[];
@@ -820,6 +830,7 @@ export function createMemoryToolExecutors(
               value,
               category,
               scope: validateScope(mem.scope),
+              scopeId: validateString(mem.scopeId, 'scopeId', MAX_KEY_LENGTH) || undefined,
               importance: mem.importance !== undefined ? validateImportance(mem.importance, 5) : undefined,
               summary: validateString(mem.summary, 'summary', MAX_SUMMARY_LENGTH) || undefined,
               tags: mem.tags ? validateTags(mem.tags) : undefined,
@@ -844,6 +855,7 @@ export function createMemoryToolExecutors(
             key: m.key,
             value: m.value,
             scope: m.scope || 'private',
+            scopeId: m.scopeId,
             category: m.category,
             importance: m.importance || 5,
             summary: m.summary,
