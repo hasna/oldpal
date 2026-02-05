@@ -68,6 +68,21 @@ export type {
   DispatcherStats,
   DispatchResult,
 } from './dispatcher';
+export {
+  SwarmResultsAggregator,
+  createSwarmAggregator,
+  quickAggregate,
+  DEFAULT_AGGREGATOR_CONFIG,
+} from './aggregator';
+export type {
+  AggregationStrategy,
+  ConflictResolution,
+  TaskResultInput,
+  AggregatedSection,
+  AggregationMetadata,
+  AggregatedResult,
+  AggregatorConfig,
+} from './aggregator';
 export type {
   TaskOutput,
   ExtendedTaskDefinition,
