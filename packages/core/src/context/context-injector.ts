@@ -279,10 +279,12 @@ export class ContextInjector {
   private getCwd(): string {
     const injections = this.config.injections as InjectionConfigs;
     const truncate = injections.cwd?.truncate || 100;
-    let path = this.cwd;
+
+    // Normalize path separators for cross-platform support (Windows uses \)
+    let path = this.cwd.replace(/\\/g, '/');
+    const home = homedir().replace(/\\/g, '/');
 
     // Replace home directory with ~
-    const home = homedir();
     if (path.startsWith(home)) {
       path = '~' + path.slice(home.length);
     }
@@ -293,14 +295,20 @@ export class ContextInjector {
       if (parts.length > 2) {
         // Handle ~ prefix correctly to avoid ~/~/...
         const startsWithTilde = parts[0] === '~';
-        const startIdx = startsWithTilde ? 1 : 0;
+        // On Windows, first part after split might be drive letter (C:)
+        const startsWithDrive = /^[a-zA-Z]:$/.test(parts[0]);
+        const startIdx = startsWithTilde ? 1 : (startsWithDrive ? 1 : 0);
         const lastPart = parts[parts.length - 1];
 
         if (parts.length - startIdx > 1) {
           const firstSignificantPart = parts[startIdx];
-          path = startsWithTilde
-            ? `~/${firstSignificantPart}/.../${lastPart}`
-            : `/${parts[0]}/.../${lastPart}`;
+          if (startsWithTilde) {
+            path = `~/${firstSignificantPart}/.../${lastPart}`;
+          } else if (startsWithDrive) {
+            path = `${parts[0]}/${firstSignificantPart}/.../${lastPart}`;
+          } else {
+            path = `/${parts[0]}/.../${lastPart}`;
+          }
         }
       }
     }
