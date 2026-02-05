@@ -92,6 +92,31 @@ async function build() {
     process.exit(1);
   }
 
+  // Post-process bundles to fix Bun bundler bugs
+  // Bug: Bun 1.3.x generates __promiseAll calls without defining the helper
+  // Fix: Inject the helper definition at the start of each bundle
+  console.log('  Post-processing bundles...');
+
+  const promiseAllPolyfill = `var __promiseAll = (arr) => Promise.all(arr);\n`;
+
+  for (const filename of ['lib.js', 'cli.js']) {
+    const filePath = join(DIST, filename);
+    let content = await Bun.file(filePath).text();
+
+    // Only add polyfill if __promiseAll is used but not defined
+    if (content.includes('__promiseAll') && !content.includes('var __promiseAll')) {
+      // Insert after shebang if present, otherwise at the start
+      if (content.startsWith('#!')) {
+        const newlineIndex = content.indexOf('\n');
+        content = content.slice(0, newlineIndex + 1) + promiseAllPolyfill + content.slice(newlineIndex + 1);
+      } else {
+        content = promiseAllPolyfill + content;
+      }
+      await Bun.write(filePath, content);
+      console.log(`    Fixed __promiseAll in ${filename}`);
+    }
+  }
+
   // Ensure CLI has shebang (only add if not already present)
   const cliPath = join(DIST, 'cli.js');
   const cliContent = await Bun.file(cliPath).text();
