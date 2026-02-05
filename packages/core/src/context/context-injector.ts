@@ -291,7 +291,17 @@ export class ContextInjector {
     if (path.length > truncate) {
       const parts = path.split('/').filter(Boolean);
       if (parts.length > 2) {
-        path = '~/' + parts[0] + '/.../' + parts[parts.length - 1];
+        // Handle ~ prefix correctly to avoid ~/~/...
+        const startsWithTilde = parts[0] === '~';
+        const startIdx = startsWithTilde ? 1 : 0;
+        const lastPart = parts[parts.length - 1];
+
+        if (parts.length - startIdx > 1) {
+          const firstSignificantPart = parts[startIdx];
+          path = startsWithTilde
+            ? `~/${firstSignificantPart}/.../${lastPart}`
+            : `/${parts[0]}/.../${lastPart}`;
+        }
       }
     }
 
