@@ -1,4 +1,4 @@
-# @hasna/assistants-terminal
+# @hasna/assistants
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -26,13 +26,13 @@ A powerful AI assistant that runs in your terminal. Built with [Ink](https://git
 ### Install globally
 
 ```bash
-bun install -g @hasna/assistants-terminal
+bun add -g @hasna/assistants
 ```
 
 ### Or run directly
 
 ```bash
-bunx @hasna/assistants-terminal
+bunx @hasna/assistants
 ```
 
 ## Quick Start
@@ -310,7 +310,7 @@ Hooks allow you to run scripts before/after tool execution:
 ### EmbeddedClient (Full Control)
 
 ```typescript
-import { EmbeddedClient } from '@hasna/assistants-terminal';
+import { EmbeddedClient } from '@hasna/assistants';
 
 // Create client with working directory
 const client = new EmbeddedClient(process.cwd(), {
@@ -340,7 +340,7 @@ client.disconnect();
 ### Headless Mode (Simple Queries)
 
 ```typescript
-import { runHeadless } from '@hasna/assistants-terminal';
+import { runHeadless } from '@hasna/assistants';
 
 // Run a simple query with JSON output
 await runHeadless({
@@ -368,7 +368,7 @@ await runHeadless({
 ### Feature Detection
 
 ```typescript
-import { getFeatureAvailability, getFeatureStatusMessage } from '@hasna/assistants-terminal';
+import { getFeatureAvailability, getFeatureStatusMessage } from '@hasna/assistants';
 
 // Check what features are available
 const features = getFeatureAvailability();
@@ -385,7 +385,7 @@ Connectors integrate external services. Install separately:
 
 ```bash
 # Example: Notion connector
-bun install -g @hasna/connect-notion
+bun add -g @hasna/connect-notion
 
 # List available connectors
 assistants

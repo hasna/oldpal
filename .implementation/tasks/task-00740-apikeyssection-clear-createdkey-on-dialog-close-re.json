@@ -1,0 +1,8 @@
+{
+  "id": "740",
+  "subject": "ApiKeysSection: clear createdKey on dialog close + reset errors",
+  "description": "UI bug: Create API Key dialog keeps showing last created key if closed via overlay/ESC because onOpenChange doesn't clear state. Add onOpenChange handler to reset createdKey/newKeyName/error when closing. Also clear error before fetchKeys so stale errors don't persist after success.",
+  "status": "pending",
+  "created": "2026-02-05T08:43:29.593Z",
+  "updated": "2026-02-05T08:43:29.593Z"
+}

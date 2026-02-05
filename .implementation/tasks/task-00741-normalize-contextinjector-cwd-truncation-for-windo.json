@@ -1,0 +1,8 @@
+{
+  "id": "741",
+  "subject": "Normalize ContextInjector cwd truncation for Windows paths",
+  "description": "Bug: ContextInjector.getCwd splits on '/' which fails for Windows paths (\\). Normalize path separators or split on /\\/ to support Windows; ensure truncation + home replacement work cross-platform.",
+  "status": "pending",
+  "created": "2026-02-05T08:43:43.043Z",
+  "updated": "2026-02-05T08:43:43.043Z"
+}

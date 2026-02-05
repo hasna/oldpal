@@ -1,0 +1,8 @@
+{
+  "id": "752",
+  "subject": "Remove private core/shared runtime deps from published package",
+  "description": "Terminal package now bundles core/shared but still lists @hasna/assistants-core and @hasna/assistants-shared as dependencies. Since those packages are now private, publishing will fail. Move them to devDependencies or bundledDependencies, or remove entirely and verify build works.",
+  "status": "pending",
+  "created": "2026-02-05T08:57:05.257Z",
+  "updated": "2026-02-05T08:57:05.257Z"
+}

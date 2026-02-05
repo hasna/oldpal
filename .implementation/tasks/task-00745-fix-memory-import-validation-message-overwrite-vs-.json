@@ -1,0 +1,8 @@
+{
+  "id": "745",
+  "subject": "Fix /memory import validation message (overwrite vs errors)",
+  "description": "Bug: /memory import prints 'Use --overwrite to proceed' when validation errors exist, but --overwrite only affects duplicate keys. Either import valid entries despite errors or change message/add a --force/--skip-invalid flag to proceed with partial import.",
+  "status": "pending",
+  "created": "2026-02-05T08:48:53.877Z",
+  "updated": "2026-02-05T08:48:53.877Z"
+}

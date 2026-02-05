@@ -1,0 +1,8 @@
+{
+  "id": "747",
+  "subject": "Fix terminal queued message send (Tab/queue mode)",
+  "description": "Queue mode should work reliably when busy (processing or pending tools). Audit Input tab/enter handling and App queue flush gating to use a single isBusy flag, ensure queued messages drain after tool execution, and add a regression test for queue send in terminal.",
+  "status": "pending",
+  "created": "2026-02-05T08:54:36.534Z",
+  "updated": "2026-02-05T08:54:36.534Z"
+}

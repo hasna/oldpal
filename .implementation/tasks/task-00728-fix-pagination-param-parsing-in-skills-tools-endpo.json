@@ -1,0 +1,8 @@
+{
+  "id": "728",
+  "subject": "Fix pagination param parsing in skills/tools endpoints",
+  "description": "Bug: /api/v1/skills and /api/v1/tools use Math.max(1, parseInt(...)) which yields NaN for invalid inputs. Use Number.parseInt(...) || default and clamp to safe range so page/limit are never NaN. Add tests for invalid/negative values.",
+  "status": "pending",
+  "created": "2026-02-05T08:36:43.260Z",
+  "updated": "2026-02-05T08:36:43.260Z"
+}

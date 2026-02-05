@@ -1,0 +1,8 @@
+{
+  "id": "737",
+  "subject": "Fix GlobalMemoryManager.export pagination limit",
+  "description": "Bug: GlobalMemoryManager.export calls query which clamps limit to 1000, so /memory export only returns first 1000. Implement proper pagination inside export (loop with offset) to return full result set.",
+  "status": "pending",
+  "created": "2026-02-05T08:42:56.672Z",
+  "updated": "2026-02-05T08:42:56.672Z"
+}

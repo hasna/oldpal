@@ -1,0 +1,8 @@
+{
+  "id": "736",
+  "subject": "Add tests for notification preferences API",
+  "description": "Missing tests: /api/v1/notifications/preferences GET should return defaults when no row exists; PATCH should upsert and persist updates, enforce auth, and return updated preferences.",
+  "status": "pending",
+  "created": "2026-02-05T08:39:09.538Z",
+  "updated": "2026-02-05T08:39:09.538Z"
+}

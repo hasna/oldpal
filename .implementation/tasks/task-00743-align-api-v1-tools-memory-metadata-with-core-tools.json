@@ -1,0 +1,8 @@
+{
+  "id": "743",
+  "subject": "Align /api/v1/tools memory metadata with core tools",
+  "description": "Mismatch: /api/v1/tools lists memory_save category enum missing 'history' and memory_list missing tags, memory_import missing scopeId, etc. Sync tool parameter schemas with core memory tools so UI docs are accurate (include history, tags, scopeId, etc.).",
+  "status": "pending",
+  "created": "2026-02-05T08:44:35.229Z",
+  "updated": "2026-02-05T08:44:35.229Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "735",
+  "subject": "Preserve scopeId in memory_import tool",
+  "description": "Bug: memory_export includes scopeId, but memory_import tool ignores it and drops scopeId on import. Extend memory_import parameters to accept scopeId, validate length, and pass through to manager.import to preserve scoping.",
+  "status": "pending",
+  "created": "2026-02-05T08:37:57.379Z",
+  "updated": "2026-02-05T08:37:57.379Z"
+}

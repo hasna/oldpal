@@ -1,0 +1,8 @@
+{
+  "id": "732",
+  "subject": "Restrict subagent tools to parent allowed-tools",
+  "description": "Security/logic: SubagentManager.filterToolsForSubagent uses full tool registry and ignores parent allowed-tools restrictions, so a restricted agent could spawn subagents with disallowed tools. Pass parent allowed tools into SubagentManager context and intersect before filtering. Add tests.",
+  "status": "pending",
+  "created": "2026-02-05T08:37:27.768Z",
+  "updated": "2026-02-05T08:37:27.768Z"
+}

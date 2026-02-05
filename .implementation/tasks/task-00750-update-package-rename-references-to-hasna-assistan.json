@@ -1,0 +1,8 @@
+{
+  "id": "750",
+  "subject": "Update package rename references to @hasna/assistants",
+  "description": "Scan repo for @hasna/assistants-terminal references (README, docs, tsconfig paths, examples, headers) and update to @hasna/assistants. Ensure path aliases and code comments match new package name.",
+  "status": "pending",
+  "created": "2026-02-05T08:56:49.186Z",
+  "updated": "2026-02-05T08:56:49.186Z"
+}

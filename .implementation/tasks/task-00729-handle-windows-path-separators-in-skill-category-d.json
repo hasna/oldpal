@@ -1,0 +1,8 @@
+{
+  "id": "729",
+  "subject": "Handle Windows path separators in skill category detection",
+  "description": "Bug: deriveCategory checks filePath.includes('shared/skills') and '.assistants/skills', which fails on Windows paths with \\. Normalize filePath (replace \\ with /) or use path.sep-aware checks in both /api/v1/skills and /api/v1/skills/[name].",
+  "status": "pending",
+  "created": "2026-02-05T08:36:56.418Z",
+  "updated": "2026-02-05T08:36:56.418Z"
+}

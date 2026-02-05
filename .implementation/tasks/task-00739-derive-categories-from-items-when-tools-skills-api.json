@@ -1,0 +1,8 @@
+{
+  "id": "739",
+  "subject": "Derive categories from items when tools/skills API omits categories",
+  "description": "UI bug: ToolSelector/SkillSelector rely on data.data.categories; if missing/empty, no categories render and lists appear blank. Fallback to deriving categories from the items list when categories is empty. Update both selectors.",
+  "status": "pending",
+  "created": "2026-02-05T08:43:19.077Z",
+  "updated": "2026-02-05T08:43:19.077Z"
+}

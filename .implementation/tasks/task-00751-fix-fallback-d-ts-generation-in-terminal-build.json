@@ -1,0 +1,8 @@
+{
+  "id": "751",
+  "subject": "Fix fallback .d.ts generation in terminal build",
+  "description": "Current fallback declarations in packages/terminal/scripts/build.ts do not match actual exported types (e.g., ToolResult shape). Either generate real d.ts via tsc as a hard requirement or update fallback types to mirror public API.",
+  "status": "pending",
+  "created": "2026-02-05T08:56:55.903Z",
+  "updated": "2026-02-05T08:56:55.903Z"
+}

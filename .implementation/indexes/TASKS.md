@@ -4,6 +4,32 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 753 | Align package versions after rename | pending | - | - |
+| 752 | Remove private core/shared runtime deps  | pending | - | - |
+| 751 | Fix fallback .d.ts generation in termina | pending | - | - |
+| 750 | Update package rename references to @has | pending | - | - |
+| 749 | Handle stop during tool execution (cance | pending | - | - |
+| 748 | Fix terminal 'Worked for' duration alway | pending | - | - |
+| 747 | Fix terminal queued message send (Tab/qu | pending | - | - |
+| 746 | Update memory tool schemas to allow non- | pending | - | - |
+| 745 | Fix /memory import validation message (o | pending | - | - |
+| 744 | Align /api/v1/skills/[name] with list en | pending | - | - |
+| 743 | Align /api/v1/tools memory metadata with | pending | - | - |
+| 742 | Update config model on /model switch | pending | - | - |
+| 741 | Normalize ContextInjector cwd truncation | pending | - | - |
+| 740 | ApiKeysSection: clear createdKey on dial | pending | - | - |
+| 739 | Derive categories from items when tools/ | pending | - | - |
+| 738 | Allow 'history' category in memory_save  | pending | - | - |
+| 737 | Fix GlobalMemoryManager.export paginatio | pending | - | - |
+| 736 | Add tests for notification preferences A | pending | - | - |
+| 735 | Preserve scopeId in memory_import tool | pending | - | - |
+| 734 | Fix ContextInjector cwd truncation when  | pending | - | - |
+| 733 | Mark subagent timeouts as timeout status | pending | - | - |
+| 732 | Restrict subagent tools to parent allowe | pending | - | - |
+| 731 | Allow clearing agent tools/skills select | pending | - | - |
+| 730 | Load project skills in /api/v1/skills/[n | pending | - | - |
+| 729 | Handle Windows path separators in skill  | pending | - | - |
+| 728 | Fix pagination param parsing in skills/t | pending | - | - |
 | 727 | Add scope controls to /memory set and me | pending | - | - |
 | 726 | Fix /model output for unknown model prov | pending | - | - |
 | 725 | Fix memory_export tool to export full re | pending | - | - |

@@ -1,0 +1,8 @@
+{
+  "id": "734",
+  "subject": "Fix ContextInjector cwd truncation when path already uses ~",
+  "description": "Bug: getCwd replaces home with ~, then truncation builds '~/' + parts[0], which yields '~/~/' when parts[0] is '~'. Adjust truncation logic to avoid duplicating ~ and show a clean path (e.g., '~/Workspace/.../repo').",
+  "status": "pending",
+  "created": "2026-02-05T08:37:45.082Z",
+  "updated": "2026-02-05T08:37:45.082Z"
+}

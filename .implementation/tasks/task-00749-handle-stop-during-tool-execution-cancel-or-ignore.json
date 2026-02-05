@@ -1,0 +1,8 @@
+{
+  "id": "749",
+  "subject": "Handle stop during tool execution (cancel or ignore tool results)",
+  "description": "Investigate stop flow when a tool call is running. Ensure stop cancels tool execution or safely ignores late tool results, clears pending tool state, and keeps UI/agent state consistent. Add regression test around stopping mid-tool.",
+  "status": "pending",
+  "created": "2026-02-05T08:54:50.451Z",
+  "updated": "2026-02-05T08:54:50.451Z"
+}

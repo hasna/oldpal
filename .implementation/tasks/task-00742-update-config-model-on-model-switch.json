@@ -1,0 +1,8 @@
+{
+  "id": "742",
+  "subject": "Update config model on /model switch",
+  "description": "Logic bug: AgentLoop.switchModel replaces llmClient but does not update this.config.llm.provider/model. Downstream consumers (summary client, persisted config, reporting) may use stale model. Update config.llm to the new provider/model when switching.",
+  "status": "pending",
+  "created": "2026-02-05T08:43:53.997Z",
+  "updated": "2026-02-05T08:43:53.997Z"
+}

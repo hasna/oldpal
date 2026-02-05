@@ -1,0 +1,8 @@
+{
+  "id": "731",
+  "subject": "Allow clearing agent tools/skills selections",
+  "description": "Bug: AgentEditDialog sends tools/skills as undefined when empty, so clearing selections does not update stored settings. Send empty arrays (or explicit null) so API updates settings and 'allow all' state is applied. Add tests for update payload.",
+  "status": "pending",
+  "created": "2026-02-05T08:37:18.523Z",
+  "updated": "2026-02-05T08:37:18.523Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "738",
+  "subject": "Allow 'history' category in memory_save tool",
+  "description": "Bug: memory_save tool category enum omits 'history' even though MemoryCategory includes it. Add 'history' to the enum and tool docs so agents can store historical context memories.",
+  "status": "pending",
+  "created": "2026-02-05T08:43:06.389Z",
+  "updated": "2026-02-05T08:43:06.389Z"
+}

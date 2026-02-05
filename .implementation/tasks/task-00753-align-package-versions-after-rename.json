@@ -1,0 +1,8 @@
+{
+  "id": "753",
+  "subject": "Align package versions after rename",
+  "description": "@hasna/assistants is now version 1.0.0 while core/shared are 1.0.1. Decide versioning strategy (monorepo lockstep vs independent) and align release notes/scripts accordingly.",
+  "status": "pending",
+  "created": "2026-02-05T08:57:11.731Z",
+  "updated": "2026-02-05T08:57:11.731Z"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "730",
+  "subject": "Load project skills in /api/v1/skills/[name]",
+  "description": "Missing implementation: detail endpoint only loads global shared skills. If a skill is defined in .assistants/skills (project scope), /skills/[name] returns 404 even though list may include it. Load both global + project skill directories (matching list behavior).",
+  "status": "pending",
+  "created": "2026-02-05T08:37:10.771Z",
+  "updated": "2026-02-05T08:37:10.771Z"
+}

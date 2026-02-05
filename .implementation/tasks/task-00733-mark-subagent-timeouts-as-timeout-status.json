@@ -1,0 +1,8 @@
+{
+  "id": "733",
+  "subject": "Mark subagent timeouts as timeout status",
+  "description": "Bug: SubagentManager uses Promise.race with createTimeout but records status as 'failed'. Use 'timeout' status in SubagentInfo/SubagentJob when timeout triggers (and surface in agent_list/agent_job_status).",
+  "status": "pending",
+  "created": "2026-02-05T08:37:35.999Z",
+  "updated": "2026-02-05T08:37:35.999Z"
+}
