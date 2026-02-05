@@ -11,6 +11,9 @@ import {
   checkRateLimit,
   getRateLimitStatus,
   clearRateLimit,
+  isHmacSecretConfigured,
+  validateApiKeyConfig,
+  isApiKeyAuthEnabled,
 } from '../src/lib/auth/api-key';
 
 describe('API Key utilities', () => {
@@ -259,6 +262,185 @@ describe('API Key utilities', () => {
 
       // key1 should be blocked
       expect(checkRateLimit(key1)).toBe(false);
+    });
+  });
+
+  describe('HMAC Configuration Validation', () => {
+    // Note: These tests validate the configuration checking logic
+    // The actual values depend on the current environment state
+
+    describe('isHmacSecretConfigured', () => {
+      test('returns false when using default key', () => {
+        // In test environment, API_KEY_HMAC_SECRET is typically not set
+        // or set to the default value, so this should return false
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+
+        // Temporarily clear the env var
+        delete process.env.API_KEY_HMAC_SECRET;
+        expect(isHmacSecretConfigured()).toBe(false);
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        }
+      });
+
+      test('returns false when set to default value', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+
+        process.env.API_KEY_HMAC_SECRET = 'default-dev-hmac-key-change-in-production';
+        expect(isHmacSecretConfigured()).toBe(false);
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        } else {
+          delete process.env.API_KEY_HMAC_SECRET;
+        }
+      });
+
+      test('returns false when secret is too short', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+
+        process.env.API_KEY_HMAC_SECRET = 'short-key'; // Less than 32 chars
+        expect(isHmacSecretConfigured()).toBe(false);
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        } else {
+          delete process.env.API_KEY_HMAC_SECRET;
+        }
+      });
+
+      test('returns true when properly configured', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+
+        // Set a proper 32+ character secret
+        process.env.API_KEY_HMAC_SECRET = 'a-very-secure-secret-that-is-at-least-32-characters-long';
+        expect(isHmacSecretConfigured()).toBe(true);
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        } else {
+          delete process.env.API_KEY_HMAC_SECRET;
+        }
+      });
+    });
+
+    describe('validateApiKeyConfig', () => {
+      test('returns valid true with warning in development without proper secret', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+        const originalEnv = process.env.NODE_ENV;
+
+        // Simulate development mode without proper secret
+        delete process.env.API_KEY_HMAC_SECRET;
+        process.env.NODE_ENV = 'development';
+
+        const result = validateApiKeyConfig();
+        expect(result.valid).toBe(true);
+        expect(result.warning).toBeDefined();
+        expect(result.warning).toContain('Using default HMAC key');
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        }
+        process.env.NODE_ENV = originalEnv;
+      });
+
+      test('returns valid false with error in production without proper secret', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+        const originalEnv = process.env.NODE_ENV;
+
+        // Simulate production mode without proper secret
+        delete process.env.API_KEY_HMAC_SECRET;
+        process.env.NODE_ENV = 'production';
+
+        const result = validateApiKeyConfig();
+        expect(result.valid).toBe(false);
+        expect(result.error).toBeDefined();
+        expect(result.error).toContain('CRITICAL');
+        expect(result.error).toContain('API_KEY_HMAC_SECRET');
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        }
+        process.env.NODE_ENV = originalEnv;
+      });
+
+      test('returns valid true without warning when properly configured', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+
+        // Set a proper secret
+        process.env.API_KEY_HMAC_SECRET = 'a-very-secure-secret-that-is-at-least-32-characters-long';
+
+        const result = validateApiKeyConfig();
+        expect(result.valid).toBe(true);
+        expect(result.warning).toBeUndefined();
+        expect(result.error).toBeUndefined();
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        } else {
+          delete process.env.API_KEY_HMAC_SECRET;
+        }
+      });
+    });
+
+    describe('isApiKeyAuthEnabled', () => {
+      test('returns true in development even without proper secret', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+        const originalEnv = process.env.NODE_ENV;
+
+        delete process.env.API_KEY_HMAC_SECRET;
+        process.env.NODE_ENV = 'development';
+
+        expect(isApiKeyAuthEnabled()).toBe(true);
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        }
+        process.env.NODE_ENV = originalEnv;
+      });
+
+      test('returns false in production without proper secret', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+        const originalEnv = process.env.NODE_ENV;
+
+        delete process.env.API_KEY_HMAC_SECRET;
+        process.env.NODE_ENV = 'production';
+
+        expect(isApiKeyAuthEnabled()).toBe(false);
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        }
+        process.env.NODE_ENV = originalEnv;
+      });
+
+      test('returns true in production with proper secret', () => {
+        const originalSecret = process.env.API_KEY_HMAC_SECRET;
+        const originalEnv = process.env.NODE_ENV;
+
+        process.env.API_KEY_HMAC_SECRET = 'a-very-secure-secret-that-is-at-least-32-characters-long';
+        process.env.NODE_ENV = 'production';
+
+        expect(isApiKeyAuthEnabled()).toBe(true);
+
+        // Restore
+        if (originalSecret !== undefined) {
+          process.env.API_KEY_HMAC_SECRET = originalSecret;
+        } else {
+          delete process.env.API_KEY_HMAC_SECRET;
+        }
+        process.env.NODE_ENV = originalEnv;
+      });
     });
   });
 });

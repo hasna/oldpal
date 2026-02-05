@@ -242,6 +242,18 @@ describe('Web tools', () => {
     await expect(WebFetchTool.executor({ url: 'http://[fd00::1]' })).rejects.toThrow('Cannot fetch');
   });
 
+  test('WebFetchTool should block IPv6 link-local addresses', async () => {
+    await expect(WebFetchTool.executor({ url: 'http://[fe80::1]' })).rejects.toThrow('Cannot fetch');
+  });
+
+  test('WebFetchTool should block multicast addresses', async () => {
+    await expect(WebFetchTool.executor({ url: 'http://224.0.0.1' })).rejects.toThrow('Cannot fetch');
+  });
+
+  test('WebFetchTool should block reserved addresses', async () => {
+    await expect(WebFetchTool.executor({ url: 'http://240.0.0.1' })).rejects.toThrow('Cannot fetch');
+  });
+
   test('WebFetchTool should block IPv4-mapped IPv6 loopback', async () => {
     await expect(WebFetchTool.executor({ url: 'http://[::ffff:127.0.0.1]' })).rejects.toThrow('Cannot fetch');
   });
@@ -458,6 +470,18 @@ describe('Web tools', () => {
   test('CurlTool should block IPv4-mapped IPv6 loopback', async () => {
     await expect(CurlTool.executor({ url: 'http://[::ffff:127.0.0.1]', method: 'GET' }))
       .rejects.toThrow('Cannot fetch');
+  });
+
+  test('CurlTool should block IPv6 link-local addresses', async () => {
+    await expect(CurlTool.executor({ url: 'http://[fe80::1]', method: 'GET' })).rejects.toThrow('Cannot fetch');
+  });
+
+  test('CurlTool should block multicast addresses', async () => {
+    await expect(CurlTool.executor({ url: 'http://224.0.0.1', method: 'GET' })).rejects.toThrow('Cannot fetch');
+  });
+
+  test('CurlTool should block reserved addresses', async () => {
+    await expect(CurlTool.executor({ url: 'http://240.0.0.1', method: 'GET' })).rejects.toThrow('Cannot fetch');
   });
 
   test('CurlTool should reject non-http protocols', async () => {

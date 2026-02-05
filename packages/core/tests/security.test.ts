@@ -54,8 +54,77 @@ describe('Path Security', () => {
     expect(result.safe).toBe(false);
   });
 
-  test('should not block paths that only share a prefix', async () => {
-    const result = await isPathSafe('/etc/passwd2', 'read');
+  test('should not block paths that only share a prefix with protected paths', async () => {
+    // Test that /etc/passwd2 isn't blocked just because /etc/passwd is protected
+    // We need to allow /etc in the allowlist to isolate testing the protected path matching
+    const result = await isPathSafe('/etc/passwd2', 'read', { cwd: '/', allowedPaths: ['/etc'] });
+    expect(result.safe).toBe(true);
+  });
+
+  test('should block path traversal attempts with ../', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-traversal-'));
+    const result = await isPathSafe(join(base, '../../etc/passwd'), 'read', { cwd: base });
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('outside');
+  });
+
+  test('should block protected filename patterns (.env)', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-env-'));
+    const result = await isPathSafe(join(base, '.env'), 'read', { cwd: base });
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('protected name');
+  });
+
+  test('should block protected filename patterns (.env.local)', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-envlocal-'));
+    const result = await isPathSafe(join(base, '.env.local'), 'read', { cwd: base });
+    expect(result.safe).toBe(false);
+    expect(result.reason).toContain('protected name');
+  });
+
+  test('should block credentials files', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-creds-'));
+    const result = await isPathSafe(join(base, 'credentials.json'), 'read', { cwd: base });
+    expect(result.safe).toBe(false);
+  });
+
+  test('should block id_rsa private keys', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-ssh-'));
+    const result = await isPathSafe(join(base, 'id_rsa'), 'read', { cwd: base });
+    expect(result.safe).toBe(false);
+  });
+
+  test('should block .pem files', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-pem-'));
+    const result = await isPathSafe(join(base, 'private.pem'), 'read', { cwd: base });
+    expect(result.safe).toBe(false);
+  });
+
+  test('should block AWS credentials', async () => {
+    const result = await isPathSafe('~/.aws/credentials', 'read');
+    expect(result.safe).toBe(false);
+  });
+
+  test('should block npm tokens', async () => {
+    const result = await isPathSafe('~/.npmrc', 'read');
+    expect(result.safe).toBe(false);
+  });
+
+  test('should block symlink pointing to protected file', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-symlink-'));
+    const secretFile = join(base, '.env');
+    await writeFile(secretFile, 'SECRET=foo');
+    const linkPath = join(base, 'innocent.txt');
+    await symlink(secretFile, linkPath);
+
+    const result = await isPathSafe(linkPath, 'read', { cwd: base });
+    expect(result.safe).toBe(false);
+  });
+
+  test('should allow safe paths within cwd', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'assistants-safe-'));
+    const safePath = join(base, 'safe', 'file.txt');
+    const result = await isPathSafe(safePath, 'read', { cwd: base });
     expect(result.safe).toBe(true);
   });
 });

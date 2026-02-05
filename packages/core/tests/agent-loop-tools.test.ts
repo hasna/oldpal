@@ -130,4 +130,44 @@ describe('AgentLoop tool execution', () => {
     expect(events).toContain('PreToolUse');
     expect(events).toContain('PostToolUseFailure');
   });
+
+  test('should ignore tool result when stop() is called during execution', async () => {
+    const agent = new AgentLoop({ cwd: '/tmp/base' });
+    const emittedResults: unknown[] = [];
+
+    // Register a tool that triggers stop during execution
+    (agent as any).toolRegistry.register(makeTool('slow-tool'), async () => {
+      // Simulate stop being called during tool execution
+      agent.stop();
+      return 'should be ignored';
+    });
+
+    (agent as any).onChunk = (chunk: any) => {
+      if (chunk.type === 'tool_result') {
+        emittedResults.push(chunk.toolResult);
+      }
+    };
+
+    const results = await (agent as any).executeToolCalls([{ id: '1', name: 'slow-tool', input: {} }]);
+
+    // The result should not be emitted or included in results
+    expect(emittedResults.length).toBe(0);
+    expect(results.length).toBe(0);
+    // pendingToolCalls should be cleared
+    expect((agent as any).pendingToolCalls.size).toBe(0);
+  });
+
+  test('should clear pendingToolCalls when stop() is called', async () => {
+    const agent = new AgentLoop({ cwd: '/tmp/base' });
+
+    // Manually add pending tool calls
+    (agent as any).pendingToolCalls.set('1', 'tool1');
+    (agent as any).pendingToolCalls.set('2', 'tool2');
+
+    expect((agent as any).pendingToolCalls.size).toBe(2);
+
+    agent.stop();
+
+    expect((agent as any).pendingToolCalls.size).toBe(0);
+  });
 });

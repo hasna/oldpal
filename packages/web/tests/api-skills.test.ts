@@ -1,9 +1,16 @@
 import { describe, expect, test, mock, beforeAll, afterAll } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mock auth middleware to allow API key or Bearer token auth
+// Token types for testing different auth scenarios
+const TOKEN_NO_SCOPE = 'api-key-no-scope';
+const TOKEN_WRONG_SCOPE = 'api-key-wrong-scope';
+const TOKEN_WITH_SCOPE = 'api-key-with-scope';
+const TOKEN_ADMIN = 'api-key-admin';
+const TOKEN_JWT = 'jwt-token';
+
+// Mock auth middleware to test scoped API key authentication
 mock.module('@/lib/auth/middleware', () => ({
-  withApiKeyAuth: (handler: any) => async (req: any) => {
+  withScopedApiKeyAuth: (requiredScopes: string[], handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
@@ -18,27 +25,46 @@ mock.module('@/lib/auth/middleware', () => ({
         { status: 401 }
       );
     }
+
+    // Set up user
     (req as any).user = { userId: 'user-123', email: 'test@example.com', role: 'user' };
-    (req as any).apiKeyPermissions = ['read:skills'];
-    return handler(req);
-  },
-  withScopedAuth: (scopes: string[], handler: any) => async (req: any) => {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
-        { status: 401 }
-      );
+
+    // Determine permissions based on token type
+    let permissions: string[] | undefined;
+    if (token === TOKEN_NO_SCOPE) {
+      permissions = [];
+    } else if (token === TOKEN_WRONG_SCOPE) {
+      permissions = ['read:agents', 'write:agents'];
+    } else if (token === TOKEN_WITH_SCOPE) {
+      permissions = ['read:skills'];
+    } else if (token === TOKEN_ADMIN) {
+      permissions = ['admin'];
+    } else if (token === TOKEN_JWT) {
+      // JWT tokens don't have apiKeyPermissions
+      permissions = undefined;
+    } else {
+      // Default case for backward compatibility - treat as having scope
+      permissions = ['read:skills'];
     }
-    const token = authHeader.substring(7);
-    if (token === 'invalid') {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid token' } },
-        { status: 401 }
-      );
+
+    (req as any).apiKeyPermissions = permissions;
+
+    // Check scopes (mimicking withScopedApiKeyAuth logic)
+    if (permissions !== undefined) {
+      // API key - check scopes
+      if (permissions.includes('admin')) {
+        return handler(req);
+      }
+      const missingScopes = requiredScopes.filter(scope => !permissions!.includes(scope));
+      if (missingScopes.length > 0) {
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: `API key missing required scopes: ${missingScopes.join(', ')}` } },
+          { status: 403 }
+        );
+      }
     }
-    (req as any).user = { userId: 'user-123', email: 'test@example.com', role: 'user' };
-    (req as any).apiKeyPermissions = ['read:skills'];
+
+    // JWT or API key with required scopes - allow
     return handler(req);
   },
 }));
@@ -87,13 +113,52 @@ describe('GET /api/v1/skills', () => {
       expect(response.status).toBe(401);
     });
 
-    test('allows API key authentication', async () => {
-      const request = createRequest({ token: 'sk_live_test_api_key_12345' });
+    test('allows API key authentication with correct scope', async () => {
+      const request = createRequest({ token: TOKEN_WITH_SCOPE });
 
       const response = await GET(request);
 
-      // Should succeed (mock allows any valid format)
       expect(response.status).toBe(200);
+    });
+
+    test('allows JWT tokens (no apiKeyPermissions)', async () => {
+      const request = createRequest({ token: TOKEN_JWT });
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+    });
+
+    test('allows admin API keys', async () => {
+      const request = createRequest({ token: TOKEN_ADMIN });
+
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+    });
+  });
+
+  describe('scope enforcement', () => {
+    test('returns 403 for API key without any scope', async () => {
+      const request = createRequest({ token: TOKEN_NO_SCOPE });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error.code).toBe('FORBIDDEN');
+      expect(data.error.message).toContain('read:skills');
+    });
+
+    test('returns 403 for API key with wrong scope', async () => {
+      const request = createRequest({ token: TOKEN_WRONG_SCOPE });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error.code).toBe('FORBIDDEN');
+      expect(data.error.message).toContain('read:skills');
     });
   });
 
