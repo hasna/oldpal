@@ -3,13 +3,18 @@ import { withApiKeyAuth, type AuthenticatedRequest } from '@/lib/auth/middleware
 import { successResponse, errorResponse } from '@/lib/api/response';
 
 /**
- * Tool parameter property schema
+ * Tool parameter property schema (supports nested array items)
  */
 interface ToolPropertySchema {
   type: string | string[];
   description: string;
   enum?: string[];
   default?: unknown;
+  items?: {
+    type: string | string[];
+    properties?: Record<string, ToolPropertySchema>;
+    required?: string[];
+  };
 }
 
 /**
@@ -378,8 +383,8 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
             properties: {
               key: { type: 'string', description: 'Unique identifier' },
               value: { type: ['string', 'number', 'boolean', 'object'], description: 'The information to store. Can be a string, number, boolean, or object.' },
-              category: { type: 'string', enum: ['preference', 'fact', 'knowledge', 'history'] },
-              scope: { type: 'string', enum: ['global', 'shared', 'private'] },
+              category: { type: 'string', description: 'Type of memory', enum: ['preference', 'fact', 'knowledge', 'history'] },
+              scope: { type: 'string', description: 'Memory scope', enum: ['global', 'shared', 'private'] },
               scopeId: { type: 'string', description: 'Scope identifier' },
               importance: { type: 'number', description: 'Importance 1-10' },
               summary: { type: 'string', description: 'Short summary' },
@@ -470,9 +475,9 @@ export const GET = withApiKeyAuth(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url);
 
-    // Pagination params
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
+    // Pagination params (handle invalid/NaN values with fallback)
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
 
     // Filter params
     const search = searchParams.get('search')?.toLowerCase();

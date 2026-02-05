@@ -75,9 +75,9 @@ export const GET = withApiKeyAuth(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url);
 
-    // Pagination params
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
+    // Pagination params (handle invalid/NaN values with fallback)
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
 
     // Filter params
     const search = searchParams.get('search')?.toLowerCase();
