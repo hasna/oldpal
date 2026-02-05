@@ -166,13 +166,14 @@ export default function ChatPage() {
       // Check if unmounted after fetch
       if (!isMountedRef.current) return;
 
-      // Get session ID from header
+      // Get session ID from header - only update URL if sessionId actually changed
       const newSessionId = response.headers.get('X-Session-Id');
-      if (newSessionId) {
+      if (newSessionId && newSessionId !== sessionId) {
         setSessionId(newSessionId);
         const nextParams = new URLSearchParams(safeSearchParams);
         nextParams.set('session', newSessionId);
-        router.replace(`/chat?${nextParams.toString()}`);
+        // Use scroll: false to prevent scroll position reset
+        router.replace(`/chat?${nextParams.toString()}`, { scroll: false });
       }
 
       if (!response.ok) {
