@@ -199,6 +199,157 @@ Create `~/.assistants/config.json` or `.assistants/config.json`:
 | **WebSearch** | Search the web |
 | **Wait** | Pause execution |
 
+## Memory System
+
+The memory system provides persistent storage for agent memories across sessions. Memories are scoped, categorized, and can be automatically injected into conversations.
+
+### Scopes
+
+| Scope | Description |
+|-------|-------------|
+| **global** | Accessible to all agents and sessions |
+| **shared** | Shared between agents (visible to current agent + agents it delegates to) |
+| **private** | Private to the current agent only |
+
+### Categories
+
+| Category | Description |
+|----------|-------------|
+| **preference** | User settings and choices (e.g., timezone, language) |
+| **fact** | Known truths about the user or environment |
+| **knowledge** | Learned information (e.g., API patterns, project structure) |
+| **history** | Session context and conversation topics |
+
+### Using the Memory Manager
+
+```typescript
+import { GlobalMemoryManager } from '@hasna/assistants-core';
+
+const manager = new GlobalMemoryManager({
+  dbPath: '/path/to/memory.db',
+  defaultScope: 'private',
+  scopeId: 'my-agent-123',
+});
+
+// Store a memory
+await manager.set('user.timezone', 'America/Los_Angeles', {
+  category: 'preference',
+  importance: 8,
+  summary: 'User is in Pacific time',
+  tags: ['user', 'timezone'],
+});
+
+// Retrieve a memory
+const memory = await manager.get('user.timezone');
+console.log(memory?.value); // 'America/Los_Angeles'
+
+// Query memories
+const prefs = await manager.query({
+  category: 'preference',
+  minImportance: 5,
+  limit: 10,
+});
+
+// Get relevant memories for a context
+const relevant = await manager.getRelevant('What time is it?', {
+  categories: ['preference', 'fact'],
+  minImportance: 5,
+});
+
+// Export/Import
+const exported = await manager.export();
+await manager.import(memoriesArray, { overwrite: true });
+```
+
+### Memory Injection
+
+The `MemoryInjector` automatically includes relevant memories in the system prompt:
+
+```typescript
+import { MemoryInjector } from '@hasna/assistants-core';
+
+const injector = new MemoryInjector(manager, {
+  enabled: true,
+  maxTokens: 500,
+  minImportance: 5,
+  categories: ['preference', 'fact'],
+  refreshInterval: 5, // Refresh deduped memories every 5 turns
+});
+
+// Prepare injection for a user message
+const { content, memoryIds, tokenEstimate } = await injector.prepareInjection(
+  'Help me with this task'
+);
+
+// content is formatted markdown ready to include in system prompt
+```
+
+### Memory Commands
+
+Users can manage memories via slash commands:
+
+| Command | Description |
+|---------|-------------|
+| `/memory` | Show help and statistics |
+| `/memory list [category]` | List memories with optional filters |
+| `/memory get <key>` | Get a specific memory |
+| `/memory set <key> <value>` | Save a memory |
+| `/memory update <key> [opts]` | Update memory metadata |
+| `/memory search <query>` | Search memories |
+| `/memory delete <key>` | Delete a memory |
+| `/memory stats` | Show detailed statistics |
+| `/memory export [file]` | Export to JSON |
+| `/memory import <file>` | Import from JSON |
+
+### Memory Tools
+
+Agents can use memory tools programmatically:
+
+| Tool | Description |
+|------|-------------|
+| `memory_save` | Save information to memory |
+| `memory_recall` | Recall by key or search |
+| `memory_list` | List memories with filters |
+| `memory_forget` | Delete a memory |
+| `memory_update` | Update metadata |
+| `memory_stats` | Get statistics |
+| `memory_export` | Export memories |
+| `memory_import` | Import memories |
+
+### Privacy Boundaries
+
+- **Global memories** are accessible to all agents
+- **Private memories** are isolated by `scopeId` (typically the agent ID)
+- **Shared memories** can be accessed by the agent and its delegates
+- Memory queries enforce scope isolation to prevent data leakage
+- Access logs track all read/write operations
+
+### Configuration
+
+```json
+{
+  "memory": {
+    "enabled": true,
+    "injection": {
+      "enabled": true,
+      "maxTokens": 500,
+      "minImportance": 5,
+      "categories": ["preference", "fact"],
+      "refreshInterval": 5
+    },
+    "storage": {
+      "maxEntries": 1000,
+      "defaultTTL": null
+    },
+    "scopes": {
+      "globalEnabled": true,
+      "sharedEnabled": true,
+      "privateEnabled": true
+    }
+  }
+}
+```
+
 ## Optional Features
 
 These features require additional configuration:
