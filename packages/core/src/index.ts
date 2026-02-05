@@ -8,6 +8,7 @@ export type { Runtime, FileHandle, SpawnOptions, SpawnResult, ShellResult, Shell
 export { AgentLoop } from './agent/loop';
 export { AgentContext } from './agent/context';
 export { SubagentManager } from './agent/subagent-manager';
+export { StatsTracker } from './agent/stats';
 export type {
   SubagentConfig,
   SubagentResult,
@@ -19,10 +20,29 @@ export type {
   SubagentLoopConfig,
   SubagentRunner,
 } from './agent/subagent-manager';
+export type { ToolStats, SessionStats } from './agent/stats';
 
 // Tools
 export { ToolRegistry } from './tools/registry';
-export { ConnectorBridge } from './tools/connector';
+export {
+  ConnectorBridge,
+  connectorExecuteTool,
+  createConnectorExecuteExecutor,
+  registerConnectorExecuteTool,
+  connectorsSearchTool,
+  createConnectorsSearchExecutor,
+  registerConnectorsSearchTool,
+  connectorsListTool,
+  createConnectorsListExecutor,
+  registerConnectorsListTool,
+} from './tools/connector';
+export type {
+  ConnectorExecuteContext,
+  ConnectorSearchContext,
+  ConnectorListContext,
+} from './tools/connector';
+export { ConnectorIndex } from './tools/connector-index';
+export type { IndexedConnector } from './tools/connector-index';
 export { BashTool } from './tools/bash';
 export { FilesystemTools } from './tools/filesystem';
 export { WebTools } from './tools/web';
@@ -72,6 +92,41 @@ export {
   registerAgentTools,
   type AgentToolContext,
 } from './tools/agents';
+export {
+  ToolIndex,
+  toolsSearchTool,
+  createToolsSearchExecutor,
+  registerToolsSearchTool,
+} from './tools/search';
+export type { ToolMetadata, ToolsSearchContext } from './tools/search';
+export {
+  agentRegistryTools,
+  registryListTool,
+  registryQueryTool,
+  registryGetTool,
+  registryStatsTool,
+  createAgentRegistryToolExecutors,
+  registerAgentRegistryTools,
+} from './tools/agent-registry';
+export type { RegistryToolContext } from './tools/agent-registry';
+export {
+  capabilityTools,
+  capabilitiesGetTool,
+  capabilitiesStatusTool,
+  capabilitiesCheckTool,
+  createCapabilityToolExecutors,
+  registerCapabilityTools,
+} from './tools/capabilities';
+export type { CapabilityToolContext } from './tools/capabilities';
+export {
+  swarmTools,
+  swarmExecuteTool,
+  swarmStatusTool,
+  swarmStopTool,
+  createSwarmToolExecutors,
+  registerSwarmTools,
+} from './tools/swarm';
+export type { SwarmToolContext } from './tools/swarm';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';
@@ -131,6 +186,18 @@ export {
   registerMemoryTools,
 } from './tools/memory';
 export type { MemoryToolContext } from './tools/memory';
+export {
+  voiceTools,
+  voiceEnableTool,
+  voiceDisableTool,
+  voiceStatusTool,
+  voiceSayTool,
+  voiceListenTool,
+  voiceStopTool,
+  createVoiceToolExecutors,
+  registerVoiceTools,
+} from './tools/voice';
+export type { VoiceToolContext } from './tools/voice';
 
 // Context
 export * from './context';
@@ -140,6 +207,17 @@ export * from './heartbeat';
 
 // Energy
 export * from './energy';
+
+// Budget
+export {
+  BudgetTracker,
+  DEFAULT_BUDGET_CONFIG,
+  DEFAULT_SESSION_LIMITS,
+  DEFAULT_AGENT_LIMITS,
+  DEFAULT_SWARM_LIMITS,
+  WARNING_THRESHOLD,
+} from './budget';
+export type { BudgetScope, BudgetCheckResult, BudgetStatus, BudgetUpdate } from './budget';
 
 // Voice
 export * from './voice/types';
@@ -174,7 +252,7 @@ export {
 export type { ModelDefinition } from './llm/models';
 
 // Config
-export { loadConfig, getConfigPath } from './config';
+export { loadConfig, getConfigPath, getConfigDir, getProjectConfigDir } from './config';
 
 // Inbox
 export * from './inbox';
@@ -245,6 +323,18 @@ export * from './validation';
 // Security
 export * from './security';
 
+// Guardrails
+export * from './guardrails';
+
+// Registry
+export * from './registry';
+
+// Capabilities
+export * from './capabilities';
+
+// Swarm
+export * from './swarm';
+
 // Features (runtime feature detection)
 export * from './features';
 
@@ -270,4 +360,5 @@ export type {
   GoalAnalysis,
   DocumentAttachment,
   DocumentSource,
+  ConnectorsConfigShared,
 } from '@hasna/assistants-shared';

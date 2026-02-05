@@ -1,7 +1,35 @@
 import { join } from 'path';
 import { homedir } from 'os';
-import type { AssistantsConfig, HookConfig } from '@hasna/assistants-shared';
+import type { AssistantsConfig, HookConfig, ConnectorsConfigShared } from '@hasna/assistants-shared';
 import { getRuntime, hasRuntime } from './runtime';
+
+/**
+ * Merge connectors config, handling both string[] and object formats
+ */
+function mergeConnectorsConfig(
+  base?: string[] | ConnectorsConfigShared,
+  override?: string[] | ConnectorsConfigShared
+): string[] | ConnectorsConfigShared | undefined {
+  // Override takes precedence if defined
+  if (override !== undefined) {
+    // If override is an array, use it directly
+    if (Array.isArray(override)) {
+      return override;
+    }
+    // If override is an object, merge with base (if base is also object)
+    if (base && !Array.isArray(base)) {
+      return {
+        ...base,
+        ...override,
+        // Merge arrays instead of replacing
+        enabled: override.enabled ?? base.enabled,
+        priorityConnectors: override.priorityConnectors ?? base.priorityConnectors,
+      };
+    }
+    return override;
+  }
+  return base;
+}
 
 /**
  * Default system prompt - used when no ASSISTANTS.md files are found
@@ -25,6 +53,12 @@ const DEFAULT_SYSTEM_PROMPT = `You are Hasna Assistant, a helpful AI assistant r
 - Ask clarifying questions when requirements are ambiguous
 - Explain your reasoning when making architectural decisions
 - Use the ask_user tool to collect structured answers when you need details
+
+## Task Management
+- Use task tools (tasks_list, tasks_add, tasks_complete) to manage work items
+- Check the task queue with tasks_list before starting multi-step work
+- When the user mentions "tasks", "todo", or work items, use task tools - not connectors
+- Complete tasks with tasks_complete when finished, or tasks_fail if blocked
 `;
 
 const DEFAULT_CONFIG: AssistantsConfig = {
@@ -193,6 +227,17 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       'schedule_delete',
     ],
   },
+  input: {
+    paste: {
+      enabled: true,
+      thresholds: {
+        chars: 500,
+        words: 100,
+        lines: 20,
+      },
+      mode: 'placeholder',
+    },
+  },
 };
 
 function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig>): AssistantsConfig {
@@ -232,7 +277,7 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
       ...(override.llm || {}),
     },
     voice: mergedVoice,
-    connectors: override.connectors ?? base.connectors,
+    connectors: mergeConnectorsConfig(base.connectors, override.connectors),
     skills: override.skills ?? base.skills,
     hooks: override.hooks ?? base.hooks,
     scheduler: {
@@ -366,6 +411,18 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
       // Arrays are replaced, not merged
       defaultTools: override.subagents?.defaultTools ?? base.subagents?.defaultTools,
       forbiddenTools: override.subagents?.forbiddenTools ?? base.subagents?.forbiddenTools,
+    },
+    input: {
+      ...(base.input || {}),
+      ...(override.input || {}),
+      paste: {
+        ...(base.input?.paste || {}),
+        ...(override.input?.paste || {}),
+        thresholds: {
+          ...(base.input?.paste?.thresholds || {}),
+          ...(override.input?.paste?.thresholds || {}),
+        },
+      },
     },
   };
 }
