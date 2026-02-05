@@ -47,3 +47,4 @@ coverage/
 tmp/
 temp/
 .checkactions-state.json
+.playwright-mcp/
