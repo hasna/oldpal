@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 /**
- * Build script for @hasna/assistants-terminal
+ * Build script for @hasna/assistants
+ *
+ * Bundles core and shared packages into a single distributable package.
  *
  * Produces:
  * - dist/lib.js    - Library entry point (for imports)
@@ -16,7 +18,7 @@ const ROOT = join(import.meta.dir, '..');
 const DIST = join(ROOT, 'dist');
 
 async function build() {
-  console.log('Building @hasna/assistants-terminal...');
+  console.log('Building @hasna/assistants...');
 
   // Clean dist
   if (existsSync(DIST)) {
@@ -32,8 +34,9 @@ async function build() {
     target: 'bun',
     format: 'esm',
     external: [
-      '@hasna/assistants-core',
-      '@hasna/assistants-shared',
+      // Internal packages are bundled, not external
+      // '@hasna/assistants-core',  -- bundled
+      // '@hasna/assistants-shared', -- bundled
       '@hasna/runtime-bun',
       'react',
       'ink',
@@ -64,8 +67,9 @@ async function build() {
     target: 'bun',
     format: 'esm',
     external: [
-      '@hasna/assistants-core',
-      '@hasna/assistants-shared',
+      // Internal packages are bundled, not external
+      // '@hasna/assistants-core',  -- bundled
+      // '@hasna/assistants-shared', -- bundled
       '@hasna/runtime-bun',
       'react',
       'ink',
@@ -129,23 +133,54 @@ async function build() {
     }
 
     console.log('  Full declarations failed, generating fallback .d.ts...');
-    // Generate minimal fallback declarations that re-export from dependencies
-    // This allows consumers to get types from the source packages
+    // Generate minimal fallback declarations
+    // Core and shared are bundled, so types are inline
     const fallbackDeclaration = `/**
- * Type declarations for @hasna/assistants-terminal
+ * Type declarations for @hasna/assistants
  *
  * Note: Full declarations are generated from source in development.
  * Published packages should include proper .d.ts files.
- *
- * For full type support, consumers can also import types directly from:
- * - @hasna/assistants-core (AgentLoop, ToolRegistry, etc.)
- * - @hasna/assistants-shared (Message, Tool, StreamChunk, etc.)
  */
 
-// Re-export core types that terminal exposes
-export { AgentLoop, EmbeddedClient, ToolRegistry, SkillLoader } from '@hasna/assistants-core';
-export type { AgentLoopOptions } from '@hasna/assistants-core';
-export type { Message, Tool, ToolCall, ToolResult, StreamChunk, Skill, AssistantsConfig } from '@hasna/assistants-shared';
+// Core types (bundled from @hasna/assistants-core)
+export declare class AgentLoop {
+  constructor(options: AgentLoopOptions);
+  initialize(): Promise<void>;
+  process(message: string): Promise<void>;
+  stop(): void;
+}
+
+export interface AgentLoopOptions {
+  cwd?: string;
+  sessionId?: string;
+  llmClient?: any;
+  allowedTools?: string[];
+  onChunk?: (chunk: StreamChunk) => void;
+}
+
+export interface StreamChunk {
+  type: 'text' | 'tool_use' | 'tool_result' | 'usage' | 'error' | 'done';
+  content?: string;
+  toolCall?: ToolCall;
+  toolResult?: ToolResult;
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface ToolResult {
+  id: string;
+  result: string;
+  isError?: boolean;
+}
+
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 // Terminal-specific exports
 export declare function startTerminal(options?: {

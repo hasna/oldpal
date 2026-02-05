@@ -1,7 +1,7 @@
 {
-  "name": "@hasna/assistants-terminal",
-  "version": "1.0.1",
-  "description": "A powerful AI assistant that runs in your terminal, powered by Claude",
+  "name": "@hasna/assistants",
+  "version": "1.0.0",
+  "description": "AI assistant that runs in your terminal - powered by Claude",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -23,10 +23,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/hasna/assistants.git",
-    "directory": "packages/terminal"
+    "url": "https://github.com/hasna/assistants.git"
   },
-  "homepage": "https://github.com/hasna/assistants/tree/main/packages/terminal#readme",
+  "homepage": "https://github.com/hasna/assistants#readme",
   "bugs": {
     "url": "https://github.com/hasna/assistants/issues"
   },
