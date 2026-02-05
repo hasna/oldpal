@@ -151,7 +151,7 @@ export function ConnectorsPanel({
   const [isLoadingHelp, setIsLoadingHelp] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingCommands, setIsLoadingCommands] = useState(false);
+  const [loadingConnectorName, setLoadingConnectorName] = useState<string | null>(null);
   const [loadedConnectors, setLoadedConnectors] = useState<Map<string, Connector>>(new Map());
 
   // Filter and sort connectors based on search query
@@ -230,16 +230,19 @@ export function ConnectorsPanel({
       (connector.commands.length === 1 && connector.commands[0].name === 'help');
     if (!needsLoad) return;
 
-    setIsLoadingCommands(true);
+    const connectorName = connector.name;
+    setLoadingConnectorName(connectorName);
     try {
-      const loaded = await onLoadCommands(connector.name);
+      const loaded = await onLoadCommands(connectorName);
       if (loaded) {
-        setLoadedConnectors((prev) => new Map(prev).set(connector.name, loaded));
+        setLoadedConnectors((prev) => new Map(prev).set(connectorName, loaded));
       }
     } catch {
       // Ignore load errors
     } finally {
-      setIsLoadingCommands(false);
+      // Only clear loading state if we're still loading this connector
+      // This prevents race conditions when user switches connectors mid-load
+      setLoadingConnectorName((current) => current === connectorName ? null : current);
     }
   }, [onLoadCommands, loadedConnectors]);
 
@@ -551,7 +554,7 @@ export function ConnectorsPanel({
             )}
           </Box>
 
-          {isLoadingCommands ? (
+          {loadingConnectorName === currentConnector.name ? (
             <Box paddingBottom={1}>
               <Text color="yellow">Loading commands...</Text>
             </Box>

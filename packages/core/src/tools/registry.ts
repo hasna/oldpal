@@ -29,7 +29,7 @@ export interface AnnotatedTool extends Tool {
 /**
  * Tool executor function type
  */
-export type ToolExecutor = (input: Record<string, unknown>) => Promise<string>;
+export type ToolExecutor = (input: Record<string, unknown>, signal?: AbortSignal) => Promise<string>;
 
 /**
  * Registered tool with executor
@@ -204,8 +204,10 @@ export class ToolRegistry {
 
   /**
    * Execute a tool call
+   * @param toolCall - The tool call to execute
+   * @param signal - Optional AbortSignal for cancellation
    */
-  async execute(toolCall: ToolCall): Promise<ToolResult> {
+  async execute(toolCall: ToolCall, signal?: AbortSignal): Promise<ToolResult> {
     const registered = this.tools.get(toolCall.name);
 
     if (!registered) {
@@ -269,8 +271,39 @@ export class ToolRegistry {
         timeoutMs = derivedWaitTimeout;
       }
 
-      const result = await Promise.race([
-        registered.executor(input),
+      // Check for abort before starting
+      if (signal?.aborted) {
+        throw new ToolExecutionError('Tool execution aborted', {
+          toolName: toolCall.name,
+          toolInput: toolCall.input,
+          code: ErrorCodes.TOOL_EXECUTION_FAILED,
+          recoverable: false,
+          retryable: false,
+          suggestion: 'The operation was cancelled.',
+        });
+      }
+
+      // Create abort promise if signal provided
+      const abortPromise = signal
+        ? new Promise<never>((_, reject) => {
+            const onAbort = () => {
+              reject(
+                new ToolExecutionError('Tool execution aborted', {
+                  toolName: toolCall.name,
+                  toolInput: toolCall.input,
+                  code: ErrorCodes.TOOL_EXECUTION_FAILED,
+                  recoverable: false,
+                  retryable: false,
+                  suggestion: 'The operation was cancelled.',
+                })
+              );
+            };
+            signal.addEventListener('abort', onAbort, { once: true });
+          })
+        : null;
+
+      const racePromises: Promise<string>[] = [
+        registered.executor(input, signal),
         sleep(timeoutMs).then(() => {
           throw new ToolExecutionError(`Tool timeout after ${Math.round(timeoutMs / 1000)}s`, {
             toolName: toolCall.name,
@@ -281,7 +314,13 @@ export class ToolRegistry {
             suggestion: 'Try again or increase the timeout.',
           });
         }),
-      ]);
+      ];
+
+      if (abortPromise) {
+        racePromises.push(abortPromise);
+      }
+
+      const result = await Promise.race(racePromises);
       const isError = isErrorResult(result);
       const outputLimit = this.getToolOutputLimit(toolCall.name);
       const rawContent = typeof result === 'string' ? result : safeStringify(result);

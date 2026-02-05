@@ -30,7 +30,7 @@ export type DocumentSource =
   | { type: 'file'; fileId: string };
 
 export interface StreamChunk {
-  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'usage' | 'exit' | 'show_panel';
+  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'usage' | 'exit' | 'show_panel' | 'stopped';
   content?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;

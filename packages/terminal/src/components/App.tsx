@@ -683,6 +683,11 @@ export function App({ cwd, version }: AppProps) {
       const active = registryRef.current.getActiveSession();
       if (active) {
         registryRef.current.setProcessing(active.id, false);
+        // Clear any stale inline pending entries for this session
+        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== active.id));
+        pendingSendsRef.current = pendingSendsRef.current.filter(
+          (entry) => entry.sessionId !== active.id
+        );
       }
       // Trigger queue flush check after state settles
       setQueueFlushTrigger((prev) => prev + 1);
@@ -706,6 +711,11 @@ export function App({ cwd, version }: AppProps) {
       const active = registryRef.current.getActiveSession();
       if (active) {
         registryRef.current.setProcessing(active.id, false);
+        // Clear any stale inline pending entries for this session
+        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== active.id));
+        pendingSendsRef.current = pendingSendsRef.current.filter(
+          (entry) => entry.sessionId !== active.id
+        );
       }
       const turnId = turnIdRef.current;
       // Defer clearing streaming state to avoid flicker where output disappears
@@ -727,6 +737,19 @@ export function App({ cwd, version }: AppProps) {
         setHeartbeatState(activeSession.client.getHeartbeatState?.() ?? undefined);
         setIdentityInfo(activeSession.client.getIdentityInfo() ?? undefined);
       }
+    } else if (chunk.type === 'stopped') {
+      // Agent was stopped mid-processing (e.g., user pressed Ctrl+C)
+      // Clear pending entries and trigger queue flush
+      const active = registryRef.current.getActiveSession();
+      if (active) {
+        // Clear any stale inline pending entries for this session
+        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== active.id));
+        pendingSendsRef.current = pendingSendsRef.current.filter(
+          (entry) => entry.sessionId !== active.id
+        );
+      }
+      // Trigger queue flush check (done chunk will follow shortly)
+      setQueueFlushTrigger((prev) => prev + 1);
     } else if (chunk.type === 'show_panel') {
       // Show interactive panel
       if (chunk.panel === 'connectors') {

@@ -160,6 +160,7 @@ export class AgentLoop {
   private sessionStartTime: number = Date.now();
   private isRunning = false;
   private shouldStop = false;
+  private toolAbortController: AbortController | null = null;
   private systemPrompt: string | null = null;
   private connectorDiscovery: Promise<unknown> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -1195,9 +1196,13 @@ export class AgentLoop {
   private async executeToolCalls(toolCalls: ToolCall[]): Promise<ToolResult[]> {
     const results: ToolResult[] = [];
 
+    // Create new abort controller for this batch of tool calls
+    this.toolAbortController = new AbortController();
+    const signal = this.toolAbortController.signal;
+
     for (const toolCall of toolCalls) {
       // Check if stop was requested - break early and return partial results
-      if (this.shouldStop) {
+      if (this.shouldStop || signal.aborted) {
         break;
       }
 
@@ -1468,7 +1473,7 @@ export class AgentLoop {
 
       // Execute the tool with timing
       const toolStartTime = Date.now();
-      const result = await this.toolRegistry.execute(toolCall);
+      const result = await this.toolRegistry.execute(toolCall, signal);
       const toolDuration = Date.now() - toolStartTime;
 
       // Record tool call in budget tracker
@@ -1508,6 +1513,9 @@ export class AgentLoop {
       // Update registry load after tool completion
       this.updateRegistryLoad();
     }
+
+    // Clean up abort controller
+    this.toolAbortController = null;
 
     return results;
   }
@@ -1830,7 +1838,14 @@ export class AgentLoop {
     this.shouldStop = true;
     // Clear pending tool calls so late results don't contaminate state
     this.pendingToolCalls.clear();
+    // Abort any running tool executions
+    if (this.toolAbortController) {
+      this.toolAbortController.abort();
+      this.toolAbortController = null;
+    }
     this.setHeartbeatState('stopped');
+    // Emit stopped chunk so clients can drain queues
+    this.emit({ type: 'stopped' });
   }
 
   /**

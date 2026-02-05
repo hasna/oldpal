@@ -64,7 +64,8 @@ export class EmbeddedClient implements AssistantClient {
         if (chunk.type === 'error') {
           this.sawErrorChunk = true;
         }
-        if (chunk.type === 'done' || chunk.type === 'error') {
+        // Drain queue on terminal chunks (done, error, stopped)
+        if (chunk.type === 'done' || chunk.type === 'error' || chunk.type === 'stopped') {
           queueMicrotask(() => {
             void this.drainQueue();
           });
