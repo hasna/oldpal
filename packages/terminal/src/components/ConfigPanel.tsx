@@ -1,0 +1,702 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { Box, Text, useInput } from 'ink';
+import TextInput from 'ink-text-input';
+import type { AssistantsConfig } from '@hasna/assistants-shared';
+import {
+  ANTHROPIC_MODELS,
+  DEFAULT_MODEL,
+  getModelDisplayName,
+} from '@hasna/assistants-shared';
+
+type ConfigLocation = 'user' | 'project' | 'local';
+type ConfigSection = 'overview' | 'model' | 'context' | 'memory' | 'subagents' | 'voice' | 'energy';
+
+interface ConfigPanelProps {
+  config: AssistantsConfig;
+  userConfig: Partial<AssistantsConfig> | null;
+  projectConfig: Partial<AssistantsConfig> | null;
+  localConfig: Partial<AssistantsConfig> | null;
+  onSave: (location: ConfigLocation, updates: Partial<AssistantsConfig>) => Promise<void>;
+  onCancel: () => void;
+}
+
+const SECTIONS: { id: ConfigSection; name: string; icon: string }[] = [
+  { id: 'overview', name: 'Overview', icon: '📋' },
+  { id: 'model', name: 'Model', icon: '🤖' },
+  { id: 'context', name: 'Context', icon: '📝' },
+  { id: 'memory', name: 'Memory', icon: '🧠' },
+  { id: 'subagents', name: 'Subagents', icon: '👥' },
+  { id: 'voice', name: 'Voice', icon: '🎤' },
+  { id: 'energy', name: 'Energy', icon: '⚡' },
+];
+
+type Mode = 'sections' | 'editing' | 'location-select';
+
+export function ConfigPanel({
+  config,
+  userConfig,
+  projectConfig,
+  localConfig,
+  onSave,
+  onCancel,
+}: ConfigPanelProps) {
+  const [selectedSection, setSelectedSection] = useState(0);
+  const [mode, setMode] = useState<Mode>('sections');
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [saveLocation, setSaveLocation] = useState<ConfigLocation>('project');
+  const [locationSelectIndex, setLocationSelectIndex] = useState(1); // Default to project
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Model editing state
+  const [selectedModelIndex, setSelectedModelIndex] = useState(
+    ANTHROPIC_MODELS.findIndex((m) => m.id === config.llm?.model) ||
+    ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL)
+  );
+  const [maxTokens, setMaxTokens] = useState(config.llm?.maxTokens ?? 8192);
+
+  // Clear message after 3 seconds
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
+  // Section navigation
+  useInput((input, key) => {
+    if (mode !== 'sections') return;
+
+    // Navigate sections
+    if (key.upArrow) {
+      setSelectedSection((prev) => (prev === 0 ? SECTIONS.length - 1 : prev - 1));
+      return;
+    }
+    if (key.downArrow) {
+      setSelectedSection((prev) => (prev === SECTIONS.length - 1 ? 0 : prev + 1));
+      return;
+    }
+
+    // Number keys for quick jump
+    const num = parseInt(input, 10);
+    if (!isNaN(num) && num >= 1 && num <= SECTIONS.length) {
+      setSelectedSection(num - 1);
+      return;
+    }
+
+    // Enter to edit section
+    if (key.return) {
+      const section = SECTIONS[selectedSection];
+      if (section.id !== 'overview') {
+        setMode('editing');
+      }
+      return;
+    }
+
+    // Escape to close
+    if (key.escape) {
+      onCancel();
+      return;
+    }
+  }, { isActive: mode === 'sections' });
+
+  // Editing mode handler
+  useInput((input, key) => {
+    if (mode !== 'editing') return;
+
+    const section = SECTIONS[selectedSection];
+
+    // Escape to go back
+    if (key.escape) {
+      setEditingField(null);
+      setMode('sections');
+      return;
+    }
+
+    // Model section specific controls
+    if (section.id === 'model' && !editingField) {
+      if (key.upArrow) {
+        setSelectedModelIndex((prev) => (prev === 0 ? ANTHROPIC_MODELS.length - 1 : prev - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedModelIndex((prev) => (prev === ANTHROPIC_MODELS.length - 1 ? 0 : prev + 1));
+        return;
+      }
+      if (key.leftArrow) {
+        setMaxTokens((prev: number) => Math.max(1024, prev - 1024));
+        return;
+      }
+      if (key.rightArrow) {
+        setMaxTokens((prev: number) => Math.min(16384, prev + 1024));
+        return;
+      }
+      if (key.return || input === 's' || input === 'S') {
+        // Save model settings
+        setMode('location-select');
+        return;
+      }
+    }
+
+    // Toggle boolean values
+    if (input === 't' || input === 'T') {
+      if (section.id === 'memory') {
+        handleSaveField('memory.enabled', !config.memory?.enabled);
+      } else if (section.id === 'voice') {
+        handleSaveField('voice.enabled', !config.voice?.enabled);
+      } else if (section.id === 'energy') {
+        handleSaveField('energy.enabled', !config.energy?.enabled);
+      }
+      return;
+    }
+
+    // Number input for numeric fields
+    if (section.id === 'context' && !editingField) {
+      if (input === '1') {
+        setEditingField('context.maxContextTokens');
+        setEditValue(String(config.context?.maxContextTokens ?? 180000));
+      } else if (input === '2') {
+        setEditingField('context.keepRecentMessages');
+        setEditValue(String(config.context?.keepRecentMessages ?? 10));
+      }
+      return;
+    }
+
+    if (section.id === 'subagents' && !editingField) {
+      if (input === '1') {
+        setEditingField('subagents.maxDepth');
+        setEditValue(String(config.subagents?.maxDepth ?? 3));
+      } else if (input === '2') {
+        setEditingField('subagents.maxConcurrent');
+        setEditValue(String(config.subagents?.maxConcurrent ?? 5));
+      } else if (input === '3') {
+        setEditingField('subagents.maxTurns');
+        setEditValue(String(config.subagents?.maxTurns ?? 10));
+      }
+      return;
+    }
+
+    if (section.id === 'energy' && !editingField && input !== 't' && input !== 'T') {
+      if (input === '1') {
+        setEditingField('energy.maxEnergy');
+        setEditValue(String(config.energy?.maxEnergy ?? 10000));
+      } else if (input === '2') {
+        setEditingField('energy.regenRate');
+        setEditValue(String(config.energy?.regenRate ?? 500));
+      }
+      return;
+    }
+  }, { isActive: mode === 'editing' && !editingField });
+
+  // Text input submit handler
+  const handleFieldSubmit = useCallback(() => {
+    if (!editingField) return;
+
+    const numValue = parseInt(editValue, 10);
+    if (isNaN(numValue) || numValue < 0) {
+      setMessage({ type: 'error', text: 'Invalid number' });
+      return;
+    }
+
+    handleSaveField(editingField, numValue);
+    setEditingField(null);
+  }, [editingField, editValue]);
+
+  // Field escape handler
+  useInput((_input, key) => {
+    if (mode === 'editing' && editingField && key.escape) {
+      setEditingField(null);
+    }
+  }, { isActive: mode === 'editing' && !!editingField });
+
+  // Location select handler
+  useInput((input, key) => {
+    if (mode !== 'location-select') return;
+
+    const locations: ConfigLocation[] = ['user', 'project', 'local'];
+
+    if (key.upArrow) {
+      setLocationSelectIndex((prev) => (prev === 0 ? 2 : prev - 1));
+      return;
+    }
+    if (key.downArrow) {
+      setLocationSelectIndex((prev) => (prev === 2 ? 0 : prev + 1));
+      return;
+    }
+    if (key.return) {
+      setSaveLocation(locations[locationSelectIndex]);
+      performSave(locations[locationSelectIndex]);
+      return;
+    }
+    if (key.escape) {
+      setMode('editing');
+      return;
+    }
+  }, { isActive: mode === 'location-select' });
+
+  // Save a single field
+  const handleSaveField = async (field: string, value: unknown) => {
+    const updates = buildUpdates(field, value);
+    await performSave(saveLocation, updates);
+  };
+
+  // Build nested updates object
+  const buildUpdates = (field: string, value: unknown): Partial<AssistantsConfig> => {
+    const parts = field.split('.');
+    const updates: Record<string, unknown> = {};
+    let current = updates;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      current[parts[i]] = {};
+      current = current[parts[i]] as Record<string, unknown>;
+    }
+    current[parts[parts.length - 1]] = value;
+
+    return updates as Partial<AssistantsConfig>;
+  };
+
+  // Perform save
+  const performSave = async (location: ConfigLocation, updates?: Partial<AssistantsConfig>) => {
+    setIsSubmitting(true);
+    try {
+      const section = SECTIONS[selectedSection];
+      let saveUpdates = updates;
+
+      // If no updates provided, use current editing state
+      if (!saveUpdates && section.id === 'model') {
+        saveUpdates = {
+          llm: {
+            provider: config.llm?.provider ?? 'anthropic',
+            model: ANTHROPIC_MODELS[selectedModelIndex].id,
+            maxTokens,
+          },
+        };
+      }
+
+      if (saveUpdates) {
+        await onSave(location, saveUpdates);
+        setMessage({ type: 'success', text: `Saved to ${location} config` });
+      }
+      setMode('sections');
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Save failed' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Get source indicator for a value
+  const getSource = (path: string): string => {
+    const parts = path.split('.');
+    const getValue = (obj: Record<string, unknown> | null | undefined, keys: string[]): unknown => {
+      if (!obj) return undefined;
+      let current: unknown = obj;
+      for (const key of keys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = (current as Record<string, unknown>)[key];
+        } else {
+          return undefined;
+        }
+      }
+      return current;
+    };
+
+    if (getValue(localConfig as Record<string, unknown>, parts) !== undefined) return '[local]';
+    if (getValue(projectConfig as Record<string, unknown>, parts) !== undefined) return '[project]';
+    if (getValue(userConfig as Record<string, unknown>, parts) !== undefined) return '[user]';
+    return '[default]';
+  };
+
+  // Render section content
+  const renderSectionContent = () => {
+    const section = SECTIONS[selectedSection];
+
+    switch (section.id) {
+      case 'overview':
+        return (
+          <Box flexDirection="column">
+            <Text bold>Configuration Overview</Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text dimColor>Config sources (in priority order):</Text>
+              <Text>  1. Local:   .assistants/config.local.json {localConfig ? '✓' : '—'}</Text>
+              <Text>  2. Project: .assistants/config.json {projectConfig ? '✓' : '—'}</Text>
+              <Text>  3. User:    ~/.assistants/config.json {userConfig ? '✓' : '—'}</Text>
+              <Text>  4. Default: Built-in defaults</Text>
+            </Box>
+            <Box marginTop={1} flexDirection="column">
+              <Text dimColor>Current effective settings:</Text>
+              <Text>  Model: {getModelDisplayName(config.llm?.model ?? DEFAULT_MODEL)}</Text>
+              <Text>  Max Tokens: {config.llm?.maxTokens ?? 8192}</Text>
+              <Text>  Memory: {config.memory?.enabled ? 'enabled' : 'disabled'}</Text>
+              <Text>  Voice: {config.voice?.enabled ? 'enabled' : 'disabled'}</Text>
+            </Box>
+          </Box>
+        );
+
+      case 'model':
+        return (
+          <Box flexDirection="column">
+            <Text bold>Model Settings</Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text dimColor>Select model: (↑/↓)</Text>
+              <Box flexDirection="column" marginTop={1} marginBottom={1}>
+                {ANTHROPIC_MODELS.map((model, index) => (
+                  <Text
+                    key={model.id}
+                    inverse={index === selectedModelIndex}
+                    color={index === selectedModelIndex ? 'cyan' : undefined}
+                    dimColor={index !== selectedModelIndex}
+                  >
+                    {index === selectedModelIndex ? '>' : ' '} {model.name}
+                    <Text dimColor> - {model.description}</Text>
+                  </Text>
+                ))}
+              </Box>
+            </Box>
+            <Box marginTop={1} flexDirection="column">
+              <Text>Max Tokens: <Text color="cyan">{maxTokens}</Text> (←/→ to adjust by 1024)</Text>
+              <Text dimColor>
+                {maxTokens < 4096 ? 'Short responses' : maxTokens > 12000 ? 'Very long responses' : 'Standard length'}
+              </Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Press s to save | Esc to cancel</Text>
+            </Box>
+          </Box>
+        );
+
+      case 'context':
+        return (
+          <Box flexDirection="column">
+            <Text bold>Context Settings</Text>
+            <Box marginTop={1} flexDirection="column">
+              {editingField === 'context.maxContextTokens' ? (
+                <Box>
+                  <Text>1. Max Context Tokens: </Text>
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleFieldSubmit}
+                  />
+                </Box>
+              ) : (
+                <Text>
+                  1. Max Context Tokens: <Text color="cyan">{config.context?.maxContextTokens ?? 180000}</Text>
+                  <Text dimColor> {getSource('context.maxContextTokens')}</Text>
+                </Text>
+              )}
+              {editingField === 'context.keepRecentMessages' ? (
+                <Box>
+                  <Text>2. Keep Recent Messages: </Text>
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleFieldSubmit}
+                  />
+                </Box>
+              ) : (
+                <Text>
+                  2. Keep Recent Messages: <Text color="cyan">{config.context?.keepRecentMessages ?? 10}</Text>
+                  <Text dimColor> {getSource('context.keepRecentMessages')}</Text>
+                </Text>
+              )}
+              <Text>
+                Summary Strategy: <Text color="cyan">{config.context?.summaryStrategy ?? 'hybrid'}</Text>
+                <Text dimColor> {getSource('context.summaryStrategy')}</Text>
+              </Text>
+              <Text>
+                Summary Max Tokens: <Text color="cyan">{config.context?.summaryMaxTokens ?? 2000}</Text>
+              </Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Press 1-2 to edit | Esc to go back</Text>
+            </Box>
+          </Box>
+        );
+
+      case 'memory':
+        return (
+          <Box flexDirection="column">
+            <Text bold>Memory Settings</Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text>
+                Enabled: <Text color={config.memory?.enabled ? 'green' : 'red'}>{config.memory?.enabled ? 'Yes' : 'No'}</Text>
+                <Text dimColor> (t to toggle) {getSource('memory.enabled')}</Text>
+              </Text>
+              <Text>
+                Injection: <Text color={config.memory?.injection?.enabled ? 'green' : 'red'}>{config.memory?.injection?.enabled ? 'Yes' : 'No'}</Text>
+              </Text>
+              <Text>
+                Max Injection Tokens: <Text color="cyan">{config.memory?.injection?.maxTokens ?? 500}</Text>
+              </Text>
+              <Text>
+                Min Importance: <Text color="cyan">{config.memory?.injection?.minImportance ?? 5}</Text>
+              </Text>
+              <Text>
+                Max Entries: <Text color="cyan">{config.memory?.storage?.maxEntries ?? 1000}</Text>
+              </Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Scopes:</Text>
+              <Text dimColor>  Global: {config.memory?.scopes?.globalEnabled ? '✓' : '✗'}</Text>
+              <Text dimColor>  Shared: {config.memory?.scopes?.sharedEnabled ? '✓' : '✗'}</Text>
+              <Text dimColor>  Private: {config.memory?.scopes?.privateEnabled ? '✓' : '✗'}</Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Press t to toggle enabled | Esc to go back</Text>
+            </Box>
+          </Box>
+        );
+
+      case 'subagents':
+        return (
+          <Box flexDirection="column">
+            <Text bold>Subagents Settings</Text>
+            <Box marginTop={1} flexDirection="column">
+              {editingField === 'subagents.maxDepth' ? (
+                <Box>
+                  <Text>1. Max Depth: </Text>
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleFieldSubmit}
+                  />
+                </Box>
+              ) : (
+                <Text>
+                  1. Max Depth: <Text color="cyan">{config.subagents?.maxDepth ?? 3}</Text>
+                  <Text dimColor> {getSource('subagents.maxDepth')}</Text>
+                </Text>
+              )}
+              {editingField === 'subagents.maxConcurrent' ? (
+                <Box>
+                  <Text>2. Max Concurrent: </Text>
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleFieldSubmit}
+                  />
+                </Box>
+              ) : (
+                <Text>
+                  2. Max Concurrent: <Text color="cyan">{config.subagents?.maxConcurrent ?? 5}</Text>
+                  <Text dimColor> {getSource('subagents.maxConcurrent')}</Text>
+                </Text>
+              )}
+              {editingField === 'subagents.maxTurns' ? (
+                <Box>
+                  <Text>3. Max Turns: </Text>
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleFieldSubmit}
+                  />
+                </Box>
+              ) : (
+                <Text>
+                  3. Max Turns: <Text color="cyan">{config.subagents?.maxTurns ?? 10}</Text>
+                  <Text dimColor> {getSource('subagents.maxTurns')}</Text>
+                </Text>
+              )}
+              <Text>
+                Default Timeout: <Text color="cyan">{Math.round((config.subagents?.defaultTimeoutMs ?? 120000) / 1000)}s</Text>
+              </Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Default Tools: {(config.subagents?.defaultTools ?? []).slice(0, 5).join(', ')}...</Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Press 1-3 to edit | Esc to go back</Text>
+            </Box>
+          </Box>
+        );
+
+      case 'voice':
+        return (
+          <Box flexDirection="column">
+            <Text bold>Voice Settings</Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text>
+                Enabled: <Text color={config.voice?.enabled ? 'green' : 'red'}>{config.voice?.enabled ? 'Yes' : 'No'}</Text>
+                <Text dimColor> (t to toggle) {getSource('voice.enabled')}</Text>
+              </Text>
+              <Text>
+                TTS Provider: <Text color="cyan">{config.voice?.tts?.provider ?? 'elevenlabs'}</Text>
+              </Text>
+              <Text>
+                STT Provider: <Text color="cyan">{config.voice?.stt?.provider ?? 'whisper'}</Text>
+              </Text>
+              <Text>
+                Auto Listen: <Text color={config.voice?.autoListen ? 'green' : 'red'}>{config.voice?.autoListen ? 'Yes' : 'No'}</Text>
+              </Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Press t to toggle enabled | Esc to go back</Text>
+            </Box>
+          </Box>
+        );
+
+      case 'energy':
+        return (
+          <Box flexDirection="column">
+            <Text bold>Energy Settings</Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text>
+                Enabled: <Text color={config.energy?.enabled ? 'green' : 'red'}>{config.energy?.enabled ? 'Yes' : 'No'}</Text>
+                <Text dimColor> (t to toggle) {getSource('energy.enabled')}</Text>
+              </Text>
+              {editingField === 'energy.maxEnergy' ? (
+                <Box>
+                  <Text>1. Max Energy: </Text>
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleFieldSubmit}
+                  />
+                </Box>
+              ) : (
+                <Text>
+                  1. Max Energy: <Text color="cyan">{config.energy?.maxEnergy ?? 10000}</Text>
+                  <Text dimColor> {getSource('energy.maxEnergy')}</Text>
+                </Text>
+              )}
+              {editingField === 'energy.regenRate' ? (
+                <Box>
+                  <Text>2. Regen Rate: </Text>
+                  <TextInput
+                    value={editValue}
+                    onChange={setEditValue}
+                    onSubmit={handleFieldSubmit}
+                  />
+                </Box>
+              ) : (
+                <Text>
+                  2. Regen Rate: <Text color="cyan">{config.energy?.regenRate ?? 500}</Text>/min
+                  <Text dimColor> {getSource('energy.regenRate')}</Text>
+                </Text>
+              )}
+              <Text>
+                Low Threshold: <Text color="cyan">{config.energy?.lowEnergyThreshold ?? 3000}</Text>
+              </Text>
+              <Text>
+                Critical Threshold: <Text color="cyan">{config.energy?.criticalThreshold ?? 1000}</Text>
+              </Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Costs:</Text>
+              <Text dimColor>  Message: {config.energy?.costs?.message ?? 200}</Text>
+              <Text dimColor>  Tool Call: {config.energy?.costs?.toolCall ?? 500}</Text>
+              <Text dimColor>  LLM Call: {config.energy?.costs?.llmCall ?? 300}</Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Press t to toggle | 1-2 to edit | Esc to go back</Text>
+            </Box>
+          </Box>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Location select dialog
+  if (mode === 'location-select') {
+    const locations: { id: ConfigLocation; name: string; desc: string }[] = [
+      { id: 'user', name: 'User (~/.assistants/config.json)', desc: 'Global settings for all projects' },
+      { id: 'project', name: 'Project (.assistants/config.json)', desc: 'Settings for this project' },
+      { id: 'local', name: 'Local (.assistants/config.local.json)', desc: 'Local overrides (gitignored)' },
+    ];
+
+    return (
+      <Box flexDirection="column" paddingY={1}>
+        <Box marginBottom={1}>
+          <Text bold color="cyan">Save to which config?</Text>
+        </Box>
+        <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+          {locations.map((loc, index) => (
+            <Box key={loc.id} flexDirection="column">
+              <Text
+                inverse={index === locationSelectIndex}
+                color={index === locationSelectIndex ? 'cyan' : undefined}
+              >
+                {index === locationSelectIndex ? '>' : ' '} {loc.name}
+              </Text>
+              {index === locationSelectIndex && (
+                <Text dimColor>    {loc.desc}</Text>
+              )}
+            </Box>
+          ))}
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>↑/↓ select | Enter confirm | Esc cancel</Text>
+        </Box>
+        {isSubmitting && (
+          <Box marginTop={1}>
+            <Text color="yellow">Saving...</Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  // Main UI
+  return (
+    <Box flexDirection="column" paddingY={1}>
+      <Box marginBottom={1} justifyContent="space-between">
+        <Text bold>Configuration</Text>
+        <Text dimColor>{mode === 'editing' ? 'Editing' : 'Sections'}</Text>
+      </Box>
+
+      <Box>
+        {/* Section list */}
+        <Box
+          flexDirection="column"
+          borderStyle="round"
+          borderColor="gray"
+          paddingX={1}
+          marginRight={1}
+          width={20}
+        >
+          {SECTIONS.map((section, index) => (
+            <Text
+              key={section.id}
+              inverse={index === selectedSection}
+              color={index === selectedSection ? 'cyan' : undefined}
+              dimColor={index !== selectedSection}
+            >
+              {index === selectedSection ? '>' : ' '} {section.icon} {section.name}
+            </Text>
+          ))}
+        </Box>
+
+        {/* Section content */}
+        <Box
+          flexDirection="column"
+          borderStyle="round"
+          borderColor="gray"
+          paddingX={1}
+          flexGrow={1}
+        >
+          {renderSectionContent()}
+        </Box>
+      </Box>
+
+      {/* Message */}
+      {message && (
+        <Box marginTop={1}>
+          <Text color={message.type === 'success' ? 'green' : 'red'}>{message.text}</Text>
+        </Box>
+      )}
+
+      {/* Footer */}
+      <Box marginTop={1}>
+        <Text dimColor>
+          {mode === 'sections'
+            ? '↑/↓ navigate | Enter edit section | 1-7 jump | Esc close'
+            : 'Esc back to sections'}
+        </Text>
+      </Box>
+    </Box>
+  );
+}
