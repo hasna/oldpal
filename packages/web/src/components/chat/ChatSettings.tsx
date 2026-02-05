@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Settings2, X, Info } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
@@ -8,7 +8,9 @@ import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -18,6 +20,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  ALL_MODELS,
+  getModelById,
+  getModelsGroupedByProvider,
+  clampMaxTokens,
+  DEFAULT_MODEL,
+} from '@hasna/assistants-shared';
 
 export interface ChatSettingsValues {
   model: string;
@@ -26,16 +35,10 @@ export interface ChatSettingsValues {
 }
 
 const DEFAULT_SETTINGS: ChatSettingsValues = {
-  model: 'claude-sonnet-4-20250514',
+  model: DEFAULT_MODEL,
   temperature: 0.7,
   maxTokens: 4096,
 };
-
-const AVAILABLE_MODELS = [
-  { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Latest, fast & capable' },
-  { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', description: 'Most intelligent' },
-  { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', description: 'Fastest, cost-effective' },
-];
 
 const STORAGE_KEY = 'chat-settings';
 
@@ -90,6 +93,23 @@ export function ChatSettingsDrawer({
   onSettingsChange,
   onReset,
 }: ChatSettingsDrawerProps) {
+  // Get models grouped by provider for the dropdown
+  const modelsByProvider = useMemo(() => getModelsGroupedByProvider(), []);
+  const currentModel = getModelById(settings.model);
+  const maxOutputTokens = currentModel?.maxOutputTokens ?? 16384;
+
+  // Handle model change with maxTokens clamping
+  const handleModelChange = (newModel: string) => {
+    const clampedTokens = clampMaxTokens(newModel, settings.maxTokens);
+    onSettingsChange({ model: newModel, maxTokens: clampedTokens });
+  };
+
+  // Handle max tokens change with clamping
+  const handleMaxTokensChange = (value: number) => {
+    const clampedTokens = clampMaxTokens(settings.model, value);
+    onSettingsChange({ maxTokens: clampedTokens });
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -117,28 +137,47 @@ export function ChatSettingsDrawer({
                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                 </TooltipTrigger>
                 <TooltipContent side="left" className="max-w-[200px]">
-                  <p className="text-xs">Choose which Claude model to use for responses</p>
+                  <p className="text-xs">Choose which model to use for responses</p>
                 </TooltipContent>
               </Tooltip>
             </div>
             <Select
               value={settings.model}
-              onValueChange={(value) => onSettingsChange({ model: value })}
+              onValueChange={handleModelChange}
             >
               <SelectTrigger id="model">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {AVAILABLE_MODELS.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    <div className="flex flex-col">
-                      <span>{model.name}</span>
-                      <span className="text-xs text-muted-foreground">{model.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectLabel>Anthropic</SelectLabel>
+                  {modelsByProvider.anthropic.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col">
+                        <span>{model.name}</span>
+                        <span className="text-xs text-muted-foreground">{model.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>OpenAI</SelectLabel>
+                  {modelsByProvider.openai.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col">
+                        <span>{model.name}</span>
+                        <span className="text-xs text-muted-foreground">{model.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
+            {currentModel && (
+              <p className="text-xs text-muted-foreground">
+                Context: {((currentModel.contextWindow ?? 0) / 1000).toFixed(0)}K • Max output: {((currentModel.maxOutputTokens ?? 0) / 1000).toFixed(0)}K
+              </p>
+            )}
           </div>
 
           {/* Temperature */}
@@ -194,14 +233,14 @@ export function ChatSettingsDrawer({
             <Slider
               id="maxTokens"
               value={[settings.maxTokens]}
-              onValueChange={([value]) => onSettingsChange({ maxTokens: value })}
+              onValueChange={([value]) => handleMaxTokensChange(value)}
               min={256}
-              max={16384}
+              max={maxOutputTokens}
               step={256}
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>256</span>
-              <span>16,384</span>
+              <span>{maxOutputTokens.toLocaleString()}</span>
             </div>
           </div>
         </div>

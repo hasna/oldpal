@@ -29,7 +29,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AvatarUpload } from '@/components/ui/avatar-upload';
-import { LoginHistory, ActiveSessions, LanguageSelector } from '@/components/settings';
+import {
+  LoginHistory,
+  ActiveSessions,
+  PreferencesSection,
+  NotificationPreferencesSection,
+  ApiKeysSection,
+} from '@/components/settings';
 
 // Password strength checker
 function checkPasswordStrength(password: string): {
@@ -568,8 +574,14 @@ export default function SettingsPage() {
           </Card>
         )}
 
-        {/* Language Selector */}
-        <LanguageSelector />
+        {/* Preferences Section (Theme + Language) */}
+        <PreferencesSection />
+
+        {/* Notification Preferences */}
+        <NotificationPreferencesSection />
+
+        {/* API Keys */}
+        <ApiKeysSection />
 
         {/* Account Section */}
         <Card>
