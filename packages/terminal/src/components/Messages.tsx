@@ -6,7 +6,7 @@ import {
   groupConsecutiveToolMessages,
   type DisplayMessage,
 } from './messageLines';
-import { truncateToolResult } from './toolDisplay';
+import { truncateToolResult, truncateToolResultWithInfo } from './toolDisplay';
 import { basename } from 'path';
 
 interface ActivityEntry {
@@ -117,47 +117,26 @@ export function Messages({
         return <CombinedToolMessage key={item.id} messages={item.item.messages} verboseTools={verboseTools} />;
       })}
 
-      {/* Show activity log - text, tool calls, and tool results */}
-      {visibleActivity.map((entry) => {
-        if (entry.type === 'text' && entry.content) {
-          return (
-            <Box key={entry.id} marginY={1}>
-              <Text dimColor>● </Text>
-              <Box flexGrow={1}>
-                <Markdown content={entry.content} />
-              </Box>
+      {/* Show text entries from activity log */}
+      {visibleActivity
+        .filter((entry) => entry.type === 'text' && entry.content)
+        .map((entry) => (
+          <Box key={entry.id} marginY={1}>
+            <Text dimColor>● </Text>
+            <Box flexGrow={1}>
+              <Markdown content={entry.content!} />
             </Box>
-          );
-        }
-        if (entry.type === 'tool_call' && entry.toolCall) {
-          const resultEntry = toolResultMap.get(entry.toolCall.id);
-          const elapsedMs = (resultEntry ? resultEntry.timestamp : now) - entry.timestamp;
-          const elapsedText = formatDuration(elapsedMs);
-          return (
-            <Box key={entry.id} marginY={1} flexDirection="column">
-              <Box>
-                <Text dimColor>⚙ </Text>
-                <Text dimColor>{formatToolCall(entry.toolCall)}</Text>
-              </Box>
-              <Box marginLeft={2}>
-                <Text dimColor>{elapsedText} elapsed</Text>
-              </Box>
-            </Box>
-          );
-        }
-        if (entry.type === 'tool_result' && entry.toolResult) {
-          const output = truncateToolResult(entry.toolResult, undefined, undefined, { verbose: verboseTools });
-          return (
-            <Box key={entry.id} marginY={1}>
-              <Text dimColor>↳ </Text>
-              <Box flexGrow={1}>
-                <Text dimColor>{output}</Text>
-              </Box>
-            </Box>
-          );
-        }
-        return null;
-      })}
+          </Box>
+        ))}
+
+      {/* Unified active tools panel */}
+      {visibleActivity.some((entry) => entry.type === 'tool_call') && (
+        <ActiveToolsPanel
+          activityLog={visibleActivity}
+          now={now}
+          verboseTools={verboseTools}
+        />
+      )}
 
       {visibleStreaming.map((message) => (
         <MessageBubble
@@ -181,11 +160,23 @@ export function Messages({
   );
 }
 
+/**
+ * Format duration in a human-friendly way
+ * - Under 1 minute: "42s"
+ * - Under 1 hour: "5m 32s"
+ * - 1 hour or more: "1h 21m 32s"
+ */
 function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   if (totalSeconds < 60) return `${totalSeconds}s`;
-  const mins = Math.floor(totalSeconds / 60);
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
   const secs = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${mins}m ${secs}s`;
+  }
   return `${mins}m ${secs}s`;
 }
 
@@ -288,6 +279,139 @@ function MessageBubble({ message, queuedMessageIds, verboseTools }: MessageBubbl
   );
 }
 
+/**
+ * Unified panel showing all active tool calls with status and counts
+ */
+interface ActiveToolsStatus {
+  running: number;
+  succeeded: number;
+  failed: number;
+  total: number;
+}
+
+interface ActiveToolInfo {
+  id: string;
+  toolCall: ToolCall;
+  status: 'running' | 'succeeded' | 'failed';
+  startTime: number;
+  endTime?: number;
+  result?: ToolResult;
+}
+
+interface ActiveToolsPanelProps {
+  activityLog: ActivityEntry[];
+  now: number;
+  verboseTools?: boolean;
+}
+
+function ActiveToolsPanel({ activityLog, now, verboseTools }: ActiveToolsPanelProps) {
+  const { stdout } = useStdout();
+  const columns = stdout?.columns ?? 80;
+  const panelWidth = Math.max(1, columns - 2);
+
+  // Build tool call info from activity log
+  const toolCalls = useMemo(() => {
+    const calls: ActiveToolInfo[] = [];
+    const resultMap = new Map<string, { result: ToolResult; timestamp: number }>();
+
+    // First pass: collect results
+    for (const entry of activityLog) {
+      if (entry.type === 'tool_result' && entry.toolResult) {
+        resultMap.set(entry.toolResult.toolCallId, {
+          result: entry.toolResult,
+          timestamp: entry.timestamp,
+        });
+      }
+    }
+
+    // Second pass: build tool info
+    for (const entry of activityLog) {
+      if (entry.type === 'tool_call' && entry.toolCall) {
+        const resultInfo = resultMap.get(entry.toolCall.id);
+        calls.push({
+          id: entry.toolCall.id,
+          toolCall: entry.toolCall,
+          status: resultInfo
+            ? resultInfo.result.isError ? 'failed' : 'succeeded'
+            : 'running',
+          startTime: entry.timestamp,
+          endTime: resultInfo?.timestamp,
+          result: resultInfo?.result,
+        });
+      }
+    }
+
+    return calls;
+  }, [activityLog]);
+
+  // Calculate status counts
+  const status = useMemo<ActiveToolsStatus>(() => {
+    const counts = { running: 0, succeeded: 0, failed: 0, total: 0 };
+    for (const call of toolCalls) {
+      counts.total++;
+      counts[call.status]++;
+    }
+    return counts;
+  }, [toolCalls]);
+
+  if (toolCalls.length === 0) return null;
+
+  // Determine panel border color
+  const hasErrors = status.failed > 0;
+  const allDone = status.running === 0;
+  const borderColor = hasErrors ? 'red' : allDone ? 'green' : 'yellow';
+
+  // Build summary text
+  const summaryParts: string[] = [];
+  if (status.running > 0) summaryParts.push(`${status.running} running`);
+  if (status.succeeded > 0) summaryParts.push(`${status.succeeded} done`);
+  if (status.failed > 0) summaryParts.push(`${status.failed} failed`);
+  const summaryText = summaryParts.join(', ');
+
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={borderColor}
+      paddingX={1}
+      width={panelWidth}
+      marginY={1}
+    >
+      <Box justifyContent="space-between">
+        <Text color={borderColor} bold>Active Tools</Text>
+        <Text dimColor>{status.total} · {summaryText}</Text>
+      </Box>
+      {toolCalls.map((call) => {
+        const statusIcon = call.status === 'running' ? '◐'
+          : call.status === 'failed' ? '✗' : '✓';
+        const statusColor = call.status === 'running' ? 'yellow'
+          : call.status === 'failed' ? 'red' : 'green';
+        const elapsedMs = (call.endTime ?? now) - call.startTime;
+        const elapsedText = formatDuration(elapsedMs);
+        const displayName = getToolDisplayName(call.toolCall);
+        const context = getToolContext(call.toolCall);
+
+        return (
+          <Box key={call.id} flexDirection="column" marginTop={1}>
+            <Box>
+              <Text color={statusColor}>{statusIcon} </Text>
+              <Text color={statusColor} bold>{displayName}</Text>
+              <Text dimColor> [{call.status}]</Text>
+              {context && <Text dimColor> · {context}</Text>}
+              <Text dimColor> · {elapsedText}</Text>
+            </Box>
+            {call.result && (
+              <Box marginLeft={2}>
+                <Text dimColor>↳ {truncateToolResult(call.result, 2, 200, { verbose: verboseTools })}</Text>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
 function startsWithListOrTable(content: string): boolean {
   const lines = content.split('\n');
   for (const line of lines) {
@@ -351,19 +475,25 @@ function ToolCallPanel({
       {toolCalls.map((toolCall) => {
         const result = resultMap.get(toolCall.id);
         const statusIcon = result ? (result.isError ? '✗' : '✓') : '◐';
+        const statusLabel = result ? (result.isError ? 'failed' : 'succeeded') : 'running';
         const statusColor = result ? (result.isError ? 'red' : 'green') : 'yellow';
         const displayName = getToolDisplayName(toolCall);
         const context = getToolContext(toolCall);
         const maxLine = Math.max(1, innerWidth - 2);
         const summaryLine = truncate(formatToolCall(toolCall), maxLine);
-        const resultText = result
-          ? indentMultiline(truncateToolResult(result, 4, 400, { verbose: verboseTools }), '  ')
+        const truncatedResult = result
+          ? truncateToolResultWithInfo(result, 4, 400, { verbose: verboseTools })
+          : null;
+        const resultText = truncatedResult
+          ? indentMultiline(truncatedResult.content, '  ')
           : '';
+        const showExpandHint = !verboseTools && truncatedResult?.truncation.wasTruncated;
         return (
           <Box key={toolCall.id} flexDirection="column" marginTop={1}>
             <Box>
               <Text color={statusColor}>{statusIcon} </Text>
               <Text color={statusColor} bold>{displayName}</Text>
+              <Text dimColor> [{statusLabel}]</Text>
               {context && <Text dimColor> · {context}</Text>}
             </Box>
             <Text dimColor>{summaryLine}</Text>
@@ -372,9 +502,9 @@ function ToolCallPanel({
                 <Text dimColor>↳ {resultText}</Text>
               </Box>
             )}
-            {result && !verboseTools && result.truncated && (
+            {showExpandHint && (
               <Box marginLeft={2}>
-                <Text dimColor>↳ (truncated · Ctrl+O for full output)</Text>
+                <Text dimColor>↳ (Ctrl+O for full output)</Text>
               </Box>
             )}
           </Box>
@@ -415,23 +545,27 @@ function ToolResultPanel({
       </Box>
       {toolResults.map((result, index) => {
         const statusIcon = result.isError ? '✗' : '✓';
+        const statusLabel = result.isError ? 'failed' : 'succeeded';
         const statusColor = result.isError ? 'red' : 'green';
         const title = result.toolName ? `${result.toolName}` : `Result ${index + 1}`;
         const maxLine = Math.max(1, innerWidth - 2);
         const summaryLine = truncate(title, maxLine);
-        const resultText = indentMultiline(truncateToolResult(result, 4, 400, { verbose: verboseTools }), '  ');
+        const truncatedResult = truncateToolResultWithInfo(result, 4, 400, { verbose: verboseTools });
+        const resultText = indentMultiline(truncatedResult.content, '  ');
+        const showExpandHint = !verboseTools && truncatedResult.truncation.wasTruncated;
         return (
           <Box key={`${result.toolCallId}-${index}`} flexDirection="column" marginTop={1}>
             <Box>
               <Text color={statusColor}>{statusIcon} </Text>
               <Text color={statusColor} bold>{summaryLine}</Text>
+              <Text dimColor> [{statusLabel}]</Text>
             </Box>
             <Box marginLeft={2}>
               <Text dimColor>↳ {resultText}</Text>
             </Box>
-            {!verboseTools && result.truncated && (
+            {showExpandHint && (
               <Box marginLeft={2}>
-                <Text dimColor>↳ (truncated · Ctrl+O for full output)</Text>
+                <Text dimColor>↳ (Ctrl+O for full output)</Text>
               </Box>
             )}
           </Box>

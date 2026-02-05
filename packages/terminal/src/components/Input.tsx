@@ -64,6 +64,54 @@ interface SkillInfo {
   argumentHint?: string;
 }
 
+// Default paste threshold configuration (can be overridden via props)
+const DEFAULT_PASTE_THRESHOLDS = {
+  chars: 500,
+  words: 100,
+  lines: 20,
+};
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function countLines(text: string): number {
+  return text.split('\n').length;
+}
+
+function formatPastePlaceholder(text: string): string {
+  const chars = text.length;
+  const words = countWords(text);
+  return `📋 Pasted ${words.toLocaleString()} words / ${chars.toLocaleString()} chars`;
+}
+
+interface PasteThresholds {
+  chars?: number;
+  words?: number;
+  lines?: number;
+}
+
+function isLargePaste(text: string, thresholds: PasteThresholds = DEFAULT_PASTE_THRESHOLDS): boolean {
+  const charThreshold = thresholds.chars ?? DEFAULT_PASTE_THRESHOLDS.chars;
+  const wordThreshold = thresholds.words ?? DEFAULT_PASTE_THRESHOLDS.words;
+  const lineThreshold = thresholds.lines ?? DEFAULT_PASTE_THRESHOLDS.lines;
+
+  return (
+    text.length > charThreshold ||
+    countWords(text) > wordThreshold ||
+    countLines(text) > lineThreshold
+  );
+}
+
+interface PasteConfig {
+  /** Whether large paste handling is enabled (default: true) */
+  enabled?: boolean;
+  /** Paste detection thresholds */
+  thresholds?: PasteThresholds;
+  /** Display mode: 'placeholder' (default), 'preview', 'confirm', 'inline' */
+  mode?: 'placeholder' | 'preview' | 'confirm' | 'inline';
+}
+
 interface InputProps {
   onSubmit: (value: string, mode: 'normal' | 'interrupt' | 'queue' | 'inline') => void;
   isProcessing?: boolean;
@@ -75,6 +123,8 @@ interface InputProps {
   allowBlankAnswer?: boolean;
   /** Optional command history instance (uses global singleton if not provided) */
   history?: CommandHistory;
+  /** Optional paste handling configuration */
+  pasteConfig?: PasteConfig;
 }
 
 export function Input({
@@ -87,12 +137,25 @@ export function Input({
   askPlaceholder,
   allowBlankAnswer = false,
   history: historyProp,
+  pasteConfig,
 }: InputProps) {
+  // Paste handling configuration with defaults
+  const pasteEnabled = pasteConfig?.enabled !== false;
+  const pasteThresholds = pasteConfig?.thresholds ?? DEFAULT_PASTE_THRESHOLDS;
+  const pasteMode = pasteConfig?.mode ?? 'placeholder';
   // Combined value+cursor state for atomic updates during rapid paste operations
   // When text is pasted, it may arrive in multiple chunks; using a single state
   // object ensures each chunk sees the correct previous state via functional updates
   const [inputState, setInputState] = useState({ value: '', cursor: 0 });
   const { value, cursor } = inputState;
+
+  // Large paste handling - when a large paste is detected, we show a placeholder
+  // but keep the actual content stored for submission
+  const [largePaste, setLargePaste] = useState<{
+    content: string;
+    placeholder: string;
+  } | null>(null);
+  const [showPastePreview, setShowPastePreview] = useState(false);
 
   // Command history - use prop or global singleton
   const historyRef = useRef<CommandHistory>(historyProp || getCommandHistory());
@@ -193,19 +256,32 @@ export function Input({
 
 
   const handleSubmit = (submittedValue: string) => {
-    // Allow blank submission only for optional ask-user questions
-    if (!submittedValue.trim() && !allowBlankAnswer) return;
+    // If there's a large paste pending, use that content instead
+    const actualValue = largePaste ? largePaste.content : submittedValue;
 
-    // Add to history before submitting
-    const valueToAdd = submittedValue.trim();
+    // Allow blank submission only for optional ask-user questions
+    if (!actualValue.trim() && !allowBlankAnswer) return;
+
+    // Add to history before submitting (use truncated version for history)
+    const valueToAdd = actualValue.trim();
     if (valueToAdd && !isAskingUser) {
-      historyRef.current.add(valueToAdd);
+      // For large pastes, add a truncated version to history
+      const historyEntry = largePaste
+        ? `[Pasted ${countWords(valueToAdd)} words]`
+        : valueToAdd;
+      historyRef.current.add(historyEntry);
+    }
+
+    // Clear large paste state before submitting
+    if (largePaste) {
+      setLargePaste(null);
+      setShowPastePreview(false);
     }
 
     if (
       autocompleteMode === 'command' &&
       filteredCommands.length > 0 &&
-      !submittedValue.includes(' ')
+      !actualValue.includes(' ')
     ) {
       const selected = filteredCommands[selectedIndex] || filteredCommands[0];
       if (selected) {
@@ -218,9 +294,9 @@ export function Input({
     }
 
     if (isProcessing) {
-      onSubmit(submittedValue, 'inline');
+      onSubmit(actualValue, 'inline');
     } else {
-      onSubmit(submittedValue, 'normal');
+      onSubmit(actualValue, 'normal');
     }
     setValueAndCursor('');
   };
@@ -246,6 +322,27 @@ export function Input({
 
   const insertText = (text: string) => {
     if (!text) return;
+
+    // Detect large paste (multiple characters at once that exceed threshold)
+    // A paste is detected when multiple characters arrive at once (text.length > 1)
+    // and the total content exceeds the threshold
+    // Only apply special handling if paste handling is enabled and mode is not 'inline'
+    if (pasteEnabled && pasteMode !== 'inline' && text.length > 1 && isLargePaste(text, pasteThresholds)) {
+      // Store the large paste content and show placeholder
+      setLargePaste({
+        content: text,
+        placeholder: formatPastePlaceholder(text),
+      });
+      setShowPastePreview(false);
+      return;
+    }
+
+    // Clear any pending large paste if user types normally
+    if (largePaste) {
+      setLargePaste(null);
+      setShowPastePreview(false);
+    }
+
     // Use functional update for atomic value+cursor change during rapid pastes
     setInputState(prev => {
       const newValue = prev.value.slice(0, prev.cursor) + text + prev.value.slice(prev.cursor);
@@ -329,8 +426,14 @@ export function Input({
       return;
     }
 
-    // Escape: clear input and exit history mode (if not asking user)
+    // Escape: clear large paste, clear input, or exit history mode (if not asking user)
     if (key.escape && !isAskingUser) {
+      // First priority: cancel pending large paste
+      if (largePaste) {
+        setLargePaste(null);
+        setShowPastePreview(false);
+        return;
+      }
       if (historyRef.current.isNavigating()) {
         // If navigating history, restore saved input
         setValueAndCursor(savedInput);
@@ -550,7 +653,16 @@ export function Input({
 
       {/* Input area */}
       <Box paddingY={0} flexDirection="column">
-        {value.length === 0 ? (
+        {largePaste ? (
+          /* Large paste placeholder view */
+          <Box>
+            <Text color={isProcessing ? 'gray' : 'cyan'}>&gt; </Text>
+            <Box flexGrow={1}>
+              <Text color="yellow">{largePaste.placeholder}</Text>
+              <Text dimColor> [Enter to send, Esc to cancel]</Text>
+            </Box>
+          </Box>
+        ) : value.length === 0 ? (
           <Box>
             <Text color={isProcessing ? 'gray' : 'cyan'}>&gt; </Text>
             <Box flexGrow={1}>

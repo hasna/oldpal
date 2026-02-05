@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
 import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, type SessionInfo, type RecoverableSession } from '@hasna/assistants-core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler } from '@hasna/assistants-shared';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
 import { Messages } from './Messages';
@@ -20,6 +20,11 @@ import { ConnectorsPanel } from './ConnectorsPanel';
 import { TasksPanel } from './TasksPanel';
 import { AssistantsPanel } from './AssistantsPanel';
 import { HooksPanel } from './HooksPanel';
+import { ConfigPanel } from './ConfigPanel';
+import { MessagesPanel } from './MessagesPanel';
+import { GuardrailsPanel } from './GuardrailsPanel';
+import { BudgetPanel } from './BudgetPanel';
+import { AgentsPanel } from './AgentsPanel';
 import type { QueuedMessage } from './appTypes';
 import {
   getTasks,
@@ -33,10 +38,26 @@ import {
   updateTask,
   HookStore,
   nativeHookRegistry,
+  loadConfig,
+  getConfigDir,
+  getProjectConfigDir,
+  GuardrailsStore,
+  PERMISSIVE_POLICY,
+  RESTRICTIVE_POLICY,
+  BudgetTracker,
+  getGlobalRegistry,
   type Task,
   type TaskPriority,
   type TaskCreateOptions,
+  type GuardrailsConfig,
+  type PolicyInfo,
+  type BudgetScope,
+  type BudgetStatus,
+  type RegisteredAgent,
+  type RegistryStats,
 } from '@hasna/assistants-core';
+import type { BudgetConfig, BudgetLimits } from '@hasna/assistants-shared';
+import type { AssistantsConfig } from '@hasna/assistants-shared';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
 
@@ -48,6 +69,36 @@ function formatElapsedDuration(ms: number): string {
   const mins = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
   return `${mins}m ${secs}s`;
+}
+
+/**
+ * Deep merge two objects
+ */
+function deepMerge<T extends Record<string, unknown>>(
+  target: T,
+  source: Partial<T>
+): T {
+  const output = { ...target };
+  for (const key of Object.keys(source) as (keyof T)[]) {
+    const sourceValue = source[key];
+    const targetValue = target[key];
+    if (
+      sourceValue &&
+      typeof sourceValue === 'object' &&
+      !Array.isArray(sourceValue) &&
+      targetValue &&
+      typeof targetValue === 'object' &&
+      !Array.isArray(targetValue)
+    ) {
+      output[key] = deepMerge(
+        targetValue as Record<string, unknown>,
+        sourceValue as Record<string, unknown>
+      ) as T[keyof T];
+    } else if (sourceValue !== undefined) {
+      output[key] = sourceValue as T[keyof T];
+    }
+  }
+  return output;
 }
 
 interface AppProps {
@@ -75,6 +126,7 @@ interface SessionUIState {
   tokenUsage: TokenUsage | undefined;
   energyState: EnergyState | undefined;
   voiceState: VoiceState | undefined;
+  heartbeatState: HeartbeatState | undefined;
   identityInfo: ActiveIdentityInfo | undefined;
   processingStartTime: number | undefined;
   currentTurnTokens: number;
@@ -126,11 +178,55 @@ export function App({ cwd, version }: AppProps) {
 
   // Assistants panel state
   const [showAssistantsPanel, setShowAssistantsPanel] = useState(false);
+  const [assistantsRefreshKey, setAssistantsRefreshKey] = useState(0);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
 
   // Hooks panel state
   const [showHooksPanel, setShowHooksPanel] = useState(false);
   const [hooksConfig, setHooksConfig] = useState<HookConfig>({});
   const hookStoreRef = useRef<HookStore | null>(null);
+
+  // Guardrails panel state
+  const [showGuardrailsPanel, setShowGuardrailsPanel] = useState(false);
+  const [guardrailsConfig, setGuardrailsConfig] = useState<GuardrailsConfig | null>(null);
+  const [guardrailsPolicies, setGuardrailsPolicies] = useState<PolicyInfo[]>([]);
+  const guardrailsStoreRef = useRef<GuardrailsStore | null>(null);
+
+  // Budget panel state
+  const [showBudgetPanel, setShowBudgetPanel] = useState(false);
+  const [budgetConfig, setBudgetConfig] = useState<BudgetConfig | null>(null);
+  const [sessionBudgetStatus, setSessionBudgetStatus] = useState<BudgetStatus | null>(null);
+  const [swarmBudgetStatus, setSwarmBudgetStatus] = useState<BudgetStatus | null>(null);
+  const budgetTrackerRef = useRef<BudgetTracker | null>(null);
+
+  // Agents panel state
+  const [showAgentsPanel, setShowAgentsPanel] = useState(false);
+  const [agentsList, setAgentsList] = useState<RegisteredAgent[]>([]);
+  const [registryStats, setRegistryStats] = useState<RegistryStats | null>(null);
+
+  // Config panel state
+  const [showConfigPanel, setShowConfigPanel] = useState(false);
+  const [currentConfig, setCurrentConfig] = useState<AssistantsConfig | null>(null);
+  const [userConfig, setUserConfig] = useState<Partial<AssistantsConfig> | null>(null);
+  const [projectConfig, setProjectConfig] = useState<Partial<AssistantsConfig> | null>(null);
+  const [localConfig, setLocalConfig] = useState<Partial<AssistantsConfig> | null>(null);
+
+  // Messages panel state
+  const [showMessagesPanel, setShowMessagesPanel] = useState(false);
+  const [messagesPanelError, setMessagesPanelError] = useState<string | null>(null);
+  const [messagesList, setMessagesList] = useState<Array<{
+    id: string;
+    threadId: string;
+    fromAgentId: string;
+    fromAgentName: string;
+    subject?: string;
+    preview: string;
+    body?: string;
+    priority: 'low' | 'normal' | 'high' | 'urgent';
+    status: 'unread' | 'read' | 'archived' | 'injected';
+    createdAt: string;
+    replyCount?: number;
+  }>>([]);
 
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
@@ -147,6 +243,7 @@ export function App({ cwd, version }: AppProps) {
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | undefined>();
   const [energyState, setEnergyState] = useState<EnergyState | undefined>();
   const [voiceState, setVoiceState] = useState<VoiceState | undefined>();
+  const [heartbeatState, setHeartbeatState] = useState<HeartbeatState | undefined>();
   const [identityInfo, setIdentityInfo] = useState<ActiveIdentityInfo | undefined>();
   const [verboseTools, setVerboseTools] = useState(false);
   const [askUserState, setAskUserState] = useState<AskUserState | null>(null);
@@ -379,6 +476,7 @@ export function App({ cwd, version }: AppProps) {
         tokenUsage,
         energyState,
         voiceState,
+        heartbeatState,
         identityInfo,
         processingStartTime,
         currentTurnTokens,
@@ -386,7 +484,7 @@ export function App({ cwd, version }: AppProps) {
         lastWorkedFor,
       });
     }
-  }, [activeSessionId, messages, tokenUsage, energyState, voiceState, identityInfo, processingStartTime, currentTurnTokens, error, lastWorkedFor]);
+  }, [activeSessionId, messages, tokenUsage, energyState, voiceState, heartbeatState, identityInfo, processingStartTime, currentTurnTokens, error, lastWorkedFor]);
 
   // Load session UI state
   const loadSessionState = useCallback((sessionId: string) => {
@@ -404,6 +502,7 @@ export function App({ cwd, version }: AppProps) {
       setTokenUsage(state.tokenUsage);
       setEnergyState(state.energyState);
       setVoiceState(state.voiceState);
+      setHeartbeatState(state.heartbeatState);
       setIdentityInfo(state.identityInfo);
       setProcessingStartTime(state.processingStartTime);
       setCurrentTurnTokens(state.currentTurnTokens);
@@ -423,6 +522,7 @@ export function App({ cwd, version }: AppProps) {
       setTokenUsage(undefined);
       setEnergyState(undefined);
       setVoiceState(undefined);
+      setHeartbeatState(undefined);
       setIdentityInfo(undefined);
       setProcessingStartTime(undefined);
       setCurrentTurnTokens(0);
@@ -573,6 +673,7 @@ export function App({ cwd, version }: AppProps) {
         setTokenUsage(activeSession.client.getTokenUsage());
         setEnergyState(activeSession.client.getEnergyState() ?? undefined);
         setVoiceState(activeSession.client.getVoiceState() ?? undefined);
+        setHeartbeatState(activeSession.client.getHeartbeatState?.() ?? undefined);
         setIdentityInfo(activeSession.client.getIdentityInfo() ?? undefined);
       }
     } else if (chunk.type === 'show_panel') {
@@ -600,9 +701,127 @@ export function App({ cwd, version }: AppProps) {
         const hooks = hookStoreRef.current.loadAll();
         setHooksConfig(hooks);
         setShowHooksPanel(true);
+      } else if (chunk.panel === 'config') {
+        // Load config and show panel
+        loadConfigFiles();
+        setShowConfigPanel(true);
+      } else if (chunk.panel === 'messages') {
+        // Load messages and show panel
+        const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
+        if (messagesManager) {
+          messagesManager.list({ limit: 50 }).then((msgs: Array<{
+            id: string;
+            threadId: string;
+            fromAgentId: string;
+            fromAgentName: string;
+            subject?: string;
+            preview: string;
+            body?: string;
+            priority: string;
+            status: string;
+            createdAt: string;
+            replyCount?: number;
+          }>) => {
+            setMessagesList(msgs.map((m: typeof msgs[0]) => ({
+              id: m.id,
+              threadId: m.threadId,
+              fromAgentId: m.fromAgentId,
+              fromAgentName: m.fromAgentName,
+              subject: m.subject,
+              preview: m.preview,
+              body: m.body,
+              priority: m.priority as 'low' | 'normal' | 'high' | 'urgent',
+              status: m.status as 'unread' | 'read' | 'archived' | 'injected',
+              createdAt: m.createdAt,
+              replyCount: m.replyCount,
+            })));
+            setMessagesPanelError(null);
+            setShowMessagesPanel(true);
+          }).catch((err: Error) => {
+            setMessagesPanelError(err instanceof Error ? err.message : String(err));
+            setShowMessagesPanel(true);
+          });
+        } else {
+          setMessagesPanelError(null);
+          setShowMessagesPanel(true);
+        }
+      } else if (chunk.panel === 'guardrails') {
+        // Load guardrails and show panel
+        if (!guardrailsStoreRef.current) {
+          guardrailsStoreRef.current = new GuardrailsStore(cwd);
+        }
+        const config = guardrailsStoreRef.current.loadAll();
+        const policies = guardrailsStoreRef.current.listPolicies();
+        setGuardrailsConfig(config);
+        setGuardrailsPolicies(policies);
+        setShowGuardrailsPanel(true);
+      } else if (chunk.panel === 'budget') {
+        // Initialize budget tracker and show panel
+        if (!budgetTrackerRef.current) {
+          budgetTrackerRef.current = new BudgetTracker(activeSessionId || 'default');
+        }
+        const config = budgetTrackerRef.current.getConfig();
+        const sessionStatus = budgetTrackerRef.current.checkBudget('session');
+        const swarmStatus = budgetTrackerRef.current.checkBudget('swarm');
+        setBudgetConfig(config);
+        setSessionBudgetStatus(sessionStatus);
+        setSwarmBudgetStatus(swarmStatus);
+        setShowBudgetPanel(true);
+      } else if (chunk.panel === 'agents') {
+        // Load agents from registry and show panel
+        const agentRegistry = getGlobalRegistry();
+        const agents = agentRegistry.list();
+        const stats = agentRegistry.getStats();
+        setAgentsList(agents);
+        setRegistryStats(stats);
+        setShowAgentsPanel(true);
       }
     }
-  }, [registry, exit, finalizeResponse, resetTurnState, cwd]);
+  }, [registry, exit, finalizeResponse, resetTurnState, cwd, activeSessionId]);
+
+  // Load config files helper
+  const loadConfigFiles = useCallback(async () => {
+    try {
+      // Load merged config
+      const config = await loadConfig(cwd);
+      setCurrentConfig(config);
+
+      // Load individual config files for source tracking
+      const { readFile, access } = await import('fs/promises');
+
+      // User config
+      const userPath = `${getConfigDir()}/config.json`;
+      try {
+        await access(userPath);
+        const content = await readFile(userPath, 'utf-8');
+        setUserConfig(JSON.parse(content));
+      } catch {
+        setUserConfig(null);
+      }
+
+      // Project config
+      const projectPath = `${getProjectConfigDir(cwd)}/config.json`;
+      try {
+        await access(projectPath);
+        const content = await readFile(projectPath, 'utf-8');
+        setProjectConfig(JSON.parse(content));
+      } catch {
+        setProjectConfig(null);
+      }
+
+      // Local config
+      const localPath = `${getProjectConfigDir(cwd)}/config.local.json`;
+      try {
+        await access(localPath);
+        const content = await readFile(localPath, 'utf-8');
+        setLocalConfig(JSON.parse(content));
+      } catch {
+        setLocalConfig(null);
+      }
+    } catch (err) {
+      console.error('Failed to load config:', err);
+    }
+  }, [cwd]);
 
   // Create a session (either fresh or from recovery)
   const createSessionFromRecovery = useCallback(async (recoverSession: RecoverableSession | null) => {
@@ -663,6 +882,7 @@ export function App({ cwd, version }: AppProps) {
 
     setEnergyState(session.client.getEnergyState() ?? undefined);
     setVoiceState(session.client.getVoiceState() ?? undefined);
+    setHeartbeatState(session.client.getHeartbeatState?.() ?? undefined);
     setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
 
     // Initialize connector bridge for the connectors panel
@@ -939,6 +1159,7 @@ export function App({ cwd, version }: AppProps) {
       isProcessingRef.current = session.isProcessing;
       setEnergyState(session.client.getEnergyState() ?? undefined);
       setVoiceState(session.client.getVoiceState() ?? undefined);
+      setHeartbeatState(session.client.getHeartbeatState?.() ?? undefined);
       setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
       await loadSessionMetadata(session);
     }
@@ -971,6 +1192,7 @@ export function App({ cwd, version }: AppProps) {
       isProcessingRef.current = false;
       setEnergyState(newSession.client.getEnergyState() ?? undefined);
       setVoiceState(newSession.client.getVoiceState() ?? undefined);
+      setHeartbeatState(newSession.client.getHeartbeatState?.() ?? undefined);
       setIdentityInfo(newSession.client.getIdentityInfo() ?? undefined);
       await loadSessionMetadata(newSession);
     } catch (err) {
@@ -1005,6 +1227,8 @@ export function App({ cwd, version }: AppProps) {
         registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
         isProcessingRef.current = false;
+        // Trigger queue flush check after stop
+        setQueueFlushTrigger((prev) => prev + 1);
         // Reset exit hint state when stopping processing
         lastCtrlCRef.current = 0;
         setShowExitHint(false);
@@ -1051,6 +1275,8 @@ export function App({ cwd, version }: AppProps) {
         registryRef.current.setProcessing(activeSession.id, false);
         setIsProcessing(false);
         isProcessingRef.current = false;
+        // Trigger queue flush check after stop
+        setQueueFlushTrigger((prev) => prev + 1);
       }
     }
 
@@ -1074,6 +1300,17 @@ export function App({ cwd, version }: AppProps) {
         const skillInput = '/' + trimmedInput.slice(1);
         // Continue with the converted input
         return handleSubmit(skillInput, mode);
+      }
+
+      // Check for ![command] bash execution syntax
+      // Converts to an instruction for the agent to run the bash command
+      if (trimmedInput.startsWith('![') && trimmedInput.endsWith(']')) {
+        const bashCommand = trimmedInput.slice(2, -1).trim();
+        if (bashCommand) {
+          // Convert to an explicit bash execution instruction
+          const bashInstruction = `Run this bash command: \`${bashCommand}\``;
+          return handleSubmit(bashInstruction, mode);
+        }
       }
 
       // Check for /session command
@@ -1108,6 +1345,8 @@ export function App({ cwd, version }: AppProps) {
         setIsProcessing(false);
         isProcessingRef.current = false;
         registry.setProcessing(activeSession.id, false);
+        // Trigger queue flush check after clear/new interrupts processing
+        setQueueFlushTrigger((prev) => prev + 1);
         await new Promise((r) => setTimeout(r, 100));
       }
 
@@ -1182,6 +1421,8 @@ export function App({ cwd, version }: AppProps) {
         setIsProcessing(false);
         isProcessingRef.current = false;
         registry.setProcessing(activeSession.id, false);
+        // Trigger queue flush check after interrupt
+        setQueueFlushTrigger((prev) => prev + 1);
         // Small delay to ensure stop is processed
         await new Promise((r) => setTimeout(r, 100));
       }
@@ -1206,6 +1447,7 @@ export function App({ cwd, version }: AppProps) {
           tokenUsage,
           energyState,
           voiceState,
+          heartbeatState,
           identityInfo,
           processingStartTime: undefined,
           currentTurnTokens: 0,
@@ -1408,39 +1650,69 @@ export function App({ cwd, version }: AppProps) {
     const activeAssistantId = assistantManager?.getActiveId() ?? undefined;
 
     const handleAssistantSelect = async (assistantId: string) => {
-      if (assistantManager) {
-        await assistantManager.switchAssistant(assistantId);
-        // Refresh identity context after switching
-        await activeSession?.client.refreshIdentityContext?.();
-        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+      setAssistantError(null);
+      try {
+        if (assistantManager) {
+          await assistantManager.switchAssistant(assistantId);
+          // Refresh identity context after switching
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+          setAssistantsRefreshKey((k) => k + 1);
+        }
+        setShowAssistantsPanel(false);
+      } catch (err) {
+        setAssistantError(err instanceof Error ? err.message : 'Failed to switch assistant');
       }
-      setShowAssistantsPanel(false);
     };
 
     const handleAssistantCreate = async (options: { name: string; description?: string; settings?: { model?: string; temperature?: number } }) => {
-      if (assistantManager) {
-        await assistantManager.createAssistant(options);
-        // Refresh identity context after creation
-        await activeSession?.client.refreshIdentityContext?.();
-        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+      setAssistantError(null);
+      try {
+        if (assistantManager) {
+          await assistantManager.createAssistant(options);
+          // Refresh identity context after creation
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+          // Force refresh of assistants list
+          setAssistantsRefreshKey((k) => k + 1);
+        }
+      } catch (err) {
+        setAssistantError(err instanceof Error ? err.message : 'Failed to create assistant');
+        throw err; // Re-throw so AssistantsPanel knows creation failed
       }
     };
 
     const handleAssistantUpdate = async (id: string, updates: Partial<{ name: string; description: string; settings: Record<string, unknown> }>) => {
-      if (assistantManager) {
-        await assistantManager.updateAssistant(id, updates as any);
-        // Refresh identity context after update
-        await activeSession?.client.refreshIdentityContext?.();
-        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+      setAssistantError(null);
+      try {
+        if (assistantManager) {
+          await assistantManager.updateAssistant(id, updates as any);
+          // Refresh identity context after update
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+          // Force refresh of assistants list
+          setAssistantsRefreshKey((k) => k + 1);
+        }
+      } catch (err) {
+        setAssistantError(err instanceof Error ? err.message : 'Failed to update assistant');
+        throw err; // Re-throw so AssistantsPanel knows update failed
       }
     };
 
     const handleAssistantDelete = async (assistantId: string) => {
-      if (assistantManager) {
-        await assistantManager.deleteAssistant(assistantId);
-        // Refresh identity context after deletion
-        await activeSession?.client.refreshIdentityContext?.();
-        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+      setAssistantError(null);
+      try {
+        if (assistantManager) {
+          await assistantManager.deleteAssistant(assistantId);
+          // Refresh identity context after deletion
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+          // Force refresh of assistants list
+          setAssistantsRefreshKey((k) => k + 1);
+        }
+      } catch (err) {
+        setAssistantError(err instanceof Error ? err.message : 'Failed to delete assistant');
+        throw err; // Re-throw so AssistantsPanel knows deletion failed
       }
     };
 
@@ -1453,7 +1725,12 @@ export function App({ cwd, version }: AppProps) {
           onCreate={handleAssistantCreate}
           onUpdate={handleAssistantUpdate}
           onDelete={handleAssistantDelete}
-          onCancel={() => setShowAssistantsPanel(false)}
+          onCancel={() => {
+            setAssistantError(null);
+            setShowAssistantsPanel(false);
+          }}
+          error={assistantError}
+          onClearError={() => setAssistantError(null)}
         />
       </Box>
     );
@@ -1510,6 +1787,309 @@ export function App({ cwd, version }: AppProps) {
           onDelete={handleHookDelete}
           onAdd={handleHookAdd}
           onCancel={() => setShowHooksPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show guardrails panel
+  if (showGuardrailsPanel && guardrailsConfig) {
+    const handleToggleEnabled = (enabled: boolean) => {
+      if (!guardrailsStoreRef.current) {
+        guardrailsStoreRef.current = new GuardrailsStore(cwd);
+      }
+      guardrailsStoreRef.current.setEnabled(enabled, 'project');
+      const config = guardrailsStoreRef.current.loadAll();
+      const policies = guardrailsStoreRef.current.listPolicies();
+      setGuardrailsConfig(config);
+      setGuardrailsPolicies(policies);
+    };
+
+    const handleTogglePolicy = (policyId: string, enabled: boolean) => {
+      if (!guardrailsStoreRef.current) {
+        guardrailsStoreRef.current = new GuardrailsStore(cwd);
+      }
+      guardrailsStoreRef.current.setPolicyEnabled(policyId, enabled);
+      const config = guardrailsStoreRef.current.loadAll();
+      const policies = guardrailsStoreRef.current.listPolicies();
+      setGuardrailsConfig(config);
+      setGuardrailsPolicies(policies);
+    };
+
+    const handleSetPreset = (preset: 'permissive' | 'restrictive') => {
+      if (!guardrailsStoreRef.current) {
+        guardrailsStoreRef.current = new GuardrailsStore(cwd);
+      }
+      const policy = preset === 'permissive' ? PERMISSIVE_POLICY : RESTRICTIVE_POLICY;
+      guardrailsStoreRef.current.addPolicy({ ...policy }, 'project');
+      guardrailsStoreRef.current.setEnabled(true, 'project');
+      const config = guardrailsStoreRef.current.loadAll();
+      const policies = guardrailsStoreRef.current.listPolicies();
+      setGuardrailsConfig(config);
+      setGuardrailsPolicies(policies);
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <GuardrailsPanel
+          config={guardrailsConfig}
+          policies={guardrailsPolicies}
+          onToggleEnabled={handleToggleEnabled}
+          onTogglePolicy={handleTogglePolicy}
+          onSetPreset={handleSetPreset}
+          onCancel={() => setShowGuardrailsPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show budget panel
+  if (showBudgetPanel && budgetConfig && sessionBudgetStatus && swarmBudgetStatus) {
+    const handleBudgetToggleEnabled = (enabled: boolean) => {
+      if (!budgetTrackerRef.current) {
+        budgetTrackerRef.current = new BudgetTracker(activeSessionId || 'default');
+      }
+      budgetTrackerRef.current.setEnabled(enabled);
+      const config = budgetTrackerRef.current.getConfig();
+      const sessionStatus = budgetTrackerRef.current.checkBudget('session');
+      const swarmStatus = budgetTrackerRef.current.checkBudget('swarm');
+      setBudgetConfig(config);
+      setSessionBudgetStatus(sessionStatus);
+      setSwarmBudgetStatus(swarmStatus);
+    };
+
+    const handleBudgetReset = (scope: BudgetScope) => {
+      if (!budgetTrackerRef.current) {
+        budgetTrackerRef.current = new BudgetTracker(activeSessionId || 'default');
+      }
+      budgetTrackerRef.current.resetUsage(scope);
+      const sessionStatus = budgetTrackerRef.current.checkBudget('session');
+      const swarmStatus = budgetTrackerRef.current.checkBudget('swarm');
+      setSessionBudgetStatus(sessionStatus);
+      setSwarmBudgetStatus(swarmStatus);
+    };
+
+    const handleBudgetSetLimits = (scope: BudgetScope, limits: Partial<BudgetLimits>) => {
+      if (!budgetTrackerRef.current) {
+        budgetTrackerRef.current = new BudgetTracker(activeSessionId || 'default');
+      }
+      // Update config with new limits for the scope
+      const currentConfig = budgetTrackerRef.current.getConfig();
+      const updatedConfig: Partial<BudgetConfig> = {
+        [scope]: { ...(currentConfig[scope] || {}), ...limits },
+      };
+      budgetTrackerRef.current.updateConfig(updatedConfig);
+      const config = budgetTrackerRef.current.getConfig();
+      const sessionStatus = budgetTrackerRef.current.checkBudget('session');
+      const swarmStatus = budgetTrackerRef.current.checkBudget('swarm');
+      setBudgetConfig(config);
+      setSessionBudgetStatus(sessionStatus);
+      setSwarmBudgetStatus(swarmStatus);
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <BudgetPanel
+          config={budgetConfig}
+          sessionStatus={sessionBudgetStatus}
+          swarmStatus={swarmBudgetStatus}
+          onToggleEnabled={handleBudgetToggleEnabled}
+          onReset={handleBudgetReset}
+          onSetLimits={handleBudgetSetLimits}
+          onCancel={() => setShowBudgetPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show agents panel
+  if (showAgentsPanel && registryStats) {
+    const handleAgentsRefresh = () => {
+      const agentRegistry = getGlobalRegistry();
+      const agents = agentRegistry.list();
+      const stats = agentRegistry.getStats();
+      setAgentsList(agents);
+      setRegistryStats(stats);
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <AgentsPanel
+          agents={agentsList}
+          stats={registryStats}
+          onRefresh={handleAgentsRefresh}
+          onCancel={() => setShowAgentsPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show config panel
+  if (showConfigPanel && currentConfig) {
+    const handleConfigSave = async (
+      location: 'user' | 'project' | 'local',
+      updates: Partial<AssistantsConfig>
+    ) => {
+      const { writeFile, mkdir } = await import('fs/promises');
+      const { dirname } = await import('path');
+
+      let configPath: string;
+      let existingConfig: Partial<AssistantsConfig> | null;
+
+      switch (location) {
+        case 'user':
+          configPath = `${getConfigDir()}/config.json`;
+          existingConfig = userConfig;
+          break;
+        case 'project':
+          configPath = `${getProjectConfigDir(cwd)}/config.json`;
+          existingConfig = projectConfig;
+          break;
+        case 'local':
+          configPath = `${getProjectConfigDir(cwd)}/config.local.json`;
+          existingConfig = localConfig;
+          break;
+      }
+
+      // Merge updates with existing config
+      const newConfig = deepMerge(existingConfig || {}, updates);
+
+      // Ensure directory exists
+      await mkdir(dirname(configPath), { recursive: true });
+
+      // Write config
+      await writeFile(configPath, JSON.stringify(newConfig, null, 2));
+
+      // Reload config files
+      await loadConfigFiles();
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <ConfigPanel
+          config={currentConfig}
+          userConfig={userConfig}
+          projectConfig={projectConfig}
+          localConfig={localConfig}
+          onSave={handleConfigSave}
+          onCancel={() => setShowConfigPanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show messages panel
+  if (showMessagesPanel) {
+    const messagesManager = activeSession?.client.getMessagesManager?.();
+
+    const handleMessagesRead = async (id: string) => {
+      if (!messagesManager) throw new Error('Messages not available');
+      const msg = await messagesManager.read(id);
+      return {
+        id: msg.id,
+        threadId: msg.threadId,
+        fromAgentId: msg.fromAgentId,
+        fromAgentName: msg.fromAgentName,
+        subject: msg.subject,
+        preview: msg.preview,
+        body: msg.body,
+        priority: msg.priority as 'low' | 'normal' | 'high' | 'urgent',
+        status: msg.status as 'unread' | 'read' | 'archived' | 'injected',
+        createdAt: msg.createdAt,
+        replyCount: msg.replyCount,
+      };
+    };
+
+    const handleMessagesDelete = async (id: string) => {
+      if (!messagesManager) throw new Error('Messages not available');
+      await messagesManager.delete(id);
+      // Refresh the messages list
+      const msgs = await messagesManager.list({ limit: 50 });
+      setMessagesList(msgs.map((m: { id: string; threadId: string; fromAgentId: string; fromAgentName: string; subject?: string; preview: string; body?: string; priority: string; status: string; createdAt: string; replyCount?: number }) => ({
+        id: m.id,
+        threadId: m.threadId,
+        fromAgentId: m.fromAgentId,
+        fromAgentName: m.fromAgentName,
+        subject: m.subject,
+        preview: m.preview,
+        body: m.body,
+        priority: m.priority as 'low' | 'normal' | 'high' | 'urgent',
+        status: m.status as 'unread' | 'read' | 'archived' | 'injected',
+        createdAt: m.createdAt,
+        replyCount: m.replyCount,
+      })));
+    };
+
+    const handleMessagesInject = async (id: string) => {
+      if (!messagesManager) throw new Error('Messages not available');
+      const msg = await messagesManager.read(id);
+      // Inject the message content into the current conversation
+      if (activeSession) {
+        activeSession.client.addSystemMessage(`[Injected message from ${msg.fromAgentName}]\n\n${msg.body || msg.preview}`);
+      }
+      // Mark as injected
+      await messagesManager.markStatus?.(id, 'injected');
+      // Refresh the messages list
+      const msgs = await messagesManager.list({ limit: 50 });
+      setMessagesList(msgs.map((m: { id: string; threadId: string; fromAgentId: string; fromAgentName: string; subject?: string; preview: string; body?: string; priority: string; status: string; createdAt: string; replyCount?: number }) => ({
+        id: m.id,
+        threadId: m.threadId,
+        fromAgentId: m.fromAgentId,
+        fromAgentName: m.fromAgentName,
+        subject: m.subject,
+        preview: m.preview,
+        body: m.body,
+        priority: m.priority as 'low' | 'normal' | 'high' | 'urgent',
+        status: m.status as 'unread' | 'read' | 'archived' | 'injected',
+        createdAt: m.createdAt,
+        replyCount: m.replyCount,
+      })));
+    };
+
+    const handleMessagesReply = async (id: string, body: string) => {
+      if (!messagesManager) throw new Error('Messages not available');
+      const msg = await messagesManager.read(id);
+      // Send reply using the messages manager
+      await messagesManager.send({
+        to: msg.fromAgentId,
+        body,
+        replyTo: id,
+      });
+    };
+
+    if (!messagesManager) {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Box marginBottom={1}>
+            <Text bold color="cyan">Messages</Text>
+          </Box>
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor="gray"
+            paddingX={1}
+            paddingY={1}
+          >
+            <Text>Messages are not enabled.</Text>
+            <Text dimColor>Configure messages in config.json to enable.</Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text dimColor>q quit</Text>
+          </Box>
+        </Box>
+      );
+    }
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <MessagesPanel
+          messages={messagesList}
+          onRead={handleMessagesRead}
+          onDelete={handleMessagesDelete}
+          onInject={handleMessagesInject}
+          onReply={handleMessagesReply}
+          onClose={() => setShowMessagesPanel(false)}
+          error={messagesPanelError}
         />
       </Box>
     );
@@ -1654,11 +2234,11 @@ export function App({ cwd, version }: AppProps) {
         tokenUsage={tokenUsage}
         energyState={energyState}
         voiceState={voiceState}
+        heartbeatState={heartbeatState}
         identityInfo={identityInfo}
         sessionIndex={sessionIndex}
         sessionCount={sessionCount}
         backgroundProcessingCount={backgroundProcessingCount}
-        sessionId={activeSessionId}
         processingStartTime={processingStartTime}
         verboseTools={verboseTools}
       />
