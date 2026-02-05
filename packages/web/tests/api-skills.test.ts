@@ -1,9 +1,9 @@
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, mock, beforeAll, afterAll } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mock auth middleware
+// Mock auth middleware to allow API key or Bearer token auth
 mock.module('@/lib/auth/middleware', () => ({
-  withAuth: (handler: any) => async (req: any) => {
+  withApiKeyAuth: (handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
@@ -19,14 +19,44 @@ mock.module('@/lib/auth/middleware', () => ({
       );
     }
     (req as any).user = { userId: 'user-123', email: 'test@example.com', role: 'user' };
+    (req as any).apiKeyPermissions = ['read:skills'];
+    return handler(req);
+  },
+  withScopedAuth: (scopes: string[], handler: any) => async (req: any) => {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
+        { status: 401 }
+      );
+    }
+    const token = authHeader.substring(7);
+    if (token === 'invalid') {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid token' } },
+        { status: 401 }
+      );
+    }
+    (req as any).user = { userId: 'user-123', email: 'test@example.com', role: 'user' };
+    (req as any).apiKeyPermissions = ['read:skills'];
     return handler(req);
   },
 }));
 
 const { GET } = await import('../src/app/api/v1/skills/route');
 
-function createRequest(options: { token?: string } = {}): NextRequest {
+function createRequest(options: {
+  token?: string;
+  searchParams?: Record<string, string>;
+} = {}): NextRequest {
   const url = new URL('http://localhost:3001/api/v1/skills');
+
+  // Add search params
+  if (options.searchParams) {
+    Object.entries(options.searchParams).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+  }
 
   const headers: Record<string, string> = {};
   if (options.token !== undefined) {
@@ -56,10 +86,19 @@ describe('GET /api/v1/skills', () => {
 
       expect(response.status).toBe(401);
     });
+
+    test('allows API key authentication', async () => {
+      const request = createRequest({ token: 'sk_live_test_api_key_12345' });
+
+      const response = await GET(request);
+
+      // Should succeed (mock allows any valid format)
+      expect(response.status).toBe(200);
+    });
   });
 
   describe('skills listing', () => {
-    test('returns list of available skills', async () => {
+    test('returns paginated list of skills', async () => {
       const request = createRequest();
 
       const response = await GET(request);
@@ -67,19 +106,31 @@ describe('GET /api/v1/skills', () => {
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.data.skills).toBeDefined();
-      expect(Array.isArray(data.data.skills)).toBe(true);
+      expect(data.data.items).toBeDefined();
+      expect(Array.isArray(data.data.items)).toBe(true);
     });
 
-    test('returns count of skills', async () => {
+    test('returns pagination metadata', async () => {
       const request = createRequest();
 
       const response = await GET(request);
       const data = await response.json();
 
-      expect(data.data.count).toBeDefined();
-      expect(typeof data.data.count).toBe('number');
-      expect(data.data.count).toBe(data.data.skills.length);
+      expect(data.data.total).toBeDefined();
+      expect(typeof data.data.total).toBe('number');
+      expect(data.data.page).toBeDefined();
+      expect(data.data.limit).toBeDefined();
+      expect(data.data.totalPages).toBeDefined();
+    });
+
+    test('returns categories list', async () => {
+      const request = createRequest();
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.categories).toBeDefined();
+      expect(Array.isArray(data.data.categories)).toBe(true);
     });
 
     test('each skill has required fields', async () => {
@@ -88,85 +139,206 @@ describe('GET /api/v1/skills', () => {
       const response = await GET(request);
       const data = await response.json();
 
-      for (const skill of data.data.skills) {
+      for (const skill of data.data.items) {
         expect(skill).toHaveProperty('name');
         expect(skill).toHaveProperty('description');
         expect(skill).toHaveProperty('category');
+        expect(skill).toHaveProperty('userInvocable');
+        expect(skill).toHaveProperty('sourceId');
+        // Should NOT expose filePath for security
+        expect(skill.filePath).toBeUndefined();
+      }
+    });
+  });
+
+  describe('pagination', () => {
+    test('respects page parameter', async () => {
+      const request = createRequest({ searchParams: { page: '2', limit: '10' } });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.page).toBe(2);
+    });
+
+    test('respects limit parameter', async () => {
+      const request = createRequest({ searchParams: { limit: '5' } });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.limit).toBe(5);
+      expect(data.data.items.length).toBeLessThanOrEqual(5);
+    });
+
+    test('enforces maximum limit of 100', async () => {
+      const request = createRequest({ searchParams: { limit: '500' } });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.limit).toBeLessThanOrEqual(100);
+    });
+
+    test('defaults to page 1', async () => {
+      const request = createRequest();
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.data.page).toBe(1);
+    });
+
+    test('handles invalid page gracefully', async () => {
+      const request = createRequest({ searchParams: { page: '-1' } });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      // Should clamp to minimum page 1
+      expect(data.data.page).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('filtering', () => {
+    test('filters by search query', async () => {
+      const request = createRequest({ searchParams: { search: 'test' } });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      // Results should match search query (if any exist)
+      if (data.data.items.length > 0) {
+        for (const skill of data.data.items) {
+          const nameMatch = skill.name.toLowerCase().includes('test');
+          const descMatch = skill.description.toLowerCase().includes('test');
+          expect(nameMatch || descMatch).toBe(true);
+        }
       }
     });
 
-    test('includes development category skills', async () => {
-      const request = createRequest();
+    test('filters by category', async () => {
+      const request = createRequest({ searchParams: { category: 'shared' } });
 
       const response = await GET(request);
       const data = await response.json();
 
-      const devSkills = data.data.skills.filter((s: any) => s.category === 'development');
-      expect(devSkills.length).toBeGreaterThan(0);
+      expect(response.status).toBe(200);
+      for (const skill of data.data.items) {
+        expect(skill.category).toBe('shared');
+      }
     });
 
-    test('includes text category skills', async () => {
-      const request = createRequest();
+    test('filters by userInvocableOnly', async () => {
+      const request = createRequest({ searchParams: { userInvocableOnly: 'true' } });
 
       const response = await GET(request);
       const data = await response.json();
 
-      const textSkills = data.data.skills.filter((s: any) => s.category === 'text');
-      expect(textSkills.length).toBeGreaterThan(0);
+      expect(response.status).toBe(200);
+      for (const skill of data.data.items) {
+        expect(skill.userInvocable).toBe(true);
+      }
     });
 
-    test('includes code-review skill', async () => {
-      const request = createRequest();
+    test('combines multiple filters', async () => {
+      const request = createRequest({
+        searchParams: {
+          category: 'shared',
+          userInvocableOnly: 'true',
+        }
+      });
 
       const response = await GET(request);
       const data = await response.json();
 
-      const codeReviewSkill = data.data.skills.find((s: any) => s.name === 'code-review');
-      expect(codeReviewSkill).toBeDefined();
-      expect(codeReviewSkill.category).toBe('development');
+      expect(response.status).toBe(200);
+      for (const skill of data.data.items) {
+        expect(skill.category).toBe('shared');
+        expect(skill.userInvocable).toBe(true);
+      }
+    });
+  });
+
+  describe('sorting', () => {
+    test('sorts by name ascending', async () => {
+      const request = createRequest({
+        searchParams: { sortBy: 'name', sortDir: 'asc' }
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      const names = data.data.items.map((s: any) => s.name);
+      const sortedNames = [...names].sort((a, b) => a.localeCompare(b));
+      expect(names).toEqual(sortedNames);
     });
 
-    test('includes summarize skill', async () => {
-      const request = createRequest();
+    test('sorts by name descending', async () => {
+      const request = createRequest({
+        searchParams: { sortBy: 'name', sortDir: 'desc' }
+      });
 
       const response = await GET(request);
       const data = await response.json();
 
-      const summarizeSkill = data.data.skills.find((s: any) => s.name === 'summarize');
-      expect(summarizeSkill).toBeDefined();
-      expect(summarizeSkill.category).toBe('text');
+      expect(response.status).toBe(200);
+      const names = data.data.items.map((s: any) => s.name);
+      const sortedNames = [...names].sort((a, b) => b.localeCompare(a));
+      expect(names).toEqual(sortedNames);
     });
 
-    test('includes translate skill', async () => {
-      const request = createRequest();
+    test('sorts by category', async () => {
+      const request = createRequest({
+        searchParams: { sortBy: 'category', sortDir: 'asc' }
+      });
 
       const response = await GET(request);
       const data = await response.json();
 
-      const translateSkill = data.data.skills.find((s: any) => s.name === 'translate');
-      expect(translateSkill).toBeDefined();
+      expect(response.status).toBe(200);
+      const categories = data.data.items.map((s: any) => s.category);
+      const sortedCategories = [...categories].sort((a, b) => a.localeCompare(b));
+      expect(categories).toEqual(sortedCategories);
     });
 
-    test('includes explain-code skill', async () => {
+    test('defaults to sorting by name ascending', async () => {
       const request = createRequest();
 
       const response = await GET(request);
       const data = await response.json();
 
-      const explainCodeSkill = data.data.skills.find((s: any) => s.name === 'explain-code');
-      expect(explainCodeSkill).toBeDefined();
-      expect(explainCodeSkill.category).toBe('development');
+      expect(response.status).toBe(200);
+      const names = data.data.items.map((s: any) => s.name);
+      const sortedNames = [...names].sort((a, b) => a.localeCompare(b));
+      expect(names).toEqual(sortedNames);
+    });
+  });
+
+  describe('security', () => {
+    test('does not expose file paths', async () => {
+      const request = createRequest();
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      for (const skill of data.data.items) {
+        expect(skill.filePath).toBeUndefined();
+      }
     });
 
-    test('all skills have non-empty descriptions', async () => {
+    test('includes safe sourceId instead of filePath', async () => {
       const request = createRequest();
 
       const response = await GET(request);
       const data = await response.json();
 
-      for (const skill of data.data.skills) {
-        expect(skill.description).toBeTruthy();
-        expect(skill.description.length).toBeGreaterThan(0);
+      for (const skill of data.data.items) {
+        expect(skill.sourceId).toBeDefined();
+        // sourceId format should be "category/name"
+        expect(skill.sourceId).toMatch(/^[a-z]+\/[a-z0-9-]+$/i);
       }
     });
   });
