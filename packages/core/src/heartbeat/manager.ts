@@ -61,6 +61,25 @@ export class HeartbeatManager {
     this.touchActivity();
   }
 
+  getState(): AgentState {
+    return this.state;
+  }
+
+  getLastActivity(): number {
+    return this.lastActivity;
+  }
+
+  getStartTime(): number {
+    return this.startTime;
+  }
+
+  getStats(): HeartbeatStats {
+    return {
+      ...this.stats,
+      uptimeSeconds: Math.floor((Date.now() - this.startTime) / 1000),
+    };
+  }
+
   onHeartbeat(listener: (heartbeat: Heartbeat) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);

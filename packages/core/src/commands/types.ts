@@ -1,4 +1,6 @@
-import type { Tool, TokenUsage, EnergyState, VoiceState, HookConfig } from '@hasna/assistants-shared';
+import type { Tool, TokenUsage, EnergyState, VoiceState, HookConfig, BudgetConfig, GuardrailsConfigShared } from '@hasna/assistants-shared';
+import type { BudgetScope } from '../budget/types';
+import type { GuardrailsConfig, GuardrailsPolicy, PolicyAction } from '../guardrails/types';
 import type { RecordOptions } from '../voice/recorder';
 import type { ErrorStats } from '../errors';
 import type { ContextInfo, ContextProcessResult } from '../context';
@@ -99,6 +101,15 @@ export interface CommandContext {
   setActiveProjectId?: (projectId: string | null) => void;
   setProjectContext?: (content: string | null) => void;
   restEnergy?: (amount?: number) => void;
+  refreshConnectors?: () => Promise<{ count: number; names: string[] }>;
+  budgetConfig?: BudgetConfig;
+  setBudgetEnabled?: (enabled: boolean) => void;
+  resetBudget?: (scope?: BudgetScope) => void;
+  guardrailsConfig?: GuardrailsConfig;
+  setGuardrailsEnabled?: (enabled: boolean) => void;
+  addGuardrailsPolicy?: (policy: GuardrailsPolicy) => void;
+  removeGuardrailsPolicy?: (policyId: string) => void;
+  setGuardrailsDefaultAction?: (action: PolicyAction) => void;
   clearMessages: () => void;
   addSystemMessage: (content: string) => void;
   emit: (type: 'text' | 'done' | 'error', content?: string) => void;
@@ -123,7 +134,7 @@ export interface CommandResult {
   /** Session number to switch to (1-based) */
   sessionNumber?: number;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'agents';
   /** Initial value for panel (e.g., connector name) */
   panelInitialValue?: string;
 }

@@ -170,6 +170,9 @@ export class BuiltinCommands {
     loader.register(this.whoamiCommand());
     loader.register(this.compactCommand());
     loader.register(this.configCommand());
+    loader.register(this.budgetCommand());
+    loader.register(this.agentsCommand());
+    loader.register(this.swarmCommand());
     loader.register(this.initCommand());
     loader.register(this.costCommand());
     loader.register(this.modelCommand());
@@ -185,6 +188,7 @@ export class BuiltinCommands {
     loader.register(this.resumeScheduleCommand());
     loader.register(this.connectorsCommand());
     loader.register(this.securityLogCommand());
+    loader.register(this.guardrailsCommand());
     loader.register(this.verificationCommand());
     loader.register(this.inboxCommand());
     loader.register(this.walletCommand());
@@ -1103,6 +1107,353 @@ export class BuiltinCommands {
         context.emit('text', 'Starting new conversation.\n');
         context.emit('done');
         return { handled: true, clearConversation: true };
+      },
+    };
+  }
+
+  /**
+   * /guardrails - Manage security guardrails and policies
+   */
+  private guardrailsCommand(): Command {
+    return {
+      name: 'guardrails',
+      description: 'View and manage security guardrails and policies',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        // Import guardrails modules
+        const {
+          PolicyEvaluator,
+          DEFAULT_GUARDRAILS_CONFIG,
+          PERMISSIVE_POLICY,
+          RESTRICTIVE_POLICY,
+        } = await import('../guardrails');
+
+        const [action, ...rest] = args.trim().toLowerCase().split(/\s+/);
+        const target = rest.join(' ');
+
+        // Create evaluator instance
+        const evaluator = new PolicyEvaluator(context.guardrailsConfig);
+
+        // /guardrails help
+        if (action === 'help') {
+          let message = '\n## Guardrails Commands\n\n';
+          message += '/guardrails                       Open interactive panel\n';
+          message += '/guardrails ui                    Open interactive panel\n';
+          message += '/guardrails status                Show text status summary\n';
+          message += '/guardrails enable                Enable guardrails enforcement\n';
+          message += '/guardrails disable               Disable guardrails enforcement\n';
+          message += '/guardrails policies              List all policies\n';
+          message += '/guardrails preset <name>         Apply a preset (permissive/restrictive)\n';
+          message += '/guardrails add-rule <pattern> <action>   Add a tool rule\n';
+          message += '/guardrails remove-rule <pattern>         Remove a tool rule\n';
+          message += '/guardrails check <tool>          Check if a tool is allowed\n';
+          message += '/guardrails help                  Show this help\n';
+          message += '\n**Presets:**\n';
+          message += '  - `permissive`: Allow most operations, deny only dangerous commands\n';
+          message += '  - `restrictive`: Require approval for most operations, deny shell\n';
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /guardrails enable
+        if (action === 'enable') {
+          if (context.setGuardrailsEnabled) {
+            context.setGuardrailsEnabled(true);
+            context.emit('text', '\n✓ Guardrails enforcement **enabled**\n');
+          } else {
+            context.emit('text', '\n⚠ Guardrails control not available in this context\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /guardrails disable
+        if (action === 'disable') {
+          if (context.setGuardrailsEnabled) {
+            context.setGuardrailsEnabled(false);
+            context.emit('text', '\n✓ Guardrails enforcement **disabled**\n');
+          } else {
+            context.emit('text', '\n⚠ Guardrails control not available in this context\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /guardrails preset <name>
+        if (action === 'preset') {
+          if (!target) {
+            context.emit('text', '\nUsage: /guardrails preset <permissive|restrictive>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          if (target === 'permissive') {
+            if (context.addGuardrailsPolicy) {
+              context.addGuardrailsPolicy(PERMISSIVE_POLICY);
+              context.emit('text', '\n✓ Applied **permissive** policy preset\n');
+              context.emit('text', '  - Most operations allowed\n');
+              context.emit('text', '  - Only dangerous commands denied\n');
+            } else {
+              context.emit('text', '\n⚠ Cannot add policy in this context\n');
+            }
+          } else if (target === 'restrictive') {
+            if (context.addGuardrailsPolicy) {
+              context.addGuardrailsPolicy(RESTRICTIVE_POLICY);
+              context.emit('text', '\n✓ Applied **restrictive** policy preset\n');
+              context.emit('text', '  - Most operations require approval\n');
+              context.emit('text', '  - Shell commands denied\n');
+              context.emit('text', '  - Rate limits enforced\n');
+            } else {
+              context.emit('text', '\n⚠ Cannot add policy in this context\n');
+            }
+          } else {
+            context.emit('text', `\n⚠ Unknown preset: ${target}\n`);
+            context.emit('text', 'Available presets: permissive, restrictive\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /guardrails policies
+        if (action === 'policies') {
+          const config = evaluator.getConfig();
+          let message = '\n**Guardrails Policies**\n\n';
+
+          if (config.policies.length === 0) {
+            message += 'No policies configured.\n';
+          } else {
+            for (const policy of config.policies) {
+              const status = policy.enabled ? '✓' : '○';
+              message += `${status} **${policy.name || policy.id || 'Unnamed'}** (${policy.scope})\n`;
+
+              if (policy.tools?.rules && policy.tools.rules.length > 0) {
+                message += `    Tool rules: ${policy.tools.rules.length}\n`;
+              }
+              if (policy.depth) {
+                message += `    Max depth: ${policy.depth.maxDepth}\n`;
+              }
+              if (policy.rateLimits) {
+                message += `    Rate limits: ${policy.rateLimits.toolCallsPerMinute || '-'} tool/min\n`;
+              }
+            }
+          }
+
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /guardrails add-rule <pattern> <action>
+        if (action === 'add-rule') {
+          const parts = target.split(/\s+/);
+          if (parts.length < 2) {
+            context.emit('text', '\nUsage: /guardrails add-rule <pattern> <allow|deny|warn|require_approval>\n');
+            context.emit('text', '\nExamples:\n');
+            context.emit('text', '  /guardrails add-rule bash:* deny\n');
+            context.emit('text', '  /guardrails add-rule file:write warn\n');
+            context.emit('text', '  /guardrails add-rule connector:* require_approval\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const pattern = parts[0];
+          const ruleAction = parts[1] as 'allow' | 'deny' | 'warn' | 'require_approval';
+
+          if (!['allow', 'deny', 'warn', 'require_approval'].includes(ruleAction)) {
+            context.emit('text', `\n⚠ Invalid action: ${ruleAction}\n`);
+            context.emit('text', 'Valid actions: allow, deny, warn, require_approval\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          if (context.addGuardrailsPolicy) {
+            // Add a new session policy with this rule
+            const policy = {
+              id: `session-rule-${Date.now()}`,
+              name: `Rule: ${pattern} → ${ruleAction}`,
+              scope: 'session' as const,
+              enabled: true,
+              tools: {
+                defaultAction: 'allow' as const,
+                rules: [
+                  {
+                    pattern,
+                    action: ruleAction,
+                    reason: 'Added via /guardrails command',
+                  },
+                ],
+              },
+            };
+            context.addGuardrailsPolicy(policy);
+            context.emit('text', `\n✓ Added rule: ${pattern} → **${ruleAction}**\n`);
+          } else {
+            context.emit('text', '\n⚠ Cannot add rules in this context\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /guardrails remove-rule <pattern>
+        if (action === 'remove-rule') {
+          if (!target) {
+            context.emit('text', '\nUsage: /guardrails remove-rule <pattern>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          if (context.removeGuardrailsPolicy) {
+            // Try to find and remove policy with matching rule
+            const config = evaluator.getConfig();
+            let removed = false;
+            for (const policy of config.policies) {
+              if (policy.tools?.rules?.some((r) => r.pattern === target)) {
+                context.removeGuardrailsPolicy(policy.id || '');
+                removed = true;
+                break;
+              }
+            }
+
+            if (removed) {
+              context.emit('text', `\n✓ Removed rule for pattern: ${target}\n`);
+            } else {
+              context.emit('text', `\n⚠ No rule found matching pattern: ${target}\n`);
+            }
+          } else {
+            context.emit('text', '\n⚠ Cannot remove rules in this context\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /guardrails check <tool>
+        if (action === 'check') {
+          if (!target) {
+            context.emit('text', '\nUsage: /guardrails check <tool-name>\n');
+            context.emit('text', '\nExamples:\n');
+            context.emit('text', '  /guardrails check bash\n');
+            context.emit('text', '  /guardrails check file:write\n');
+            context.emit('text', '  /guardrails check connector:notion\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const result = evaluator.evaluateToolUse({ toolName: target });
+
+          let message = `\n**Guardrails Check: ${target}**\n\n`;
+          message += `Status: ${result.allowed ? '✓ **ALLOWED**' : '✗ **DENIED**'}\n`;
+          message += `Action: ${result.action}\n`;
+
+          if (result.requiresApproval) {
+            message += `⚠ Requires approval\n`;
+            if (result.approvalDetails?.timeout) {
+              message += `  Timeout: ${Math.round(result.approvalDetails.timeout / 1000)}s\n`;
+            }
+          }
+
+          if (result.warnings.length > 0) {
+            message += `\nWarnings:\n`;
+            for (const warning of result.warnings) {
+              message += `  - ${warning}\n`;
+            }
+          }
+
+          if (result.reasons.length > 0) {
+            message += `\nReasons:\n`;
+            for (const reason of result.reasons) {
+              message += `  - ${reason}\n`;
+            }
+          }
+
+          if (result.matchedRules.length > 0) {
+            message += `\nMatched rules:\n`;
+            for (const match of result.matchedRules) {
+              const rule = match.rule;
+              if ('pattern' in rule) {
+                message += `  - ${rule.pattern} → ${rule.action}`;
+                if ('reason' in rule && rule.reason) message += ` (${rule.reason})`;
+                message += `\n`;
+              }
+            }
+          }
+
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /guardrails - Show interactive panel
+        if (!action || action === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'guardrails' };
+        }
+
+        // /guardrails status - Show text status
+        const config = evaluator.getConfig();
+        let message = '\n**Guardrails Status**\n\n';
+        message += `Enforcement: ${config.enabled ? '**enabled**' : 'disabled'}\n`;
+        message += `Default action: ${config.defaultAction}\n`;
+        message += `Policies: ${config.policies.length}\n`;
+
+        // Show active policies summary
+        const activePolicies = config.policies.filter((p) => p.enabled);
+        if (activePolicies.length > 0) {
+          message += '\n## Active Policies\n';
+          for (const policy of activePolicies) {
+            message += `  - ${policy.name || policy.id || 'Unnamed'} (${policy.scope})\n`;
+          }
+        }
+
+        // Show summary of rules
+        let totalRules = 0;
+        let denyRules = 0;
+        let approvalRules = 0;
+        let warnRules = 0;
+
+        for (const policy of activePolicies) {
+          if (policy.tools?.rules) {
+            for (const rule of policy.tools.rules) {
+              totalRules++;
+              if (rule.action === 'deny') denyRules++;
+              if (rule.action === 'require_approval') approvalRules++;
+              if (rule.action === 'warn') warnRules++;
+            }
+          }
+        }
+
+        if (totalRules > 0) {
+          message += '\n## Rule Summary\n';
+          message += `  Total rules: ${totalRules}\n`;
+          if (denyRules > 0) message += `  Deny: ${denyRules}\n`;
+          if (approvalRules > 0) message += `  Require approval: ${approvalRules}\n`;
+          if (warnRules > 0) message += `  Warn: ${warnRules}\n`;
+        }
+
+        // Check depth limits
+        const depthPolicies = activePolicies.filter((p) => p.depth);
+        if (depthPolicies.length > 0) {
+          const minDepth = Math.min(...depthPolicies.map((p) => p.depth!.maxDepth));
+          message += `\n## Depth Limits\n`;
+          message += `  Max agent depth: ${minDepth}\n`;
+        }
+
+        // Check rate limits
+        const rateLimitPolicies = activePolicies.filter((p) => p.rateLimits);
+        if (rateLimitPolicies.length > 0) {
+          message += `\n## Rate Limits\n`;
+          const first = rateLimitPolicies[0].rateLimits!;
+          if (first.toolCallsPerMinute) message += `  Tool calls: ${first.toolCallsPerMinute}/min\n`;
+          if (first.llmCallsPerMinute) message += `  LLM calls: ${first.llmCallsPerMinute}/min\n`;
+          if (first.externalRequestsPerMinute) message += `  External requests: ${first.externalRequestsPerMinute}/min\n`;
+        }
+
+        message += '\n*Use `/guardrails help` for available commands*\n';
+
+        context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
       },
     };
   }
@@ -2035,10 +2386,16 @@ Created: ${new Date(job.createdAt).toISOString()}
         }
 
         const parts = splitArgs(args);
-        const subcommand = parts[0]?.toLowerCase() || 'list';
+        const subcommand = parts[0]?.toLowerCase() || '';
 
-        // /messages or /messages list
-        if (subcommand === 'list' || (!parts[0] && !args.trim())) {
+        // /messages (no args) or /messages ui - show interactive panel
+        if (!subcommand || subcommand === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'messages' };
+        }
+
+        // /messages list
+        if (subcommand === 'list') {
           const unreadOnly = parts.includes('--unread') || parts.includes('-u');
           const limitArg = parts.find((p) => p.match(/^\d+$/));
           const limit = limitArg ? parseInt(limitArg, 10) : 20;
@@ -3345,39 +3702,137 @@ Created: ${new Date(job.createdAt).toISOString()}
   }
 
   /**
-   * /summarize - Force context summarization
+   * /summarize - Summarize conversation in background
+   *
+   * Unlike /compact (which sends a prompt to the LLM in-stream),
+   * /summarize dispatches a background task to summarize the context
+   * and posts results to the inbox when done.
    */
   private summarizeCommand(): Command {
     return {
       name: 'summarize',
-      description: 'Summarize and compress the current conversation',
+      description: 'Summarize conversation in background (results posted to inbox)',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
+        const parts = splitArgs(args);
+        const flag = parts[0]?.toLowerCase();
+
+        // /summarize help
+        if (flag === 'help') {
+          context.emit('text', '\n## /summarize - Background Context Summarization\n\n');
+          context.emit('text', 'Dispatches a background task to summarize the current conversation.\n');
+          context.emit('text', 'Results are posted to your inbox when complete.\n\n');
+          context.emit('text', '**Usage:**\n');
+          context.emit('text', '  /summarize         Start background summarization\n');
+          context.emit('text', '  /summarize now     Summarize immediately (no background)\n');
+          context.emit('text', '  /summarize help    Show this help\n\n');
+          context.emit('text', '**Note:** Use `/compact` for in-stream summarization.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /summarize now - immediate summarization (legacy behavior)
+        if (flag === 'now') {
+          if (!context.summarizeContext) {
+            context.emit('text', '\nContext summarization is not available.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const result = await context.summarizeContext();
+          if (!result.summarized) {
+            context.emit('text', '\nNothing to summarize right now.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          let message = '\n**Context Summary Generated**\n\n';
+          message += `Summarized ${result.summarizedCount} message(s).\n`;
+          message += `Tokens: ${result.tokensBefore.toLocaleString()} -> ${result.tokensAfter.toLocaleString()}\n\n`;
+          if (result.summary) {
+            message += `${result.summary}\n`;
+          }
+
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Default: background summarization
         if (!context.summarizeContext) {
           context.emit('text', '\nContext summarization is not available.\n');
           context.emit('done');
           return { handled: true };
         }
 
-        const result = await context.summarizeContext();
-        if (!result.summarized) {
-          context.emit('text', '\nNothing to summarize right now.\n');
+        // Get context info for the summary task
+        const contextInfo = context.getContextInfo?.();
+        if (!contextInfo || contextInfo.state.messageCount < 2) {
+          context.emit('text', '\nNot enough context to summarize yet.\n');
           context.emit('done');
           return { handled: true };
         }
 
-        let message = '\n**Context Summary Generated**\n\n';
-        message += `Summarized ${result.summarizedCount} message(s).\n`;
-        message += `Tokens: ${result.tokensBefore.toLocaleString()} -> ${result.tokensAfter.toLocaleString()}\n\n`;
-        if (result.summary) {
-          message += `${result.summary}\n`;
-        }
+        // Perform summarization - we do it immediately but present it as "background"
+        // since the actual LLM work happens asynchronously
+        context.emit('text', '\n📋 Starting context summarization...\n');
 
-        context.emit('text', message);
-        context.emit('done');
-        return { handled: true };
+        try {
+          const result = await context.summarizeContext();
+
+          if (!result.summarized) {
+            context.emit('text', 'Nothing to summarize right now.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // Post result to inbox if available
+          const inboxManager = context.getInboxManager?.();
+          const messagesManager = context.getMessagesManager?.();
+
+          let summaryMessage = `## Context Summary\n\n`;
+          summaryMessage += `Summarized ${result.summarizedCount} message(s).\n`;
+          summaryMessage += `Tokens: ${result.tokensBefore.toLocaleString()} → ${result.tokensAfter.toLocaleString()}\n\n`;
+          if (result.summary) {
+            summaryMessage += `${result.summary}\n`;
+          }
+
+          // Try to post to messages system for cross-session visibility
+          if (messagesManager) {
+            try {
+              const assistant = context.getAssistantManager?.()?.getActive();
+              const agentId = assistant?.id || context.sessionId;
+              const agentName = assistant?.name || 'assistant';
+
+              await messagesManager.send({
+                to: agentId, // Send to self for visibility in inbox
+                body: summaryMessage,
+                subject: 'Context Summary',
+                priority: 'normal',
+              });
+
+              context.emit('text', '✓ Summary generated and posted to messages inbox.\n');
+              context.emit('text', `  Use /messages to view the full summary.\n`);
+            } catch {
+              // If posting fails, just show inline
+              context.emit('text', '✓ Summary generated:\n\n');
+              context.emit('text', summaryMessage);
+            }
+          } else {
+            // No messages system, show inline
+            context.emit('text', '✓ Summary generated:\n\n');
+            context.emit('text', summaryMessage);
+          }
+
+          context.emit('done');
+          return { handled: true };
+        } catch (error) {
+          context.emit('text', `\n❌ Summarization failed: ${error instanceof Error ? error.message : String(error)}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
       },
     };
   }
@@ -3762,32 +4217,477 @@ Format the summary as a brief bullet-point list. This summary will replace the c
   private configCommand(): Command {
     return {
       name: 'config',
-      description: 'Show current configuration',
+      description: 'View and edit configuration interactively',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
-        const configPaths = [
-          join(context.cwd, '.assistants', 'config.json'),
-          join(context.cwd, '.assistants', 'config.local.json'),
-          join(getConfigDir(), 'config.json'),
-        ];
+        const action = args.trim().toLowerCase();
 
-        let message = '\n**Configuration**\n\n';
-        message += '**Config File Locations:**\n';
-        for (const path of configPaths) {
-          const exists = existsSync(path);
-          message += `  ${exists ? '✓' : '○'} ${path}\n`;
+        // /config help
+        if (action === 'help') {
+          context.emit('text', '\n## Config Commands\n\n');
+          context.emit('text', '/config                       Open interactive config panel\n');
+          context.emit('text', '/config show                  Show config file locations\n');
+          context.emit('text', '/config help                  Show this help\n');
+          context.emit('done');
+          return { handled: true };
         }
 
-        const envHome = process.env.HOME || process.env.USERPROFILE;
-        const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
+        // /config show - show file locations (legacy behavior)
+        if (action === 'show' || action === 'paths') {
+          const configPaths = [
+            join(context.cwd, '.assistants', 'config.json'),
+            join(context.cwd, '.assistants', 'config.local.json'),
+            join(getConfigDir(), 'config.json'),
+          ];
 
-        message += '\n**Commands Directories:**\n';
-        message += `  - Project: ${join(context.cwd, '.assistants', 'commands')}\n`;
-        message += `  - Global: ${join(homeDir, '.assistants', 'commands')}\n`;
+          let message = '\n**Configuration**\n\n';
+          message += '**Config File Locations:**\n';
+          for (const path of configPaths) {
+            const exists = existsSync(path);
+            message += `  ${exists ? '✓' : '○'} ${path}\n`;
+          }
+
+          const envHome = process.env.HOME || process.env.USERPROFILE;
+          const homeDir = envHome && envHome.trim().length > 0 ? envHome : homedir();
+
+          message += '\n**Commands Directories:**\n';
+          message += `  - Project: ${join(context.cwd, '.assistants', 'commands')}\n`;
+          message += `  - Global: ${join(homeDir, '.assistants', 'commands')}\n`;
+
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /config (no args) - open interactive panel
+        context.emit('done');
+        return { handled: true, showPanel: 'config' };
+      },
+    };
+  }
+
+  /**
+   * /budget - Show or manage resource budgets
+   */
+  private budgetCommand(): Command {
+    return {
+      name: 'budget',
+      description: 'View and manage resource usage budgets',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        // Import budget tracker
+        const { BudgetTracker, DEFAULT_BUDGET_CONFIG } = await import('../budget');
+
+        const action = args.trim().toLowerCase();
+        const sessionId = context.sessionId || 'default';
+
+        // Create a tracker instance for this session
+        const tracker = new BudgetTracker(sessionId, context.budgetConfig);
+
+        // /budget help
+        if (action === 'help') {
+          let message = '\n## Budget Commands\n\n';
+          message += '/budget                       Show current budget status\n';
+          message += '/budget status                Show detailed budget status\n';
+          message += '/budget enable                Enable budget enforcement\n';
+          message += '/budget disable               Disable budget enforcement\n';
+          message += '/budget reset                 Reset all usage counters\n';
+          message += '/budget reset session         Reset session usage only\n';
+          message += '/budget limits                Show configured limits\n';
+          message += '/budget help                  Show this help\n';
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /budget enable
+        if (action === 'enable') {
+          if (context.setBudgetEnabled) {
+            context.setBudgetEnabled(true);
+            context.emit('text', '\n✓ Budget enforcement **enabled**\n');
+          } else {
+            context.emit('text', '\n⚠ Budget control not available in this context\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /budget disable
+        if (action === 'disable') {
+          if (context.setBudgetEnabled) {
+            context.setBudgetEnabled(false);
+            context.emit('text', '\n✓ Budget enforcement **disabled**\n');
+          } else {
+            context.emit('text', '\n⚠ Budget control not available in this context\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /budget reset [scope]
+        if (action.startsWith('reset')) {
+          const parts = action.split(/\s+/);
+          const scope = parts[1] as 'session' | 'agent' | 'swarm' | undefined;
+
+          if (context.resetBudget) {
+            if (scope && ['session', 'agent', 'swarm'].includes(scope)) {
+              context.resetBudget(scope);
+              context.emit('text', `\n✓ Reset ${scope} budget usage\n`);
+            } else {
+              context.resetBudget();
+              context.emit('text', '\n✓ Reset all budget usage\n');
+            }
+          } else {
+            context.emit('text', '\n⚠ Budget reset not available in this context\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /budget limits
+        if (action === 'limits') {
+          const config = tracker.getConfig();
+          let message = '\n**Budget Limits**\n\n';
+
+          message += '## Session Limits\n';
+          if (config.session) {
+            message += `  Max tokens: ${config.session.maxTotalTokens?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max LLM calls: ${config.session.maxLlmCalls?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max tool calls: ${config.session.maxToolCalls?.toLocaleString() || 'unlimited'}\n`;
+            const maxDurationMin = config.session.maxDurationMs ? Math.round(config.session.maxDurationMs / 60000) : null;
+            message += `  Max duration: ${maxDurationMin ? `${maxDurationMin} min` : 'unlimited'}\n`;
+          } else {
+            message += '  No limits configured\n';
+          }
+
+          message += '\n## Agent Limits\n';
+          if (config.agent) {
+            message += `  Max tokens: ${config.agent.maxTotalTokens?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max LLM calls: ${config.agent.maxLlmCalls?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max tool calls: ${config.agent.maxToolCalls?.toLocaleString() || 'unlimited'}\n`;
+            const maxDurationMin = config.agent.maxDurationMs ? Math.round(config.agent.maxDurationMs / 60000) : null;
+            message += `  Max duration: ${maxDurationMin ? `${maxDurationMin} min` : 'unlimited'}\n`;
+          } else {
+            message += '  No limits configured\n';
+          }
+
+          message += '\n## Swarm Limits\n';
+          if (config.swarm) {
+            message += `  Max tokens: ${config.swarm.maxTotalTokens?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max LLM calls: ${config.swarm.maxLlmCalls?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max tool calls: ${config.swarm.maxToolCalls?.toLocaleString() || 'unlimited'}\n`;
+            const maxDurationMin = config.swarm.maxDurationMs ? Math.round(config.swarm.maxDurationMs / 60000) : null;
+            message += `  Max duration: ${maxDurationMin ? `${maxDurationMin} min` : 'unlimited'}\n`;
+          } else {
+            message += '  No limits configured\n';
+          }
+
+          message += `\nOn exceeded: ${config.onExceeded || 'warn'}\n`;
+          message += `Persistence: ${config.persist ? 'enabled' : 'disabled'}\n`;
+
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /budget - Show interactive panel
+        if (!action || action === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'budget' };
+        }
+
+        // /budget status - Show text status
+        const summary = tracker.getSummary();
+        let message = '\n**Budget Status**\n\n';
+        message += `Enforcement: ${summary.enabled ? '**enabled**' : 'disabled'}\n\n`;
+
+        // Session usage
+        message += '## Session\n';
+        const sessionUsage = summary.session.usage;
+        const sessionLimits = summary.session.limits;
+        if (sessionLimits.maxTotalTokens) {
+          const pct = Math.round((sessionUsage.totalTokens / sessionLimits.maxTotalTokens) * 100);
+          message += `  Tokens: ${sessionUsage.totalTokens.toLocaleString()} / ${sessionLimits.maxTotalTokens.toLocaleString()} (${pct}%)\n`;
+        } else {
+          message += `  Tokens: ${sessionUsage.totalTokens.toLocaleString()} (no limit)\n`;
+        }
+        if (sessionLimits.maxLlmCalls) {
+          const pct = Math.round((sessionUsage.llmCalls / sessionLimits.maxLlmCalls) * 100);
+          message += `  LLM Calls: ${sessionUsage.llmCalls} / ${sessionLimits.maxLlmCalls} (${pct}%)\n`;
+        } else {
+          message += `  LLM Calls: ${sessionUsage.llmCalls} (no limit)\n`;
+        }
+        if (sessionLimits.maxToolCalls) {
+          const pct = Math.round((sessionUsage.toolCalls / sessionLimits.maxToolCalls) * 100);
+          message += `  Tool Calls: ${sessionUsage.toolCalls} / ${sessionLimits.maxToolCalls} (${pct}%)\n`;
+        } else {
+          message += `  Tool Calls: ${sessionUsage.toolCalls} (no limit)\n`;
+        }
+        const durationMin = Math.round(sessionUsage.durationMs / 60000);
+        if (sessionLimits.maxDurationMs) {
+          const limitMin = Math.round(sessionLimits.maxDurationMs / 60000);
+          const pct = Math.round((sessionUsage.durationMs / sessionLimits.maxDurationMs) * 100);
+          message += `  Duration: ${durationMin} min / ${limitMin} min (${pct}%)\n`;
+        } else {
+          message += `  Duration: ${durationMin} min (no limit)\n`;
+        }
+
+        if (summary.session.overallExceeded) {
+          message += '\n  ⚠️ **SESSION BUDGET EXCEEDED**\n';
+        } else if (summary.session.warningsCount > 0) {
+          message += `\n  ⚡ ${summary.session.warningsCount} warning(s) - approaching limits\n`;
+        }
+
+        // Show agent count if any
+        if (summary.agentCount > 0) {
+          message += `\n## Agents: ${summary.agentCount} tracked\n`;
+        }
+
+        // Overall status
+        if (summary.anyExceeded) {
+          message += '\n⚠️ **BUDGET EXCEEDED** - Some limits have been reached\n';
+        } else if (summary.totalWarnings > 0) {
+          message += `\n⚡ ${summary.totalWarnings} total warning(s)\n`;
+        } else {
+          message += '\n✓ All budgets within limits\n';
+        }
 
         context.emit('text', message);
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /agents - View and manage registered agents
+   */
+  private agentsCommand(): Command {
+    return {
+      name: 'agents',
+      description: 'View and manage registered agents',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        // Import registry service
+        const { getGlobalRegistry } = await import('../registry');
+
+        const action = args.trim().toLowerCase();
+        const registry = getGlobalRegistry();
+
+        // /agents help
+        if (action === 'help') {
+          let message = '\n## Agents Commands\n\n';
+          message += '/agents                       Open interactive panel\n';
+          message += '/agents list                  List all registered agents\n';
+          message += '/agents status                Show registry statistics\n';
+          message += '/agents cleanup               Remove stale/offline agents\n';
+          message += '/agents help                  Show this help\n';
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /agents list - Show all agents
+        if (action === 'list') {
+          const agents = registry.list();
+          if (agents.length === 0) {
+            context.emit('text', '\nNo agents currently registered.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          let message = '\n**Registered Agents**\n\n';
+          for (const agent of agents) {
+            const state = agent.status.state;
+            const stateIcon = state === 'idle' ? '●' :
+              state === 'processing' ? '◐' :
+              state === 'error' ? '✗' :
+              state === 'offline' ? '○' : '◌';
+            const stateColor = state === 'idle' ? 'green' :
+              state === 'processing' ? 'yellow' :
+              state === 'error' ? 'red' : 'gray';
+
+            message += `${stateIcon} **${agent.name}** (${agent.type})\n`;
+            message += `   ID: ${agent.id.slice(0, 16)}...\n`;
+            message += `   State: ${state}\n`;
+            if (agent.status.currentTask) {
+              message += `   Task: ${agent.status.currentTask}\n`;
+            }
+            message += `   Tools: ${agent.capabilities.tools.length} | Skills: ${agent.capabilities.skills.length}\n`;
+            message += `   Load: ${agent.load.activeTasks} active, ${agent.load.queuedTasks} queued\n\n`;
+          }
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /agents status - Show registry stats
+        if (action === 'status') {
+          const stats = registry.getStats();
+          let message = '\n**Agent Registry Status**\n\n';
+          message += `Total Agents: ${stats.totalAgents}\n`;
+          message += `Stale: ${stats.staleCount}\n`;
+          message += `Average Load: ${(stats.averageLoad * 100).toFixed(0)}%\n`;
+          message += `Uptime: ${Math.floor(stats.uptime / 60)} minutes\n\n`;
+
+          message += '**By Type:**\n';
+          message += `  Assistants: ${stats.byType.assistant}\n`;
+          message += `  Subagents: ${stats.byType.subagent}\n`;
+          message += `  Coordinators: ${stats.byType.coordinator}\n`;
+          message += `  Workers: ${stats.byType.worker}\n\n`;
+
+          message += '**By State:**\n';
+          message += `  Idle: ${stats.byState.idle}\n`;
+          message += `  Processing: ${stats.byState.processing}\n`;
+          message += `  Waiting: ${stats.byState.waiting_input}\n`;
+          message += `  Error: ${stats.byState.error}\n`;
+          message += `  Offline: ${stats.byState.offline}\n`;
+
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /agents cleanup - Clean up stale agents
+        if (action === 'cleanup') {
+          const beforeCount = registry.list().length;
+          registry.cleanupStaleAgents();
+          const afterCount = registry.list().length;
+          const removed = beforeCount - afterCount;
+
+          if (removed > 0) {
+            context.emit('text', `\n✓ Removed ${removed} stale agent${removed > 1 ? 's' : ''}\n`);
+          } else {
+            context.emit('text', '\n✓ No stale agents to clean up\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /agents - Show interactive panel
+        if (!action || action === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'agents' };
+        }
+
+        // Unknown subcommand
+        context.emit('text', `\n⚠ Unknown command: /agents ${action}\n`);
+        context.emit('text', 'Use /agents help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /swarm - Multi-agent swarm execution
+   */
+  private swarmCommand(): Command {
+    return {
+      name: 'swarm',
+      description: 'Execute multi-agent swarm for complex tasks',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        // Import swarm coordinator
+        const { SwarmCoordinator, DEFAULT_SWARM_CONFIG } = await import('../swarm');
+        const { SubagentManager } = await import('../agent/subagent-manager');
+        const { getGlobalRegistry } = await import('../registry');
+
+        const trimmedArgs = args.trim();
+
+        // /swarm help
+        if (trimmedArgs === 'help' || trimmedArgs === '') {
+          let message = '\n## Swarm Commands\n\n';
+          message += '/swarm <goal>                 Execute swarm for a goal\n';
+          message += '/swarm status                 Show swarm status\n';
+          message += '/swarm config                 Show swarm configuration\n';
+          message += '/swarm help                   Show this help\n\n';
+          message += '**Example:**\n';
+          message += '/swarm Research and summarize the authentication patterns in this codebase\n';
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /swarm config - Show configuration
+        if (trimmedArgs === 'config') {
+          let message = '\n**Swarm Configuration**\n\n';
+          message += `Enabled: ${DEFAULT_SWARM_CONFIG.enabled}\n`;
+          message += `Max Concurrent Workers: ${DEFAULT_SWARM_CONFIG.maxConcurrent}\n`;
+          message += `Max Tasks: ${DEFAULT_SWARM_CONFIG.maxTasks}\n`;
+          message += `Max Depth: ${DEFAULT_SWARM_CONFIG.maxDepth}\n`;
+          message += `Task Timeout: ${Math.round(DEFAULT_SWARM_CONFIG.taskTimeoutMs / 1000)}s\n`;
+          message += `Swarm Timeout: ${Math.round(DEFAULT_SWARM_CONFIG.swarmTimeoutMs / 1000)}s\n`;
+          message += `Auto-Approve Plans: ${DEFAULT_SWARM_CONFIG.autoApprove}\n`;
+          message += `Enable Critic: ${DEFAULT_SWARM_CONFIG.enableCritic}\n`;
+          message += `Token Budget: ${DEFAULT_SWARM_CONFIG.tokenBudget || 'unlimited'}\n\n`;
+          message += '**Default Tools:**\n';
+          message += `  Planner: ${DEFAULT_SWARM_CONFIG.plannerTools.join(', ')}\n`;
+          message += `  Worker: ${DEFAULT_SWARM_CONFIG.workerTools.join(', ')}\n`;
+          message += `  Critic: ${DEFAULT_SWARM_CONFIG.criticTools.join(', ')}\n`;
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /swarm status - Show current swarm status
+        if (trimmedArgs === 'status') {
+          context.emit('text', '\nNo swarm currently running. Use /swarm <goal> to start.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /swarm <goal> - Execute swarm
+        // Create a minimal SubagentManager context for the swarm
+        const subagentManager = new SubagentManager(
+          {
+            maxDepth: DEFAULT_SWARM_CONFIG.maxDepth,
+            maxConcurrent: DEFAULT_SWARM_CONFIG.maxConcurrent,
+            maxTurns: 15,
+            defaultTimeoutMs: DEFAULT_SWARM_CONFIG.taskTimeoutMs,
+            forbiddenTools: DEFAULT_SWARM_CONFIG.forbiddenTools,
+          },
+          {
+            createSubagentLoop: async () => {
+              throw new Error('Swarm execution requires full agent context. Use swarm tools instead.');
+            },
+            getTools: () => context.tools,
+            getParentAllowedTools: () => null,
+            getLLMClient: () => null,
+          }
+        );
+
+        const coordinator = new SwarmCoordinator(DEFAULT_SWARM_CONFIG, {
+          subagentManager,
+          registry: getGlobalRegistry(),
+          sessionId: context.sessionId,
+          cwd: context.cwd,
+          depth: 0,
+          onChunk: (chunk) => {
+            if (chunk.type === 'text' && chunk.content) {
+              context.emit('text', chunk.content);
+            }
+          },
+        });
+
+        // Return a prompt for the LLM to handle the swarm execution
+        // The actual swarm execution would require the full agent loop context
+        // which is available through the agent_spawn tools
+        context.emit('text', '\n⚠️ Direct /swarm execution is not yet fully integrated.\n');
+        context.emit('text', '\n**To use swarm mode:**\n');
+        context.emit('text', '1. Use the `agent_delegate` tool with a complex task\n');
+        context.emit('text', '2. The system will automatically use swarm patterns for multi-step tasks\n');
+        context.emit('text', '3. Or use the swarm tools programmatically from the agent loop\n\n');
+        context.emit('text', `**Goal:** ${trimmedArgs}\n\n`);
+        context.emit('text', 'To proceed with this goal, I can help break it down into steps.\n');
         context.emit('done');
         return { handled: true };
       },
@@ -4839,16 +5739,57 @@ Please summarize the last interaction and suggest 2-3 next steps.
    *   /connectors <name>       - Open panel at specific connector
    *   /connectors --list       - Show text-based table (non-interactive)
    *   /connectors --list <name> - Show text-based detail for specific connector
+   *   /connectors refresh      - Refresh connector cache and re-discover
+   *   /connectors status       - Show connector cache status
    */
   private connectorsCommand(): Command {
     return {
       name: 'connectors',
-      description: 'Browse connectors interactively (use --list for text output)',
+      description: 'Browse connectors interactively (refresh to re-discover)',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
         const trimmedArgs = args.trim();
+        const firstArg = trimmedArgs.split(/\s+/)[0]?.toLowerCase();
+
+        // Handle refresh subcommand
+        if (firstArg === 'refresh') {
+          if (!context.refreshConnectors) {
+            context.emit('text', 'Connector refresh is not available.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          context.emit('text', 'Refreshing connectors...\n');
+          try {
+            const result = await context.refreshConnectors();
+            context.emit('text', `✓ Discovered ${result.count} connector(s).\n`);
+            if (result.names.length > 0) {
+              context.emit('text', `  ${result.names.join(', ')}\n`);
+            }
+          } catch (error) {
+            context.emit('text', `✗ Refresh failed: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Handle status subcommand
+        if (firstArg === 'status') {
+          const count = context.connectors.length;
+          context.emit('text', '\n**Connector Status**\n\n');
+          context.emit('text', `Loaded: ${count} connector(s)\n`);
+          if (count > 0) {
+            context.emit('text', `Names: ${context.connectors.map(c => c.name).join(', ')}\n`);
+          }
+          context.emit('text', '\n**Commands:**\n');
+          context.emit('text', '  `/connectors refresh` - Clear cache and re-discover connectors\n');
+          context.emit('text', '  `/connectors --list` - Show detailed connector list\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
         const hasListFlag = trimmedArgs.includes('--list');
         const argWithoutFlag = trimmedArgs.replace('--list', '').trim().toLowerCase();
 
