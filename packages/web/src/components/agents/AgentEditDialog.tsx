@@ -18,13 +18,23 @@ import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/Badge';
 import { AvatarUpload } from '@/components/ui/avatar-upload';
+import { ToolSelector } from './ToolSelector';
+// SkillSelector is available but skill allowlist enforcement is not yet implemented in the runtime
+// import { SkillSelector } from './SkillSelector';
 import {
-  ANTHROPIC_MODELS,
+  ALL_MODELS,
+  getModelById,
+  getModelsGroupedByProvider,
+  clampMaxTokens,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
   MIN_TEMPERATURE,
@@ -43,6 +53,8 @@ interface Agent {
   settings?: {
     temperature?: number;
     maxTokens?: number;
+    tools?: string[];
+    skills?: string[];
   } | null;
   isActive: boolean;
 }
@@ -67,6 +79,8 @@ export function AgentEditDialog({
   const [temperature, setTemperature] = useState(DEFAULT_TEMPERATURE);
   const [maxTokens, setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
   const [systemPrompt, setSystemPrompt] = useState('');
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -81,6 +95,8 @@ export function AgentEditDialog({
       setTemperature(agent.settings?.temperature ?? DEFAULT_TEMPERATURE);
       setMaxTokens(agent.settings?.maxTokens ?? DEFAULT_MAX_TOKENS);
       setSystemPrompt(agent.systemPrompt || '');
+      setSelectedTools(agent.settings?.tools || []);
+      setSelectedSkills(agent.settings?.skills || []);
       setIsActive(agent.isActive);
       setError('');
     }
@@ -106,6 +122,8 @@ export function AgentEditDialog({
         settings: {
           temperature,
           maxTokens,
+          tools: selectedTools.length > 0 ? selectedTools : undefined,
+          skills: selectedSkills.length > 0 ? selectedSkills : undefined,
         },
         isActive,
       };
@@ -125,27 +143,50 @@ export function AgentEditDialog({
     return 'Balanced - good mix of consistency and creativity';
   };
 
+  // Handle model change - clamp maxTokens to new model's limit
+  const handleModelChange = (newModel: string) => {
+    setModel(newModel);
+    // Clamp maxTokens to the new model's maximum
+    const clampedTokens = clampMaxTokens(newModel, maxTokens);
+    if (clampedTokens !== maxTokens) {
+      setMaxTokens(clampedTokens);
+    }
+  };
+
+  // Get current model info
+  const currentModel = getModelById(model);
+  const modelsByProvider = getModelsGroupedByProvider();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Agent</DialogTitle>
           <DialogDescription>
-            Configure the agent settings below.
+            Configure the agent settings, tools, and skills below.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {error && (
-            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
+        {error && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
-          {/* Basic Info Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-foreground">Basic Info</h3>
+        <Tabs defaultValue="basic" className="w-full">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="basic">Basic</TabsTrigger>
+            <TabsTrigger value="model">Model</TabsTrigger>
+            <TabsTrigger value="prompt">Prompt</TabsTrigger>
+            <TabsTrigger value="tools">Tools</TabsTrigger>
+            <TabsTrigger value="skills" className="relative">
+              Skills
+              <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0">Soon</Badge>
+            </TabsTrigger>
+          </TabsList>
 
+          {/* Basic Info Tab */}
+          <TabsContent value="basic" className="space-y-4 mt-4">
             <div className="flex flex-col sm:flex-row gap-6">
               {/* Avatar Upload */}
               <div className="flex-shrink-0">
@@ -183,26 +224,71 @@ export function AgentEditDialog({
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Model Configuration Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-foreground">Model Configuration</h3>
+            {/* Status */}
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="edit-active">Active</Label>
+                <p className="text-xs text-muted-foreground">
+                  {isActive ? 'Agent is active and available for use' : 'Agent is inactive'}
+                </p>
+              </div>
+              <Switch
+                id="edit-active"
+                checked={isActive}
+                onCheckedChange={setIsActive}
+              />
+            </div>
+          </TabsContent>
 
+          {/* Model Configuration Tab */}
+          <TabsContent value="model" className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>Model</Label>
-              <Select value={model} onValueChange={setModel}>
+              <Select value={model} onValueChange={handleModelChange}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ANTHROPIC_MODELS.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.name} - {m.description}
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    <SelectLabel>Anthropic</SelectLabel>
+                    {modelsByProvider.anthropic.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>OpenAI</SelectLabel>
+                    {modelsByProvider.openai.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
+              {currentModel && (
+                <div className="rounded-md bg-muted p-3 text-sm space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">{currentModel.name}</p>
+                    <Badge variant="outline" className="text-[10px] capitalize">
+                      {currentModel.provider}
+                    </Badge>
+                  </div>
+                  <p className="text-muted-foreground">{currentModel.description}</p>
+                  {(currentModel.contextWindow || currentModel.maxOutputTokens) && (
+                    <div className="flex gap-4 text-xs text-muted-foreground mt-2">
+                      {currentModel.contextWindow && (
+                        <span>Context: {(currentModel.contextWindow / 1000).toFixed(0)}K tokens</span>
+                      )}
+                      {currentModel.maxOutputTokens && (
+                        <span>Max output: {(currentModel.maxOutputTokens / 1000).toFixed(0)}K tokens</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -229,57 +315,79 @@ export function AgentEditDialog({
                 id="edit-max-tokens"
                 type="number"
                 min={256}
-                max={32000}
+                max={currentModel?.maxOutputTokens || 32000}
                 step={256}
                 value={maxTokens}
-                onChange={(e) => setMaxTokens(Number(e.target.value))}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  // Clamp to model's max output tokens
+                  setMaxTokens(clampMaxTokens(model, value));
+                }}
               />
               <p className="text-xs text-muted-foreground">
                 Maximum number of tokens the model can generate in a response
+                {currentModel?.maxOutputTokens && ` (up to ${(currentModel.maxOutputTokens / 1000).toFixed(0)}K)`}
               </p>
             </div>
-          </div>
+          </TabsContent>
 
-          {/* System Prompt Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-foreground">System Prompt</h3>
-
+          {/* System Prompt Tab */}
+          <TabsContent value="prompt" className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-system-prompt">Additional Instructions (optional)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-system-prompt">System Prompt</Label>
+                <span className="text-xs text-muted-foreground">
+                  {systemPrompt.length} characters
+                </span>
+              </div>
               <Textarea
                 id="edit-system-prompt"
                 placeholder="You are a helpful assistant that specializes in..."
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
-                rows={4}
+                rows={12}
+                className="font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                Add custom instructions that will be included in every conversation with this agent
+                Add custom instructions that will be included in every conversation with this agent.
+                This is appended to the default system prompt.
               </p>
             </div>
-          </div>
+          </TabsContent>
 
-          {/* Status Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-foreground">Status</h3>
+          {/* Tools Tab */}
+          <TabsContent value="tools" className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Available Tools</Label>
+              <p className="text-xs text-muted-foreground">
+                Select which tools this agent can use. Leave empty to allow all tools.
+              </p>
+            </div>
+            <ToolSelector
+              selectedTools={selectedTools}
+              onChange={setSelectedTools}
+            />
+          </TabsContent>
 
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="edit-active">Active</Label>
+          {/* Skills Tab - Coming Soon */}
+          <TabsContent value="skills" className="space-y-4 mt-4">
+            <div className="rounded-md border border-dashed p-8 text-center">
+              <div className="space-y-3">
+                <Badge variant="outline" className="text-sm">Coming Soon</Badge>
+                <h3 className="font-medium">Skill Allowlists</h3>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                  Per-agent skill allowlists will allow you to restrict which skills
+                  each agent can access. This feature is under development.
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  {isActive ? 'Agent is active and available for use' : 'Agent is inactive'}
+                  For now, all agents have access to all available skills.
                 </p>
               </div>
-              <Switch
-                id="edit-active"
-                checked={isActive}
-                onCheckedChange={setIsActive}
-              />
             </div>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
 
-        <DialogFooter>
+        <DialogFooter className="mt-6">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

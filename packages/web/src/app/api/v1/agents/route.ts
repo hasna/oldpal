@@ -5,6 +5,7 @@ import { agents } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
 import { eq, desc, asc, count, and, ilike } from 'drizzle-orm';
+import { getModelById } from '@hasna/assistants-shared';
 
 // Allow URLs or relative paths starting with /uploads/
 const avatarSchema = z
@@ -106,6 +107,14 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
     const data = createAgentSchema.parse(body);
+
+    // Validate and clamp maxTokens against model's limit
+    if (data.settings?.maxTokens !== undefined) {
+      const model = getModelById(data.model);
+      if (model && model.maxOutputTokens) {
+        data.settings.maxTokens = Math.min(data.settings.maxTokens, model.maxOutputTokens);
+      }
+    }
 
     const [newAgent] = await db
       .insert(agents)

@@ -6,6 +6,7 @@ import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
 import { eq } from 'drizzle-orm';
+import { getModelById, clampMaxTokens } from '@hasna/assistants-shared';
 
 // Allow URLs or relative paths starting with /uploads/
 const avatarSchema = z
@@ -80,6 +81,14 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
 
     const body = await request.json();
     const data = updateAgentSchema.parse(body);
+
+    // Validate and clamp maxTokens against model's limit
+    if (data.settings?.maxTokens !== undefined && data.model) {
+      const model = getModelById(data.model);
+      if (model && model.maxOutputTokens) {
+        data.settings.maxTokens = Math.min(data.settings.maxTokens, model.maxOutputTokens);
+      }
+    }
 
     // Check ownership
     const existingAgent = await db.query.agents.findFirst({

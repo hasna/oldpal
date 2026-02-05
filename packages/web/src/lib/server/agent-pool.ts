@@ -8,6 +8,9 @@ if (!hasRuntime()) {
 
 import type { StreamChunk } from '@hasna/assistants-shared';
 import { EmbeddedClient } from '@hasna/assistants-core';
+import { db } from '@/db';
+import { sessions as sessionsTable, agents } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 type ChunkListener = (chunk: StreamChunk) => void;
 type ErrorListener = (error: Error) => void;
@@ -22,8 +25,56 @@ interface SessionRecord {
 const sessions = new Map<string, SessionRecord>();
 const pendingSessions = new Map<string, Promise<SessionRecord>>();
 
+/**
+ * Get agent settings for a session (allowedTools, systemPrompt, etc.)
+ */
+async function getAgentSettingsForSession(sessionId: string): Promise<{
+  allowedTools?: string[];
+  systemPrompt?: string;
+  model?: string;
+} | null> {
+  try {
+    // Look up session to get agentId
+    const session = await db.query.sessions.findFirst({
+      where: eq(sessionsTable.id, sessionId),
+      columns: { agentId: true },
+    });
+
+    if (!session?.agentId) {
+      return null;
+    }
+
+    // Look up agent to get settings
+    const agent = await db.query.agents.findFirst({
+      where: eq(agents.id, session.agentId),
+      columns: { settings: true, systemPrompt: true, model: true, isActive: true },
+    });
+
+    if (!agent || !agent.isActive) {
+      return null;
+    }
+
+    return {
+      allowedTools: agent.settings?.tools,
+      systemPrompt: agent.systemPrompt || undefined,
+      model: agent.model,
+    };
+  } catch (error) {
+    console.error('[AgentPool] Failed to get agent settings:', error);
+    return null;
+  }
+}
+
 async function createSession(sessionId: string): Promise<SessionRecord> {
-  const client = new EmbeddedClient(process.cwd(), { sessionId });
+  // Get agent-specific settings if the session has an associated agent
+  const agentSettings = await getAgentSettingsForSession(sessionId);
+
+  const client = new EmbeddedClient(process.cwd(), {
+    sessionId,
+    allowedTools: agentSettings?.allowedTools,
+    systemPrompt: agentSettings?.systemPrompt,
+    // TODO: model selection support would need to be wired through here
+  });
   await client.initialize();
   const record: SessionRecord = {
     client,
