@@ -174,24 +174,39 @@ export class CommandLoader {
    */
   register(command: Command): void {
     this.commands.set(command.name, command);
+    // Also register any aliases
+    if (command.aliases) {
+      for (const alias of command.aliases) {
+        this.commands.set(alias, command);
+      }
+    }
   }
 
   /**
-   * Get a command by name
+   * Get a command by name (or alias)
    */
   getCommand(name: string): Command | undefined {
     return this.commands.get(name);
   }
 
   /**
-   * Get all loaded commands
+   * Get all loaded commands (deduplicated, excludes alias entries)
    */
   getCommands(): Command[] {
-    return Array.from(this.commands.values());
+    // Deduplicate since aliases point to the same command
+    const seen = new Set<string>();
+    const result: Command[] = [];
+    for (const cmd of this.commands.values()) {
+      if (!seen.has(cmd.name)) {
+        seen.add(cmd.name);
+        result.push(cmd);
+      }
+    }
+    return result;
   }
 
   /**
-   * Check if a command exists
+   * Check if a command exists (by name or alias)
    */
   hasCommand(name: string): boolean {
     return this.commands.has(name);
@@ -204,7 +219,8 @@ export class CommandLoader {
     const lower = partial.toLowerCase();
     return this.getCommands().filter(cmd =>
       cmd.name.toLowerCase().startsWith(lower) ||
-      cmd.description.toLowerCase().includes(lower)
+      cmd.description.toLowerCase().includes(lower) ||
+      cmd.aliases?.some(alias => alias.toLowerCase().startsWith(lower))
     );
   }
 }

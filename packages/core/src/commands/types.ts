@@ -18,6 +18,8 @@ export type { TokenUsage } from '@hasna/assistants-shared';
 export interface Command {
   /** Command name (derived from filename or frontmatter) */
   name: string;
+  /** Alias names for backwards compatibility */
+  aliases?: string[];
   /** Human-readable description */
   description: string;
   /** Optional tags for categorization */

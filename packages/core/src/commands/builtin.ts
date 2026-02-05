@@ -327,11 +327,12 @@ export class BuiltinCommands {
   }
 
   /**
-   * /assistant - Manage assistants
+   * /assistants - Manage assistants
    */
   private assistantCommand(): Command {
     return {
-      name: 'assistant',
+      name: 'assistants',
+      aliases: ['assistant'], // Deprecated alias for backwards compatibility
       description: 'Manage assistants (list, create, switch, delete)',
       builtin: true,
       selfHandled: true,
