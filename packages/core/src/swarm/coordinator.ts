@@ -729,43 +729,79 @@ Maximum ${this.config.maxTasks} tasks.`;
     const completedTasks = this.state?.plan?.tasks.filter(t => t.status === 'completed') || [];
     if (completedTasks.length === 0) return;
 
-    const reviewPrompt = this.buildCriticPrompt(completedTasks);
-
     this.emit('swarm:review_started');
-    this.streamText('\n🔍 Running critic review...\n');
 
-    const result = await this.spawnAgent({
-      role: 'critic',
-      task: reviewPrompt,
-      tools: this.config.criticTools,
-    });
+    let iteration = 0;
+    let unresolvedIssues: string[] = [];
 
-    if (result.success && result.result) {
-      // Parse critic output
-      try {
-        const review = this.parseCriticOutput(result.result);
-        if (!review.approved && review.issues.length > 0) {
-          this.streamText(`\n⚠️ Critic found ${review.issues.length} issues:\n`);
-          review.issues.forEach(issue => this.streamText(`  - ${issue}\n`));
-        } else {
-          this.streamText('\n✅ Critic approved the work\n');
+    while (iteration < this.config.maxCriticIterations && !this.stopped) {
+      iteration++;
+      this.streamText(`\n🔍 Running critic review (iteration ${iteration}/${this.config.maxCriticIterations})...\n`);
+
+      const reviewPrompt = this.buildCriticPrompt(completedTasks, unresolvedIssues);
+
+      const result = await this.spawnAgent({
+        role: 'critic',
+        task: reviewPrompt,
+        tools: this.config.criticTools,
+      });
+
+      if (result.success && result.result) {
+        try {
+          const review = this.parseCriticOutput(result.result);
+          if (review.approved || review.issues.length === 0) {
+            this.streamText('\n✅ Critic approved the work\n');
+            unresolvedIssues = [];
+            break; // Exit loop on approval
+          } else {
+            unresolvedIssues = review.issues;
+            this.streamText(`\n⚠️ Critic found ${review.issues.length} issues:\n`);
+            review.issues.forEach(issue => this.streamText(`  - ${issue}\n`));
+
+            if (iteration < this.config.maxCriticIterations) {
+              this.streamText('\nRetrying with critic feedback...\n');
+            }
+          }
+        } catch {
+          // Couldn't parse, log the raw result and break
+          this.streamText(`\nCritic review: ${result.result}\n`);
+          break;
         }
-      } catch {
-        // Couldn't parse, log the raw result
-        this.streamText(`\nCritic review: ${result.result}\n`);
+      } else {
+        // Critic failed, exit loop
+        break;
+      }
+    }
+
+    // Report unresolved issues if any remain after all iterations
+    if (unresolvedIssues.length > 0) {
+      this.streamText(`\n⚠️ ${unresolvedIssues.length} unresolved issues after ${iteration} critic iterations:\n`);
+      unresolvedIssues.forEach(issue => this.streamText(`  - ${issue}\n`));
+
+      // Store unresolved issues in state for final result
+      if (this.state) {
+        this.state.unresolvedIssues = unresolvedIssues;
       }
     }
 
     this.emit('swarm:review_completed');
   }
 
-  private buildCriticPrompt(tasks: SwarmTask[]): string {
+  private buildCriticPrompt(tasks: SwarmTask[], previousIssues: string[] = []): string {
     const taskSummaries = tasks.map(task => {
       const result = this.state?.taskResults.get(task.id);
       return `Task: ${task.description}\nResult: ${result?.result || 'No result'}`;
     }).join('\n\n---\n\n');
 
-    return `Review the following completed work:\n\n${taskSummaries}\n\nProvide your assessment as JSON with "approved", "issues", and "suggestions" fields.`;
+    let prompt = `Review the following completed work:\n\n${taskSummaries}\n\n`;
+
+    if (previousIssues.length > 0) {
+      prompt += `PREVIOUS ISSUES TO ADDRESS:\n${previousIssues.map(i => `- ${i}`).join('\n')}\n\n`;
+      prompt += `Please verify if these issues have been addressed in the current work.\n\n`;
+    }
+
+    prompt += `Provide your assessment as JSON with "approved", "issues", and "suggestions" fields.`;
+    return prompt;
   }
 
   private parseCriticOutput(output: string): { approved: boolean; issues: string[]; suggestions: string[] } {

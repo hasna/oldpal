@@ -120,6 +120,8 @@ export interface SwarmState {
   finalResult?: string;
   /** Progress metrics */
   metrics: SwarmMetrics;
+  /** Unresolved issues from critic review (if any) */
+  unresolvedIssues?: string[];
 }
 
 /**
