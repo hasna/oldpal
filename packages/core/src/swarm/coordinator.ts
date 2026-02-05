@@ -939,16 +939,19 @@ Maximum ${this.config.maxTasks} tasks.`;
       !this.config.forbiddenTools.includes(t)
     );
 
-    // Check if we should use registry for agent selection
+    // Check registry for matching agents
+    // Note: True delegation to existing agents would require an RPC mechanism.
+    // For now, we use the registry primarily for discovery and informational purposes.
+    // When a match is found, we still spawn a new subagent but inform the user.
     if (this.context.registry && role === 'worker') {
       const bestMatch = this.context.registry.findBestMatch({
         required: { tools: filteredTools },
         maxLoadFactor: 0.9,
       });
 
-      if (bestMatch) {
-        // TODO: Delegate to matched agent instead of spawning new one
-        // This will be implemented in task #1069 (Swarm agent selection via registry)
+      if (bestMatch && bestMatch.status.state === 'idle') {
+        // A matching idle agent exists - note this for potential future delegation
+        this.streamText(`[Note: Found matching agent "${bestMatch.name}" with required tools]\n`);
       }
     }
 
