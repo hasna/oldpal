@@ -424,46 +424,152 @@ export class ConnectorBridge {
 
   /**
    * Parse help output to discover commands
-   * This is a simplified parser - connectors should ideally provide manifests
+   * Handles multiple common help output formats:
+   * - Standard format: "  command-name    Description"
+   * - Oclif format: "  connect-foo:command    Description"
+   * - Cobra/Go format: "  command-name" followed by description
+   * - List format: "  - command-name: description"
+   * - Tabular format: "command-name     description text"
    */
-  private parseHelpOutput(helpText: string, name: string): ConnectorCommand[] {
+  private parseHelpOutput(helpText: string, _name: string): ConnectorCommand[] {
     const commands: ConnectorCommand[] = [];
+    const seenCommands = new Set<string>();
     const lines = helpText.split('\n');
 
-    // Look for command patterns in help output
-    // Common pattern: "  command-name    Description"
-    let inCommands = false;
+    // Section headers that indicate a commands section
+    const commandsSectionHeaders = [
+      'commands:',
+      'available commands:',
+      'subcommands:',
+      'topics:',
+    ];
 
-    for (const line of lines) {
-      if (line.toLowerCase().includes('commands:')) {
+    // Section headers that indicate end of commands section
+    const nonCommandSections = [
+      'flags:',
+      'options:',
+      'global options:',
+      'global flags:',
+      'examples:',
+      'environment:',
+      'learn more:',
+      'see more help:',
+    ];
+
+    // Skip patterns - commands to exclude
+    const skipPatterns = [
+      /^help$/i,
+      /^version$/i,
+      /^-h$/,
+      /^--help$/,
+      /^-v$/,
+      /^--version$/,
+      /^plugins$/i,
+      /^update$/i,
+      /^autocomplete$/i,
+    ];
+
+    let inCommands = false;
+    let prevLineEmpty = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim().toLowerCase();
+
+      // Check for section headers
+      if (commandsSectionHeaders.some((h) => trimmed.includes(h))) {
         inCommands = true;
+        prevLineEmpty = false;
         continue;
       }
 
-      if (inCommands && line.trim()) {
-        const match = line.match(/^\s{2,}(\S+)\s{2,}(.+)$/);
-        if (match) {
-          const [, cmdName, description] = match;
-          // Skip help and version commands
-          if (['help', 'version', '-h', '--help', '-v', '--version'].includes(cmdName)) {
-            continue;
-          }
-          commands.push({
-            name: cmdName,
-            description: description.trim(),
-            args: [],
-            options: [],
-          });
-        }
+      // Check for end of commands section
+      if (nonCommandSections.some((h) => trimmed.includes(h))) {
+        inCommands = false;
+        continue;
       }
 
-      // Stop if we hit another section
-      if (inCommands && line.match(/^\S/) && !line.match(/^\s/)) {
+      // Empty line might indicate section end, or just formatting
+      if (!line.trim()) {
+        prevLineEmpty = true;
+        continue;
+      }
+
+      // If we had empty line followed by non-indented text, might be new section
+      if (prevLineEmpty && !line.match(/^\s/) && inCommands) {
         inCommands = false;
+      }
+      prevLineEmpty = false;
+
+      const originalLine = line;
+
+      // Pattern 1: Indented command with multiple spaces before description
+      // "  command-name    Description text"
+      const pattern1 = line.match(/^\s{1,8}(\S+)\s{2,}(.+)$/);
+      if (pattern1) {
+        const [, cmdName, description] = pattern1;
+        if (!skipPatterns.some((p) => p.test(cmdName))) {
+          this.addCommand(commands, seenCommands, cmdName, description.trim());
+        }
+        continue;
+      }
+
+      // Pattern 2: Oclif-style with colon separator
+      // "  connect-name:subcommand    Description text"
+      const pattern2 = line.match(/^\s{1,8}[\w-]+:([\w-]+)\s{2,}(.+)$/);
+      if (pattern2) {
+        const [, cmdName, description] = pattern2;
+        if (!skipPatterns.some((p) => p.test(cmdName))) {
+          this.addCommand(commands, seenCommands, cmdName, description.trim());
+        }
+        continue;
+      }
+
+      // Pattern 3: List format with dash
+      // "  - command-name: description text"
+      const pattern3 = line.match(/^\s*[-*]\s+([\w-]+)[:\s]+(.+)$/);
+      if (pattern3 && inCommands) {
+        const [, cmdName, description] = pattern3;
+        if (!skipPatterns.some((p) => p.test(cmdName))) {
+          this.addCommand(commands, seenCommands, cmdName, description.trim());
+        }
+        continue;
+      }
+
+      // Pattern 4: Simple indented name (description might be on next line)
+      // "  command-name" with description on following line
+      const pattern4 = originalLine.match(/^\s{2,8}([\w][\w-]*)$/);
+      if (pattern4 && inCommands) {
+        const [, cmdName] = pattern4;
+        // Look ahead for description
+        const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
+        const nextTrimmed = nextLine.trim();
+        if (nextTrimmed && nextLine.match(/^\s{4,}/)) {
+          // Description is on next line
+          if (!skipPatterns.some((p) => p.test(cmdName))) {
+            this.addCommand(commands, seenCommands, cmdName, nextTrimmed);
+            i++; // Skip description line
+          }
+        } else if (!skipPatterns.some((p) => p.test(cmdName))) {
+          // No description found
+          this.addCommand(commands, seenCommands, cmdName, `${cmdName} command`);
+        }
+        continue;
+      }
+
+      // Pattern 5: Bracket-delimited command
+      // "[command]    description"
+      const pattern5 = line.match(/^\s*\[([\w-]+)\]\s{2,}(.+)$/);
+      if (pattern5 && inCommands) {
+        const [, cmdName, description] = pattern5;
+        if (!skipPatterns.some((p) => p.test(cmdName))) {
+          this.addCommand(commands, seenCommands, cmdName, description.trim());
+        }
+        continue;
       }
     }
 
-    // If no commands found, add generic ones based on common patterns
+    // If no commands found, add generic fallbacks
     if (commands.length === 0) {
       commands.push(
         { name: 'auth status', description: 'Check authentication status', args: [], options: [] },
@@ -472,6 +578,27 @@ export class ConnectorBridge {
     }
 
     return commands;
+  }
+
+  /**
+   * Add a command if not already seen
+   */
+  private addCommand(
+    commands: ConnectorCommand[],
+    seenCommands: Set<string>,
+    name: string,
+    description: string
+  ): void {
+    const normalized = name.toLowerCase();
+    if (!seenCommands.has(normalized)) {
+      seenCommands.add(normalized);
+      commands.push({
+        name,
+        description,
+        args: [],
+        options: [],
+      });
+    }
   }
 
   /**
