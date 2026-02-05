@@ -654,7 +654,12 @@ Maximum ${this.config.maxTasks} tasks.`;
       if (running.size > 0) {
         await Promise.race(Array.from(running.values()));
       } else if (readyTasks.length === 0 && pendingCount > 0) {
-        // Deadlock - all remaining tasks are blocked
+        // Deadlock - all remaining tasks are blocked by failed dependencies
+        const blockedTasks = plan.tasks.filter(t => t.status === 'pending' || t.status === 'blocked');
+        const blockedIds = blockedTasks.map(t => t.id).join(', ');
+        const error = `Deadlock detected: ${blockedTasks.length} task(s) cannot proceed due to failed dependencies (${blockedIds})`;
+        this.state!.errors.push(error);
+        this.streamText(`\n⚠️ ${error}\n`);
         break;
       }
     }
