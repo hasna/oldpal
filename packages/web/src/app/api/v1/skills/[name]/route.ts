@@ -1,13 +1,14 @@
 import { NextRequest } from 'next/server';
-import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
+import { withApiKeyAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { NotFoundError } from '@/lib/api/errors';
 import { SkillLoader } from '@hasna/assistants-core';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { homedir } from 'os';
 
 /**
  * Skill detail response for API
+ * Note: filePath is intentionally not exposed to avoid leaking server paths
  */
 interface SkillDetailResponse {
   name: string;
@@ -18,8 +19,9 @@ interface SkillDetailResponse {
   model?: string;
   context?: string;
   agent?: string;
-  filePath: string;
   category: string;
+  /** Safe source identifier (e.g., "shared/skill-name") */
+  sourceId: string;
   content: string;
 }
 
@@ -34,19 +36,33 @@ function getGlobalSkillsDir(): string {
 
 /**
  * Derive category from file path
+ * Normalizes path separators for cross-platform support (Windows uses \)
  */
 function deriveCategory(filePath: string): string {
-  if (filePath.includes('shared/skills')) {
+  // Normalize path separators for consistent checks
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  if (normalizedPath.includes('shared/skills')) {
     return 'shared';
   }
-  if (filePath.includes('.assistants/skills')) {
+  if (normalizedPath.includes('.assistants/skills')) {
     return 'project';
   }
   return 'other';
 }
 
+/**
+ * Generate a safe source identifier from file path
+ * Format: "category/filename" (without extension)
+ */
+function generateSourceId(filePath: string, category: string): string {
+  // Extract filename without extension
+  const filename = basename(filePath).replace(/\.md$/i, '');
+  return `${category}/${filename}`;
+}
+
 // GET /api/v1/skills/[name] - Get skill detail by name
-export const GET = withAuth(async (
+// Supports both session auth and API key auth
+export const GET = withApiKeyAuth(async (
   request: AuthenticatedRequest,
   { params }: { params: Promise<{ name: string }> }
 ) => {
@@ -64,6 +80,7 @@ export const GET = withAuth(async (
       throw new NotFoundError(`Skill '${name}' not found`);
     }
 
+    const category = deriveCategory(skill.filePath);
     const response: SkillDetailResponse = {
       name: skill.name,
       description: skill.description,
@@ -73,8 +90,8 @@ export const GET = withAuth(async (
       model: skill.model,
       context: skill.context,
       agent: skill.agent,
-      filePath: skill.filePath,
-      category: deriveCategory(skill.filePath),
+      category,
+      sourceId: generateSourceId(skill.filePath, category),
       content: skill.content,
     };
 
