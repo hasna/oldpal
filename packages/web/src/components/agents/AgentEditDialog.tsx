@@ -122,8 +122,9 @@ export function AgentEditDialog({
         settings: {
           temperature,
           maxTokens,
-          tools: selectedTools.length > 0 ? selectedTools : undefined,
-          skills: selectedSkills.length > 0 ? selectedSkills : undefined,
+          // Send empty arrays to clear selections (undefined would be ignored by API)
+          tools: selectedTools,
+          skills: selectedSkills,
         },
         isActive,
       };
