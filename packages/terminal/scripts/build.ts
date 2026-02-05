@@ -88,17 +88,81 @@ async function build() {
     process.exit(1);
   }
 
-  // Add shebang to CLI
+  // Ensure CLI has shebang (only add if not already present)
   const cliPath = join(DIST, 'cli.js');
   const cliContent = await Bun.file(cliPath).text();
-  await Bun.write(cliPath, '#!/usr/bin/env bun\n' + cliContent);
+  if (!cliContent.startsWith('#!')) {
+    await Bun.write(cliPath, '#!/usr/bin/env bun\n' + cliContent);
+  }
 
   // Generate TypeScript declarations
-  console.log('  Generating type declarations...');
-  const tscResult = await $`cd ${ROOT} && bunx tsc -p tsconfig.build.json`.quiet();
-  if (tscResult.exitCode !== 0) {
-    console.error('Failed to generate declarations:', tscResult.stderr.toString());
-    process.exit(1);
+  // In monorepo: may fail due to cross-package imports pointing to source files
+  // We generate fallback .d.ts files that re-export from @hasna/assistants-core
+  //
+  // CI/Release mode: Set STRICT_TYPES=1 to fail build if declarations fail
+  // This ensures published packages have proper types
+  const strictTypes = process.env.STRICT_TYPES === '1' || process.env.CI === 'true';
+  console.log(`  Generating type declarations... (strict=${strictTypes})`);
+
+  let declarationsGenerated = false;
+  let declarationError: string | undefined;
+
+  try {
+    const tscResult = await $`cd ${ROOT} && bunx tsc -p tsconfig.build.json`.quiet();
+    if (tscResult.exitCode === 0) {
+      declarationsGenerated = true;
+    } else {
+      declarationError = tscResult.stderr.toString() || 'Unknown error';
+    }
+  } catch (error) {
+    declarationError = error instanceof Error ? error.message : String(error);
+  }
+
+  if (!declarationsGenerated) {
+    if (strictTypes) {
+      console.error('  ERROR: Type declaration generation failed in strict mode');
+      if (declarationError) {
+        console.error('  Error:', declarationError.slice(0, 500));
+      }
+      console.error('  Set STRICT_TYPES=0 to allow fallback declarations in development');
+      process.exit(1);
+    }
+
+    console.log('  Full declarations failed, generating fallback .d.ts...');
+    // Generate minimal fallback declarations that re-export from dependencies
+    // This allows consumers to get types from the source packages
+    const fallbackDeclaration = `/**
+ * Type declarations for @hasna/assistants-terminal
+ *
+ * Note: Full declarations are generated from source in development.
+ * Published packages should include proper .d.ts files.
+ *
+ * For full type support, consumers can also import types directly from:
+ * - @hasna/assistants-core (AgentLoop, ToolRegistry, etc.)
+ * - @hasna/assistants-shared (Message, Tool, StreamChunk, etc.)
+ */
+
+// Re-export core types that terminal exposes
+export { AgentLoop, EmbeddedClient, ToolRegistry, SkillLoader } from '@hasna/assistants-core';
+export type { AgentLoopOptions } from '@hasna/assistants-core';
+export type { Message, Tool, ToolCall, ToolResult, StreamChunk, Skill, AssistantsConfig } from '@hasna/assistants-shared';
+
+// Terminal-specific exports
+export declare function startTerminal(options?: {
+  cwd?: string;
+  sessionId?: string;
+}): Promise<void>;
+
+export declare function startHeadless(options?: {
+  cwd?: string;
+  sessionId?: string;
+  onChunk?: (chunk: StreamChunk) => void;
+}): Promise<{ agent: AgentLoop; process: (message: string) => Promise<void>; stop: () => void }>;
+`;
+    await Bun.write(join(DIST, 'lib.d.ts'), fallbackDeclaration);
+    console.log('  Generated fallback lib.d.ts');
+  } else {
+    console.log('  Type declarations generated successfully');
   }
 
   console.log('Build complete!');
