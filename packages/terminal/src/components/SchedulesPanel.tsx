@@ -2,6 +2,127 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
 
+/**
+ * Render markdown-like content as styled Ink components.
+ * Supports: **bold**, *italic*, `code`, - bullet lists, --- separators.
+ * Headings (## / ###) render as bold text (no special sizing).
+ */
+function MarkdownContent({ content, color }: { content: string; color?: string }) {
+  if (!content) return <Text dimColor>(empty)</Text>;
+
+  const lines = content.split('\n');
+  const elements: React.ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Horizontal rule: --- or ***
+    if (/^[-*]{3,}\s*$/.test(line.trim())) {
+      elements.push(
+        <Box key={i} marginY={0}>
+          <Text dimColor>{'─'.repeat(48)}</Text>
+        </Box>
+      );
+      continue;
+    }
+
+    // Heading: ## or ### - render as bold, no special sizing
+    const headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
+    if (headingMatch) {
+      const text = headingMatch[2];
+      elements.push(
+        <Box key={i} marginTop={i > 0 ? 0 : 0}>
+          <Text bold color={color}>{renderInlineFormatting(text)}</Text>
+        </Box>
+      );
+      continue;
+    }
+
+    // Bullet list: - item or * item
+    const bulletMatch = line.match(/^(\s*)([-*])\s+(.+)$/);
+    if (bulletMatch) {
+      const indent = bulletMatch[1].length;
+      const text = bulletMatch[3];
+      elements.push(
+        <Box key={i} paddingLeft={indent > 0 ? 2 : 0}>
+          <Text dimColor>  {'›'} </Text>
+          <Text color={color} wrap="wrap">{renderInlineFormatting(text)}</Text>
+        </Box>
+      );
+      continue;
+    }
+
+    // Numbered list: 1. item or 1) item
+    const numberedMatch = line.match(/^(\s*)(\d+)[.)]\s+(.+)$/);
+    if (numberedMatch) {
+      const num = numberedMatch[2];
+      const text = numberedMatch[3];
+      elements.push(
+        <Box key={i}>
+          <Text dimColor>  {num}. </Text>
+          <Text color={color} wrap="wrap">{renderInlineFormatting(text)}</Text>
+        </Box>
+      );
+      continue;
+    }
+
+    // Empty line
+    if (line.trim() === '') {
+      elements.push(<Box key={i}><Text> </Text></Box>);
+      continue;
+    }
+
+    // Regular text with inline formatting
+    elements.push(
+      <Box key={i}>
+        <Text color={color} wrap="wrap">{renderInlineFormatting(line)}</Text>
+      </Box>
+    );
+  }
+
+  return <Box flexDirection="column">{elements}</Box>;
+}
+
+/**
+ * Process inline markdown: **bold**, *italic*, `code`
+ * Returns an array of React elements for Ink's Text component.
+ */
+function renderInlineFormatting(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  // Match **bold**, *italic*, `code`, or plain text
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+
+    if (match[2]) {
+      // **bold**
+      parts.push(<Text key={key++} bold>{match[2]}</Text>);
+    } else if (match[3]) {
+      // *italic*
+      parts.push(<Text key={key++} dimColor>{match[3]}</Text>);
+    } else if (match[4]) {
+      // `code`
+      parts.push(<Text key={key++} color="cyan">{match[4]}</Text>);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [text];
+}
+
 interface SchedulesPanelProps {
   schedules: ScheduledCommand[];
   onPause: (id: string) => Promise<void>;
@@ -341,10 +462,10 @@ export function SchedulesPanel({
           ) : (
             <>
               <Box marginTop={1}>
-                <Text bold>Message: </Text>
+                <Text bold>Prompt:</Text>
               </Box>
-              <Box marginLeft={2}>
-                <Text wrap="wrap" color="magenta">{s.message || '(empty)'}</Text>
+              <Box marginLeft={1} flexDirection="column" marginTop={0}>
+                <MarkdownContent content={s.message || ''} />
               </Box>
             </>
           )}

@@ -32,6 +32,8 @@ import { PlansPanel } from './PlansPanel';
 import { WalletPanel } from './WalletPanel';
 import { SecretsPanel } from './SecretsPanel';
 import { InboxPanel } from './InboxPanel';
+import { AgentDashboard } from './AgentDashboard';
+import { SwarmPanel } from './SwarmPanel';
 import type { QueuedMessage } from './appTypes';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
 import {
@@ -75,6 +77,8 @@ import {
   type ProjectRecord,
   type ProjectPlan,
   type PlanStepStatus,
+  type SerializableSwarmState,
+  type SwarmConfig,
 } from '@hasna/assistants-core';
 import type { BudgetConfig, BudgetLimits } from '@hasna/assistants-shared';
 import type { AssistantsConfig } from '@hasna/assistants-shared';
@@ -279,6 +283,12 @@ export function App({ cwd, version }: AppProps) {
   const [showInboxPanel, setShowInboxPanel] = useState(false);
   const [inboxEmails, setInboxEmails] = useState<EmailListItem[]>([]);
   const [inboxError, setInboxError] = useState<string | null>(null);
+
+  // Agent dashboard panel state
+  const [showAgentDashboard, setShowAgentDashboard] = useState(false);
+
+  // Swarm panel state
+  const [showSwarmPanel, setShowSwarmPanel] = useState(false);
 
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
@@ -929,6 +939,49 @@ export function App({ cwd, version }: AppProps) {
           setInboxError('Inbox not enabled. Configure inbox in config.json.');
           setShowInboxPanel(true);
         }
+      } else if (chunk.panel === 'agents') {
+        // Handle session actions or show agent dashboard
+        if (chunk.panelValue?.startsWith('session:')) {
+          try {
+            const payload = JSON.parse(chunk.panelValue.slice('session:'.length));
+            if (payload.action === 'list') {
+              setShowSessionSelector(true);
+            } else if (payload.action === 'new') {
+              registry.createSession({
+                cwd,
+                label: payload.label,
+                assistantId: payload.agent,
+              }).then((newSession) => {
+                registry.switchSession(newSession.id).then(() => {
+                  setActiveSessionId(newSession.id);
+                });
+              });
+            } else if (payload.action === 'assign' && payload.agent) {
+              const active = registry.getActiveSession();
+              if (active) {
+                registry.assignAssistant(active.id, payload.agent);
+              }
+            } else if (payload.action === 'switch' && payload.number) {
+              const allSessions = registry.listSessions();
+              const target = allSessions[payload.number - 1];
+              if (target) {
+                registry.switchSession(target.id).then(() => {
+                  setActiveSessionId(target.id);
+                });
+              }
+            }
+          } catch {
+            // Invalid payload, show dashboard instead
+            setShowAgentDashboard(true);
+          }
+        } else {
+          setShowAgentDashboard(true);
+        }
+      } else if (chunk.panel === 'swarm') {
+        setShowSwarmPanel(true);
+      } else if (chunk.panel === 'workspace') {
+        // Workspace panel - not yet implemented as interactive UI
+        // The /workspace command handles text output
       }
     }
   }, [registry, exit, finalizeResponse, resetTurnState, cwd, activeSessionId]);
@@ -1458,6 +1511,54 @@ export function App({ cwd, version }: AppProps) {
       }
     }
 
+    // Ctrl+A: show agent dashboard
+    if (key.ctrl && input === 'a') {
+      setShowAgentDashboard(true);
+      return;
+    }
+    // Ctrl+B: show budget panel
+    if (key.ctrl && input === 'b') {
+      if (!budgetTrackerRef.current) {
+        budgetTrackerRef.current = new BudgetTracker(activeSessionId || 'default');
+      }
+      const bConfig = budgetTrackerRef.current.getConfig();
+      const bSessionStatus = budgetTrackerRef.current.checkBudget('session');
+      const bSwarmStatus = budgetTrackerRef.current.checkBudget('swarm');
+      setBudgetConfig(bConfig);
+      setSessionBudgetStatus(bSessionStatus);
+      setSwarmBudgetStatus(bSwarmStatus);
+      setShowBudgetPanel(true);
+      return;
+    }
+    // Ctrl+M: show messages panel
+    if (key.ctrl && input === 'm') {
+      const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
+      if (messagesManager) {
+        messagesManager.list({ limit: 50 }).then((msgs: any[]) => {
+          setMessagesList(msgs.map((m: any) => ({
+            id: m.id,
+            threadId: m.threadId,
+            fromAssistantId: m.fromAssistantId,
+            fromAssistantName: m.fromAssistantName,
+            subject: m.subject,
+            preview: m.preview,
+            body: m.body,
+            priority: m.priority,
+            status: m.status,
+            createdAt: m.createdAt,
+            replyCount: m.replyCount,
+          })));
+          setMessagesPanelError(null);
+          setShowMessagesPanel(true);
+        }).catch(() => {
+          setShowMessagesPanel(true);
+        });
+      } else {
+        setShowMessagesPanel(true);
+      }
+      return;
+    }
+
     // Native terminal scrolling is used - scroll with terminal's scrollback
   }, { isActive: !showSessionSelector });
 
@@ -1494,21 +1595,55 @@ export function App({ cwd, version }: AppProps) {
       // Check for /session command
       if (trimmedInput.startsWith('/session')) {
         const arg = trimmedInput.slice(8).trim();
+        const sessionParts = arg.split(/\s+/);
+        const sessionSub = sessionParts[0]?.toLowerCase() || '';
 
-        if (arg === 'new') {
-          await handleNewSession();
+        if (sessionSub === 'new') {
+          // Parse --agent flag
+          const agentIdx = sessionParts.indexOf('--agent');
+          let label: string | undefined;
+          let agentId: string | undefined;
+
+          if (agentIdx !== -1 && sessionParts[agentIdx + 1]) {
+            agentId = sessionParts[agentIdx + 1];
+            const labelParts = sessionParts.slice(1, agentIdx);
+            if (labelParts.length > 0) label = labelParts.join(' ');
+          } else {
+            const labelParts = sessionParts.slice(1);
+            if (labelParts.length > 0) label = labelParts.join(' ');
+          }
+
+          const newSession = await registry.createSession({
+            cwd,
+            label,
+            assistantId: agentId,
+          });
+          await registry.switchSession(newSession.id);
+          setActiveSessionId(newSession.id);
           return;
         }
 
-        const num = parseInt(arg, 10);
-        if (!isNaN(num) && num > 0 && num <= sessions.length) {
-          await handleSessionSwitch(sessions[num - 1].id);
+        if (sessionSub === 'assign') {
+          const agentName = sessionParts.slice(1).join(' ').trim();
+          if (agentName && activeSession) {
+            registry.assignAssistant(activeSession.id, agentName);
+          }
           return;
         }
 
-        // No arg or invalid - show session list
-        setShowSessionSelector(true);
-        return;
+        if (sessionSub === 'help') {
+          // Let it fall through to the assistant loop for help text
+        } else {
+          const num = parseInt(sessionSub, 10);
+          if (!isNaN(num) && num > 0 && num <= sessions.length) {
+            await handleSessionSwitch(sessions[num - 1].id);
+            return;
+          }
+
+          // No arg or 'list' - show session selector
+          setShowSessionSelector(true);
+          return;
+        }
       }
 
       const isClearCommand = trimmedInput === '/clear' || trimmedInput === '/new';
@@ -1867,8 +2002,12 @@ export function App({ cwd, version }: AppProps) {
     };
 
     const handleScheduleDelete = async (id: string) => {
+      // Optimistic removal: remove from UI immediately
+      setSchedulesList((prev) => prev.filter((s) => s.id !== id));
+      // Then delete from disk and refresh
       await deleteSchedule(cwd, id);
-      setSchedulesList(await listSchedules(cwd, scheduleListOpts));
+      const refreshed = await listSchedules(cwd, scheduleListOpts);
+      setSchedulesList(refreshed);
     };
 
     const handleScheduleRun = async (id: string) => {
@@ -2581,6 +2720,84 @@ export function App({ cwd, version }: AppProps) {
           onReply={handleInboxReply}
           onClose={() => setShowInboxPanel(false)}
           error={inboxError}
+        />
+      </Box>
+    );
+  }
+
+  // Show agent dashboard panel
+  if (showAgentDashboard) {
+    const sessions = registry.listSessions();
+    const sessionEntries = sessions.map((s, i) => ({
+      id: s.id,
+      label: s.label,
+      assistantId: s.assistantId,
+      assistantName: s.assistantId ? (s.label || `Agent ${i + 1}`) : null,
+      isActive: s.id === activeSessionId,
+      isProcessing: s.isProcessing,
+      isPaused: false, // Would need to check from loop
+      cwd: s.cwd,
+      startedAt: s.startedAt,
+      unreadMessages: 0,
+    }));
+
+    const swarmCoordinator = activeSession?.client.getSwarmCoordinator?.();
+    const swarmState = swarmCoordinator?.getSerializableState?.();
+
+    const projectBudgetStatus = budgetTrackerRef.current?.getActiveProject()
+      ? budgetTrackerRef.current.checkBudget('project')
+      : null;
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <AgentDashboard
+          sessions={sessionEntries}
+          projectBudget={projectBudgetStatus || undefined}
+          projectName={budgetTrackerRef.current?.getActiveProject() || undefined}
+          swarmStatus={swarmState?.status || null}
+          swarmTaskProgress={swarmState ? `${swarmState.metrics.completedTasks}/${swarmState.metrics.totalTasks}` : null}
+          onSwitchSession={async (sessionId) => {
+            await registry.switchSession(sessionId);
+            setActiveSessionId(sessionId);
+            setShowAgentDashboard(false);
+          }}
+          onMessageAgent={(assistantId) => {
+            setShowAgentDashboard(false);
+            activeSession?.client.send(`/messages send ${assistantId}`);
+          }}
+          onPauseResume={(sessionId) => {
+            const session = registry.getSession(sessionId);
+            if (session) {
+              const loop = session.client.getAssistantLoop?.();
+              if (loop?.isPaused?.()) {
+                loop.resume?.();
+              }
+            }
+          }}
+          onCancel={() => setShowAgentDashboard(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show swarm panel
+  if (showSwarmPanel) {
+    const swarmCoordinator = activeSession?.client.getSwarmCoordinator?.();
+    const swarmState = swarmCoordinator?.getSerializableState?.() || null;
+    const swarmConfig = swarmCoordinator?.getConfig?.() || null;
+    const swarmMemory = swarmCoordinator?.getMemory?.();
+    const memoryStats = swarmMemory ? swarmMemory.getStats() : null;
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <SwarmPanel
+          state={swarmState}
+          config={swarmConfig}
+          memoryStats={memoryStats}
+          onStop={() => {
+            swarmCoordinator?.stop?.();
+          }}
+          onCancel={() => setShowSwarmPanel(false)}
         />
       </Box>
     );

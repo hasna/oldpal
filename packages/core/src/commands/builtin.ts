@@ -175,6 +175,8 @@ export class BuiltinCommands {
     loader.register(this.budgetCommand());
     loader.register(this.assistantsCommand());
     loader.register(this.swarmCommand());
+    loader.register(this.workspaceCommand());
+    loader.register(this.agentsCommand());
     loader.register(this.initCommand());
     loader.register(this.costCommand());
     loader.register(this.modelCommand());
@@ -2958,6 +2960,136 @@ Created: ${new Date(job.createdAt).toISOString()}
     };
   }
 
+  /**
+   * /workspace - Manage shared workspaces for agent collaboration
+   */
+  private workspaceCommand(): Command {
+    return {
+      name: 'workspace',
+      description: 'Manage shared workspaces for agent collaboration',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const { SharedWorkspaceManager } = await import('../workspace');
+        const manager = new SharedWorkspaceManager();
+        const trimmedArgs = args.trim();
+        const parts = trimmedArgs.split(/\s+/);
+        const action = parts[0]?.toLowerCase() || '';
+
+        // /workspace help
+        if (action === 'help' || action === '') {
+          let message = '\n## Workspace Commands\n\n';
+          message += '/workspace list                  List all workspaces\n';
+          message += '/workspace create <name>         Create a new shared workspace\n';
+          message += '/workspace info <id>             Show workspace details\n';
+          message += '/workspace archive <id>          Archive a workspace\n';
+          message += '/workspace help                  Show this help\n';
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /workspace list
+        if (action === 'list') {
+          const workspaces = manager.list();
+          if (workspaces.length === 0) {
+            context.emit('text', '\nNo shared workspaces. Use /workspace create <name> to create one.\n');
+          } else {
+            let message = '\n**Shared Workspaces**\n\n';
+            for (const ws of workspaces) {
+              message += `- **${ws.name}** (${ws.id})\n`;
+              message += `  Participants: ${ws.participants.length} | Status: ${ws.status}\n`;
+              message += `  Created: ${new Date(ws.createdAt).toLocaleString()}\n`;
+            }
+            context.emit('text', message);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /workspace create <name>
+        if (action === 'create') {
+          const name = parts.slice(1).join(' ').trim();
+          if (!name) {
+            context.emit('text', '\nUsage: /workspace create <name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const creatorId = context.sessionId || 'default';
+          const workspace = manager.create(name, creatorId, []);
+          context.emit('text', `\n✓ Workspace created: **${workspace.name}** (${workspace.id})\n`);
+          context.emit('text', `  Path: ${manager.getPath(workspace.id)}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /workspace info <id>
+        if (action === 'info') {
+          const id = parts[1]?.trim();
+          if (!id) {
+            context.emit('text', '\nUsage: /workspace info <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const workspace = manager.get(id);
+          if (!workspace) {
+            context.emit('text', `\nWorkspace ${id} not found.\n`);
+          } else {
+            let message = `\n**Workspace: ${workspace.name}**\n\n`;
+            message += `ID: ${workspace.id}\n`;
+            message += `Status: ${workspace.status}\n`;
+            message += `Created by: ${workspace.createdBy}\n`;
+            message += `Participants: ${workspace.participants.join(', ')}\n`;
+            message += `Created: ${new Date(workspace.createdAt).toLocaleString()}\n`;
+            message += `Path: ${manager.getPath(workspace.id)}\n`;
+            if (workspace.description) {
+              message += `Description: ${workspace.description}\n`;
+            }
+            context.emit('text', message);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /workspace archive <id>
+        if (action === 'archive') {
+          const id = parts[1]?.trim();
+          if (!id) {
+            context.emit('text', '\nUsage: /workspace archive <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          manager.archive(id);
+          context.emit('text', `\n✓ Workspace ${id} archived.\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', '\nUnknown workspace command. Use /workspace help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /agents - Agent dashboard
+   */
+  private agentsCommand(): Command {
+    return {
+      name: 'agents',
+      description: 'Open agent dashboard showing all sessions, budgets, and messages',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (_args, context) => {
+        context.emit('done');
+        return { handled: true, showPanel: 'agents' };
+      },
+    };
+  }
+
   private exitCommand(): Command {
     return {
       name: 'exit',
@@ -2980,27 +3112,124 @@ Created: ${new Date(job.createdAt).toISOString()}
   private sessionCommand(): Command {
     return {
       name: 'session',
-      description: 'List sessions or switch to a session by number',
+      description: 'Manage sessions: list, create with agent, switch, assign agent',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
-        // Session management is handled by the terminal UI
-        // This command signals what action to take
-        const arg = args.trim();
+        const parts = splitArgs(args);
+        const sub = parts[0]?.toLowerCase() || '';
 
-        if (arg === 'new') {
+        // /session help
+        if (sub === 'help') {
+          let message = '\n## Session Commands\n\n';
+          message += '/session                           List all sessions\n';
+          message += '/session list                      List all sessions with agents\n';
+          message += '/session new [label] --agent <name>  Create session with agent\n';
+          message += '/session assign <agent>            Assign agent to current session\n';
+          message += '/session <number>                  Switch to session by number\n';
+          message += '/session help                      Show this help\n';
+          context.emit('text', message);
           context.emit('done');
-          return { handled: true, sessionAction: 'new' };
+          return { handled: true };
         }
 
-        const num = parseInt(arg, 10);
+        // /session new [label] --agent <name>
+        if (sub === 'new') {
+          let label: string | undefined;
+          let agent: string | undefined;
+
+          // Parse --agent flag
+          const agentIdx = parts.indexOf('--agent');
+          if (agentIdx !== -1 && parts[agentIdx + 1]) {
+            agent = parts[agentIdx + 1];
+            const labelParts = parts.slice(1, agentIdx);
+            if (labelParts.length > 0) {
+              label = labelParts.join(' ');
+            }
+          } else {
+            const labelParts = parts.slice(1);
+            if (labelParts.length > 0) {
+              label = labelParts.join(' ');
+            }
+          }
+
+          // Validate agent name if provided
+          if (agent) {
+            const assistantManager = context.getAssistantManager?.();
+            if (assistantManager) {
+              const assistants = assistantManager.listAssistants();
+              const found = assistants.find(
+                (a) => a.name.toLowerCase() === agent!.toLowerCase() || a.id === agent
+              );
+              if (!found) {
+                const names = assistants.map((a) => a.name).join(', ');
+                context.emit('text', `\n⚠ Agent "${agent}" not found. Available: ${names || 'none'}\n`);
+                context.emit('done');
+                return { handled: true };
+              }
+              agent = found.id;
+              if (label) {
+                context.emit('text', `\n✓ Creating session "${label}" with agent ${found.name}\n`);
+              } else {
+                context.emit('text', `\n✓ Creating session with agent ${found.name}\n`);
+              }
+            }
+          }
+
+          context.emit('done');
+          return {
+            handled: true,
+            sessionAction: 'new',
+            sessionLabel: label,
+            sessionAgent: agent,
+          };
+        }
+
+        // /session assign <agent>
+        if (sub === 'assign') {
+          const agentName = parts.slice(1).join(' ').trim();
+          if (!agentName) {
+            context.emit('text', '\nUsage: /session assign <agent-name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const assistantManager = context.getAssistantManager?.();
+          if (!assistantManager) {
+            context.emit('text', '\n⚠ Assistant manager not available.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const assistants = assistantManager.listAssistants();
+          const found = assistants.find(
+            (a) => a.name.toLowerCase() === agentName.toLowerCase() || a.id === agentName
+          );
+          if (!found) {
+            const names = assistants.map((a) => a.name).join(', ');
+            context.emit('text', `\n⚠ Agent "${agentName}" not found. Available: ${names || 'none'}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          context.emit('text', `\n✓ Assigned agent **${found.name}** to current session\n`);
+          context.emit('done');
+          return {
+            handled: true,
+            sessionAction: 'assign',
+            sessionAgent: found.id,
+          };
+        }
+
+        // /session <number> - switch
+        const num = parseInt(sub, 10);
         if (!isNaN(num) && num > 0) {
           context.emit('done');
           return { handled: true, sessionAction: 'switch', sessionNumber: num };
         }
 
-        // No arg or invalid - signal to show session list
+        // /session list or no arg - signal to show session list
         context.emit('done');
         return { handled: true, sessionAction: 'list' };
       },
@@ -4322,6 +4551,9 @@ Format the summary as a brief bullet-point list. This summary will replace the c
           message += '/budget reset                 Reset all usage counters\n';
           message += '/budget reset session         Reset session usage only\n';
           message += '/budget limits                Show configured limits\n';
+          message += '/budget resume                Resume from budget pause\n';
+          message += '/budget extend <tokens>       Extend token limit\n';
+          message += '/budget project [name]        Show/set project budget\n';
           message += '/budget help                  Show this help\n';
           context.emit('text', message);
           context.emit('done');
@@ -4352,13 +4584,69 @@ Format the summary as a brief bullet-point list. This summary will replace the c
           return { handled: true };
         }
 
+        // /budget resume
+        if (action === 'resume') {
+          if (context.resumeBudget) {
+            context.resumeBudget();
+            context.emit('text', '\n✓ Budget pause lifted - agent will continue\n');
+          } else {
+            context.emit('text', '\n⚠ Budget resume not available in this context\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /budget extend <tokens>
+        if (action.startsWith('extend')) {
+          const parts = action.split(/\s+/);
+          const tokensStr = parts[1];
+          if (!tokensStr) {
+            context.emit('text', '\nUsage: /budget extend <tokens>\nExample: /budget extend 500000\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const tokens = parseInt(tokensStr, 10);
+          if (isNaN(tokens) || tokens <= 0) {
+            context.emit('text', '\n⚠ Invalid token count. Must be a positive number.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          tracker.extendLimits('session', tokens);
+          context.emit('text', `\n✓ Extended session token limit by ${tokens.toLocaleString()}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /budget project [name]
+        if (action.startsWith('project')) {
+          const parts = action.split(/\s+/);
+          const projectName = parts.slice(1).join(' ').trim();
+
+          if (projectName) {
+            // Set active project
+            tracker.setActiveProject(projectName);
+            context.emit('text', `\n✓ Active project set to: ${projectName}\n`);
+          } else {
+            // Show project budget
+            const activeProject = tracker.getActiveProject();
+            if (activeProject) {
+              const projectStatus = tracker.formatUsage('project', activeProject);
+              context.emit('text', `\n${projectStatus}\n`);
+            } else {
+              context.emit('text', '\nNo active project. Use /budget project <name> to set one.\n');
+            }
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
         // /budget reset [scope]
         if (action.startsWith('reset')) {
           const parts = action.split(/\s+/);
-          const scope = parts[1] as 'session' | 'assistant' | 'swarm' | undefined;
+          const scope = parts[1] as 'session' | 'assistant' | 'swarm' | 'project' | undefined;
 
           if (context.resetBudget) {
-            if (scope && ['session', 'assistant', 'swarm'].includes(scope)) {
+            if (scope && ['session', 'assistant', 'swarm', 'project'].includes(scope)) {
               context.resetBudget(scope);
               context.emit('text', `\n✓ Reset ${scope} budget usage\n`);
             } else {
@@ -4405,6 +4693,17 @@ Format the summary as a brief bullet-point list. This summary will replace the c
             message += `  Max LLM calls: ${config.swarm.maxLlmCalls?.toLocaleString() || 'unlimited'}\n`;
             message += `  Max tool calls: ${config.swarm.maxToolCalls?.toLocaleString() || 'unlimited'}\n`;
             const maxDurationMin = config.swarm.maxDurationMs ? Math.round(config.swarm.maxDurationMs / 60000) : null;
+            message += `  Max duration: ${maxDurationMin ? `${maxDurationMin} min` : 'unlimited'}\n`;
+          } else {
+            message += '  No limits configured\n';
+          }
+
+          message += '\n## Project Limits\n';
+          if (config.project) {
+            message += `  Max tokens: ${config.project.maxTotalTokens?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max LLM calls: ${config.project.maxLlmCalls?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max tool calls: ${config.project.maxToolCalls?.toLocaleString() || 'unlimited'}\n`;
+            const maxDurationMin = config.project.maxDurationMs ? Math.round(config.project.maxDurationMs / 60000) : null;
             message += `  Max duration: ${maxDurationMin ? `${maxDurationMin} min` : 'unlimited'}\n`;
           } else {
             message += '  No limits configured\n';
@@ -4464,6 +4763,24 @@ Format the summary as a brief bullet-point list. This summary will replace the c
           message += '\n  ⚠️ **SESSION BUDGET EXCEEDED**\n';
         } else if (summary.session.warningsCount > 0) {
           message += `\n  ⚡ ${summary.session.warningsCount} warning(s) - approaching limits\n`;
+        }
+
+        // Show project budget if active
+        if (summary.project) {
+          message += '\n## Project\n';
+          const projUsage = summary.project.usage;
+          const projLimits = summary.project.limits;
+          if (projLimits.maxTotalTokens) {
+            const pct = Math.round((projUsage.totalTokens / projLimits.maxTotalTokens) * 100);
+            message += `  Tokens: ${projUsage.totalTokens.toLocaleString()} / ${projLimits.maxTotalTokens.toLocaleString()} (${pct}%)\n`;
+          }
+          if (projLimits.maxLlmCalls) {
+            const pct = Math.round((projUsage.llmCalls / projLimits.maxLlmCalls) * 100);
+            message += `  LLM Calls: ${projUsage.llmCalls} / ${projLimits.maxLlmCalls} (${pct}%)\n`;
+          }
+          if (summary.project.overallExceeded) {
+            message += '\n  ⚠️ **PROJECT BUDGET EXCEEDED**\n';
+          }
         }
 
         // Show assistant count if any
@@ -4657,6 +4974,7 @@ Format the summary as a brief bullet-point list. This summary will replace the c
           message += '/swarm <goal>                 Execute swarm for a goal\n';
           message += '/swarm status                 Show swarm status\n';
           message += '/swarm stop                   Stop current swarm\n';
+          message += '/swarm memory                 Show shared memory contents\n';
           message += '/swarm config                 Show swarm configuration\n';
           message += '/swarm help                   Show this help\n\n';
           message += '**Example:**\n';
@@ -4727,6 +5045,51 @@ Format the summary as a brief bullet-point list. This summary will replace the c
               message += `  - ${err}\n`;
             }
           }
+          context.emit('text', message);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /swarm memory - Show shared memory contents
+        if (trimmedArgs === 'memory') {
+          if (!coordinator) {
+            context.emit('text', '\n⚠️ Swarm coordinator not available in this context.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const memory = coordinator.getMemory();
+          if (!memory) {
+            context.emit('text', '\nShared memory is not enabled for this swarm.\nEnable it with `enableSharedMemory: true` in swarm config.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const stats = memory.getStats();
+          let message = '\n**Swarm Shared Memory**\n\n';
+          message += `Total entries: ${stats.totalEntries}\n`;
+          message += `Total access count: ${stats.totalAccessCount}\n\n`;
+
+          if (stats.totalEntries > 0) {
+            message += '**By Category:**\n';
+            for (const [category, count] of Object.entries(stats.byCategory)) {
+              if (count > 0) {
+                message += `  ${category}: ${count}\n`;
+              }
+            }
+
+            message += '\n**Recent Entries:**\n';
+            const entries = memory.list();
+            const recent = entries.slice(0, 10);
+            for (const entry of recent) {
+              const preview = entry.content.length > 100 ? entry.content.slice(0, 100) + '...' : entry.content;
+              message += `\n- [${entry.category}] ${preview}\n`;
+              message += `  Tags: ${entry.tags.join(', ')} | Relevance: ${entry.relevance}\n`;
+            }
+          } else {
+            message += 'No entries in shared memory yet.\n';
+          }
+
           context.emit('text', message);
           context.emit('done');
           return { handled: true };
