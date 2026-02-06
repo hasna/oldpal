@@ -771,12 +771,7 @@ export function App({ cwd, version }: AppProps) {
           setShowSchedulesPanel(true);
         });
       } else if (chunk.panel === 'assistants') {
-        // Show assistants panel and load registry data
-        const assistantRegistry = getGlobalRegistry();
-        const assistants = assistantRegistry.list();
-        const stats = assistantRegistry.getStats();
-        setAssistantsList(assistants);
-        setRegistryStats(stats);
+        // Show personal assistants panel (it loads its own data from AssistantManager)
         setShowAssistantsPanel(true);
       } else if (chunk.panel === 'hooks') {
         // Load hooks and show panel
