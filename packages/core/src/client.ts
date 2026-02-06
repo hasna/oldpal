@@ -366,6 +366,16 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the identity manager
+   */
+  getIdentityManager(): any {
+    if (typeof (this.assistantLoop as any).getIdentityManager === 'function') {
+      return (this.assistantLoop as any).getIdentityManager();
+    }
+    return null;
+  }
+
+  /**
    * Refresh identity context after assistant/identity changes
    */
   async refreshIdentityContext(): Promise<void> {

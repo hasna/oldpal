@@ -1952,6 +1952,36 @@ export class AssistantLoop {
     };
   }
 
+  getAssistantManager(): AssistantManager | null {
+    return this.assistantManager;
+  }
+
+  getIdentityManager(): IdentityManager | null {
+    return this.identityManager;
+  }
+
+  getMessagesManager(): MessagesManager | null {
+    return this.messagesManager;
+  }
+
+  getWalletManager(): WalletManager | null {
+    return this.walletManager;
+  }
+
+  getSecretsManager(): SecretsManager | null {
+    return this.secretsManager;
+  }
+
+  getInboxManager(): InboxManager | null {
+    return this.inboxManager;
+  }
+
+  async refreshIdentityContext(): Promise<void> {
+    if (this.identityManager) {
+      this.identityContext = await this.identityManager.buildSystemPromptContext();
+    }
+  }
+
   getAssistantId(): string | null {
     return this.assistantManager?.getActiveId() ?? null;
   }

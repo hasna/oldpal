@@ -753,17 +753,9 @@ export class BuiltinCommands {
         const [action, ...rest] = args.trim().split(/\s+/).filter(Boolean);
         const target = rest.join(' ');
 
-        if (!action) {
-          const active = manager.getActive();
-          if (!active) {
-            context.emit('text', 'No active identity.\n');
-          } else {
-            context.emit('text', `Current identity: ${active.name}\n`);
-            context.emit('text', `ID: ${active.id}\n`);
-            context.emit('text', `Display name: ${active.profile.displayName}\n`);
-          }
+        if (!action || action === 'ui') {
           context.emit('done');
-          return { handled: true };
+          return { handled: true, showPanel: 'identity' };
         }
 
         if (action === 'list') {

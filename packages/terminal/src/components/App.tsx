@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
-import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, type SessionInfo, type RecoverableSession } from '@hasna/assistants-core';
+import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, type SessionInfo, type RecoverableSession, type CreateIdentityOptions } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input } from './Input';
@@ -19,6 +19,7 @@ import { RecoveryPanel } from './RecoveryPanel';
 import { ConnectorsPanel } from './ConnectorsPanel';
 import { TasksPanel } from './TasksPanel';
 import { AssistantsPanel } from './AssistantsPanel';
+import { IdentityPanel } from './IdentityPanel';
 import { HooksPanel } from './HooksPanel';
 import { ConfigPanel } from './ConfigPanel';
 import { MessagesPanel } from './MessagesPanel';
@@ -203,6 +204,10 @@ export function App({ cwd, version }: AppProps) {
   const [showAssistantsPanel, setShowAssistantsPanel] = useState(false);
   const [assistantsRefreshKey, setAssistantsRefreshKey] = useState(0);
   const [assistantError, setAssistantError] = useState<string | null>(null);
+
+  // Identity panel state
+  const [showIdentityPanel, setShowIdentityPanel] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
 
   // Hooks panel state
   const [showHooksPanel, setShowHooksPanel] = useState(false);
@@ -773,6 +778,9 @@ export function App({ cwd, version }: AppProps) {
       } else if (chunk.panel === 'assistants') {
         // Show personal assistants panel (it loads its own data from AssistantManager)
         setShowAssistantsPanel(true);
+      } else if (chunk.panel === 'identity') {
+        // Show identity management panel
+        setShowIdentityPanel(true);
       } else if (chunk.panel === 'hooks') {
         // Load hooks and show panel
         if (!hookStoreRef.current) {
@@ -1985,6 +1993,126 @@ export function App({ cwd, version }: AppProps) {
           }}
           error={assistantError}
           onClearError={() => setAssistantError(null)}
+        />
+      </Box>
+    );
+  }
+
+  // Show identity panel
+  if (showIdentityPanel) {
+    const identityManager = activeSession?.client.getIdentityManager?.();
+    const identitiesList = identityManager?.listIdentities() ?? [];
+    const activeIdentity = identityManager?.getActive();
+    const templates = listTemplates();
+
+    const handleIdentitySwitch = async (identityId: string) => {
+      setIdentityError(null);
+      try {
+        if (identityManager) {
+          await identityManager.switchIdentity(identityId);
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        }
+      } catch (err) {
+        setIdentityError(err instanceof Error ? err.message : 'Failed to switch identity');
+      }
+    };
+
+    const handleIdentityCreate = async (options: CreateIdentityOptions) => {
+      setIdentityError(null);
+      try {
+        if (identityManager) {
+          await identityManager.createIdentity(options);
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        }
+      } catch (err) {
+        setIdentityError(err instanceof Error ? err.message : 'Failed to create identity');
+        throw err;
+      }
+    };
+
+    const handleIdentityCreateFromTemplate = async (templateName: string) => {
+      setIdentityError(null);
+      try {
+        if (identityManager) {
+          const options = createIdentityFromTemplate(templateName);
+          if (options) {
+            await identityManager.createIdentity(options);
+            await activeSession?.client.refreshIdentityContext?.();
+            setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+          }
+        }
+      } catch (err) {
+        setIdentityError(err instanceof Error ? err.message : 'Failed to create identity from template');
+        throw err;
+      }
+    };
+
+    const handleIdentityUpdate = async (identityId: string, updates: Partial<CreateIdentityOptions>) => {
+      setIdentityError(null);
+      try {
+        if (identityManager) {
+          await identityManager.updateIdentity(identityId, updates as any);
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        }
+      } catch (err) {
+        setIdentityError(err instanceof Error ? err.message : 'Failed to update identity');
+        throw err;
+      }
+    };
+
+    const handleIdentitySetDefault = async (identityId: string) => {
+      setIdentityError(null);
+      try {
+        if (identityManager) {
+          // Clear default from all other identities
+          for (const identity of identitiesList) {
+            if (identity.isDefault && identity.id !== identityId) {
+              await identityManager.updateIdentity(identity.id, { isDefault: false });
+            }
+          }
+          await identityManager.updateIdentity(identityId, { isDefault: true });
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        }
+      } catch (err) {
+        setIdentityError(err instanceof Error ? err.message : 'Failed to set default identity');
+      }
+    };
+
+    const handleIdentityDelete = async (identityId: string) => {
+      setIdentityError(null);
+      try {
+        if (identityManager) {
+          await identityManager.deleteIdentity(identityId);
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        }
+      } catch (err) {
+        setIdentityError(err instanceof Error ? err.message : 'Failed to delete identity');
+        throw err;
+      }
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <IdentityPanel
+          identities={identitiesList}
+          activeIdentityId={activeIdentity?.id}
+          templates={templates}
+          onSwitch={handleIdentitySwitch}
+          onCreate={handleIdentityCreate}
+          onCreateFromTemplate={handleIdentityCreateFromTemplate}
+          onUpdate={handleIdentityUpdate}
+          onSetDefault={handleIdentitySetDefault}
+          onDelete={handleIdentityDelete}
+          onClose={() => {
+            setIdentityError(null);
+            setShowIdentityPanel(false);
+          }}
+          error={identityError}
         />
       </Box>
     );

@@ -47,7 +47,7 @@ function formatTime(timestamp: string): string {
 }
 
 type Mode = 'list' | 'create' | 'edit' | 'delete-confirm';
-type CreateStep = 'name' | 'description' | 'model' | 'temperature';
+type CreateStep = 'name' | 'description' | 'model' | 'temperature' | 'systemPrompt';
 
 export function AssistantsPanel({
   assistants,
@@ -72,6 +72,7 @@ export function AssistantsPanel({
     ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL)
   );
   const [temperature, setTemperature] = useState(DEFAULT_TEMPERATURE);
+  const [newSystemPrompt, setNewSystemPrompt] = useState('');
 
   // Edit state
   const [editingAssistant, setEditingAssistant] = useState<Assistant | null>(null);
@@ -88,6 +89,7 @@ export function AssistantsPanel({
     setNewDescription('');
     setSelectedModelIndex(ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL));
     setTemperature(DEFAULT_TEMPERATURE);
+    setNewSystemPrompt('');
     setCreateStep('name');
     setEditingAssistant(null);
     setEditStep('name');
@@ -118,6 +120,7 @@ export function AssistantsPanel({
           ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL)
         );
         setTemperature(assistant.settings.temperature ?? DEFAULT_TEMPERATURE);
+        setNewSystemPrompt(assistant.settings.systemPromptAddition || '');
         setEditStep('name');
         setMode('edit');
       }
@@ -204,10 +207,12 @@ export function AssistantsPanel({
         if (createStep === 'description') setCreateStep('name');
         else if (createStep === 'model') setCreateStep('description');
         else if (createStep === 'temperature') setCreateStep('model');
+        else if (createStep === 'systemPrompt') setCreateStep('temperature');
       } else {
         if (editStep === 'description') setEditStep('name');
         else if (editStep === 'model') setEditStep('description');
         else if (editStep === 'temperature') setEditStep('model');
+        else if (editStep === 'systemPrompt') setEditStep('temperature');
       }
     }
   }, { isActive: (mode === 'create' || mode === 'edit') && (createStep !== 'name' && editStep !== 'name') });
@@ -265,9 +270,9 @@ export function AssistantsPanel({
 
     if (key.return) {
       if (mode === 'create') {
-        handleCreate();
+        setCreateStep('systemPrompt');
       } else {
-        handleUpdate();
+        setEditStep('systemPrompt');
       }
       return;
     }
@@ -281,6 +286,21 @@ export function AssistantsPanel({
       return;
     }
   }, { isActive: (mode === 'create' && createStep === 'temperature') || (mode === 'edit' && editStep === 'temperature') });
+
+  // Handle system prompt step escape
+  useInput((_input, key) => {
+    const isCreateSystemPromptStep = mode === 'create' && createStep === 'systemPrompt';
+    const isEditSystemPromptStep = mode === 'edit' && editStep === 'systemPrompt';
+    if (!isCreateSystemPromptStep && !isEditSystemPromptStep) return;
+
+    if (key.escape) {
+      if (mode === 'create') {
+        setCreateStep('temperature');
+      } else {
+        setEditStep('temperature');
+      }
+    }
+  }, { isActive: (mode === 'create' && createStep === 'systemPrompt') || (mode === 'edit' && editStep === 'systemPrompt') });
 
   // Handle name step escape (full cancel)
   useInput((_input, key) => {
@@ -321,6 +341,23 @@ export function AssistantsPanel({
     }
   };
 
+  const handleSystemPromptSubmit = () => {
+    if (mode === 'create') {
+      handleCreate();
+    } else {
+      handleUpdate();
+    }
+  };
+
+  const handleSkipSystemPrompt = () => {
+    setNewSystemPrompt('');
+    if (mode === 'create') {
+      handleCreate();
+    } else {
+      handleUpdate();
+    }
+  };
+
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setIsSubmitting(true);
@@ -328,6 +365,7 @@ export function AssistantsPanel({
       const settings: Partial<AssistantSettings> = {
         model: ANTHROPIC_MODELS[selectedModelIndex].id,
         temperature,
+        systemPromptAddition: newSystemPrompt.trim() || undefined,
       };
       await onCreate({
         name: newName.trim(),
@@ -352,6 +390,7 @@ export function AssistantsPanel({
           ...editingAssistant.settings,
           model: ANTHROPIC_MODELS[selectedModelIndex].id,
           temperature,
+          systemPromptAddition: newSystemPrompt.trim() || undefined,
         } as Record<string, unknown>,
       });
       resetForm();
@@ -427,7 +466,7 @@ export function AssistantsPanel({
         </Box>
 
         <Box marginTop={1}>
-          <Text dimColor>Left/Right adjust | Enter {mode === 'create' ? 'create' : 'save'} | Esc back</Text>
+          <Text dimColor>Left/Right adjust | Enter continue | Esc back</Text>
         </Box>
 
         {isSubmitting && (
@@ -455,6 +494,43 @@ export function AssistantsPanel({
       return (
         <Box flexDirection="column" paddingY={1}>
           {renderTemperatureSlider()}
+        </Box>
+      );
+    }
+
+    if (currentStep === 'systemPrompt') {
+      return (
+        <Box flexDirection="column" paddingY={1}>
+          <Box marginBottom={1}>
+            <Text bold color="cyan">{mode === 'create' ? 'Create New Assistant' : 'Edit Assistant'}</Text>
+            <Text dimColor> - Custom Instructions</Text>
+          </Box>
+
+          <Box marginBottom={1} flexDirection="column">
+            <Text dimColor>Name: {newName}</Text>
+            {newDescription && <Text dimColor>Description: {newDescription}</Text>}
+            <Text dimColor>Model: {ANTHROPIC_MODELS[selectedModelIndex].name}</Text>
+            <Text dimColor>Temperature: {temperature.toFixed(1)}</Text>
+          </Box>
+
+          <Box>
+            <Text>Instructions: </Text>
+            <TextInput
+              value={newSystemPrompt}
+              onChange={setNewSystemPrompt}
+              onSubmit={handleSystemPromptSubmit}
+              placeholder="Custom system prompt (optional)..."
+            />
+          </Box>
+          <Box marginTop={1}>
+            <Text dimColor>Enter to {mode === 'create' ? 'create' : 'save'} | Tab to skip | Esc back</Text>
+          </Box>
+
+          {isSubmitting && (
+            <Box marginTop={1}>
+              <Text color="yellow">{mode === 'create' ? 'Creating assistant...' : 'Updating assistant...'}</Text>
+            </Box>
+          )}
         </Box>
       );
     }

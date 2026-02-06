@@ -1,11 +1,16 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
+import TextInput from 'ink-text-input';
 import type { Identity, CreateIdentityOptions } from '@hasna/assistants-core';
 
 // Maximum visible items in lists before pagination kicks in
 const MAX_VISIBLE_ITEMS = 5;
 
-type ViewMode = 'list' | 'detail' | 'create' | 'delete-confirm';
+type ViewMode = 'list' | 'detail' | 'create' | 'create-form' | 'edit-form' | 'delete-confirm';
+type FormStep = 'name' | 'displayName' | 'title' | 'company' | 'communicationStyle' | 'responseLength' | 'context';
+
+const COMMUNICATION_STYLES = ['formal', 'casual', 'professional'] as const;
+const RESPONSE_LENGTHS = ['concise', 'detailed', 'balanced'] as const;
 
 interface IdentityPanelProps {
   identities: Identity[];
@@ -14,6 +19,7 @@ interface IdentityPanelProps {
   onSwitch: (identityId: string) => Promise<void>;
   onCreate: (options: CreateIdentityOptions) => Promise<void>;
   onCreateFromTemplate: (templateName: string) => Promise<void>;
+  onUpdate: (identityId: string, updates: Partial<CreateIdentityOptions>) => Promise<void>;
   onSetDefault: (identityId: string) => Promise<void>;
   onDelete: (identityId: string) => Promise<void>;
   onClose: () => void;
@@ -70,6 +76,7 @@ export function IdentityPanel({
   onSwitch,
   onCreate,
   onCreateFromTemplate,
+  onUpdate,
   onSetDefault,
   onDelete,
   onClose,
@@ -80,6 +87,17 @@ export function IdentityPanel({
   const [templateIndex, setTemplateIndex] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<Identity | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Form state
+  const [formStep, setFormStep] = useState<FormStep>('name');
+  const [formName, setFormName] = useState('');
+  const [formDisplayName, setFormDisplayName] = useState('');
+  const [formTitle, setFormTitle] = useState('');
+  const [formCompany, setFormCompany] = useState('');
+  const [formStyleIndex, setFormStyleIndex] = useState(2); // 'professional'
+  const [formLengthIndex, setFormLengthIndex] = useState(2); // 'balanced'
+  const [formContext, setFormContext] = useState('');
+  const [editingIdentity, setEditingIdentity] = useState<Identity | null>(null);
 
   // Jump to active identity on mount
   useEffect(() => {
@@ -97,17 +115,41 @@ export function IdentityPanel({
     [identityIndex, identities.length]
   );
 
-  // Calculate visible range for templates list
+  // Calculate visible range for templates list (+1 for "Create custom" option)
+  const totalCreateOptions = templates.length + 1;
   const templateRange = useMemo(
-    () => getVisibleRange(templateIndex, templates.length),
-    [templateIndex, templates.length]
+    () => getVisibleRange(templateIndex, totalCreateOptions),
+    [templateIndex, totalCreateOptions]
   );
 
   const currentIdentity = identities[identityIndex];
 
+  const resetForm = useCallback(() => {
+    setFormStep('name');
+    setFormName('');
+    setFormDisplayName('');
+    setFormTitle('');
+    setFormCompany('');
+    setFormStyleIndex(2);
+    setFormLengthIndex(2);
+    setFormContext('');
+    setEditingIdentity(null);
+  }, []);
+
+  const populateFormFromIdentity = useCallback((identity: Identity) => {
+    setFormName(identity.name);
+    setFormDisplayName(identity.profile.displayName);
+    setFormTitle(identity.profile.title || '');
+    setFormCompany(identity.profile.company || '');
+    setFormStyleIndex(COMMUNICATION_STYLES.indexOf(identity.preferences.communicationStyle));
+    setFormLengthIndex(RESPONSE_LENGTHS.indexOf(identity.preferences.responseLength));
+    setFormContext(identity.context || '');
+    setFormStep('name');
+  }, []);
+
   // Handle create from template
   const handleCreateFromTemplate = useCallback(async () => {
-    const template = templates[templateIndex];
+    const template = templates[templateIndex - 1]; // offset by 1 for "Create custom" option
     if (!template) return;
 
     setIsProcessing(true);
@@ -118,6 +160,58 @@ export function IdentityPanel({
       setIsProcessing(false);
     }
   }, [templateIndex, templates, onCreateFromTemplate]);
+
+  // Handle create from form
+  const handleCreateFromForm = useCallback(async () => {
+    if (!formName.trim()) return;
+
+    setIsProcessing(true);
+    try {
+      await onCreate({
+        name: formName.trim(),
+        profile: {
+          displayName: formDisplayName.trim() || formName.trim(),
+          title: formTitle.trim() || undefined,
+          company: formCompany.trim() || undefined,
+        },
+        preferences: {
+          communicationStyle: COMMUNICATION_STYLES[formStyleIndex],
+          responseLength: RESPONSE_LENGTHS[formLengthIndex],
+        },
+        context: formContext.trim() || undefined,
+      });
+      resetForm();
+      setMode('list');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [formName, formDisplayName, formTitle, formCompany, formStyleIndex, formLengthIndex, formContext, onCreate, resetForm]);
+
+  // Handle edit form submit
+  const handleEditSubmit = useCallback(async () => {
+    if (!editingIdentity || !formName.trim()) return;
+
+    setIsProcessing(true);
+    try {
+      await onUpdate(editingIdentity.id, {
+        name: formName.trim(),
+        profile: {
+          displayName: formDisplayName.trim() || formName.trim(),
+          title: formTitle.trim() || undefined,
+          company: formCompany.trim() || undefined,
+        },
+        preferences: {
+          communicationStyle: COMMUNICATION_STYLES[formStyleIndex],
+          responseLength: RESPONSE_LENGTHS[formLengthIndex],
+        },
+        context: formContext.trim() || undefined,
+      });
+      resetForm();
+      setMode('list');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [editingIdentity, formName, formDisplayName, formTitle, formCompany, formStyleIndex, formLengthIndex, formContext, onUpdate, resetForm]);
 
   // Handle delete
   const handleDelete = useCallback(async () => {
@@ -161,9 +255,30 @@ export function IdentityPanel({
     }
   }, [currentIdentity, onSetDefault]);
 
-  // Keyboard navigation
+  // Form step navigation helpers
+  const FORM_STEPS: FormStep[] = ['name', 'displayName', 'title', 'company', 'communicationStyle', 'responseLength', 'context'];
+
+  const goToNextStep = useCallback(() => {
+    const idx = FORM_STEPS.indexOf(formStep);
+    if (idx < FORM_STEPS.length - 1) {
+      setFormStep(FORM_STEPS[idx + 1]);
+    }
+  }, [formStep]);
+
+  const goToPrevStep = useCallback(() => {
+    const idx = FORM_STEPS.indexOf(formStep);
+    if (idx > 0) {
+      setFormStep(FORM_STEPS[idx - 1]);
+    }
+  }, [formStep]);
+
+  const isTextStep = formStep === 'name' || formStep === 'displayName' || formStep === 'title' || formStep === 'company' || formStep === 'context';
+  const isSelectorStep = formStep === 'communicationStyle' || formStep === 'responseLength';
+  const isFormMode = mode === 'create-form' || mode === 'edit-form';
+
+  // Keyboard navigation for list/detail/create/delete modes
   useInput((input, key) => {
-    if (isProcessing) return;
+    if (isProcessing || isFormMode) return;
 
     // Exit with q or Escape at top level
     if (input === 'q' || (key.escape && mode === 'list')) {
@@ -219,6 +334,14 @@ export function IdentityPanel({
         handleSetDefault();
         return;
       }
+      if (input === 'e') {
+        if (currentIdentity) {
+          setEditingIdentity(currentIdentity);
+          populateFormFromIdentity(currentIdentity);
+          setMode('edit-form');
+        }
+        return;
+      }
       if (input === 'x' || key.delete) {
         if (currentIdentity) {
           setDeleteTarget(currentIdentity);
@@ -229,18 +352,24 @@ export function IdentityPanel({
       return;
     }
 
-    // Create mode (template selection)
+    // Create mode (template selection + custom option)
     if (mode === 'create') {
       if (key.upArrow) {
-        setTemplateIndex((prev) => (prev === 0 ? templates.length - 1 : prev - 1));
+        setTemplateIndex((prev) => (prev === 0 ? totalCreateOptions - 1 : prev - 1));
         return;
       }
       if (key.downArrow) {
-        setTemplateIndex((prev) => (prev === templates.length - 1 ? 0 : prev + 1));
+        setTemplateIndex((prev) => (prev === totalCreateOptions - 1 ? 0 : prev + 1));
         return;
       }
       if (key.return) {
-        handleCreateFromTemplate();
+        if (templateIndex === 0) {
+          // "Create custom identity" selected
+          resetForm();
+          setMode('create-form');
+        } else {
+          handleCreateFromTemplate();
+        }
         return;
       }
       return;
@@ -258,7 +387,108 @@ export function IdentityPanel({
         return;
       }
     }
-  });
+  }, { isActive: !isFormMode });
+
+  // Form mode: text input steps - escape handling
+  useInput((_input, key) => {
+    if (!isFormMode || !isTextStep) return;
+
+    if (key.escape) {
+      if (formStep === 'name') {
+        resetForm();
+        setMode(mode === 'edit-form' ? 'detail' : 'create');
+      } else {
+        goToPrevStep();
+      }
+    }
+  }, { isActive: isFormMode && isTextStep });
+
+  // Form mode: selector steps
+  useInput((input, key) => {
+    if (!isFormMode || !isSelectorStep) return;
+
+    if (formStep === 'communicationStyle') {
+      if (key.upArrow) {
+        setFormStyleIndex((prev) => (prev === 0 ? COMMUNICATION_STYLES.length - 1 : prev - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setFormStyleIndex((prev) => (prev === COMMUNICATION_STYLES.length - 1 ? 0 : prev + 1));
+        return;
+      }
+    }
+
+    if (formStep === 'responseLength') {
+      if (key.upArrow) {
+        setFormLengthIndex((prev) => (prev === 0 ? RESPONSE_LENGTHS.length - 1 : prev - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setFormLengthIndex((prev) => (prev === RESPONSE_LENGTHS.length - 1 ? 0 : prev + 1));
+        return;
+      }
+    }
+
+    if (key.return) {
+      goToNextStep();
+      return;
+    }
+
+    if (key.escape) {
+      goToPrevStep();
+      return;
+    }
+  }, { isActive: isFormMode && isSelectorStep });
+
+  // Form text submit handlers
+  const handleFormNameSubmit = () => {
+    if (!formName.trim()) return;
+    goToNextStep();
+  };
+
+  const handleFormDisplayNameSubmit = () => {
+    goToNextStep();
+  };
+
+  const handleFormTitleSubmit = () => {
+    goToNextStep();
+  };
+
+  const handleFormCompanySubmit = () => {
+    goToNextStep();
+  };
+
+  const handleFormContextSubmit = () => {
+    if (mode === 'create-form') {
+      handleCreateFromForm();
+    } else {
+      handleEditSubmit();
+    }
+  };
+
+  // Render form summary of completed steps
+  const renderFormSummary = () => {
+    const steps = FORM_STEPS;
+    const currentIdx = steps.indexOf(formStep);
+    const completedFields: Array<{ label: string; value: string }> = [];
+
+    if (currentIdx > 0) completedFields.push({ label: 'Name', value: formName });
+    if (currentIdx > 1 && formDisplayName) completedFields.push({ label: 'Display Name', value: formDisplayName });
+    if (currentIdx > 2 && formTitle) completedFields.push({ label: 'Title', value: formTitle });
+    if (currentIdx > 3 && formCompany) completedFields.push({ label: 'Company', value: formCompany });
+    if (currentIdx > 4) completedFields.push({ label: 'Style', value: COMMUNICATION_STYLES[formStyleIndex] });
+    if (currentIdx > 5) completedFields.push({ label: 'Response', value: RESPONSE_LENGTHS[formLengthIndex] });
+
+    if (completedFields.length === 0) return null;
+
+    return (
+      <Box marginBottom={1} flexDirection="column">
+        {completedFields.map((field) => (
+          <Text key={field.label} dimColor>{field.label}: {field.value}</Text>
+        ))}
+      </Box>
+    );
+  };
 
   // Empty state
   if (identities.length === 0 && mode === 'list') {
@@ -275,7 +505,7 @@ export function IdentityPanel({
           paddingY={1}
         >
           <Text dimColor>No identities found.</Text>
-          <Text dimColor>Press n to create a new identity from a template.</Text>
+          <Text dimColor>Press n to create a new identity.</Text>
         </Box>
         <Box marginTop={1}>
           <Text dimColor>n new | q quit</Text>
@@ -308,16 +538,20 @@ export function IdentityPanel({
     );
   }
 
-  // Create mode (template selection)
+  // Create mode (template selection + custom)
   if (mode === 'create') {
-    const visibleTemplates = templates.slice(templateRange.start, templateRange.end);
+    const allOptions = [
+      { name: 'Create custom identity', description: 'Fill out a form with custom fields' },
+      ...templates,
+    ];
+    const visibleOptions = allOptions.slice(templateRange.start, templateRange.end);
 
     return (
       <Box flexDirection="column" paddingY={1}>
         <Box marginBottom={1}>
-          <Text bold color="cyan">Create Identity from Template</Text>
-          {templates.length > MAX_VISIBLE_ITEMS && (
-            <Text dimColor> ({templateIndex + 1}/{templates.length})</Text>
+          <Text bold color="cyan">Create Identity</Text>
+          {totalCreateOptions > MAX_VISIBLE_ITEMS && (
+            <Text dimColor> ({templateIndex + 1}/{totalCreateOptions})</Text>
           )}
         </Box>
 
@@ -333,15 +567,20 @@ export function IdentityPanel({
             </Box>
           )}
 
-          {visibleTemplates.map((template, visibleIdx) => {
+          {visibleOptions.map((option, visibleIdx) => {
             const actualIdx = templateRange.start + visibleIdx;
             const isSelected = actualIdx === templateIndex;
             const prefix = isSelected ? '> ' : '  ';
+            const isCustom = actualIdx === 0;
 
             return (
-              <Box key={template.name} paddingY={0}>
-                <Text inverse={isSelected} dimColor={!isSelected}>
-                  {prefix}{template.name.padEnd(20)} {template.description}
+              <Box key={option.name} paddingY={0}>
+                <Text
+                  inverse={isSelected}
+                  dimColor={!isSelected}
+                  color={isCustom && isSelected ? 'cyan' : undefined}
+                >
+                  {prefix}{option.name.padEnd(24)} {option.description}
                 </Text>
               </Box>
             );
@@ -357,6 +596,163 @@ export function IdentityPanel({
         <Box marginTop={1}>
           <Text dimColor>↑↓ select | Enter create | Esc back</Text>
         </Box>
+      </Box>
+    );
+  }
+
+  // Create form / Edit form
+  if (mode === 'create-form' || mode === 'edit-form') {
+    const isEdit = mode === 'edit-form';
+    const stepIdx = FORM_STEPS.indexOf(formStep);
+    const stepLabel = `Step ${stepIdx + 1}/${FORM_STEPS.length}`;
+
+    return (
+      <Box flexDirection="column" paddingY={1}>
+        <Box marginBottom={1}>
+          <Text bold color="cyan">{isEdit ? 'Edit Identity' : 'Create Custom Identity'}</Text>
+          <Text dimColor> - {stepLabel}</Text>
+        </Box>
+
+        {renderFormSummary()}
+
+        {formStep === 'name' && (
+          <Box flexDirection="column">
+            <Box>
+              <Text>Name: </Text>
+              <TextInput
+                value={formName}
+                onChange={setFormName}
+                onSubmit={handleFormNameSubmit}
+                placeholder="Identity name (required)..."
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Enter to continue | Esc to {isEdit ? 'cancel' : 'go back'}</Text>
+            </Box>
+          </Box>
+        )}
+
+        {formStep === 'displayName' && (
+          <Box flexDirection="column">
+            <Box>
+              <Text>Display Name: </Text>
+              <TextInput
+                value={formDisplayName}
+                onChange={setFormDisplayName}
+                onSubmit={handleFormDisplayNameSubmit}
+                placeholder={`Display name (default: ${formName})...`}
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Enter to continue | Esc back</Text>
+            </Box>
+          </Box>
+        )}
+
+        {formStep === 'title' && (
+          <Box flexDirection="column">
+            <Box>
+              <Text>Title: </Text>
+              <TextInput
+                value={formTitle}
+                onChange={setFormTitle}
+                onSubmit={handleFormTitleSubmit}
+                placeholder="Job title (optional)..."
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Enter to continue | Esc back</Text>
+            </Box>
+          </Box>
+        )}
+
+        {formStep === 'company' && (
+          <Box flexDirection="column">
+            <Box>
+              <Text>Company: </Text>
+              <TextInput
+                value={formCompany}
+                onChange={setFormCompany}
+                onSubmit={handleFormCompanySubmit}
+                placeholder="Company name (optional)..."
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Enter to continue | Esc back</Text>
+            </Box>
+          </Box>
+        )}
+
+        {formStep === 'communicationStyle' && (
+          <Box flexDirection="column">
+            <Box marginBottom={1}>
+              <Text>Communication Style:</Text>
+            </Box>
+            <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+              {COMMUNICATION_STYLES.map((style, index) => (
+                <Box key={style} paddingY={0}>
+                  <Text
+                    inverse={index === formStyleIndex}
+                    color={index === formStyleIndex ? 'cyan' : undefined}
+                    dimColor={index !== formStyleIndex}
+                  >
+                    {index === formStyleIndex ? '>' : ' '} {style}
+                  </Text>
+                </Box>
+              ))}
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>↑↓ select | Enter continue | Esc back</Text>
+            </Box>
+          </Box>
+        )}
+
+        {formStep === 'responseLength' && (
+          <Box flexDirection="column">
+            <Box marginBottom={1}>
+              <Text>Response Length:</Text>
+            </Box>
+            <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+              {RESPONSE_LENGTHS.map((length, index) => (
+                <Box key={length} paddingY={0}>
+                  <Text
+                    inverse={index === formLengthIndex}
+                    color={index === formLengthIndex ? 'cyan' : undefined}
+                    dimColor={index !== formLengthIndex}
+                  >
+                    {index === formLengthIndex ? '>' : ' '} {length}
+                  </Text>
+                </Box>
+              ))}
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>↑↓ select | Enter continue | Esc back</Text>
+            </Box>
+          </Box>
+        )}
+
+        {formStep === 'context' && (
+          <Box flexDirection="column">
+            <Box>
+              <Text>Context: </Text>
+              <TextInput
+                value={formContext}
+                onChange={setFormContext}
+                onSubmit={handleFormContextSubmit}
+                placeholder="Custom personality notes (optional)..."
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Enter to {isEdit ? 'save' : 'create'} | Esc back</Text>
+            </Box>
+          </Box>
+        )}
+
+        {isProcessing && (
+          <Box marginTop={1}>
+            <Text color="yellow">{isEdit ? 'Saving...' : 'Creating...'}</Text>
+          </Box>
+        )}
       </Box>
     );
   }
@@ -426,7 +822,7 @@ export function IdentityPanel({
                 <Text bold>Context</Text>
               </Box>
               <Box marginLeft={2}>
-                <Text dimColor>{currentIdentity.context.slice(0, 200)}...</Text>
+                <Text dimColor>{currentIdentity.context.slice(0, 200)}{currentIdentity.context.length > 200 ? '...' : ''}</Text>
               </Box>
             </>
           )}
@@ -441,6 +837,7 @@ export function IdentityPanel({
         <Box marginTop={1}>
           <Text dimColor>
             {!isActive && 's switch | '}
+            e edit |{' '}
             {!currentIdentity.isDefault && 'd set default | '}
             x delete | Esc back
           </Text>
