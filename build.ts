@@ -61,12 +61,28 @@ if (!result.success) {
   process.exit(1);
 }
 
-// Add shebang to the output if not present
+// Post-process: fix Bun bundler __promiseAll bug
+// Bun 1.3.x generates __promiseAll calls without defining the helper
 const outputFile = `${outdir}/index.js`;
-const content = await Bun.file(outputFile).text();
-if (!content.startsWith('#!/usr/bin/env bun')) {
-  await Bun.write(outputFile, `#!/usr/bin/env bun\n${content}`);
+let content = await Bun.file(outputFile).text();
+
+if (content.includes('__promiseAll') && !content.includes('var __promiseAll')) {
+  const polyfill = `var __promiseAll = (arr) => Promise.all(arr);\n`;
+  if (content.startsWith('#!')) {
+    const newlineIndex = content.indexOf('\n');
+    content = content.slice(0, newlineIndex + 1) + polyfill + content.slice(newlineIndex + 1);
+  } else {
+    content = polyfill + content;
+  }
+  console.log('  Fixed __promiseAll bundler bug');
 }
+
+// Add shebang to the output if not present
+if (!content.startsWith('#!/usr/bin/env bun')) {
+  content = `#!/usr/bin/env bun\n${content}`;
+}
+
+await Bun.write(outputFile, content);
 
 // Make executable
 await $`chmod +x ${outputFile}`;
