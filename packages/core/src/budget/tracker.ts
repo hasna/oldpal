@@ -71,7 +71,9 @@ export class BudgetTracker {
 
       this.sessionUsage = data.session;
       this.swarmUsage = data.swarm;
-      for (const [assistantId, usage] of Object.entries(data.assistants)) {
+      // Backwards compat: old files use 'agents' key
+      const assistantData = data.assistants || (data as unknown as Record<string, Record<string, BudgetUsage>>).agents || {};
+      for (const [assistantId, usage] of Object.entries(assistantData)) {
         this.assistantUsages.set(assistantId, usage);
       }
     } catch {

@@ -466,18 +466,41 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<Assistant
   const legacyUserConfigPath = getConfigPath('settings.json');
   const userConfig = (await loadJsonFile<Partial<AssistantsConfig>>(userConfigPath))
     || (await loadJsonFile<Partial<AssistantsConfig>>(legacyUserConfigPath));
-  config = mergeConfig(config, userConfig || undefined);
+  config = mergeConfig(config, migrateConfigKeys(userConfig) || undefined);
 
   // Load project config
   const projectConfigPath = join(getProjectConfigDir(cwd), 'config.json');
   const projectConfig = await loadJsonFile<Partial<AssistantsConfig>>(projectConfigPath);
-  config = mergeConfig(config, projectConfig || undefined);
+  config = mergeConfig(config, migrateConfigKeys(projectConfig) || undefined);
 
   // Load project local config (git-ignored)
   const localConfigPath = join(getProjectConfigDir(cwd), 'config.local.json');
   const localConfig = await loadJsonFile<Partial<AssistantsConfig>>(localConfigPath);
-  config = mergeConfig(config, localConfig || undefined);
+  config = mergeConfig(config, migrateConfigKeys(localConfig) || undefined);
 
+  return config;
+}
+
+/**
+ * Migrate old config keys to new names for backwards compatibility
+ * Handles: subagents → subassistants, budget.agent → budget.assistant
+ */
+function migrateConfigKeys(config: Partial<AssistantsConfig> | null): Partial<AssistantsConfig> | null {
+  if (!config) return null;
+  const c = config as Record<string, unknown>;
+  // subagents → subassistants
+  if (c.subagents && !c.subassistants) {
+    c.subassistants = c.subagents;
+    delete c.subagents;
+  }
+  // budget.agent → budget.assistant
+  if (config.budget) {
+    const b = config.budget as Record<string, unknown>;
+    if (b.agent && !b.assistant) {
+      b.assistant = b.agent;
+      delete b.agent;
+    }
+  }
   return config;
 }
 

@@ -112,7 +112,12 @@ export class LocalMessagesStorage {
       if (!(await file.exists())) {
         return { assistants: {} };
       }
-      return await file.json();
+      const data = await file.json() as Record<string, unknown>;
+      // Backwards compatibility: migrate old { agents: {} } to { assistants: {} }
+      if (data.agents && !data.assistants) {
+        return { assistants: data.agents as Record<string, AssistantRegistryEntry> };
+      }
+      return { assistants: (data.assistants || {}) as Record<string, AssistantRegistryEntry> };
     } catch {
       return { assistants: {} };
     }
