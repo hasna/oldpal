@@ -106,6 +106,7 @@ export interface CommandContext {
   budgetConfig?: BudgetConfig;
   setBudgetEnabled?: (enabled: boolean) => void;
   resetBudget?: (scope?: BudgetScope) => void;
+  resumeBudget?: () => void;
   guardrailsConfig?: GuardrailsConfig;
   setGuardrailsEnabled?: (enabled: boolean) => void;
   addGuardrailsPolicy?: (policy: GuardrailsPolicy) => void;
@@ -132,11 +133,15 @@ export interface CommandResult {
   /** Whether to exit the application */
   exit?: boolean;
   /** Session action to perform */
-  sessionAction?: 'list' | 'switch' | 'new';
+  sessionAction?: 'list' | 'switch' | 'new' | 'assign';
   /** Session number to switch to (1-based) */
   sessionNumber?: number;
+  /** Label for new session */
+  sessionLabel?: string;
+  /** Agent name/ID to assign to session */
+  sessionAgent?: string;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'agents' | 'swarm' | 'workspace';
   /** Initial value for panel (e.g., connector name) */
   panelInitialValue?: string;
 }

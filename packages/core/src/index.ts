@@ -277,7 +277,8 @@ export { EmbeddedClient } from './client';
 
 // Sessions
 export { SessionRegistry } from './sessions/registry';
-export type { SessionInfo, PersistedSession } from './sessions/registry';
+export type { SessionInfo, PersistedSession, CreateSessionOptions } from './sessions/registry';
+export { SessionStore, type PersistedSessionData } from './sessions/store';
 export {
   sessionTools,
   sessionInfoTool,
@@ -334,6 +335,9 @@ export * from './capabilities';
 
 // Swarm
 export * from './swarm';
+
+// Workspace (shared workspaces for agent collaboration)
+export * from './workspace';
 
 // Features (runtime feature detection)
 export * from './features';

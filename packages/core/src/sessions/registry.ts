@@ -1,6 +1,7 @@
 import type { StreamChunk, Message, TokenUsage } from '@hasna/assistants-shared';
 import { generateId } from '@hasna/assistants-shared';
 import { EmbeddedClient } from '../client';
+import { SessionStore, type PersistedSessionData } from './store';
 
 /**
  * Information about a session
@@ -12,6 +13,10 @@ export interface SessionInfo {
   updatedAt: number;
   isProcessing: boolean;
   client: EmbeddedClient;
+  /** Assigned assistant ID */
+  assistantId: string | null;
+  /** Human-readable session label */
+  label: string | null;
 }
 
 /**
@@ -26,6 +31,18 @@ export interface PersistedSession {
 }
 
 /**
+ * Options for creating a session
+ */
+export interface CreateSessionOptions {
+  /** Working directory */
+  cwd: string;
+  /** Optional assistant ID to bind to this session */
+  assistantId?: string;
+  /** Optional label for the session */
+  label?: string;
+}
+
+/**
  * Registry that manages multiple concurrent sessions
  */
 export class SessionRegistry {
@@ -36,25 +53,33 @@ export class SessionRegistry {
   private errorCallbacks: ((error: Error) => void)[] = [];
   private clientFactory: (cwd: string) => EmbeddedClient;
   private maxBufferedChunks = 2000;
+  private store: SessionStore;
 
   constructor(clientFactory?: (cwd: string) => EmbeddedClient) {
     this.clientFactory = clientFactory ?? ((cwd) => new EmbeddedClient(cwd));
+    this.store = new SessionStore();
   }
 
   /**
    * Create a new session
    */
-  async createSession(cwd: string): Promise<SessionInfo> {
-    const client = this.clientFactory(cwd);
+  async createSession(cwdOrOptions: string | CreateSessionOptions): Promise<SessionInfo> {
+    const options = typeof cwdOrOptions === 'string'
+      ? { cwd: cwdOrOptions }
+      : cwdOrOptions;
+
+    const client = this.clientFactory(options.cwd);
     await client.initialize();
 
     const sessionInfo: SessionInfo = {
       id: client.getSessionId(),
-      cwd,
+      cwd: options.cwd,
       startedAt: Date.now(),
       updatedAt: Date.now(),
       isProcessing: false,
       client,
+      assistantId: options.assistantId || null,
+      label: options.label || null,
     };
 
     // Setup chunk forwarding/buffering
@@ -80,7 +105,65 @@ export class SessionRegistry {
       this.activeSessionId = sessionInfo.id;
     }
 
+    // Persist session
+    this.persistSession(sessionInfo);
+
     return sessionInfo;
+  }
+
+  /**
+   * Assign an assistant to a session
+   */
+  assignAssistant(sessionId: string, assistantId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+    session.assistantId = assistantId;
+    session.updatedAt = Date.now();
+    this.persistSession(session);
+  }
+
+  /**
+   * Set a session label
+   */
+  setLabel(sessionId: string, label: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+    session.label = label;
+    session.updatedAt = Date.now();
+    this.persistSession(session);
+  }
+
+  /**
+   * Persist session metadata to store
+   */
+  private persistSession(session: SessionInfo): void {
+    this.store.save({
+      id: session.id,
+      cwd: session.cwd,
+      startedAt: session.startedAt,
+      updatedAt: session.updatedAt,
+      assistantId: session.assistantId,
+      label: session.label,
+      status: session.id === this.activeSessionId ? 'active' : 'background',
+    });
+  }
+
+  /**
+   * Load persisted sessions for recovery
+   */
+  loadPersistedSessions(): PersistedSessionData[] {
+    return this.store.listRecoverable();
+  }
+
+  /**
+   * Get the session store (for external access)
+   */
+  getStore(): SessionStore {
+    return this.store;
   }
 
   /**
@@ -129,7 +212,29 @@ export class SessionRegistry {
       return; // Already active
     }
 
+    // Persist old session as background
+    if (this.activeSessionId) {
+      const oldSession = this.sessions.get(this.activeSessionId);
+      if (oldSession) {
+        this.store.save({
+          id: oldSession.id,
+          cwd: oldSession.cwd,
+          startedAt: oldSession.startedAt,
+          updatedAt: Date.now(),
+          assistantId: oldSession.assistantId,
+          label: oldSession.label,
+          status: 'background',
+        });
+      }
+    }
+
     this.activeSessionId = id;
+
+    // Persist new session as active
+    const newSession = this.sessions.get(id);
+    if (newSession) {
+      this.persistSession(newSession);
+    }
 
     // Replay any buffered chunks from the new active session
     const buffer = this.chunkBuffers.get(id);
@@ -200,6 +305,17 @@ export class SessionRegistry {
       this.sessions.delete(id);
       this.chunkBuffers.delete(id);
 
+      // Persist as closed
+      this.store.save({
+        id: session.id,
+        cwd: session.cwd,
+        startedAt: session.startedAt,
+        updatedAt: Date.now(),
+        assistantId: session.assistantId,
+        label: session.label,
+        status: 'closed',
+      });
+
       // If we closed the active session, switch to another
       if (this.activeSessionId === id) {
         const remaining = this.listSessions();
@@ -225,6 +341,16 @@ export class SessionRegistry {
   closeAll(): void {
     for (const session of this.sessions.values()) {
       session.client.disconnect();
+      // Persist as closed
+      this.store.save({
+        id: session.id,
+        cwd: session.cwd,
+        startedAt: session.startedAt,
+        updatedAt: Date.now(),
+        assistantId: session.assistantId,
+        label: session.label,
+        status: 'closed',
+      });
     }
     this.sessions.clear();
     this.chunkBuffers.clear();
