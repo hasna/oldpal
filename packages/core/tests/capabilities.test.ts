@@ -23,7 +23,7 @@ import {
 } from '../src/capabilities';
 import type {
   CapabilityChain,
-  AgentCapabilitySet,
+  AssistantCapabilitySet,
   CapabilityScope,
   OrchestrationLevel,
 } from '../src/capabilities';
@@ -50,9 +50,9 @@ describe('Capability Types', () => {
   describe('DEFAULT_CAPABILITY_SET', () => {
     test('has standard orchestration level', () => {
       expect(DEFAULT_CAPABILITY_SET.orchestration.level).toBe('standard');
-      expect(DEFAULT_CAPABILITY_SET.orchestration.canSpawnSubagents).toBe(true);
-      expect(DEFAULT_CAPABILITY_SET.orchestration.maxConcurrentSubagents).toBe(5);
-      expect(DEFAULT_CAPABILITY_SET.orchestration.maxSubagentDepth).toBe(3);
+      expect(DEFAULT_CAPABILITY_SET.orchestration.canSpawnSubassistants).toBe(true);
+      expect(DEFAULT_CAPABILITY_SET.orchestration.maxConcurrentSubassistants).toBe(5);
+      expect(DEFAULT_CAPABILITY_SET.orchestration.maxSubassistantDepth).toBe(3);
     });
 
     test('allows all tools by default', () => {
@@ -86,36 +86,36 @@ describe('Capability Types', () => {
   });
 
   describe('ORCHESTRATION_DEFAULTS', () => {
-    test('none level cannot spawn subagents', () => {
-      expect(ORCHESTRATION_DEFAULTS.none.canSpawnSubagents).toBe(false);
-      expect(ORCHESTRATION_DEFAULTS.none.maxConcurrentSubagents).toBe(0);
-      expect(ORCHESTRATION_DEFAULTS.none.maxSubagentDepth).toBe(0);
+    test('none level cannot spawn subassistants', () => {
+      expect(ORCHESTRATION_DEFAULTS.none.canSpawnSubassistants).toBe(false);
+      expect(ORCHESTRATION_DEFAULTS.none.maxConcurrentSubassistants).toBe(0);
+      expect(ORCHESTRATION_DEFAULTS.none.maxSubassistantDepth).toBe(0);
       expect(ORCHESTRATION_DEFAULTS.none.canCoordinateSwarms).toBe(false);
     });
 
     test('limited level has restricted spawning', () => {
-      expect(ORCHESTRATION_DEFAULTS.limited.canSpawnSubagents).toBe(true);
-      expect(ORCHESTRATION_DEFAULTS.limited.maxConcurrentSubagents).toBe(2);
-      expect(ORCHESTRATION_DEFAULTS.limited.maxSubagentDepth).toBe(1);
+      expect(ORCHESTRATION_DEFAULTS.limited.canSpawnSubassistants).toBe(true);
+      expect(ORCHESTRATION_DEFAULTS.limited.maxConcurrentSubassistants).toBe(2);
+      expect(ORCHESTRATION_DEFAULTS.limited.maxSubassistantDepth).toBe(1);
       expect(ORCHESTRATION_DEFAULTS.limited.canCoordinateSwarms).toBe(false);
     });
 
     test('standard level allows normal spawning', () => {
-      expect(ORCHESTRATION_DEFAULTS.standard.canSpawnSubagents).toBe(true);
-      expect(ORCHESTRATION_DEFAULTS.standard.maxConcurrentSubagents).toBe(5);
-      expect(ORCHESTRATION_DEFAULTS.standard.maxSubagentDepth).toBe(3);
+      expect(ORCHESTRATION_DEFAULTS.standard.canSpawnSubassistants).toBe(true);
+      expect(ORCHESTRATION_DEFAULTS.standard.maxConcurrentSubassistants).toBe(5);
+      expect(ORCHESTRATION_DEFAULTS.standard.maxSubassistantDepth).toBe(3);
       expect(ORCHESTRATION_DEFAULTS.standard.canDelegate).toBe(true);
     });
 
     test('full level enables swarm coordination', () => {
-      expect(ORCHESTRATION_DEFAULTS.full.canSpawnSubagents).toBe(true);
+      expect(ORCHESTRATION_DEFAULTS.full.canSpawnSubassistants).toBe(true);
       expect(ORCHESTRATION_DEFAULTS.full.canCoordinateSwarms).toBe(true);
       expect(ORCHESTRATION_DEFAULTS.full.maxSwarmSize).toBe(10);
     });
 
     test('coordinator level has maximum capabilities', () => {
-      expect(ORCHESTRATION_DEFAULTS.coordinator.maxConcurrentSubagents).toBe(20);
-      expect(ORCHESTRATION_DEFAULTS.coordinator.maxSubagentDepth).toBe(10);
+      expect(ORCHESTRATION_DEFAULTS.coordinator.maxConcurrentSubassistants).toBe(20);
+      expect(ORCHESTRATION_DEFAULTS.coordinator.maxSubassistantDepth).toBe(10);
       expect(ORCHESTRATION_DEFAULTS.coordinator.maxSwarmSize).toBe(50);
     });
   });
@@ -123,7 +123,7 @@ describe('Capability Types', () => {
   describe('RESTRICTED_CAPABILITY_SET', () => {
     test('has no orchestration capabilities', () => {
       expect(RESTRICTED_CAPABILITY_SET.orchestration?.level).toBe('none');
-      expect(RESTRICTED_CAPABILITY_SET.orchestration?.canSpawnSubagents).toBe(false);
+      expect(RESTRICTED_CAPABILITY_SET.orchestration?.canSpawnSubassistants).toBe(false);
     });
 
     test('has allow_list tool policy', () => {
@@ -181,7 +181,7 @@ describe('Capability Resolver', () => {
       };
       const resolved = resolveCapabilityChain(chain);
       expect(resolved.orchestration.level).toBe('limited');
-      expect(resolved.orchestration.maxConcurrentSubagents).toBe(2);
+      expect(resolved.orchestration.maxConcurrentSubassistants).toBe(2);
     });
 
     test('higher precedence scope takes effect (system over assistant)', () => {
@@ -240,9 +240,9 @@ describe('Capability Resolver', () => {
         organization: {
           orchestration: {
             level: 'full',
-            canSpawnSubagents: true,
-            maxConcurrentSubagents: 10,
-            maxSubagentDepth: 5,
+            canSpawnSubassistants: true,
+            maxConcurrentSubassistants: 10,
+            maxSubassistantDepth: 5,
             canCoordinateSwarms: true,
             maxSwarmSize: 10,
             canDelegate: true,
@@ -251,9 +251,9 @@ describe('Capability Resolver', () => {
         assistant: {
           orchestration: {
             level: 'standard',
-            canSpawnSubagents: true,
-            maxConcurrentSubagents: 3,
-            maxSubagentDepth: 2,
+            canSpawnSubassistants: true,
+            maxConcurrentSubassistants: 3,
+            maxSubassistantDepth: 2,
             canCoordinateSwarms: false,
             maxSwarmSize: 0,
             canDelegate: true,
@@ -262,8 +262,8 @@ describe('Capability Resolver', () => {
       };
       const resolved = resolveCapabilityChain(chain);
       // Should take the minimum values
-      expect(resolved.orchestration.maxConcurrentSubagents).toBeLessThanOrEqual(3);
-      expect(resolved.orchestration.maxSubagentDepth).toBeLessThanOrEqual(2);
+      expect(resolved.orchestration.maxConcurrentSubassistants).toBeLessThanOrEqual(3);
+      expect(resolved.orchestration.maxSubassistantDepth).toBeLessThanOrEqual(2);
     });
 
     test('disabled at any level results in disabled', () => {
@@ -326,10 +326,10 @@ describe('Capability Enforcer', () => {
     });
   });
 
-  describe('canSpawnSubagent', () => {
+  describe('canSpawnSubassistant', () => {
     test('allows when enforcement disabled', () => {
       const enforcer = new CapabilityEnforcer();
-      const result = enforcer.canSpawnSubagent({ depth: 0 });
+      const result = enforcer.canSpawnSubassistant({ depth: 0 });
       expect(result.allowed).toBe(true);
       expect(result.reason).toContain('disabled');
     });
@@ -340,7 +340,7 @@ describe('Capability Enforcer', () => {
         orchestrationLevel: 'none',
       };
       const enforcer = new CapabilityEnforcer(config);
-      const result = enforcer.canSpawnSubagent({ depth: 0 });
+      const result = enforcer.canSpawnSubassistant({ depth: 0 });
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('not allowed');
     });
@@ -349,10 +349,10 @@ describe('Capability Enforcer', () => {
       const config: CapabilitiesConfigShared = {
         enabled: true,
         orchestrationLevel: 'limited',
-        maxSubagentDepth: 1,
+        maxSubassistantDepth: 1,
       };
       const enforcer = new CapabilityEnforcer(config);
-      const result = enforcer.canSpawnSubagent({ depth: 1 });
+      const result = enforcer.canSpawnSubassistant({ depth: 1 });
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('depth');
     });
@@ -363,18 +363,18 @@ describe('Capability Enforcer', () => {
         orchestrationLevel: 'standard',
       };
       const enforcer = new CapabilityEnforcer(config);
-      const result = enforcer.canSpawnSubagent({ depth: 0 });
+      const result = enforcer.canSpawnSubassistant({ depth: 0 });
       expect(result.allowed).toBe(true);
     });
 
-    test('denies when concurrent subagent limit reached', () => {
+    test('denies when concurrent subassistant limit reached', () => {
       const config: CapabilitiesConfigShared = {
         enabled: true,
         orchestrationLevel: 'limited',
-        maxConcurrentSubagents: 2,
+        maxConcurrentSubassistants: 2,
       };
       const enforcer = new CapabilityEnforcer(config);
-      const result = enforcer.canSpawnSubagent({ depth: 0, activeSubagents: 2 });
+      const result = enforcer.canSpawnSubassistant({ depth: 0, activeSubassistants: 2 });
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('concurrent');
     });
@@ -383,10 +383,10 @@ describe('Capability Enforcer', () => {
       const config: CapabilitiesConfigShared = {
         enabled: true,
         orchestrationLevel: 'limited',
-        maxConcurrentSubagents: 2,
+        maxConcurrentSubassistants: 2,
       };
       const enforcer = new CapabilityEnforcer(config);
-      const result = enforcer.canSpawnSubagent({ depth: 0, activeSubagents: 1 });
+      const result = enforcer.canSpawnSubassistant({ depth: 0, activeSubassistants: 1 });
       expect(result.allowed).toBe(true);
       expect(result.warnings.length).toBeGreaterThan(0);
     });
@@ -469,7 +469,7 @@ describe('Capability Enforcer', () => {
   describe('canDelegate', () => {
     test('allows when enforcement disabled', () => {
       const enforcer = new CapabilityEnforcer();
-      const result = enforcer.canDelegate('agent-1', { depth: 0 });
+      const result = enforcer.canDelegate('assistant-1', { depth: 0 });
       expect(result.allowed).toBe(true);
     });
 
@@ -479,7 +479,7 @@ describe('Capability Enforcer', () => {
         orchestrationLevel: 'none',
       };
       const enforcer = new CapabilityEnforcer(config);
-      const result = enforcer.canDelegate('agent-1', { depth: 0 });
+      const result = enforcer.canDelegate('assistant-1', { depth: 0 });
       expect(result.allowed).toBe(false);
     });
 
@@ -489,7 +489,7 @@ describe('Capability Enforcer', () => {
         orchestrationLevel: 'standard',
       };
       const enforcer = new CapabilityEnforcer(config);
-      const result = enforcer.canDelegate('agent-1', { depth: 0 });
+      const result = enforcer.canDelegate('assistant-1', { depth: 0 });
       expect(result.allowed).toBe(true);
     });
   });
@@ -559,7 +559,7 @@ describe('Capability Storage', () => {
       };
       const caps = configToCapabilities(config);
       expect(caps.orchestration?.level).toBe('limited');
-      expect(caps.orchestration?.maxConcurrentSubagents).toBe(2);
+      expect(caps.orchestration?.maxConcurrentSubassistants).toBe(2);
     });
 
     test('converts tool policy', () => {
@@ -584,12 +584,12 @@ describe('Capability Storage', () => {
 
     test('converts max limits', () => {
       const config: CapabilitiesConfigShared = {
-        maxConcurrentSubagents: 10,
-        maxSubagentDepth: 5,
+        maxConcurrentSubassistants: 10,
+        maxSubassistantDepth: 5,
       };
       const caps = configToCapabilities(config);
-      expect(caps.orchestration?.maxConcurrentSubagents).toBe(10);
-      expect(caps.orchestration?.maxSubagentDepth).toBe(5);
+      expect(caps.orchestration?.maxConcurrentSubassistants).toBe(10);
+      expect(caps.orchestration?.maxSubassistantDepth).toBe(5);
     });
   });
 

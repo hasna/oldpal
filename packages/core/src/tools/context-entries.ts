@@ -49,7 +49,7 @@ export const contextEntryListTool: Tool = {
 
 export const contextEntryAddTool: Tool = {
   name: 'context_entry_add',
-  description: 'Add a context entry to the active project. Entries provide context to the agent about the project.',
+  description: 'Add a context entry to the active project. Entries provide context to the assistant about the project.',
   parameters: {
     type: 'object',
     properties: {

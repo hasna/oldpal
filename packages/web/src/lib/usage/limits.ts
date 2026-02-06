@@ -3,21 +3,21 @@ import { subscriptions, subscriptionPlans, usageMetrics, assistants, sessions, s
 import { eq, and, gte, lte, count } from 'drizzle-orm';
 
 export interface UsageLimits {
-  maxAgents: number;
+  maxAssistants: number;
   maxMessagesPerDay: number;
   maxSessions: number;
   maxSchedules: number; // Derived from plan or default
 }
 
 export interface CurrentUsage {
-  agents: number;
+  assistants: number;
   messagesThisPeriod: number;
   sessions: number;
   schedules: number;
 }
 
 export interface UsageStatus {
-  type: 'agents' | 'messages' | 'sessions' | 'schedules';
+  type: 'assistants' | 'messages' | 'sessions' | 'schedules';
   current: number;
   limit: number;
   percentage: number;
@@ -76,7 +76,7 @@ export async function getUserPlanLimits(userId: string): Promise<UsageLimits & {
       ?? DEFAULT_MAX_SCHEDULES.free;
 
     return {
-      maxAgents: subscription.plan.maxAgents,
+      maxAssistants: subscription.plan.maxAssistants,
       maxMessagesPerDay: subscription.plan.maxMessagesPerDay,
       maxSessions: subscription.plan.maxSessions,
       maxSchedules,
@@ -92,7 +92,7 @@ export async function getUserPlanLimits(userId: string): Promise<UsageLimits & {
 
   if (freePlan) {
     return {
-      maxAgents: freePlan.maxAgents,
+      maxAssistants: freePlan.maxAssistants,
       maxMessagesPerDay: freePlan.maxMessagesPerDay,
       maxSessions: freePlan.maxSessions,
       maxSchedules: DEFAULT_MAX_SCHEDULES.free,
@@ -103,7 +103,7 @@ export async function getUserPlanLimits(userId: string): Promise<UsageLimits & {
 
   // Fallback defaults if no plans in DB
   return {
-    maxAgents: 3,
+    maxAssistants: 3,
     maxMessagesPerDay: 50,
     maxSessions: 10,
     maxSchedules: 5,
@@ -119,8 +119,8 @@ export async function getCurrentUsage(userId: string): Promise<CurrentUsage> {
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
 
   // Count current resources
-  const [agentCount, sessionCount, scheduleCount, messagesToday] = await Promise.all([
-    // Count agents
+  const [assistantCount, sessionCount, scheduleCount, messagesToday] = await Promise.all([
+    // Count assistants
     db.select({ count: count() }).from(assistants).where(eq(assistants.userId, userId)),
 
     // Count sessions
@@ -144,7 +144,7 @@ export async function getCurrentUsage(userId: string): Promise<CurrentUsage> {
   ]);
 
   return {
-    agents: agentCount[0]?.count ?? 0,
+    assistants: assistantCount[0]?.count ?? 0,
     messagesThisPeriod: messagesToday[0]?.count ?? 0,
     sessions: sessionCount[0]?.count ?? 0,
     schedules: scheduleCount[0]?.count ?? 0,
@@ -158,7 +158,7 @@ export async function getUsageOverview(userId: string): Promise<UsageOverview> {
   ]);
 
   const statuses: UsageStatus[] = [
-    calculateStatus('agents', current.agents, limits.maxAgents),
+    calculateStatus('assistants', current.assistants, limits.maxAssistants),
     calculateStatus('messages', current.messagesThisPeriod, limits.maxMessagesPerDay),
     calculateStatus('sessions', current.sessions, limits.maxSessions),
     calculateStatus('schedules', current.schedules, limits.maxSchedules),
@@ -178,7 +178,7 @@ export async function getUsageOverview(userId: string): Promise<UsageOverview> {
 
 export async function checkCanPerformAction(
   userId: string,
-  action: 'create_agent' | 'create_session' | 'create_schedule' | 'send_message'
+  action: 'create_assistant' | 'create_session' | 'create_schedule' | 'send_message'
 ): Promise<{ allowed: boolean; reason?: string; currentUsage?: number; limit?: number }> {
   const [limits, current] = await Promise.all([
     getUserPlanLimits(userId),
@@ -186,13 +186,13 @@ export async function checkCanPerformAction(
   ]);
 
   switch (action) {
-    case 'create_agent':
-      if (limits.maxAgents !== -1 && current.agents >= limits.maxAgents) {
+    case 'create_assistant':
+      if (limits.maxAssistants !== -1 && current.assistants >= limits.maxAssistants) {
         return {
           allowed: false,
-          reason: `You have reached your limit of ${limits.maxAgents} agents. Please upgrade your plan to create more agents.`,
-          currentUsage: current.agents,
-          limit: limits.maxAgents,
+          reason: `You have reached your limit of ${limits.maxAssistants} assistants. Please upgrade your plan to create more assistants.`,
+          currentUsage: current.assistants,
+          limit: limits.maxAssistants,
         };
       }
       break;

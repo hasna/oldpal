@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Mock data
 let mockUser: any = null;
 let mockSessionCount = 5;
-let mockAgentCount = 3;
+let mockAssistantCount = 3;
 let mockAdminCount = 2;
 let mockUpdatedUser: any = null;
 
@@ -64,7 +64,7 @@ mock.module('@/db/schema', () => ({
     stripeCustomerId: 'stripeCustomerId',
   },
   sessions: { userId: 'userId' },
-  agents: { userId: 'userId' },
+  assistants: { userId: 'userId' },
 }));
 
 // Mock auth middleware
@@ -240,7 +240,7 @@ describe('GET /api/v1/admin/users/:id', () => {
       updatedAt: new Date('2024-01-15'),
     };
     mockSessionCount = 5;
-    mockAgentCount = 3;
+    mockAssistantCount = 3;
     mockAdminCount = 2;
   });
 

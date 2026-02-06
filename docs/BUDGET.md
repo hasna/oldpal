@@ -1,6 +1,6 @@
 # Budget System Documentation
 
-The budget system provides resource usage tracking and enforcement to prevent runaway costs and ensure controlled agent behavior.
+The budget system provides resource usage tracking and enforcement to prevent runaway costs and ensure controlled assistant behavior.
 
 ## Overview
 
@@ -42,8 +42,8 @@ Budgets are disabled by default. Enable them via:
 | Scope | Description | Default Limits |
 |-------|-------------|----------------|
 | `session` | Applies to the current session | 1M tokens, 500 LLM calls, 1000 tool calls, 4 hours |
-| `agent` | Applies to individual subagents | 500K tokens, 100 LLM calls, 200 tool calls, 30 minutes |
-| `swarm` | Applies to coordinated agent swarms | 2M tokens, 1000 LLM calls, 2000 tool calls, 1 hour |
+| `assistant` | Applies to individual subassistants | 500K tokens, 100 LLM calls, 200 tool calls, 30 minutes |
+| `swarm` | Applies to coordinated assistant swarms | 2M tokens, 1000 LLM calls, 2000 tool calls, 1 hour |
 
 ### Default Limits
 
@@ -57,7 +57,7 @@ Budgets are disabled by default. Enable them via:
 | `maxToolCalls` | 1000 |
 | `maxDurationMs` | 14,400,000 (4 hours) |
 
-**Agent Limits:**
+**Assistant Limits:**
 | Limit | Default Value |
 |-------|---------------|
 | `maxTotalTokens` | 500,000 |
@@ -197,7 +197,7 @@ const summary = tracker.getSummary();
 
 1. **Start with warnings** - Use `onExceeded: 'warn'` initially to understand typical usage patterns
 2. **Set appropriate limits** - Adjust limits based on task complexity
-3. **Use agent limits** - Prevent individual subagents from consuming all resources
+3. **Use assistant limits** - Prevent individual subassistants from consuming all resources
 4. **Monitor usage** - Check `/budget` periodically during long sessions
 5. **Reset when appropriate** - Reset usage counters when starting new tasks
 

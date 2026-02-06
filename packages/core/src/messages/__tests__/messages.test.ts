@@ -1,5 +1,5 @@
 /**
- * Integration tests for agent-to-agent messaging system
+ * Integration tests for assistant-to-assistant messaging system
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
@@ -52,8 +52,8 @@ afterAll(async () => {
 
 describe('MessagesManager', () => {
   test('creates manager and initializes successfully', async () => {
-    const agentId = `test-${generateId().slice(0, 8)}`;
-    const manager = createMessagesManager(agentId, 'TestAgent', testConfig);
+    const assistantId = `test-${generateId().slice(0, 8)}`;
+    const manager = createMessagesManager(assistantId, 'TestAssistant', testConfig);
 
     await manager.initialize();
 
@@ -63,33 +63,33 @@ describe('MessagesManager', () => {
     expect(stats.threadCount).toBe(0);
   });
 
-  test('registers agent in registry on initialize', async () => {
+  test('registers assistant in registry on initialize', async () => {
     const storage = new LocalMessagesStorage({ basePath: testBasePath });
-    const agentId = `test-${generateId().slice(0, 8)}`;
-    const agentName = 'RegisterTestAgent';
+    const assistantId = `test-${generateId().slice(0, 8)}`;
+    const assistantName = 'RegisterTestAssistant';
 
-    const manager = createMessagesManager(agentId, agentName, testConfig);
+    const manager = createMessagesManager(assistantId, assistantName, testConfig);
     await manager.initialize();
 
     const registry = await storage.loadRegistry();
-    expect(registry.agents[agentId]).toBeDefined();
-    expect(registry.agents[agentId].name).toBe(agentName);
+    expect(registry.assistants[assistantId]).toBeDefined();
+    expect(registry.assistants[assistantId].name).toBe(assistantName);
   });
 
-  test('sends message between agents successfully', async () => {
-    // Create two agents
-    const agent1Id = `sender-${generateId().slice(0, 8)}`;
-    const agent2Id = `receiver-${generateId().slice(0, 8)}`;
+  test('sends message between assistants successfully', async () => {
+    // Create two assistants
+    const assistant1Id = `sender-${generateId().slice(0, 8)}`;
+    const assistant2Id = `receiver-${generateId().slice(0, 8)}`;
 
-    const sender = createMessagesManager(agent1Id, 'SenderAgent', testConfig);
-    const receiver = createMessagesManager(agent2Id, 'ReceiverAgent', testConfig);
+    const sender = createMessagesManager(assistant1Id, 'SenderAssistant', testConfig);
+    const receiver = createMessagesManager(assistant2Id, 'ReceiverAssistant', testConfig);
 
     await sender.initialize();
     await receiver.initialize();
 
     // Send message from sender to receiver
     const result = await sender.send({
-      to: 'ReceiverAgent',
+      to: 'ReceiverAssistant',
       body: 'Hello from sender!',
       subject: 'Test Subject',
       priority: 'normal',
@@ -102,17 +102,17 @@ describe('MessagesManager', () => {
     // Verify message is in receiver's inbox
     const messages = await receiver.list({ limit: 10 });
     expect(messages.length).toBe(1);
-    expect(messages[0].fromAgentName).toBe('SenderAgent');
+    expect(messages[0].fromAssistantName).toBe('SenderAssistant');
     expect(messages[0].subject).toBe('Test Subject');
     expect(messages[0].status).toBe('unread');
   });
 
   test('reads message and marks as read', async () => {
-    const agent1Id = `sender2-${generateId().slice(0, 8)}`;
-    const agent2Id = `receiver2-${generateId().slice(0, 8)}`;
+    const assistant1Id = `sender2-${generateId().slice(0, 8)}`;
+    const assistant2Id = `receiver2-${generateId().slice(0, 8)}`;
 
-    const sender = createMessagesManager(agent1Id, 'Sender2', testConfig);
-    const receiver = createMessagesManager(agent2Id, 'Receiver2', testConfig);
+    const sender = createMessagesManager(assistant1Id, 'Sender2', testConfig);
+    const receiver = createMessagesManager(assistant2Id, 'Receiver2', testConfig);
 
     await sender.initialize();
     await receiver.initialize();
@@ -137,52 +137,52 @@ describe('MessagesManager', () => {
   });
 
   test('replies create proper thread', async () => {
-    const agent1Id = `thread1-${generateId().slice(0, 8)}`;
-    const agent2Id = `thread2-${generateId().slice(0, 8)}`;
+    const assistant1Id = `thread1-${generateId().slice(0, 8)}`;
+    const assistant2Id = `thread2-${generateId().slice(0, 8)}`;
 
-    const agent1 = createMessagesManager(agent1Id, 'ThreadAgent1', testConfig);
-    const agent2 = createMessagesManager(agent2Id, 'ThreadAgent2', testConfig);
+    const assistant1 = createMessagesManager(assistant1Id, 'ThreadAssistant1', testConfig);
+    const assistant2 = createMessagesManager(assistant2Id, 'ThreadAssistant2', testConfig);
 
-    await agent1.initialize();
-    await agent2.initialize();
+    await assistant1.initialize();
+    await assistant2.initialize();
 
-    // Agent1 sends initial message
-    const msg1 = await agent1.send({
-      to: 'ThreadAgent2',
+    // Assistant1 sends initial message
+    const msg1 = await assistant1.send({
+      to: 'ThreadAssistant2',
       body: 'Initial message',
       subject: 'Thread Test',
     });
 
-    // Agent2 replies
-    const reply1 = await agent2.send({
-      to: 'ThreadAgent1',
-      body: 'Reply from agent2',
+    // Assistant2 replies
+    const reply1 = await assistant2.send({
+      to: 'ThreadAssistant1',
+      body: 'Reply from assistant2',
       replyTo: msg1.messageId,
     });
 
     // Verify same thread
     expect(reply1.threadId).toBe(msg1.threadId);
 
-    // Agent1 replies back
-    const reply2 = await agent1.send({
-      to: 'ThreadAgent2',
-      body: 'Reply from agent1',
+    // Assistant1 replies back
+    const reply2 = await assistant1.send({
+      to: 'ThreadAssistant2',
+      body: 'Reply from assistant1',
       replyTo: reply1.messageId,
     });
 
     expect(reply2.threadId).toBe(msg1.threadId);
 
-    // Read thread from agent2's perspective
-    const threadMessages = await agent2.readThread(msg1.threadId!);
+    // Read thread from assistant2's perspective
+    const threadMessages = await assistant2.readThread(msg1.threadId!);
     expect(threadMessages.length).toBeGreaterThanOrEqual(2);
   });
 
   test('deletes message successfully', async () => {
-    const agent1Id = `del1-${generateId().slice(0, 8)}`;
-    const agent2Id = `del2-${generateId().slice(0, 8)}`;
+    const assistant1Id = `del1-${generateId().slice(0, 8)}`;
+    const assistant2Id = `del2-${generateId().slice(0, 8)}`;
 
-    const sender = createMessagesManager(agent1Id, 'DelSender', testConfig);
-    const receiver = createMessagesManager(agent2Id, 'DelReceiver', testConfig);
+    const sender = createMessagesManager(assistant1Id, 'DelSender', testConfig);
+    const receiver = createMessagesManager(assistant2Id, 'DelReceiver', testConfig);
 
     await sender.initialize();
     await receiver.initialize();
@@ -207,41 +207,41 @@ describe('MessagesManager', () => {
     expect(messages.length).toBe(initialCount - 1);
   });
 
-  test('lists known agents correctly', async () => {
-    const agent1Id = `list1-${generateId().slice(0, 8)}`;
-    const agent2Id = `list2-${generateId().slice(0, 8)}`;
+  test('lists known assistants correctly', async () => {
+    const assistant1Id = `list1-${generateId().slice(0, 8)}`;
+    const assistant2Id = `list2-${generateId().slice(0, 8)}`;
 
-    const agent1 = createMessagesManager(agent1Id, 'ListAgent1', testConfig);
-    const agent2 = createMessagesManager(agent2Id, 'ListAgent2', testConfig);
+    const assistant1 = createMessagesManager(assistant1Id, 'ListAssistant1', testConfig);
+    const assistant2 = createMessagesManager(assistant2Id, 'ListAssistant2', testConfig);
 
-    await agent1.initialize();
-    await agent2.initialize();
+    await assistant1.initialize();
+    await assistant2.initialize();
 
     // Exchange messages to ensure both are in registry
-    await agent1.send({ to: 'ListAgent2', body: 'Hello' });
+    await assistant1.send({ to: 'ListAssistant2', body: 'Hello' });
 
-    // List agents from agent1's perspective (should see agent2)
-    const agents = await agent1.listAgents();
-    const agent2Entry = agents.find(a => a.name === 'ListAgent2');
-    expect(agent2Entry).toBeDefined();
-    expect(agent2Entry?.id).toBe(agent2Id);
+    // List assistants from assistant1's perspective (should see assistant2)
+    const assistants = await assistant1.listAssistants();
+    const assistant2Entry = assistants.find(a => a.name === 'ListAssistant2');
+    expect(assistant2Entry).toBeDefined();
+    expect(assistant2Entry?.id).toBe(assistant2Id);
   });
 
   test('lists threads correctly', async () => {
-    const agent1Id = `thr1-${generateId().slice(0, 8)}`;
-    const agent2Id = `thr2-${generateId().slice(0, 8)}`;
+    const assistant1Id = `thr1-${generateId().slice(0, 8)}`;
+    const assistant2Id = `thr2-${generateId().slice(0, 8)}`;
 
-    const agent1 = createMessagesManager(agent1Id, 'ThrAgent1', testConfig);
-    const agent2 = createMessagesManager(agent2Id, 'ThrAgent2', testConfig);
+    const assistant1 = createMessagesManager(assistant1Id, 'ThrAssistant1', testConfig);
+    const assistant2 = createMessagesManager(assistant2Id, 'ThrAssistant2', testConfig);
 
-    await agent1.initialize();
-    await agent2.initialize();
+    await assistant1.initialize();
+    await assistant2.initialize();
 
     // Create a conversation
-    await agent1.send({ to: 'ThrAgent2', body: 'Thread starter', subject: 'Test Thread' });
+    await assistant1.send({ to: 'ThrAssistant2', body: 'Thread starter', subject: 'Test Thread' });
 
     // List threads
-    const threads = await agent2.listThreads();
+    const threads = await assistant2.listThreads();
     expect(threads.length).toBeGreaterThan(0);
     expect(threads[0].subject).toBe('Test Thread');
   });
@@ -249,11 +249,11 @@ describe('MessagesManager', () => {
 
 describe('Message Injection', () => {
   test('gets unread messages for injection', async () => {
-    const agent1Id = `inj1-${generateId().slice(0, 8)}`;
-    const agent2Id = `inj2-${generateId().slice(0, 8)}`;
+    const assistant1Id = `inj1-${generateId().slice(0, 8)}`;
+    const assistant2Id = `inj2-${generateId().slice(0, 8)}`;
 
-    const sender = createMessagesManager(agent1Id, 'InjSender', testConfig);
-    const receiver = createMessagesManager(agent2Id, 'InjReceiver', testConfig);
+    const sender = createMessagesManager(assistant1Id, 'InjSender', testConfig);
+    const receiver = createMessagesManager(assistant2Id, 'InjReceiver', testConfig);
 
     await sender.initialize();
     await receiver.initialize();
@@ -272,11 +272,11 @@ describe('Message Injection', () => {
   });
 
   test('builds injection context correctly', async () => {
-    const agent1Id = `ctx1-${generateId().slice(0, 8)}`;
-    const agent2Id = `ctx2-${generateId().slice(0, 8)}`;
+    const assistant1Id = `ctx1-${generateId().slice(0, 8)}`;
+    const assistant2Id = `ctx2-${generateId().slice(0, 8)}`;
 
-    const sender = createMessagesManager(agent1Id, 'CtxSender', testConfig);
-    const receiver = createMessagesManager(agent2Id, 'CtxReceiver', testConfig);
+    const sender = createMessagesManager(assistant1Id, 'CtxSender', testConfig);
+    const receiver = createMessagesManager(assistant2Id, 'CtxReceiver', testConfig);
 
     await sender.initialize();
     await receiver.initialize();
@@ -297,11 +297,11 @@ describe('Message Injection', () => {
   });
 
   test('marks messages as injected', async () => {
-    const agent1Id = `mark1-${generateId().slice(0, 8)}`;
-    const agent2Id = `mark2-${generateId().slice(0, 8)}`;
+    const assistant1Id = `mark1-${generateId().slice(0, 8)}`;
+    const assistant2Id = `mark2-${generateId().slice(0, 8)}`;
 
-    const sender = createMessagesManager(agent1Id, 'MarkSender', testConfig);
-    const receiver = createMessagesManager(agent2Id, 'MarkReceiver', testConfig);
+    const sender = createMessagesManager(assistant1Id, 'MarkSender', testConfig);
+    const receiver = createMessagesManager(assistant2Id, 'MarkReceiver', testConfig);
 
     await sender.initialize();
     await receiver.initialize();
@@ -320,10 +320,10 @@ describe('Message Injection', () => {
   });
 
   test('respects minPriority filter', async () => {
-    const agent1Id = `pri1-${generateId().slice(0, 8)}`;
-    const agent2Id = `pri2-${generateId().slice(0, 8)}`;
+    const assistant1Id = `pri1-${generateId().slice(0, 8)}`;
+    const assistant2Id = `pri2-${generateId().slice(0, 8)}`;
 
-    const sender = createMessagesManager(agent1Id, 'PriSender', testConfig);
+    const sender = createMessagesManager(assistant1Id, 'PriSender', testConfig);
 
     // Receiver with minPriority: 'high'
     const receiverConfig = {
@@ -333,7 +333,7 @@ describe('Message Injection', () => {
         minPriority: 'high' as const,
       },
     };
-    const receiver = createMessagesManager(agent2Id, 'PriReceiver', receiverConfig);
+    const receiver = createMessagesManager(assistant2Id, 'PriReceiver', receiverConfig);
 
     await sender.initialize();
     await receiver.initialize();
@@ -354,13 +354,13 @@ describe('Message Injection', () => {
 });
 
 describe('Error Handling', () => {
-  test('fails gracefully when sending to non-existent agent', async () => {
-    const agentId = `err1-${generateId().slice(0, 8)}`;
-    const manager = createMessagesManager(agentId, 'ErrAgent', testConfig);
+  test('fails gracefully when sending to non-existent assistant', async () => {
+    const assistantId = `err1-${generateId().slice(0, 8)}`;
+    const manager = createMessagesManager(assistantId, 'ErrAssistant', testConfig);
     await manager.initialize();
 
     const result = await manager.send({
-      to: 'NonExistentAgent12345',
+      to: 'NonExistentAssistant12345',
       body: 'Test message',
     });
 
@@ -369,8 +369,8 @@ describe('Error Handling', () => {
   });
 
   test('returns null when reading non-existent message', async () => {
-    const agentId = `err2-${generateId().slice(0, 8)}`;
-    const manager = createMessagesManager(agentId, 'ErrAgent2', testConfig);
+    const assistantId = `err2-${generateId().slice(0, 8)}`;
+    const manager = createMessagesManager(assistantId, 'ErrAssistant2', testConfig);
     await manager.initialize();
 
     const message = await manager.read('msg_nonexistent');
@@ -378,8 +378,8 @@ describe('Error Handling', () => {
   });
 
   test('returns failure when deleting non-existent message', async () => {
-    const agentId = `err3-${generateId().slice(0, 8)}`;
-    const manager = createMessagesManager(agentId, 'ErrAgent3', testConfig);
+    const assistantId = `err3-${generateId().slice(0, 8)}`;
+    const manager = createMessagesManager(assistantId, 'ErrAssistant3', testConfig);
     await manager.initialize();
 
     const result = await manager.delete('msg_nonexistent');
@@ -390,29 +390,29 @@ describe('Error Handling', () => {
 describe('LocalMessagesStorage', () => {
   test('creates storage directories', async () => {
     const storage = new LocalMessagesStorage({ basePath: testBasePath });
-    const agentId = `store-${generateId().slice(0, 8)}`;
+    const assistantId = `store-${generateId().slice(0, 8)}`;
 
-    await storage.ensureDirectories(agentId);
+    await storage.ensureDirectories(assistantId);
 
-    // Check agent can load empty index
-    const index = await storage.loadIndex(agentId);
+    // Check assistant can load empty index
+    const index = await storage.loadIndex(assistantId);
     expect(index.messages).toEqual([]);
     expect(index.stats.totalMessages).toBe(0);
   });
 
-  test('finds agent by name case-insensitively', async () => {
+  test('finds assistant by name case-insensitively', async () => {
     const storage = new LocalMessagesStorage({ basePath: testBasePath });
-    const agentId = `case-${generateId().slice(0, 8)}`;
+    const assistantId = `case-${generateId().slice(0, 8)}`;
 
-    await storage.registerAgent(agentId, 'CaseSensitiveAgent');
+    await storage.registerAssistant(assistantId, 'CaseSensitiveAssistant');
 
     // Find with different case
-    const found = await storage.findAgentByName('casesensitiveagent');
+    const found = await storage.findAssistantByName('casesensitiveassistant');
     expect(found).not.toBeNull();
-    expect(found?.id).toBe(agentId);
+    expect(found?.id).toBe(assistantId);
 
-    const found2 = await storage.findAgentByName('CASESENSITIVEAGENT');
+    const found2 = await storage.findAssistantByName('CASESENSITIVEASSISTANT');
     expect(found2).not.toBeNull();
-    expect(found2?.id).toBe(agentId);
+    expect(found2?.id).toBe(assistantId);
   });
 });

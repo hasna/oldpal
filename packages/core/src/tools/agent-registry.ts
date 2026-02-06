@@ -1,95 +1,95 @@
 /**
- * Agent Registry Tools
+ * Assistant Registry Tools
  *
- * Tools for querying and interacting with the agent registry.
+ * Tools for querying and interacting with the assistant registry.
  */
 
 import type { Tool } from '@hasna/assistants-shared';
 import type { ToolRegistry } from './registry';
-import type { AgentRegistryService, RegisteredAgent, AgentQuery, RegistryAgentState, AgentType } from '../registry';
+import type { AssistantRegistryService, RegisteredAssistant, AssistantQuery, RegistryAssistantState, AssistantType } from '../registry';
 
 /**
  * Context required for registry tools
  */
 export interface RegistryToolContext {
   /** Registry service instance */
-  getRegistryService?: () => AgentRegistryService | null;
+  getRegistryService?: () => AssistantRegistryService | null;
   /** Current session ID (for filtering) */
   sessionId?: string;
-  /** Current agent ID */
-  agentId?: string;
+  /** Current assistant ID */
+  assistantId?: string;
 }
 
 /**
- * Format agent for display
+ * Format assistant for display
  */
-function formatAgent(agent: RegisteredAgent): string {
+function formatAssistant(assistant: RegisteredAssistant): string {
   const lines: string[] = [];
 
-  lines.push(`ID: ${agent.id}`);
-  lines.push(`Name: ${agent.name}`);
-  lines.push(`Type: ${agent.type}`);
-  lines.push(`State: ${agent.status.state}`);
+  lines.push(`ID: ${assistant.id}`);
+  lines.push(`Name: ${assistant.name}`);
+  lines.push(`Type: ${assistant.type}`);
+  lines.push(`State: ${assistant.status.state}`);
 
-  if (agent.description) {
-    lines.push(`Description: ${agent.description}`);
+  if (assistant.description) {
+    lines.push(`Description: ${assistant.description}`);
   }
 
-  if (agent.sessionId) {
-    lines.push(`Session: ${agent.sessionId}`);
+  if (assistant.sessionId) {
+    lines.push(`Session: ${assistant.sessionId}`);
   }
 
-  if (agent.parentId) {
-    lines.push(`Parent: ${agent.parentId}`);
+  if (assistant.parentId) {
+    lines.push(`Parent: ${assistant.parentId}`);
   }
 
-  if (agent.childIds.length > 0) {
-    lines.push(`Children: ${agent.childIds.join(', ')}`);
+  if (assistant.childIds.length > 0) {
+    lines.push(`Children: ${assistant.childIds.join(', ')}`);
   }
 
   // Capabilities
   const caps: string[] = [];
-  if (agent.capabilities.tools.length > 0) {
-    caps.push(`tools: ${agent.capabilities.tools.slice(0, 5).join(', ')}${agent.capabilities.tools.length > 5 ? '...' : ''}`);
+  if (assistant.capabilities.tools.length > 0) {
+    caps.push(`tools: ${assistant.capabilities.tools.slice(0, 5).join(', ')}${assistant.capabilities.tools.length > 5 ? '...' : ''}`);
   }
-  if (agent.capabilities.skills.length > 0) {
-    caps.push(`skills: ${agent.capabilities.skills.slice(0, 3).join(', ')}${agent.capabilities.skills.length > 3 ? '...' : ''}`);
+  if (assistant.capabilities.skills.length > 0) {
+    caps.push(`skills: ${assistant.capabilities.skills.slice(0, 3).join(', ')}${assistant.capabilities.skills.length > 3 ? '...' : ''}`);
   }
-  if (agent.capabilities.tags.length > 0) {
-    caps.push(`tags: ${agent.capabilities.tags.join(', ')}`);
+  if (assistant.capabilities.tags.length > 0) {
+    caps.push(`tags: ${assistant.capabilities.tags.join(', ')}`);
   }
   if (caps.length > 0) {
     lines.push(`Capabilities: ${caps.join('; ')}`);
   }
 
   // Load
-  lines.push(`Load: ${agent.load.activeTasks} active, ${agent.load.queuedTasks} queued`);
+  lines.push(`Load: ${assistant.load.activeTasks} active, ${assistant.load.queuedTasks} queued`);
 
   // Heartbeat
-  const staleStatus = agent.heartbeat.isStale ? ' (STALE)' : '';
-  lines.push(`Last Heartbeat: ${agent.heartbeat.lastHeartbeat}${staleStatus}`);
+  const staleStatus = assistant.heartbeat.isStale ? ' (STALE)' : '';
+  lines.push(`Last Heartbeat: ${assistant.heartbeat.lastHeartbeat}${staleStatus}`);
 
   return lines.join('\n');
 }
 
 /**
- * Registry list tool - list all registered agents
+ * Registry list tool - list all registered assistants
  */
 export const registryListTool: Tool = {
   name: 'registry_list',
-  description: 'List all registered agents in the system. Returns agent IDs, names, types, and status.',
+  description: 'List all registered assistants in the system. Returns assistant IDs, names, types, and status.',
   parameters: {
     type: 'object',
     properties: {
       type: {
         type: 'string',
-        enum: ['assistant', 'subagent', 'coordinator', 'worker'],
-        description: 'Filter by agent type',
+        enum: ['assistant', 'subassistant', 'coordinator', 'worker'],
+        description: 'Filter by assistant type',
       },
       state: {
         type: 'string',
         enum: ['idle', 'processing', 'waiting_input', 'error', 'offline', 'stopped'],
-        description: 'Filter by agent state',
+        description: 'Filter by assistant state',
       },
       sessionId: {
         type: 'string',
@@ -97,11 +97,11 @@ export const registryListTool: Tool = {
       },
       includeOffline: {
         type: 'boolean',
-        description: 'Include offline/stale agents (default: false)',
+        description: 'Include offline/stale assistants (default: false)',
       },
       limit: {
         type: 'number',
-        description: 'Maximum number of agents to return (default: 20)',
+        description: 'Maximum number of assistants to return (default: 20)',
       },
     },
   },
@@ -112,8 +112,8 @@ export const registryListTool: Tool = {
  */
 export function createRegistryListExecutor(context: RegistryToolContext) {
   return async (input: {
-    type?: AgentType;
-    state?: RegistryAgentState;
+    type?: AssistantType;
+    state?: RegistryAssistantState;
     sessionId?: string;
     includeOffline?: boolean;
     limit?: number;
@@ -124,7 +124,7 @@ export function createRegistryListExecutor(context: RegistryToolContext) {
     }
 
     try {
-      const query: AgentQuery = {
+      const query: AssistantQuery = {
         type: input.type,
         state: input.state,
         sessionId: input.sessionId,
@@ -136,48 +136,48 @@ export function createRegistryListExecutor(context: RegistryToolContext) {
 
       const result = service.query(query);
 
-      if (result.agents.length === 0) {
-        return 'No agents found matching the criteria.';
+      if (result.assistants.length === 0) {
+        return 'No assistants found matching the criteria.';
       }
 
       const lines: string[] = [];
-      lines.push(`Found ${result.total} agent(s)${result.total > result.agents.length ? ` (showing ${result.agents.length})` : ''}:\n`);
+      lines.push(`Found ${result.total} assistant(s)${result.total > result.assistants.length ? ` (showing ${result.assistants.length})` : ''}:\n`);
 
-      for (const agent of result.agents) {
+      for (const assistant of result.assistants) {
         lines.push(`---`);
-        lines.push(formatAgent(agent));
+        lines.push(formatAssistant(assistant));
       }
 
       return lines.join('\n');
     } catch (error) {
-      return `Failed to list agents: ${error instanceof Error ? error.message : String(error)}`;
+      return `Failed to list assistants: ${error instanceof Error ? error.message : String(error)}`;
     }
   };
 }
 
 /**
- * Registry query tool - query agents by capability
+ * Registry query tool - query assistants by capability
  */
 export const registryQueryTool: Tool = {
   name: 'registry_query',
-  description: 'Query agents by capabilities, finding agents that have specific tools, skills, or tags.',
+  description: 'Query assistants by capabilities, finding assistants that have specific tools, skills, or tags.',
   parameters: {
     type: 'object',
     properties: {
       requiredTools: {
         type: 'array',
         items: { type: 'string', description: 'Tool name' },
-        description: 'Required tools the agent must have',
+        description: 'Required tools the assistant must have',
       },
       requiredSkills: {
         type: 'array',
         items: { type: 'string', description: 'Skill name' },
-        description: 'Required skills the agent must have',
+        description: 'Required skills the assistant must have',
       },
       requiredTags: {
         type: 'array',
         items: { type: 'string', description: 'Tag name' },
-        description: 'Required tags the agent must have',
+        description: 'Required tags the assistant must have',
       },
       preferredTools: {
         type: 'array',
@@ -195,7 +195,7 @@ export const registryQueryTool: Tool = {
       },
       limit: {
         type: 'number',
-        description: 'Maximum number of agents to return (default: 10)',
+        description: 'Maximum number of assistants to return (default: 10)',
       },
     },
   },
@@ -220,7 +220,7 @@ export function createRegistryQueryExecutor(context: RegistryToolContext) {
     }
 
     try {
-      const query: AgentQuery = {
+      const query: AssistantQuery = {
         requiredCapabilities: {
           tools: input.requiredTools,
           skills: input.requiredSkills,
@@ -237,42 +237,42 @@ export function createRegistryQueryExecutor(context: RegistryToolContext) {
 
       const result = service.query(query);
 
-      if (result.agents.length === 0) {
-        return 'No agents found matching the capability requirements.';
+      if (result.assistants.length === 0) {
+        return 'No assistants found matching the capability requirements.';
       }
 
       const lines: string[] = [];
-      lines.push(`Found ${result.total} matching agent(s)${result.total > result.agents.length ? ` (showing ${result.agents.length})` : ''}:\n`);
+      lines.push(`Found ${result.total} matching assistant(s)${result.total > result.assistants.length ? ` (showing ${result.assistants.length})` : ''}:\n`);
 
-      for (const agent of result.agents) {
-        const score = result.scores.get(agent.id) ?? 0;
+      for (const assistant of result.assistants) {
+        const score = result.scores.get(assistant.id) ?? 0;
         lines.push(`---`);
         lines.push(`Match Score: ${(score * 100).toFixed(0)}%`);
-        lines.push(formatAgent(agent));
+        lines.push(formatAssistant(assistant));
       }
 
       return lines.join('\n');
     } catch (error) {
-      return `Failed to query agents: ${error instanceof Error ? error.message : String(error)}`;
+      return `Failed to query assistants: ${error instanceof Error ? error.message : String(error)}`;
     }
   };
 }
 
 /**
- * Registry get tool - get details of a specific agent
+ * Registry get tool - get details of a specific assistant
  */
 export const registryGetTool: Tool = {
   name: 'registry_get',
-  description: 'Get detailed information about a specific registered agent by ID.',
+  description: 'Get detailed information about a specific registered assistant by ID.',
   parameters: {
     type: 'object',
     properties: {
-      agentId: {
+      assistantId: {
         type: 'string',
-        description: 'The agent ID to look up',
+        description: 'The assistant ID to look up',
       },
     },
-    required: ['agentId'],
+    required: ['assistantId'],
   },
 };
 
@@ -286,21 +286,21 @@ export function createRegistryGetExecutor(context: RegistryToolContext) {
       return 'Registry service not available';
     }
 
-    const agentId = input.agentId as string;
-    if (!agentId) {
-      return 'Agent ID is required';
+    const assistantId = input.assistantId as string;
+    if (!assistantId) {
+      return 'Assistant ID is required';
     }
 
     try {
-      const agent = service.get(agentId);
+      const assistant = service.get(assistantId);
 
-      if (!agent) {
-        return `Agent not found: ${agentId}`;
+      if (!assistant) {
+        return `Assistant not found: ${assistantId}`;
       }
 
-      return formatAgent(agent);
+      return formatAssistant(assistant);
     } catch (error) {
-      return `Failed to get agent: ${error instanceof Error ? error.message : String(error)}`;
+      return `Failed to get assistant: ${error instanceof Error ? error.message : String(error)}`;
     }
   };
 }
@@ -310,7 +310,7 @@ export function createRegistryGetExecutor(context: RegistryToolContext) {
  */
 export const registryStatsTool: Tool = {
   name: 'registry_stats',
-  description: 'Get statistics about the agent registry, including counts by type and state.',
+  description: 'Get statistics about the assistant registry, including counts by type and state.',
   parameters: {
     type: 'object',
     properties: {},
@@ -332,7 +332,7 @@ export function createRegistryStatsExecutor(context: RegistryToolContext) {
 
       const lines: string[] = [];
       lines.push('Registry Statistics:');
-      lines.push(`  Total Agents: ${stats.totalAgents}`);
+      lines.push(`  Total Assistants: ${stats.totalAssistants}`);
       lines.push(`  Stale Count: ${stats.staleCount}`);
       lines.push(`  Average Load: ${(stats.averageLoad * 100).toFixed(1)}%`);
       lines.push(`  Uptime: ${Math.floor(stats.uptime)}s`);
@@ -361,7 +361,7 @@ export function createRegistryStatsExecutor(context: RegistryToolContext) {
 /**
  * All registry tools
  */
-export const agentRegistryTools: Tool[] = [
+export const assistantRegistryTools: Tool[] = [
   registryListTool,
   registryQueryTool,
   registryGetTool,
@@ -371,7 +371,7 @@ export const agentRegistryTools: Tool[] = [
 /**
  * Create all registry tool executors
  */
-export function createAgentRegistryToolExecutors(context: RegistryToolContext) {
+export function createAssistantRegistryToolExecutors(context: RegistryToolContext) {
   return {
     registry_list: createRegistryListExecutor(context),
     registry_query: createRegistryQueryExecutor(context),
@@ -383,11 +383,11 @@ export function createAgentRegistryToolExecutors(context: RegistryToolContext) {
 /**
  * Register all registry tools with a tool registry
  */
-export function registerAgentRegistryTools(
+export function registerAssistantRegistryTools(
   registry: ToolRegistry,
   context: RegistryToolContext
 ): void {
-  const executors = createAgentRegistryToolExecutors(context);
+  const executors = createAssistantRegistryToolExecutors(context);
 
   registry.register(registryListTool, executors.registry_list);
   registry.register(registryQueryTool, executors.registry_query);

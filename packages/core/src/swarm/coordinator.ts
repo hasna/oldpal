@@ -1,18 +1,18 @@
 /**
  * Swarm Coordinator
  *
- * Orchestrates multi-agent swarm execution using SubagentManager.
+ * Orchestrates multi-assistant swarm execution using SubassistantManager.
  * Implements the planner -> workers -> critic -> aggregator pattern.
  */
 
 import { generateId } from '@hasna/assistants-shared';
 import type { StreamChunk } from '@hasna/assistants-shared';
 import type {
-  SubagentManager,
-  SubagentConfig,
-  SubagentResult,
+  SubassistantManager,
+  SubassistantConfig,
+  SubassistantResult,
 } from '../agent/subagent-manager';
-import type { AgentRegistryService, RegisteredAgent } from '../registry';
+import type { AssistantRegistryService, RegisteredAssistant } from '../registry';
 import type {
   SwarmConfig,
   SwarmState,
@@ -39,10 +39,10 @@ export type ApprovalDecision = 'approve' | 'abort' | 'edit';
  * Context required by the SwarmCoordinator
  */
 export interface SwarmCoordinatorContext {
-  /** SubagentManager for spawning agents */
-  subagentManager: SubagentManager;
-  /** Agent registry for agent selection */
-  registry?: AgentRegistryService;
+  /** SubassistantManager for spawning assistants */
+  subassistantManager: SubassistantManager;
+  /** Assistant registry for assistant selection */
+  registry?: AssistantRegistryService;
   /** Parent session ID */
   sessionId: string;
   /** Working directory */
@@ -242,7 +242,7 @@ export class SwarmCoordinator {
       plan: null,
       sessionId: this.context.sessionId,
       taskResults: new Map(),
-      activeAgents: new Set(),
+      activeAssistants: new Set(),
       errors: [],
       startedAt: Date.now(),
       metrics: this.createEmptyMetrics(),
@@ -274,7 +274,7 @@ export class SwarmCoordinator {
         // Use pre-defined tasks
         plan = this.createPlanFromTasks(input.goal, input.tasks);
       } else {
-        // Run planner agent
+        // Run planner assistant
         this.updateStatus('planning');
         plan = await this.runPlanner(input.goal, input.context);
       }
@@ -430,10 +430,10 @@ export class SwarmCoordinator {
     this.stopped = true;
     this.clearTimeoutTimer();
 
-    // Stop all active subagents
-    const stoppedCount = this.context.subagentManager.stopAll();
+    // Stop all active subassistants
+    const stoppedCount = this.context.subassistantManager.stopAll();
     if (stoppedCount > 0) {
-      this.streamText(`\nStopping ${stoppedCount} active subagent(s)...\n`);
+      this.streamText(`\nStopping ${stoppedCount} active subassistant(s)...\n`);
     }
 
     if (this.state && this.isRunning()) {
@@ -451,7 +451,7 @@ export class SwarmCoordinator {
   private async runPlanner(goal: string, context?: string): Promise<SwarmPlan> {
     const prompt = this.buildPlannerPrompt(goal, context);
 
-    const result = await this.spawnAgent({
+    const result = await this.spawnAssistant({
       role: 'planner',
       task: prompt,
       tools: this.config.plannerTools,
@@ -683,22 +683,22 @@ Maximum ${this.config.maxTasks} tasks.`;
     // Select tools
     const tools = task.requiredTools || this.config.workerTools;
 
-    // Track the real subagentId once we have it from spawn result
-    let realSubagentId: string | undefined;
+    // Track the real subassistant ID once we have it from spawn result
+    let realSubassistantId: string | undefined;
 
     try {
-      const result = await this.spawnAgent({
+      const result = await this.spawnAssistant({
         role: task.role,
         task: taskPrompt,
         tools,
       });
 
-      // Use the real subagentId from the spawn result for tracking
-      realSubagentId = result.subagentId;
-      if (realSubagentId) {
-        task.assignedAgentId = realSubagentId;
+      // Use the real subassistant ID from the spawn result for tracking
+      realSubassistantId = result.subassistantId;
+      if (realSubassistantId) {
+        task.assignedAssistantId = realSubassistantId;
         if (this.state) {
-          this.state.activeAgents.add(realSubagentId);
+          this.state.activeAssistants.add(realSubassistantId);
         }
       }
 
@@ -724,12 +724,12 @@ Maximum ${this.config.maxTasks} tasks.`;
         throw new Error(result.error || 'Task failed');
       }
     } finally {
-      // Remove from active agents when done (but keep assignedAgentId for history)
-      if (realSubagentId && this.state) {
-        this.state.activeAgents.delete(realSubagentId);
+      // Remove from active assistants when done (but keep assignedAssistantId for history)
+      if (realSubassistantId && this.state) {
+        this.state.activeAssistants.delete(realSubassistantId);
       }
-      // Note: We intentionally keep task.assignedAgentId so status displays can show
-      // which agent executed the task even after completion
+      // Note: We intentionally keep task.assignedAssistantId so status displays can show
+      // which assistant executed the task even after completion
     }
   }
 
@@ -768,7 +768,7 @@ Maximum ${this.config.maxTasks} tasks.`;
 
       const reviewPrompt = this.buildCriticPrompt(completedTasks, unresolvedIssues);
 
-      const result = await this.spawnAgent({
+      const result = await this.spawnAssistant({
         role: 'critic',
         task: reviewPrompt,
         tools: this.config.criticTools,
@@ -862,7 +862,7 @@ Maximum ${this.config.maxTasks} tasks.`;
 
     const aggregatePrompt = this.buildAggregatorPrompt(goal, completedTasks, failedTasks, blockedTasks);
 
-    const result = await this.spawnAgent({
+    const result = await this.spawnAssistant({
       role: 'aggregator',
       task: aggregatePrompt,
       tools: [], // Aggregator typically doesn't need tools
@@ -918,16 +918,16 @@ Maximum ${this.config.maxTasks} tasks.`;
   }
 
   // ============================================
-  // Agent Spawning
+  // Assistant Spawning
   // ============================================
 
-  private async spawnAgent(params: {
+  private async spawnAssistant(params: {
     role: SwarmRole;
     task: string;
     tools: string[];
-    /** If true, track this agent in activeAgents (for internal planner/critic/aggregator agents) */
+    /** If true, track this assistant in activeAssistants (for internal planner/critic/aggregator assistants) */
     trackInternal?: boolean;
-  }): Promise<SubagentResult> {
+  }): Promise<SubassistantResult> {
     const { role, task, tools, trackInternal } = params;
 
     // Build system prompt
@@ -939,10 +939,10 @@ Maximum ${this.config.maxTasks} tasks.`;
       !this.config.forbiddenTools.includes(t)
     );
 
-    // Check registry for matching agents
-    // Note: True delegation to existing agents would require an RPC mechanism.
+    // Check registry for matching assistants
+    // Note: True delegation to existing assistants would require an RPC mechanism.
     // For now, we use the registry primarily for discovery and informational purposes.
-    // When a match is found, we still spawn a new subagent but inform the user.
+    // When a match is found, we still spawn a new subassistant but inform the user.
     if (this.context.registry && role === 'worker') {
       const bestMatch = this.context.registry.findBestMatch({
         required: { tools: filteredTools },
@@ -950,12 +950,12 @@ Maximum ${this.config.maxTasks} tasks.`;
       });
 
       if (bestMatch && bestMatch.status.state === 'idle') {
-        // A matching idle agent exists - note this for potential future delegation
-        this.streamText(`[Note: Found matching agent "${bestMatch.name}" with required tools]\n`);
+        // A matching idle assistant exists - note this for potential future delegation
+        this.streamText(`[Note: Found matching assistant "${bestMatch.name}" with required tools]\n`);
       }
     }
 
-    const config: SubagentConfig = {
+    const config: SubassistantConfig = {
       task: fullTask,
       tools: filteredTools,
       maxTurns: 15,
@@ -965,13 +965,13 @@ Maximum ${this.config.maxTasks} tasks.`;
       timeoutMs: this.config.taskTimeoutMs,
     };
 
-    const result = await this.context.subagentManager.spawn(config);
+    const result = await this.context.subassistantManager.spawn(config);
 
-    // Track internal agents using the real subagentId from spawn result
-    if (trackInternal && result.subagentId && this.state) {
-      this.state.activeAgents.add(result.subagentId);
-      // Note: Internal agents complete synchronously, so remove immediately after spawn returns
-      this.state.activeAgents.delete(result.subagentId);
+    // Track internal assistants using the real subassistantId from spawn result
+    if (trackInternal && result.subassistantId && this.state) {
+      this.state.activeAssistants.add(result.subassistantId);
+      // Note: Internal assistants complete synchronously, so remove immediately after spawn returns
+      this.state.activeAssistants.delete(result.subassistantId);
     }
 
     return result;
@@ -1031,8 +1031,8 @@ Maximum ${this.config.maxTasks} tasks.`;
     };
   }
 
-  private getTaskResultsRecord(): Record<string, SubagentResult> {
-    const record: Record<string, SubagentResult> = {};
+  private getTaskResultsRecord(): Record<string, SubassistantResult> {
+    const record: Record<string, SubassistantResult> = {};
     if (this.state) {
       for (const [id, result] of this.state.taskResults) {
         record[id] = result;

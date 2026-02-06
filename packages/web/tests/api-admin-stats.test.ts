@@ -5,9 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
 let mockCounts = {
   totalUsers: 100,
   totalSessions: 500,
-  totalAgents: 50,
+  totalAssistants: 50,
   totalMessages: 2000,
-  totalAgentMessages: 300,
+  totalAssistantMessages: 300,
   newUsersToday: 5,
   newUsersWeek: 25,
   newUsersMonth: 80,
@@ -46,9 +46,9 @@ mock.module('@/db', () => ({
 mock.module('@/db/schema', () => ({
   users: 'users',
   sessions: 'sessions',
-  agents: 'agents',
+  assistants: 'assistants',
   messages: 'messages',
-  agentMessages: 'agentMessages',
+  assistantMessages: 'assistantMessages',
 }));
 
 // Mock auth middleware
@@ -106,9 +106,9 @@ describe('GET /api/v1/admin/stats', () => {
     mockCounts = {
       totalUsers: 100,
       totalSessions: 500,
-      totalAgents: 50,
+      totalAssistants: 50,
       totalMessages: 2000,
-      totalAgentMessages: 300,
+      totalAssistantMessages: 300,
       newUsersToday: 5,
       newUsersWeek: 25,
       newUsersMonth: 80,
@@ -171,9 +171,9 @@ describe('GET /api/v1/admin/stats', () => {
 
       expect(data.data.totals.users).toBe(100);
       expect(data.data.totals.sessions).toBe(500);
-      expect(data.data.totals.agents).toBe(50);
+      expect(data.data.totals.assistants).toBe(50);
       expect(data.data.totals.messages).toBe(2000);
-      expect(data.data.totals.agentMessages).toBe(300);
+      expect(data.data.totals.assistantMessages).toBe(300);
     });
 
     test('returns correct recent activity counts', async () => {
@@ -202,9 +202,9 @@ describe('GET /api/v1/admin/stats', () => {
       mockCounts = {
         totalUsers: 0,
         totalSessions: 0,
-        totalAgents: 0,
+        totalAssistants: 0,
         totalMessages: 0,
-        totalAgentMessages: 0,
+        totalAssistantMessages: 0,
         newUsersToday: 0,
         newUsersWeek: 0,
         newUsersMonth: 0,
@@ -226,9 +226,9 @@ describe('GET /api/v1/admin/stats', () => {
       mockCounts = {
         totalUsers: 1000000,
         totalSessions: 5000000,
-        totalAgents: 100000,
+        totalAssistants: 100000,
         totalMessages: 50000000,
-        totalAgentMessages: 10000000,
+        totalAssistantMessages: 10000000,
         newUsersToday: 1000,
         newUsersWeek: 5000,
         newUsersMonth: 15000,

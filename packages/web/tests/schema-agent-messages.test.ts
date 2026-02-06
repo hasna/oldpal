@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-describe('agent-messages schema', () => {
-  test('exports agentMessages table', async () => {
+describe('assistant-messages schema', () => {
+  test('exports assistantMessages table', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages).toBeDefined();
+    expect(mod.assistantMessages).toBeDefined();
   });
 
   test('exports messagePriorityEnum', async () => {
@@ -16,9 +16,9 @@ describe('agent-messages schema', () => {
     expect(mod.messageStatusEnum).toBeDefined();
   });
 
-  test('exports agentMessagesRelations', async () => {
+  test('exports assistantMessagesRelations', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessagesRelations).toBeDefined();
+    expect(mod.assistantMessagesRelations).toBeDefined();
   });
 
   test('messagePriorityEnum has expected values', async () => {
@@ -39,69 +39,69 @@ describe('agent-messages schema', () => {
     expect(enumValues).toContain('injected');
   });
 
-  test('agentMessages has id column', async () => {
+  test('assistantMessages has id column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.id).toBeDefined();
+    expect(mod.assistantMessages.id).toBeDefined();
   });
 
-  test('agentMessages has threadId column', async () => {
+  test('assistantMessages has threadId column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.threadId).toBeDefined();
+    expect(mod.assistantMessages.threadId).toBeDefined();
   });
 
-  test('agentMessages has parentId column', async () => {
+  test('assistantMessages has parentId column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.parentId).toBeDefined();
+    expect(mod.assistantMessages.parentId).toBeDefined();
   });
 
-  test('agentMessages has fromAgentId column', async () => {
+  test('assistantMessages has fromAssistantId column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.fromAgentId).toBeDefined();
+    expect(mod.assistantMessages.fromAssistantId).toBeDefined();
   });
 
-  test('agentMessages has toAgentId column', async () => {
+  test('assistantMessages has toAssistantId column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.toAgentId).toBeDefined();
+    expect(mod.assistantMessages.toAssistantId).toBeDefined();
   });
 
-  test('agentMessages has subject column', async () => {
+  test('assistantMessages has subject column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.subject).toBeDefined();
+    expect(mod.assistantMessages.subject).toBeDefined();
   });
 
-  test('agentMessages has body column', async () => {
+  test('assistantMessages has body column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.body).toBeDefined();
+    expect(mod.assistantMessages.body).toBeDefined();
   });
 
-  test('agentMessages has priority column', async () => {
+  test('assistantMessages has priority column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.priority).toBeDefined();
+    expect(mod.assistantMessages.priority).toBeDefined();
   });
 
-  test('agentMessages has status column', async () => {
+  test('assistantMessages has status column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.status).toBeDefined();
+    expect(mod.assistantMessages.status).toBeDefined();
   });
 
-  test('agentMessages has readAt column', async () => {
+  test('assistantMessages has readAt column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.readAt).toBeDefined();
+    expect(mod.assistantMessages.readAt).toBeDefined();
   });
 
-  test('agentMessages has injectedAt column', async () => {
+  test('assistantMessages has injectedAt column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.injectedAt).toBeDefined();
+    expect(mod.assistantMessages.injectedAt).toBeDefined();
   });
 
-  test('agentMessages has createdAt column', async () => {
+  test('assistantMessages has createdAt column', async () => {
     const mod = await import('../src/db/schema/agent-messages');
-    expect(mod.agentMessages.createdAt).toBeDefined();
+    expect(mod.assistantMessages.createdAt).toBeDefined();
   });
 
-  test('agentMessages table has correct name', async () => {
+  test('assistantMessages table has correct name', async () => {
     const mod = await import('../src/db/schema/agent-messages');
     // @ts-ignore - accessing internal drizzle property
-    expect(mod.agentMessages[Symbol.for('drizzle:Name')]).toBe('agent_messages');
+    expect(mod.assistantMessages[Symbol.for('drizzle:Name')]).toBe('agent_messages');
   });
 });

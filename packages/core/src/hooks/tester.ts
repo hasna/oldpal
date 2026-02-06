@@ -58,16 +58,16 @@ const sampleInputs: Record<HookEvent, Partial<HookInput>> = {
     title: 'Test Notification',
     message: 'This is a test notification',
   },
-  SubagentStart: {
-    subagent_id: 'test-agent-001',
+  SubassistantStart: {
+    subassistant_id: 'test-assistant-001',
     task: 'Explore the codebase and find all API endpoints',
     allowed_tools: ['Glob', 'Grep', 'Read'],
     max_turns: 10,
     depth: 1,
     parent_session_id: 'parent-session-001',
   },
-  SubagentStop: {
-    subagent_id: 'test-agent-001',
+  SubassistantStop: {
+    subassistant_id: 'test-assistant-001',
     status: 'completed',
     result: 'Found 5 API endpoints',
     duration_ms: 5000,
@@ -83,7 +83,7 @@ const sampleInputs: Record<HookEvent, Partial<HookInput>> = {
 };
 
 /**
- * HookTester - test hooks with sample input without running the full agent
+ * HookTester - test hooks with sample input without running the full assistant
  */
 export class HookTester {
   private cwd: string;

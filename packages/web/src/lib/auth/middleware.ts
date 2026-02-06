@@ -387,8 +387,8 @@ export function withApiKeyAuth<T = unknown, C = RouteContext>(handler: AuthedHan
  * Available API key permission scopes
  */
 export type ApiKeyScope =
-  | 'read:agents'
-  | 'write:agents'
+  | 'read:assistants'
+  | 'write:assistants'
   | 'read:sessions'
   | 'write:sessions'
   | 'read:tools'

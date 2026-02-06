@@ -1,6 +1,6 @@
 /**
  * Wallet module exports
- * Provides secure payment card storage for agents using AWS Secrets Manager
+ * Provides secure payment card storage for assistants using AWS Secrets Manager
  *
  * SECURITY NOTE: Cards are NEVER stored locally. All card data is stored
  * exclusively in AWS Secrets Manager and fetched on-demand with rate limiting.

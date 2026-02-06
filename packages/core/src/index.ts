@@ -4,21 +4,21 @@
 export { setRuntime, getRuntime, hasRuntime } from './runtime';
 export type { Runtime, FileHandle, SpawnOptions, SpawnResult, ShellResult, ShellCommand, GlobOptions, DatabaseConnection, DatabaseStatement } from './runtime';
 
-// Agent
-export { AgentLoop } from './agent/loop';
-export { AgentContext } from './agent/context';
-export { SubagentManager } from './agent/subagent-manager';
+// Assistant
+export { AssistantLoop } from './agent/loop';
+export { AssistantContext } from './agent/context';
+export { SubassistantManager } from './agent/subagent-manager';
 export { StatsTracker } from './agent/stats';
 export type {
-  SubagentConfig,
-  SubagentResult,
-  SubagentInfo,
-  SubagentJob,
-  SubagentJobStatus,
-  SubagentManagerConfig,
-  SubagentManagerContext,
-  SubagentLoopConfig,
-  SubagentRunner,
+  SubassistantConfig,
+  SubassistantResult,
+  SubassistantInfo,
+  SubassistantJob,
+  SubassistantJobStatus,
+  SubassistantManagerConfig,
+  SubassistantManagerContext,
+  SubassistantLoopConfig,
+  SubassistantRunner,
 } from './agent/subagent-manager';
 export type { ToolStats, SessionStats } from './agent/stats';
 
@@ -83,14 +83,14 @@ export {
   type SelfAwarenessContext,
 } from './tools/self-awareness';
 export {
-  agentTools,
-  agentSpawnTool,
-  agentListTool,
-  agentDelegateTool,
-  agentJobStatusTool,
-  createAgentToolExecutors,
-  registerAgentTools,
-  type AgentToolContext,
+  assistantTools,
+  assistantSpawnTool,
+  assistantListTool,
+  assistantDelegateTool,
+  assistantJobStatusTool,
+  createAssistantToolExecutors,
+  registerAssistantTools,
+  type AssistantToolContext,
 } from './tools/agents';
 export {
   ToolIndex,
@@ -100,13 +100,13 @@ export {
 } from './tools/search';
 export type { ToolMetadata, ToolsSearchContext } from './tools/search';
 export {
-  agentRegistryTools,
+  assistantRegistryTools,
   registryListTool,
   registryQueryTool,
   registryGetTool,
   registryStatsTool,
-  createAgentRegistryToolExecutors,
-  registerAgentRegistryTools,
+  createAssistantRegistryToolExecutors,
+  registerAssistantRegistryTools,
 } from './tools/agent-registry';
 export type { RegistryToolContext } from './tools/agent-registry';
 export {
@@ -213,7 +213,7 @@ export {
   BudgetTracker,
   DEFAULT_BUDGET_CONFIG,
   DEFAULT_SESSION_LIMITS,
-  DEFAULT_AGENT_LIMITS,
+  DEFAULT_ASSISTANT_LIMITS,
   DEFAULT_SWARM_LIMITS,
   WARNING_THRESHOLD,
 } from './budget';
@@ -269,7 +269,7 @@ export * from './scheduler';
 // Jobs
 export * from './jobs';
 
-// Messages (Agent-to-Agent)
+// Messages (Assistant-to-Assistant)
 export * from './messages';
 
 // Client
@@ -291,7 +291,7 @@ export {
 export type {
   SessionContext,
   SessionQueryFunctions,
-  AgentSessionData,
+  AssistantSessionData,
   SessionMetadata as SessionToolMetadata,
   ListSessionsOptions,
   CreateSessionData,

@@ -74,8 +74,8 @@ export function SessionSelector({
 
     // Enter: select current option
     if (key.return) {
-      if (selectedIndex === sessions.length) {
-        // "New session" option
+      if (selectedIndex >= sessions.length) {
+        // "New session" option or out of bounds
         onNew();
       } else {
         onSelect(sessions[selectedIndex].id);

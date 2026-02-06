@@ -2,7 +2,7 @@
  * Assistant Management Tools
  *
  * Tools for listing, creating, updating, deleting, and switching assistants.
- * Enables agents to programmatically manage assistants.
+ * Enables assistants to programmatically manage other assistants.
  */
 
 import type { Tool } from '@hasna/assistants-shared';

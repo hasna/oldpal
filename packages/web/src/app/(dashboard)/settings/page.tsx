@@ -255,7 +255,7 @@ export default function SettingsPage() {
   const canChangePassword = currentPassword && newPassword && confirmPassword &&
     newPassword === confirmPassword && passwordStrength.score >= 4 && !isChangingPassword;
 
-  const handleExport = async (format: 'json' | 'csv' | 'markdown', type: 'all' | 'sessions' | 'agents' = 'all') => {
+  const handleExport = async (format: 'json' | 'csv' | 'markdown', type: 'all' | 'sessions' | 'assistants' = 'all') => {
     setIsExporting(true);
     try {
       const response = await fetchWithAuth(`/api/v1/export?format=${format}&type=${type}`);
@@ -670,7 +670,7 @@ export default function SettingsPage() {
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Exports include your sessions, messages, agents, and schedules.
+              Exports include your sessions, messages, assistants, and schedules.
             </p>
           </CardContent>
         </Card>
@@ -701,9 +701,9 @@ export default function SettingsPage() {
                       and remove all your data including:
                       <ul className="list-disc list-inside mt-2 space-y-1">
                         <li>All your chat sessions and messages</li>
-                        <li>All your agents and their configurations</li>
+                        <li>All your assistants and their configurations</li>
                         <li>All your scheduled tasks</li>
-                        <li>All agent-to-agent messages</li>
+                        <li>All assistant-to-assistant messages</li>
                       </ul>
                     </AlertDialogDescription>
                   </AlertDialogHeader>

@@ -1,6 +1,6 @@
 /**
- * Session management tools for agent use
- * Tools that allow agents to create and manage sessions programmatically
+ * Session management tools for assistant use
+ * Tools that allow assistants to create and manage sessions programmatically
  */
 
 import type { Tool } from '@hasna/assistants-shared';
@@ -19,23 +19,23 @@ export interface SessionContext {
 
 export interface SessionQueryFunctions {
   /** Get current session info */
-  getSession: (sessionId: string, userId: string) => Promise<AgentSessionData | null>;
+  getSession: (sessionId: string, userId: string) => Promise<AssistantSessionData | null>;
   /** List sessions for user */
-  listSessions: (userId: string, options: ListSessionsOptions) => Promise<AgentSessionData[]>;
+  listSessions: (userId: string, options: ListSessionsOptions) => Promise<AssistantSessionData[]>;
   /** Create a new session */
-  createSession: (userId: string, data: CreateSessionData) => Promise<AgentSessionData>;
+  createSession: (userId: string, data: CreateSessionData) => Promise<AssistantSessionData>;
   /** Update a session */
-  updateSession: (sessionId: string, userId: string, data: UpdateSessionData) => Promise<AgentSessionData | null>;
+  updateSession: (sessionId: string, userId: string, data: UpdateSessionData) => Promise<AssistantSessionData | null>;
   /** Delete a session */
   deleteSession: (sessionId: string, userId: string) => Promise<boolean>;
-  /** Verify agent ownership */
-  verifyAgentOwnership?: (agentId: string, userId: string) => Promise<boolean>;
+  /** Verify assistant ownership */
+  verifyAssistantOwnership?: (assistantId: string, userId: string) => Promise<boolean>;
 }
 
-export interface AgentSessionData {
+export interface AssistantSessionData {
   id: string;
   label: string | null;
-  agentId: string | null;
+  assistantId: string | null;
   cwd: string | null;
   metadata: SessionMetadata | null;
   createdAt: string;
@@ -51,12 +51,12 @@ export interface SessionMetadata {
 export interface ListSessionsOptions {
   limit?: number;
   search?: string;
-  agentId?: string;
+  assistantId?: string;
 }
 
 export interface CreateSessionData {
   label?: string;
-  agentId?: string;
+  assistantId?: string;
   cwd?: string;
   metadata?: Record<string, unknown>;
 }
@@ -76,7 +76,7 @@ export interface UpdateSessionData {
 export const sessionInfoTool: Tool = {
   name: 'session_info',
   description:
-    'Get information about the current session including ID, label, agent, and metadata.',
+    'Get information about the current session including ID, label, assistant, and metadata.',
   parameters: {
     type: 'object',
     properties: {},
@@ -90,7 +90,7 @@ export const sessionInfoTool: Tool = {
 export const sessionListTool: Tool = {
   name: 'session_list',
   description:
-    'List sessions owned by the current user. Can filter by search term or agent ID.',
+    'List sessions owned by the current user. Can filter by search term or assistant ID.',
   parameters: {
     type: 'object',
     properties: {
@@ -102,9 +102,9 @@ export const sessionListTool: Tool = {
         type: 'string',
         description: 'Search term to filter by session label',
       },
-      agentId: {
+      assistantId: {
         type: 'string',
-        description: 'Filter sessions by agent UUID',
+        description: 'Filter sessions by assistant UUID',
       },
     },
     required: [],
@@ -117,7 +117,7 @@ export const sessionListTool: Tool = {
 export const sessionCreateTool: Tool = {
   name: 'session_create',
   description:
-    'Create a new session with optional label, agent assignment, and metadata.',
+    'Create a new session with optional label, assistant assignment, and metadata.',
   parameters: {
     type: 'object',
     properties: {
@@ -125,9 +125,9 @@ export const sessionCreateTool: Tool = {
         type: 'string',
         description: 'Session label/name (auto-generated if not provided)',
       },
-      agentId: {
+      assistantId: {
         type: 'string',
-        description: 'Agent UUID to assign to this session',
+        description: 'Assistant UUID to assign to this session',
       },
       metadata: {
         type: 'object',
@@ -224,13 +224,13 @@ export function createSessionToolExecutors(
         50
       );
       const search = input.search ? String(input.search).trim() : undefined;
-      const agentId = input.agentId ? String(input.agentId).trim() : undefined;
+      const assistantId = input.assistantId ? String(input.assistantId).trim() : undefined;
 
       try {
         const sessions = await ctx.queryFn.listSessions(ctx.userId, {
           limit,
           search,
-          agentId,
+          assistantId,
         });
 
         if (sessions.length === 0) {
@@ -243,14 +243,14 @@ export function createSessionToolExecutors(
 
         for (const session of sessions) {
           const isCurrent = session.id === ctx.sessionId;
-          const currentIndicator = isCurrent ? ' ← current' : '';
+          const currentIndicator = isCurrent ? ' <- current' : '';
           const label = session.label || 'Untitled';
           const date = new Date(session.updatedAt).toLocaleDateString();
 
           lines.push(`- **${label}**${currentIndicator}`);
           lines.push(`  ID: \`${session.id}\``);
-          if (session.agentId) {
-            lines.push(`  Agent: ${session.agentId}`);
+          if (session.assistantId) {
+            lines.push(`  Assistant: ${session.assistantId}`);
           }
           lines.push(`  Updated: ${date}`);
           lines.push('');
@@ -269,25 +269,25 @@ export function createSessionToolExecutors(
       }
 
       const label = input.label ? String(input.label).trim() : undefined;
-      const agentId = input.agentId ? String(input.agentId).trim() : undefined;
+      const assistantId = input.assistantId ? String(input.assistantId).trim() : undefined;
       const metadata = input.metadata as Record<string, unknown> | undefined;
 
-      // Validate agentId ownership if provided
-      if (agentId && ctx.queryFn.verifyAgentOwnership) {
+      // Validate assistantId ownership if provided
+      if (assistantId && ctx.queryFn.verifyAssistantOwnership) {
         try {
-          const isOwner = await ctx.queryFn.verifyAgentOwnership(agentId, ctx.userId);
+          const isOwner = await ctx.queryFn.verifyAssistantOwnership(assistantId, ctx.userId);
           if (!isOwner) {
-            return 'Error: You do not own this agent or it does not exist.';
+            return 'Error: You do not own this assistant or it does not exist.';
           }
         } catch (error) {
-          return `Error verifying agent ownership: ${error instanceof Error ? error.message : String(error)}`;
+          return `Error verifying assistant ownership: ${error instanceof Error ? error.message : String(error)}`;
         }
       }
 
       try {
         const session = await ctx.queryFn.createSession(ctx.userId, {
           label,
-          agentId,
+          assistantId,
           metadata,
         });
 
@@ -362,15 +362,15 @@ export function createSessionToolExecutors(
 // Formatting Helpers
 // ============================================
 
-function formatSessionAsMarkdown(session: AgentSessionData, verbose = false): string {
+function formatSessionAsMarkdown(session: AssistantSessionData, verbose = false): string {
   const lines: string[] = [];
 
   lines.push(`## Session: ${session.label || 'Untitled'}`);
   lines.push('');
   lines.push(`**ID:** \`${session.id}\``);
 
-  if (session.agentId) {
-    lines.push(`**Agent:** ${session.agentId}`);
+  if (session.assistantId) {
+    lines.push(`**Assistant:** ${session.assistantId}`);
   }
 
   if (session.cwd) {
@@ -397,7 +397,7 @@ function formatSessionAsMarkdown(session: AgentSessionData, verbose = false): st
   return lines.join('\n');
 }
 
-function formatSessionCreatedMessage(session: AgentSessionData): string {
+function formatSessionCreatedMessage(session: AssistantSessionData): string {
   const lines: string[] = [];
 
   lines.push('Session created successfully.');
@@ -405,14 +405,14 @@ function formatSessionCreatedMessage(session: AgentSessionData): string {
   lines.push(`**ID:** \`${session.id}\``);
   lines.push(`**Label:** ${session.label || 'Untitled'}`);
 
-  if (session.agentId) {
-    lines.push(`**Agent:** ${session.agentId}`);
+  if (session.assistantId) {
+    lines.push(`**Assistant:** ${session.assistantId}`);
   }
 
   return lines.join('\n');
 }
 
-function formatSessionUpdatedMessage(session: AgentSessionData): string {
+function formatSessionUpdatedMessage(session: AssistantSessionData): string {
   const lines: string[] = [];
 
   lines.push('Session updated successfully.');

@@ -1,6 +1,6 @@
 /**
  * Guardrails policy types
- * Defines security and safety policies for agent behavior
+ * Defines security and safety policies for assistant behavior
  */
 
 /**
@@ -74,10 +74,10 @@ export interface ApprovalRequirement {
 }
 
 /**
- * Agent depth policy
+ * Assistant depth policy
  */
 export interface DepthPolicy {
-  /** Maximum subagent depth */
+  /** Maximum subassistant depth */
   maxDepth: number;
   /** Action when max depth exceeded */
   onExceeded: PolicyAction;
@@ -125,7 +125,7 @@ export interface GuardrailsPolicy {
   };
   /** Approval requirements */
   approvals?: ApprovalRequirement[];
-  /** Agent depth limits */
+  /** Assistant depth limits */
   depth?: DepthPolicy;
   /** Rate limits */
   rateLimits?: RateLimitPolicy;

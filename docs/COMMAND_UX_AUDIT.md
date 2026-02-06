@@ -60,7 +60,7 @@ This document inventories all `/commands` and classifies which should be interac
 | `/messages` | MessagesPanel.tsx | Yes | `/messages ui` opens panel |
 | `/projects` | ProjectsPanel.tsx | Yes | `/projects ui` opens panel |
 | `/plans` | PlansPanel.tsx | Yes | `/plans ui` opens panel |
-| `/agents` | AgentsPanel.tsx | Yes | `/agents ui` opens panel |
+| `/assistants` | AssistantsPanel.tsx | Yes | `/assistants ui` opens panel |
 | `/budget` | BudgetPanel.tsx | Yes | `/budget ui` opens panel |
 | `/guardrails` | GuardrailsPanel.tsx | Yes | `/guardrails ui` opens panel |
 | `/schedules` | SchedulesPanel.tsx | Yes | `/schedules` opens panel by default |

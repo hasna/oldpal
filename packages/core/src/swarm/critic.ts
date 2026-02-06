@@ -5,7 +5,7 @@
  * and produces fixes or follow-up recommendations.
  */
 
-import type { SubagentManager, SubagentConfig, SubagentResult } from '../agent/subagent-manager';
+import type { SubassistantManager, SubassistantConfig, SubassistantResult } from '../agent/subagent-manager';
 import type { SwarmTask, SwarmRole } from './types';
 import { ROLE_SYSTEM_PROMPTS } from './types';
 import type { AggregatedResult } from './aggregator';
@@ -117,7 +117,7 @@ export interface CriticConfig {
   checkConsistency: boolean;
   /** Custom review prompt additions */
   customPrompt?: string;
-  /** Maximum turns for critic agent */
+  /** Maximum turns for critic assistant */
   maxTurns: number;
   /** Tools available to critic */
   criticTools: string[];
@@ -179,13 +179,13 @@ export class SwarmCritic {
   }
 
   /**
-   * Run critic review using subagent
+   * Run critic review using subassistant
    */
   async review(params: {
     goal: string;
     tasks: SwarmTask[];
     aggregatedResult: AggregatedResult;
-    subagentManager: SubagentManager;
+    subassistantManager: SubassistantManager;
     sessionId: string;
     cwd: string;
     depth: number;
@@ -199,10 +199,10 @@ export class SwarmCritic {
     // Build critic prompt
     const prompt = this.buildCriticPrompt(params);
 
-    // Run critic agent
-    const result = await this.runCriticAgent({
+    // Run critic assistant
+    const result = await this.runCriticAssistant({
       prompt,
-      subagentManager: params.subagentManager,
+      subassistantManager: params.subassistantManager,
       sessionId: params.sessionId,
       cwd: params.cwd,
       depth: params.depth,
@@ -443,18 +443,18 @@ Check for:
   }
 
   /**
-   * Run critic agent
+   * Run critic assistant
    */
-  private async runCriticAgent(params: {
+  private async runCriticAssistant(params: {
     prompt: string;
-    subagentManager: SubagentManager;
+    subassistantManager: SubassistantManager;
     sessionId: string;
     cwd: string;
     depth: number;
-  }): Promise<SubagentResult> {
+  }): Promise<SubassistantResult> {
     const systemPrompt = ROLE_SYSTEM_PROMPTS.critic;
 
-    const config: SubagentConfig = {
+    const config: SubassistantConfig = {
       task: `${systemPrompt}\n\n---\n\n${params.prompt}`,
       tools: this.config.criticTools,
       maxTurns: this.config.maxTurns,
@@ -464,13 +464,13 @@ Check for:
     };
 
     // Execute with timeout
-    const timeoutPromise = new Promise<SubagentResult>((_, reject) => {
+    const timeoutPromise = new Promise<SubassistantResult>((_, reject) => {
       setTimeout(() => reject(new Error('Critic timeout')), this.config.timeoutMs);
     });
 
     try {
       return await Promise.race([
-        params.subagentManager.spawn(config),
+        params.subassistantManager.spawn(config),
         timeoutPromise,
       ]);
     } catch (error) {
@@ -486,7 +486,7 @@ Check for:
   /**
    * Parse critic output
    */
-  private parseCriticOutput(result: SubagentResult, startTime: number): CriticReview {
+  private parseCriticOutput(result: SubassistantResult, startTime: number): CriticReview {
     const durationMs = Date.now() - startTime;
 
     if (!result.success || !result.result) {
@@ -499,7 +499,7 @@ Check for:
           category: 'quality',
           severity: 'high',
           title: 'Critic review failed',
-          description: result.error || 'No result from critic agent',
+          description: result.error || 'No result from critic assistant',
           autoFixable: false,
         }],
         followUps: [],

@@ -1,23 +1,23 @@
 /**
- * Swarm Agent Selector
+ * Swarm Assistant Selector
  *
- * Selects agents for swarm tasks based on capability, heartbeat status,
+ * Selects assistants for swarm tasks based on capability, heartbeat status,
  * tool scopes, and load. Produces assignment plans with fallback handling.
  */
 
-import type { AgentRegistryService, RegisteredAgent } from '../registry';
+import type { AssistantRegistryService, RegisteredAssistant } from '../registry';
 import type { SwarmTask, SwarmRole } from './types';
 
 /**
- * Agent assignment for a task
+ * Assistant assignment for a task
  */
-export interface TaskAgentAssignment {
+export interface TaskAssistantAssignment {
   /** Task ID */
   taskId: string;
-  /** Assigned agent ID (null if using fallback) */
-  agentId: string | null;
-  /** Assigned agent (null if using fallback) */
-  agent: RegisteredAgent | null;
+  /** Assigned assistant ID (null if using fallback) */
+  assistantId: string | null;
+  /** Assigned assistant (null if using fallback) */
+  assistant: RegisteredAssistant | null;
   /** Whether this is a fallback assignment */
   isFallback: boolean;
   /** Fallback reason if applicable */
@@ -25,13 +25,13 @@ export interface TaskAgentAssignment {
   /** Match score (0-1) */
   matchScore: number;
   /** Requirements used for matching */
-  requirements: AgentRequirements;
+  requirements: AssistantRequirements;
 }
 
 /**
- * Agent requirements for matching
+ * Assistant requirements for matching
  */
-export interface AgentRequirements {
+export interface AssistantRequirements {
   /** Required tools */
   requiredTools?: string[];
   /** Preferred tools */
@@ -51,7 +51,7 @@ export interface AgentRequirements {
  */
 export interface AssignmentPlan {
   /** Task assignments */
-  assignments: Map<string, TaskAgentAssignment>;
+  assignments: Map<string, TaskAssistantAssignment>;
   /** Unassigned task IDs (need fallback) */
   unassignedTasks: string[];
   /** Statistics */
@@ -72,32 +72,32 @@ export interface AssignmentStats {
   assignedTasks: number;
   /** Fallback tasks */
   fallbackTasks: number;
-  /** Unique agents used */
-  uniqueAgents: number;
+  /** Unique assistants used */
+  uniqueAssistants: number;
   /** Average match score */
   averageMatchScore: number;
-  /** Distribution by agent */
-  tasksByAgent: Map<string, number>;
+  /** Distribution by assistant */
+  tasksByAssistant: Map<string, number>;
 }
 
 /**
  * Selector configuration
  */
-export interface AgentSelectorConfig {
+export interface AssistantSelectorConfig {
   /** Enable registry-based selection */
   enabled: boolean;
-  /** Maximum load factor for agent selection */
+  /** Maximum load factor for assistant selection */
   maxLoadFactor: number;
   /** Minimum match score to accept */
   minMatchScore: number;
-  /** Prefer agents with matching skills */
+  /** Prefer assistants with matching skills */
   preferSkillMatch: boolean;
-  /** Prefer agents with lower load */
+  /** Prefer assistants with lower load */
   preferLowLoad: boolean;
-  /** Enable load balancing across agents */
+  /** Enable load balancing across assistants */
   enableLoadBalancing: boolean;
-  /** Maximum tasks per agent */
-  maxTasksPerAgent: number;
+  /** Maximum tasks per assistant */
+  maxTasksPerAssistant: number;
   /** Role-based tool preferences */
   roleToolPreferences: Record<SwarmRole, string[]>;
 }
@@ -105,14 +105,14 @@ export interface AgentSelectorConfig {
 /**
  * Default selector configuration
  */
-export const DEFAULT_SELECTOR_CONFIG: AgentSelectorConfig = {
+export const DEFAULT_SELECTOR_CONFIG: AssistantSelectorConfig = {
   enabled: true,
   maxLoadFactor: 0.9,
   minMatchScore: 0.3,
   preferSkillMatch: true,
   preferLowLoad: true,
   enableLoadBalancing: true,
-  maxTasksPerAgent: 5,
+  maxTasksPerAssistant: 5,
   roleToolPreferences: {
     planner: ['tasks_create', 'tasks_list', 'plan_create'],
     worker: ['bash', 'read', 'write', 'edit', 'glob', 'grep'],
@@ -122,17 +122,17 @@ export const DEFAULT_SELECTOR_CONFIG: AgentSelectorConfig = {
 };
 
 /**
- * Swarm Agent Selector
+ * Swarm Assistant Selector
  *
- * Selects agents for swarm tasks based on capabilities and availability.
+ * Selects assistants for swarm tasks based on capabilities and availability.
  */
-export class SwarmAgentSelector {
-  private config: AgentSelectorConfig;
-  private registry: AgentRegistryService | null;
+export class SwarmAssistantSelector {
+  private config: AssistantSelectorConfig;
+  private registry: AssistantRegistryService | null;
 
   constructor(
-    registry?: AgentRegistryService,
-    config?: Partial<AgentSelectorConfig>
+    registry?: AssistantRegistryService,
+    config?: Partial<AssistantSelectorConfig>
   ) {
     this.registry = registry || null;
     this.config = { ...DEFAULT_SELECTOR_CONFIG, ...config };
@@ -149,9 +149,9 @@ export class SwarmAgentSelector {
    * Create assignment plan for a list of tasks
    */
   createAssignmentPlan(tasks: SwarmTask[]): AssignmentPlan {
-    const assignments = new Map<string, TaskAgentAssignment>();
+    const assignments = new Map<string, TaskAssistantAssignment>();
     const warnings: string[] = [];
-    const tasksByAgent = new Map<string, number>();
+    const tasksByAssistant = new Map<string, number>();
     let totalMatchScore = 0;
     let fallbackCount = 0;
 
@@ -160,7 +160,7 @@ export class SwarmAgentSelector {
 
     for (const task of sortedTasks) {
       const requirements = this.buildRequirements(task);
-      const assignment = this.selectAgentForTask(task, requirements, tasksByAgent);
+      const assignment = this.selectAssistantForTask(task, requirements, tasksByAssistant);
 
       assignments.set(task.id, assignment);
       totalMatchScore += assignment.matchScore;
@@ -170,9 +170,9 @@ export class SwarmAgentSelector {
         if (assignment.fallbackReason) {
           warnings.push(`Task ${task.id}: ${assignment.fallbackReason}`);
         }
-      } else if (assignment.agentId) {
-        const count = tasksByAgent.get(assignment.agentId) || 0;
-        tasksByAgent.set(assignment.agentId, count + 1);
+      } else if (assignment.assistantId) {
+        const count = tasksByAssistant.get(assignment.assistantId) || 0;
+        tasksByAssistant.set(assignment.assistantId, count + 1);
       }
     }
 
@@ -186,9 +186,9 @@ export class SwarmAgentSelector {
       totalTasks: tasks.length,
       assignedTasks: tasks.length - fallbackCount,
       fallbackTasks: fallbackCount,
-      uniqueAgents: tasksByAgent.size,
+      uniqueAssistants: tasksByAssistant.size,
       averageMatchScore: tasks.length > 0 ? totalMatchScore / tasks.length : 0,
-      tasksByAgent,
+      tasksByAssistant,
     };
 
     return {
@@ -201,13 +201,13 @@ export class SwarmAgentSelector {
   }
 
   /**
-   * Select single best agent for a task
+   * Select single best assistant for a task
    */
-  selectAgentForTask(
+  selectAssistantForTask(
     task: SwarmTask,
-    requirements: AgentRequirements,
+    requirements: AssistantRequirements,
     currentAssignments?: Map<string, number>
-  ): TaskAgentAssignment {
+  ): TaskAssistantAssignment {
     // If registry not available, use fallback
     if (!this.registry || !this.config.enabled) {
       return this.createFallbackAssignment(task, requirements, 'Registry not available');
@@ -217,14 +217,14 @@ export class SwarmAgentSelector {
     const matchCriteria = this.buildMatchCriteria(requirements, currentAssignments);
 
     // Find best match
-    const bestAgent = this.registry.findBestMatch(matchCriteria);
+    const bestAssistant = this.registry.findBestMatch(matchCriteria);
 
-    if (!bestAgent) {
-      return this.createFallbackAssignment(task, requirements, 'No matching agents available');
+    if (!bestAssistant) {
+      return this.createFallbackAssignment(task, requirements, 'No matching assistants available');
     }
 
     // Calculate match score
-    const matchScore = this.calculateMatchScore(bestAgent, requirements);
+    const matchScore = this.calculateMatchScore(bestAssistant, requirements);
 
     // Check if match score meets minimum threshold
     if (matchScore < this.config.minMatchScore) {
@@ -237,22 +237,22 @@ export class SwarmAgentSelector {
 
     // Check load balancing constraints
     if (this.config.enableLoadBalancing && currentAssignments) {
-      const currentLoad = currentAssignments.get(bestAgent.id) || 0;
-      if (currentLoad >= this.config.maxTasksPerAgent) {
-        // Try to find alternative agent
-        const alternativeAgent = this.findAlternativeAgent(
-          bestAgent.id,
+      const currentLoad = currentAssignments.get(bestAssistant.id) || 0;
+      if (currentLoad >= this.config.maxTasksPerAssistant) {
+        // Try to find alternative assistant
+        const alternativeAssistant = this.findAlternativeAssistant(
+          bestAssistant.id,
           requirements,
           currentAssignments
         );
 
-        if (alternativeAgent) {
+        if (alternativeAssistant) {
           return {
             taskId: task.id,
-            agentId: alternativeAgent.id,
-            agent: alternativeAgent,
+            assistantId: alternativeAssistant.id,
+            assistant: alternativeAssistant,
             isFallback: false,
-            matchScore: this.calculateMatchScore(alternativeAgent, requirements),
+            matchScore: this.calculateMatchScore(alternativeAssistant, requirements),
             requirements,
           };
         }
@@ -261,8 +261,8 @@ export class SwarmAgentSelector {
 
     return {
       taskId: task.id,
-      agentId: bestAgent.id,
-      agent: bestAgent,
+      assistantId: bestAssistant.id,
+      assistant: bestAssistant,
       isFallback: false,
       matchScore,
       requirements,
@@ -270,9 +270,9 @@ export class SwarmAgentSelector {
   }
 
   /**
-   * Find agents by capability
+   * Find assistants by capability
    */
-  findAgentsByCapability(requirements: AgentRequirements): RegisteredAgent[] {
+  findAssistantsByCapability(requirements: AssistantRequirements): RegisteredAssistant[] {
     if (!this.registry) {
       return [];
     }
@@ -285,12 +285,12 @@ export class SwarmAgentSelector {
   }
 
   /**
-   * Find available agents (idle, low load)
+   * Find available assistants (idle, low load)
    */
-  findAvailableAgents(options?: {
+  findAvailableAssistants(options?: {
     maxLoadFactor?: number;
     limit?: number;
-  }): RegisteredAgent[] {
+  }): RegisteredAssistant[] {
     if (!this.registry) {
       return [];
     }
@@ -302,9 +302,9 @@ export class SwarmAgentSelector {
   }
 
   /**
-   * Get agent by ID
+   * Get assistant by ID
    */
-  getAgent(id: string): RegisteredAgent | null {
+  getAssistant(id: string): RegisteredAssistant | null {
     return this.registry?.get(id) || null;
   }
 
@@ -312,51 +312,51 @@ export class SwarmAgentSelector {
    * Rebalance assignments to distribute load more evenly
    */
   rebalanceAssignments(plan: AssignmentPlan): AssignmentPlan {
-    if (!this.config.enableLoadBalancing || plan.stats.uniqueAgents <= 1) {
+    if (!this.config.enableLoadBalancing || plan.stats.uniqueAssistants <= 1) {
       return plan;
     }
 
     const newAssignments = new Map(plan.assignments);
-    const newTasksByAgent = new Map(plan.stats.tasksByAgent);
+    const newTasksByAssistant = new Map(plan.stats.tasksByAssistant);
     const warnings = [...plan.warnings];
 
-    // Find overloaded agents
-    const avgTasksPerAgent = plan.stats.assignedTasks / Math.max(plan.stats.uniqueAgents, 1);
-    const overloadThreshold = Math.ceil(avgTasksPerAgent * 1.5);
+    // Find overloaded assistants
+    const avgTasksPerAssistant = plan.stats.assignedTasks / Math.max(plan.stats.uniqueAssistants, 1);
+    const overloadThreshold = Math.ceil(avgTasksPerAssistant * 1.5);
 
-    for (const [agentId, taskCount] of newTasksByAgent) {
+    for (const [assistantId, taskCount] of newTasksByAssistant) {
       if (taskCount <= overloadThreshold) continue;
 
       // Find tasks to reassign
-      const agentTasks = Array.from(newAssignments.entries())
-        .filter(([_, a]) => a.agentId === agentId && !a.isFallback);
+      const assistantTasks = Array.from(newAssignments.entries())
+        .filter(([_, a]) => a.assistantId === assistantId && !a.isFallback);
 
       // Try to reassign excess tasks
       const excessCount = taskCount - overloadThreshold;
       let reassigned = 0;
 
-      for (const [taskId, assignment] of agentTasks.slice(0, excessCount)) {
-        const alternativeAgent = this.findAlternativeAgent(
-          agentId,
+      for (const [taskId, assignment] of assistantTasks.slice(0, excessCount)) {
+        const alternativeAssistant = this.findAlternativeAssistant(
+          assistantId,
           assignment.requirements,
-          newTasksByAgent
+          newTasksByAssistant
         );
 
-        if (alternativeAgent) {
-          const newMatchScore = this.calculateMatchScore(alternativeAgent, assignment.requirements);
+        if (alternativeAssistant) {
+          const newMatchScore = this.calculateMatchScore(alternativeAssistant, assignment.requirements);
 
           newAssignments.set(taskId, {
             ...assignment,
-            agentId: alternativeAgent.id,
-            agent: alternativeAgent,
+            assistantId: alternativeAssistant.id,
+            assistant: alternativeAssistant,
             matchScore: newMatchScore,
           });
 
           // Update counts
-          newTasksByAgent.set(agentId, (newTasksByAgent.get(agentId) || 1) - 1);
-          newTasksByAgent.set(
-            alternativeAgent.id,
-            (newTasksByAgent.get(alternativeAgent.id) || 0) + 1
+          newTasksByAssistant.set(assistantId, (newTasksByAssistant.get(assistantId) || 1) - 1);
+          newTasksByAssistant.set(
+            alternativeAssistant.id,
+            (newTasksByAssistant.get(alternativeAssistant.id) || 0) + 1
           );
 
           reassigned++;
@@ -364,7 +364,7 @@ export class SwarmAgentSelector {
       }
 
       if (reassigned > 0) {
-        warnings.push(`Rebalanced ${reassigned} tasks from agent ${agentId}`);
+        warnings.push(`Rebalanced ${reassigned} tasks from assistant ${assistantId}`);
       }
     }
 
@@ -382,7 +382,7 @@ export class SwarmAgentSelector {
         averageMatchScore: newAssignments.size > 0
           ? totalMatchScore / newAssignments.size
           : 0,
-        tasksByAgent: newTasksByAgent,
+        tasksByAssistant: newTasksByAssistant,
       },
       warnings,
       createdAt: Date.now(),
@@ -396,7 +396,7 @@ export class SwarmAgentSelector {
   /**
    * Build requirements from task
    */
-  private buildRequirements(task: SwarmTask): AgentRequirements {
+  private buildRequirements(task: SwarmTask): AssistantRequirements {
     const roleTools = this.config.roleToolPreferences[task.role] || [];
 
     return {
@@ -411,14 +411,14 @@ export class SwarmAgentSelector {
    * Build match criteria for registry query
    */
   private buildMatchCriteria(
-    requirements: AgentRequirements,
+    requirements: AssistantRequirements,
     currentAssignments?: Map<string, number>
-  ): Parameters<AgentRegistryService['findBestMatch']>[0] {
+  ): Parameters<AssistantRegistryService['findBestMatch']>[0] {
     // Adjust max load factor based on current assignments
     let adjustedMaxLoadFactor = requirements.maxLoadFactor ?? this.config.maxLoadFactor;
 
     if (this.config.enableLoadBalancing && currentAssignments && currentAssignments.size > 0) {
-      // Slightly reduce acceptable load factor if agents are already assigned
+      // Slightly reduce acceptable load factor if assistants are already assigned
       const totalAssignments = Array.from(currentAssignments.values())
         .reduce((sum, count) => sum + count, 0);
       if (totalAssignments > 5) {
@@ -440,16 +440,16 @@ export class SwarmAgentSelector {
   }
 
   /**
-   * Calculate match score for an agent
+   * Calculate match score for an assistant
    */
-  private calculateMatchScore(agent: RegisteredAgent, requirements: AgentRequirements): number {
+  private calculateMatchScore(assistant: RegisteredAssistant, requirements: AssistantRequirements): number {
     let score = 0;
     let totalWeight = 0;
 
     // Tool match (weight: 0.4)
     if (requirements.requiredTools && requirements.requiredTools.length > 0) {
-      const agentTools = agent.capabilities.tools || [];
-      const matchedTools = requirements.requiredTools.filter(t => agentTools.includes(t));
+      const assistantTools = assistant.capabilities.tools || [];
+      const matchedTools = requirements.requiredTools.filter(t => assistantTools.includes(t));
       const toolScore = matchedTools.length / requirements.requiredTools.length;
       score += toolScore * 0.4;
       totalWeight += 0.4;
@@ -457,8 +457,8 @@ export class SwarmAgentSelector {
 
     // Skill match (weight: 0.2)
     if (requirements.requiredSkills && requirements.requiredSkills.length > 0) {
-      const agentSkills = agent.capabilities.skills || [];
-      const matchedSkills = requirements.requiredSkills.filter(s => agentSkills.includes(s));
+      const assistantSkills = assistant.capabilities.skills || [];
+      const matchedSkills = requirements.requiredSkills.filter(s => assistantSkills.includes(s));
       const skillScore = matchedSkills.length / requirements.requiredSkills.length;
       score += skillScore * 0.2;
       totalWeight += 0.2;
@@ -466,13 +466,13 @@ export class SwarmAgentSelector {
 
     // Load factor (weight: 0.2) - prefer lower load
     // Calculate load factor from available properties
-    const loadFactor = this.calculateLoadFactor(agent.load);
+    const loadFactor = this.calculateLoadFactor(assistant.load);
     const loadScore = 1 - loadFactor;
     score += loadScore * 0.2;
     totalWeight += 0.2;
 
-    // Health (weight: 0.2) - prefer healthy agents
-    const isHealthy = !agent.heartbeat.isStale && agent.status.state !== 'error';
+    // Health (weight: 0.2) - prefer healthy assistants
+    const isHealthy = !assistant.heartbeat.isStale && assistant.status.state !== 'error';
     score += (isHealthy ? 1 : 0) * 0.2;
     totalWeight += 0.2;
 
@@ -481,9 +481,9 @@ export class SwarmAgentSelector {
   }
 
   /**
-   * Calculate load factor (0-1) from agent load info
+   * Calculate load factor (0-1) from assistant load info
    */
-  private calculateLoadFactor(load: RegisteredAgent['load']): number {
+  private calculateLoadFactor(load: RegisteredAssistant['load']): number {
     // Calculate based on active/queued tasks and token usage
     const taskLoad = Math.min((load.activeTasks + load.queuedTasks * 0.5) / 5, 1);
 
@@ -502,41 +502,41 @@ export class SwarmAgentSelector {
   }
 
   /**
-   * Find alternative agent excluding specified agent
+   * Find alternative assistant excluding specified assistant
    */
-  private findAlternativeAgent(
-    excludeAgentId: string,
-    requirements: AgentRequirements,
+  private findAlternativeAssistant(
+    excludeAssistantId: string,
+    requirements: AssistantRequirements,
     currentAssignments: Map<string, number>
-  ): RegisteredAgent | null {
+  ): RegisteredAssistant | null {
     if (!this.registry) return null;
 
-    // Find all available agents
-    const availableAgents = this.findAvailableAgents({
+    // Find all available assistants
+    const availableAssistants = this.findAvailableAssistants({
       maxLoadFactor: requirements.maxLoadFactor,
     });
 
-    // Filter out excluded agent and overloaded agents
-    const candidates = availableAgents.filter(agent => {
-      if (agent.id === excludeAgentId) return false;
+    // Filter out excluded assistant and overloaded assistants
+    const candidates = availableAssistants.filter(assistant => {
+      if (assistant.id === excludeAssistantId) return false;
 
-      const currentLoad = currentAssignments.get(agent.id) || 0;
-      return currentLoad < this.config.maxTasksPerAgent;
+      const currentLoad = currentAssignments.get(assistant.id) || 0;
+      return currentLoad < this.config.maxTasksPerAssistant;
     });
 
     if (candidates.length === 0) return null;
 
     // Score and sort candidates
-    const scoredCandidates = candidates.map(agent => ({
-      agent,
-      score: this.calculateMatchScore(agent, requirements),
+    const scoredCandidates = candidates.map(assistant => ({
+      assistant,
+      score: this.calculateMatchScore(assistant, requirements),
     }));
 
     scoredCandidates.sort((a, b) => b.score - a.score);
 
     // Return best candidate above threshold
     const best = scoredCandidates[0];
-    return best && best.score >= this.config.minMatchScore ? best.agent : null;
+    return best && best.score >= this.config.minMatchScore ? best.assistant : null;
   }
 
   /**
@@ -544,13 +544,13 @@ export class SwarmAgentSelector {
    */
   private createFallbackAssignment(
     task: SwarmTask,
-    requirements: AgentRequirements,
+    requirements: AssistantRequirements,
     reason: string
-  ): TaskAgentAssignment {
+  ): TaskAssistantAssignment {
     return {
       taskId: task.id,
-      agentId: null,
-      agent: null,
+      assistantId: null,
+      assistant: null,
       isFallback: true,
       fallbackReason: reason,
       matchScore: 0,
@@ -562,9 +562,9 @@ export class SwarmAgentSelector {
 /**
  * Create a selector with default configuration
  */
-export function createSwarmAgentSelector(
-  registry?: AgentRegistryService,
-  config?: Partial<AgentSelectorConfig>
-): SwarmAgentSelector {
-  return new SwarmAgentSelector(registry, config);
+export function createSwarmAssistantSelector(
+  registry?: AssistantRegistryService,
+  config?: Partial<AssistantSelectorConfig>
+): SwarmAssistantSelector {
+  return new SwarmAssistantSelector(registry, config);
 }

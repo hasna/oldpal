@@ -95,10 +95,10 @@ describe('SecretsStorageClient', () => {
           ],
         };
       }
-      if (filter === `${prefix}agent/agent-1/`) {
+      if (filter === `${prefix}agent/assistant-1/`) {
         return {
           SecretList: [
-            { Name: `${prefix}agent/agent-1/key/name`, Description: 'Agent', CreatedDate: new Date(3), LastChangedDate: new Date(4) },
+            { Name: `${prefix}agent/assistant-1/key/name`, Description: 'Assistant', CreatedDate: new Date(3), LastChangedDate: new Date(4) },
           ],
         };
       }
@@ -106,7 +106,7 @@ describe('SecretsStorageClient', () => {
     };
 
     const client = new SecretsStorageClient({ region: 'us-east-1' });
-    const results = await client.listSecrets('all', 'agent-1');
+    const results = await client.listSecrets('all', 'assistant-1');
     expect(results).toEqual([
       {
         name: 'alpha',
@@ -118,8 +118,8 @@ describe('SecretsStorageClient', () => {
       },
       {
         name: 'key/name',
-        description: 'Agent',
-        scope: 'agent',
+        description: 'Assistant',
+        scope: 'assistant',
         createdAt: 3,
         updatedAt: 4,
         hasValue: true,
@@ -197,10 +197,10 @@ describe('SecretsStorageClient', () => {
     await expect(client.checkCredentials()).resolves.toEqual({ valid: false, error: 'nope' });
   });
 
-  test('listSecrets with agent scope requires agentId to return results', async () => {
+  test('listSecrets with assistant scope requires assistantId to return results', async () => {
     sendImpl = async () => ({ SecretList: [] });
     const client = new SecretsStorageClient({ region: 'us-east-1' });
-    const secrets = await client.listSecrets('agent' as SecretScope);
+    const secrets = await client.listSecrets('assistant' as SecretScope);
     expect(secrets).toEqual([]);
   });
 });

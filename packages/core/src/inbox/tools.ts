@@ -1,6 +1,6 @@
 /**
- * Inbox tools for agent use
- * Native tools that allow agents to interact with their email inbox
+ * Inbox tools for assistant use
+ * Native tools that allow assistants to interact with their email inbox
  */
 
 import type { Tool } from '@hasna/assistants-shared';
@@ -93,7 +93,7 @@ export const inboxDownloadAttachmentTool: Tool = {
  */
 export const inboxSendTool: Tool = {
   name: 'inbox_send',
-  description: 'Send an email from the agent inbox.',
+  description: 'Send an email from the assistant inbox.',
   parameters: {
     type: 'object',
     properties: {

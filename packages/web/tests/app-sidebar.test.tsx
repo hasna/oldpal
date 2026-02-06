@@ -148,7 +148,7 @@ describe('AppSidebar', () => {
     const markup = renderToStaticMarkup(<AppSidebar />);
 
     expect(markup).toContain('Chat');
-    expect(markup).toContain('Agents');
+    expect(markup).toContain('Assistants');
     expect(markup).toContain('Messages');
     expect(markup).toContain('Settings');
   });

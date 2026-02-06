@@ -212,11 +212,11 @@ describe('Hook types', () => {
     const handlers: HookHandler[] = [
       { type: 'command', command: 'echo test' },
       { type: 'prompt', prompt: 'Is this safe?' },
-      { type: 'agent', prompt: 'Validate input', model: 'claude-3-haiku' },
+      { type: 'assistant', prompt: 'Validate input', model: 'claude-3-haiku' },
     ];
     expect(handlers[0].type).toBe('command');
     expect(handlers[1].type).toBe('prompt');
-    expect(handlers[2].type).toBe('agent');
+    expect(handlers[2].type).toBe('assistant');
   });
 
   test('HookInput structure', () => {

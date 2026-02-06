@@ -8,7 +8,7 @@ export const schedules = pgTable('schedules', {
   userId: uuid('user_id')
     .references(() => users.id, { onDelete: 'cascade' })
     .notNull(),
-  agentId: uuid('agent_id')
+  assistantId: uuid('agent_id')
     .references(() => assistants.id, { onDelete: 'cascade' }),
   command: text('command').notNull(),
   description: text('description'),
@@ -33,8 +33,8 @@ export const schedulesRelations = relations(schedules, ({ one }) => ({
     fields: [schedules.userId],
     references: [users.id],
   }),
-  agent: one(assistants, {
-    fields: [schedules.agentId],
+  assistant: one(assistants, {
+    fields: [schedules.assistantId],
     references: [assistants.id],
   }),
 }));

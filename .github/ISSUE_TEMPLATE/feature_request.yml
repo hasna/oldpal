@@ -39,7 +39,7 @@ body:
       label: Area
       description: Which area of the project does this affect?
       options:
-        - Core (agent runtime)
+        - Core (assistant runtime)
         - Terminal UI
         - Web UI
         - API

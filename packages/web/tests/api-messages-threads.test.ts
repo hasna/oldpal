@@ -2,17 +2,17 @@ import { describe, expect, test, beforeEach, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Mock state
-let mockUserAgents: any[] = [];
+let mockUserAssistants: any[] = [];
 let mockThreadMessages: any[] = [];
 
 // Mock database
 mock.module('@/db', () => ({
   db: {
     query: {
-      agents: {
-        findMany: async () => mockUserAgents,
+      assistants: {
+        findMany: async () => mockUserAssistants,
       },
-      agentMessages: {
+      assistantMessages: {
         findMany: async () => mockThreadMessages,
       },
     },
@@ -21,8 +21,8 @@ mock.module('@/db', () => ({
 
 // Mock db schema
 mock.module('@/db/schema', () => ({
-  agentMessages: 'agentMessages',
-  agents: 'agents',
+  assistantMessages: 'assistantMessages',
+  assistants: 'assistants',
 }));
 
 // Mock auth middleware
@@ -77,29 +77,29 @@ function createRequest(
 
 describe('GET /api/v1/messages/threads/:threadId', () => {
   beforeEach(() => {
-    mockUserAgents = [{ id: 'agent-1' }, { id: 'agent-2' }];
+    mockUserAssistants = [{ id: 'assistant-1' }, { id: 'assistant-2' }];
     mockThreadMessages = [
       {
         id: 'msg-1',
         threadId: 'thread-123',
-        fromAgentId: 'agent-1',
-        toAgentId: 'agent-other',
+        fromAssistantId: 'assistant-1',
+        toAssistantId: 'assistant-other',
         body: 'First message',
         createdAt: new Date('2024-01-01T10:00:00Z'),
       },
       {
         id: 'msg-2',
         threadId: 'thread-123',
-        fromAgentId: 'agent-other',
-        toAgentId: 'agent-1',
+        fromAssistantId: 'assistant-other',
+        toAssistantId: 'assistant-1',
         body: 'Reply',
         createdAt: new Date('2024-01-01T10:05:00Z'),
       },
       {
         id: 'msg-3',
         threadId: 'thread-123',
-        fromAgentId: 'agent-1',
-        toAgentId: 'agent-other',
+        fromAssistantId: 'assistant-1',
+        toAssistantId: 'assistant-other',
         body: 'Second reply',
         createdAt: new Date('2024-01-01T10:10:00Z'),
       },
@@ -165,8 +165,8 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
   });
 
   describe('authorization', () => {
-    test('returns 403 when user has no agents', async () => {
-      mockUserAgents = [];
+    test('returns 403 when user has no assistants', async () => {
+      mockUserAssistants = [];
       const [request, context] = createRequest('thread-123');
 
       const response = await GET(request, context);
@@ -177,14 +177,14 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
     });
 
     test('returns 403 when user has no access to any message in thread', async () => {
-      // User has different agents than the ones in the thread
-      mockUserAgents = [{ id: 'my-agent-1' }, { id: 'my-agent-2' }];
+      // User has different assistants than the ones in the thread
+      mockUserAssistants = [{ id: 'my-assistant-1' }, { id: 'my-assistant-2' }];
       mockThreadMessages = [
         {
           id: 'msg-1',
           threadId: 'thread-123',
-          fromAgentId: 'other-agent-1',
-          toAgentId: 'other-agent-2',
+          fromAssistantId: 'other-assistant-1',
+          toAssistantId: 'other-assistant-2',
           body: 'Message between others',
         },
       ];
@@ -199,13 +199,13 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
     });
 
     test('grants access when user owns sender of any message', async () => {
-      mockUserAgents = [{ id: 'agent-1' }];
+      mockUserAssistants = [{ id: 'assistant-1' }];
       mockThreadMessages = [
         {
           id: 'msg-1',
           threadId: 'thread-123',
-          fromAgentId: 'agent-1',
-          toAgentId: 'other-agent',
+          fromAssistantId: 'assistant-1',
+          toAssistantId: 'other-assistant',
           body: 'I sent this',
         },
       ];
@@ -220,13 +220,13 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
     });
 
     test('grants access when user owns recipient of any message', async () => {
-      mockUserAgents = [{ id: 'agent-2' }];
+      mockUserAssistants = [{ id: 'assistant-2' }];
       mockThreadMessages = [
         {
           id: 'msg-1',
           threadId: 'thread-123',
-          fromAgentId: 'other-agent',
-          toAgentId: 'agent-2',
+          fromAssistantId: 'other-assistant',
+          toAssistantId: 'assistant-2',
           body: 'Message to me',
         },
       ];
@@ -241,24 +241,24 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
     });
 
     test('grants access if user owns one message in a larger thread', async () => {
-      mockUserAgents = [{ id: 'agent-1' }];
+      mockUserAssistants = [{ id: 'assistant-1' }];
       mockThreadMessages = [
         {
           id: 'msg-1',
-          fromAgentId: 'other-1',
-          toAgentId: 'other-2',
+          fromAssistantId: 'other-1',
+          toAssistantId: 'other-2',
           body: 'Others talking',
         },
         {
           id: 'msg-2',
-          fromAgentId: 'other-2',
-          toAgentId: 'agent-1',
+          fromAssistantId: 'other-2',
+          toAssistantId: 'assistant-1',
           body: 'Message to me',
         },
         {
           id: 'msg-3',
-          fromAgentId: 'other-1',
-          toAgentId: 'other-2',
+          fromAssistantId: 'other-1',
+          toAssistantId: 'other-2',
           body: 'More others talking',
         },
       ];
@@ -280,8 +280,8 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
         {
           id: 'msg-1',
           threadId: 'thread-123',
-          fromAgentId: 'agent-1',
-          toAgentId: 'agent-2',
+          fromAssistantId: 'assistant-1',
+          toAssistantId: 'assistant-2',
           subject: 'Test Subject',
           body: 'Hello',
           priority: 'high',
@@ -298,8 +298,8 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
       const msg = data.data.messages[0];
       expect(msg).toHaveProperty('id');
       expect(msg).toHaveProperty('threadId');
-      expect(msg).toHaveProperty('fromAgentId');
-      expect(msg).toHaveProperty('toAgentId');
+      expect(msg).toHaveProperty('fromAssistantId');
+      expect(msg).toHaveProperty('toAssistantId');
       expect(msg).toHaveProperty('body');
     });
   });

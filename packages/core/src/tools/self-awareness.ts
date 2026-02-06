@@ -1,8 +1,8 @@
 /**
  * Self-Awareness Tools
  *
- * Tools that allow agents to understand their context, identity, and resources.
- * These enable agents to make informed decisions about expensive operations,
+ * Tools that allow assistants to understand their context, identity, and resources.
+ * These enable assistants to make informed decisions about expensive operations,
  * adjust behavior based on remaining resources, and identify themselves.
  */
 
@@ -77,7 +77,7 @@ export const contextStatsTool: Tool = {
 export const whoamiTool: Tool = {
   name: 'whoami',
   description:
-    'Get current agent identity - assistant name, model, session ID, and active identity. Quick way to identify yourself.',
+    'Get current assistant identity - name, model, session ID, and active identity. Quick way to identify yourself.',
   parameters: {
     type: 'object',
     properties: {},
@@ -160,7 +160,7 @@ export const statsSummaryTool: Tool = {
 export const sessionStateTool: Tool = {
   name: 'session_state',
   description:
-    'Get current session state including processing status, queue length, pending tool calls, model, working directory, and timing. Use to understand what the agent is currently doing.',
+    'Get current session state including processing status, queue length, pending tool calls, model, working directory, and timing. Use to understand what the assistant is currently doing.',
   parameters: {
     type: 'object',
     properties: {},

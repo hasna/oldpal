@@ -13,7 +13,7 @@ describe('GlobalMemoryManager', () => {
     manager = new GlobalMemoryManager({
       dbPath: join(tempDir, 'memory.db'),
       scope: 'private',
-      scopeId: 'test-agent-123',
+      scopeId: 'test-assistant-123',
       sessionId: 'test-session-456',
     });
   });
@@ -117,7 +117,7 @@ describe('GlobalMemoryManager', () => {
 
       const memory = await manager.get('private-data', 'private');
       expect(memory?.scope).toBe('private');
-      expect(memory?.scopeId).toBe('test-agent-123');
+      expect(memory?.scopeId).toBe('test-assistant-123');
     });
 
     test('should store shared memories', async () => {
@@ -480,7 +480,7 @@ describe('GlobalMemoryManager', () => {
       const tempDir6 = await mkdtemp(join(tmpdir(), 'memory-test-scope2-'));
       const managerWithScope = new GlobalMemoryManager({
         dbPath: join(tempDir6, 'memory.db'),
-        scopeId: 'agent-123',
+        scopeId: 'assistant-123',
       });
 
       try {
@@ -490,7 +490,7 @@ describe('GlobalMemoryManager', () => {
         });
         expect(memory).not.toBeNull();
         expect(memory.scope).toBe('private');
-        expect(memory.scopeId).toBe('agent-123');
+        expect(memory.scopeId).toBe('assistant-123');
       } finally {
         managerWithScope.close();
         await rm(tempDir6, { recursive: true, force: true });
@@ -501,7 +501,7 @@ describe('GlobalMemoryManager', () => {
       const tempDir7 = await mkdtemp(join(tmpdir(), 'memory-test-disabled-'));
       const managerDisabled = new GlobalMemoryManager({
         dbPath: join(tempDir7, 'memory.db'),
-        scopeId: 'agent-123',
+        scopeId: 'assistant-123',
         config: {
           scopes: {
             globalEnabled: false,
@@ -528,7 +528,7 @@ describe('GlobalMemoryManager', () => {
       const tempDir8 = await mkdtemp(join(tmpdir(), 'memory-test-disabled2-'));
       const managerDisabled = new GlobalMemoryManager({
         dbPath: join(tempDir8, 'memory.db'),
-        scopeId: 'agent-123',
+        scopeId: 'assistant-123',
         config: {
           scopes: {
             globalEnabled: true,
@@ -558,7 +558,7 @@ describe('GlobalMemoryManager', () => {
       const tempDir9 = await mkdtemp(join(tmpdir(), 'memory-test-query-scope-'));
       const managerScoped = new GlobalMemoryManager({
         dbPath: join(tempDir9, 'memory.db'),
-        scopeId: 'agent-123',
+        scopeId: 'assistant-123',
         config: {
           scopes: {
             globalEnabled: true,
@@ -592,7 +592,7 @@ describe('GlobalMemoryManager', () => {
       const tempDir10 = await mkdtemp(join(tmpdir(), 'memory-test-relevant-scope-'));
       const managerScoped = new GlobalMemoryManager({
         dbPath: join(tempDir10, 'memory.db'),
-        scopeId: 'agent-123',
+        scopeId: 'assistant-123',
         config: {
           scopes: {
             globalEnabled: true,
@@ -610,7 +610,7 @@ describe('GlobalMemoryManager', () => {
           importance: 8,
           summary: 'Global test memory with searchterm',
         });
-        await managerScoped.set('private-fact', 'agent private searchterm info', {
+        await managerScoped.set('private-fact', 'assistant private searchterm info', {
           category: 'fact',
           scope: 'private',
           importance: 8,
@@ -669,7 +669,7 @@ describe('GlobalMemoryManager', () => {
       const managerWithLimits = new GlobalMemoryManager({
         dbPath: join(tempDir2, 'memory.db'),
         scope: 'private',
-        scopeId: 'test-agent',
+        scopeId: 'test-assistant',
         config: {
           storage: {
             maxEntries: 5,
@@ -718,7 +718,7 @@ describe('GlobalMemoryManager', () => {
       const managerWithLimits = new GlobalMemoryManager({
         dbPath: join(tempDir3, 'memory.db'),
         scope: 'private',
-        scopeId: 'test-agent',
+        scopeId: 'test-assistant',
         config: {
           storage: {
             maxEntries: 3,
@@ -766,7 +766,7 @@ describe('GlobalMemoryManager', () => {
       const managerForCleanup = new GlobalMemoryManager({
         dbPath: join(tempDir4, 'memory.db'),
         scope: 'private',
-        scopeId: 'test-agent',
+        scopeId: 'test-assistant',
         config: {
           storage: {
             maxEntries: 10,

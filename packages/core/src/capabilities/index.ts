@@ -1,7 +1,7 @@
 /**
- * Agent Capabilities Module
+ * Assistant Capabilities Module
  *
- * Provides capability definitions, resolution, and enforcement for agents.
+ * Provides capability definitions, resolution, and enforcement for assistants.
  */
 
 export * from './types';

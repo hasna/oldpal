@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/use-auth';
 const PREFETCH_ROUTES = [
   '/chat',
   '/sessions',
-  '/agents',
+  '/assistants',
   '/messages',
   '/settings',
 ];

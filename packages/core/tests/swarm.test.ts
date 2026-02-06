@@ -9,7 +9,7 @@ import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import {
   SwarmDecisionPolicy,
   DEFAULT_DECISION_POLICY,
-  SwarmAgentSelector,
+  SwarmAssistantSelector,
   DEFAULT_SELECTOR_CONFIG,
   SwarmResultsAggregator,
   DEFAULT_AGGREGATOR_CONFIG,
@@ -29,7 +29,7 @@ import type {
   SwarmMetrics,
 } from '../src/swarm/types';
 import type { SubagentResult } from '../src/agent/subagent-manager';
-import type { RegisteredAgent } from '../src/registry';
+import type { RegisteredAssistant } from '../src/registry';
 
 // ============================================
 // Decision Policy Tests
@@ -92,7 +92,7 @@ describe('SwarmDecisionPolicy', () => {
     expect(result.riskScore).toBeGreaterThan(0.3);
   });
 
-  test('should return single_agent for simple task', () => {
+  test('should return single_assistant for simple task', () => {
     const { decision, reasons } = policy.evaluate('fix typo');
     expect(decision).toBe('single_agent');
     expect(reasons.length).toBe(0);
@@ -116,11 +116,11 @@ describe('SwarmDecisionPolicy', () => {
 });
 
 // ============================================
-// Agent Selector Tests
+// Assistant Selector Tests
 // ============================================
 
-describe('SwarmAgentSelector', () => {
-  let selector: SwarmAgentSelector;
+describe('SwarmAssistantSelector', () => {
+  let selector: SwarmAssistantSelector;
   let mockRegistry: {
     findBestMatch: ReturnType<typeof mock>;
     findByCapability: ReturnType<typeof mock>;
@@ -128,10 +128,10 @@ describe('SwarmAgentSelector', () => {
     get: ReturnType<typeof mock>;
   };
 
-  const createMockAgent = (id: string, tools: string[] = []): RegisteredAgent => ({
+  const createMockAssistant = (id: string, tools: string[] = []): RegisteredAssistant => ({
     id,
-    name: `Agent ${id}`,
-    type: 'subagent',
+    name: `Assistant ${id}`,
+    type: 'subassistant',
     capabilities: { tools, skills: [] },
     status: { state: 'idle', message: '' },
     load: { activeTasks: 0, queuedTasks: 0, tokensUsed: 0, llmCalls: 0, currentDepth: 0 },
@@ -150,17 +150,17 @@ describe('SwarmAgentSelector', () => {
   });
 
   test('should initialize with default config', () => {
-    selector = new SwarmAgentSelector();
+    selector = new SwarmAssistantSelector();
     expect(selector.isEnabled()).toBe(false); // No registry
   });
 
   test('should be enabled with registry', () => {
-    selector = new SwarmAgentSelector(mockRegistry as any);
+    selector = new SwarmAssistantSelector(mockRegistry as any);
     expect(selector.isEnabled()).toBe(true);
   });
 
   test('should create fallback assignment without registry', () => {
-    selector = new SwarmAgentSelector();
+    selector = new SwarmAssistantSelector();
     const task: SwarmTask = {
       id: 'task-1',
       description: 'Test task',
@@ -176,11 +176,11 @@ describe('SwarmAgentSelector', () => {
     expect(plan.unassignedTasks).toContain('task-1');
   });
 
-  test('should assign agent when found', () => {
-    const agent = createMockAgent('agent-1', ['bash', 'read']);
-    mockRegistry.findBestMatch = mock(() => agent);
+  test('should assign assistant when found', () => {
+    const assistant = createMockAssistant('assistant-1', ['bash', 'read']);
+    mockRegistry.findBestMatch = mock(() => assistant);
 
-    selector = new SwarmAgentSelector(mockRegistry as any);
+    selector = new SwarmAssistantSelector(mockRegistry as any);
 
     const task: SwarmTask = {
       id: 'task-1',
@@ -195,14 +195,14 @@ describe('SwarmAgentSelector', () => {
 
     const plan = selector.createAssignmentPlan([task]);
     expect(plan.stats.assignedTasks).toBe(1);
-    expect(plan.assignments.get('task-1')?.agentId).toBe('agent-1');
+    expect(plan.assignments.get('task-1')?.assistantId).toBe('assistant-1');
   });
 
   test('should sort tasks by priority', () => {
-    const agent = createMockAgent('agent-1');
-    mockRegistry.findBestMatch = mock(() => agent);
+    const assistant = createMockAssistant('assistant-1');
+    mockRegistry.findBestMatch = mock(() => assistant);
 
-    selector = new SwarmAgentSelector(mockRegistry as any);
+    selector = new SwarmAssistantSelector(mockRegistry as any);
 
     const tasks: SwarmTask[] = [
       { id: 't1', description: 'Low', status: 'pending', role: 'worker', priority: 5, dependsOn: [], createdAt: Date.now() },

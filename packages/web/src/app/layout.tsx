@@ -19,7 +19,7 @@ const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' }
 
 const siteConfig = {
   name: 'Assistants',
-  description: 'Your personal AI assistant platform. Create and manage intelligent agents that help you automate tasks, organize information, and boost productivity.',
+  description: 'Your personal AI assistant platform. Create and manage intelligent assistants that help you automate tasks, organize information, and boost productivity.',
   url: process.env.NEXT_PUBLIC_APP_URL || 'https://assistants.app',
   ogImage: '/og-image.png',
 };
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   },
   description: siteConfig.description,
   manifest: '/manifest.json',
-  keywords: ['AI assistant', 'automation', 'productivity', 'agents', 'chatbot', 'AI platform'],
+  keywords: ['AI assistant', 'automation', 'productivity', 'assistants', 'chatbot', 'AI platform'],
   authors: [{ name: 'Hasna' }],
   creator: 'Hasna',
   icons: {

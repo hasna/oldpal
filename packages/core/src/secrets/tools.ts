@@ -1,6 +1,6 @@
 /**
- * Secrets tools for agent use
- * Native tools that allow agents to manage and retrieve secrets
+ * Secrets tools for assistant use
+ * Native tools that allow assistants to manage and retrieve secrets
  */
 
 import type { Tool } from '@hasna/assistants-shared';
@@ -19,8 +19,8 @@ export const secretsListTool: Tool = {
     properties: {
       scope: {
         type: 'string',
-        description: 'Filter by scope: "global" for shared secrets, "agent" for agent-specific secrets, or "all" for both. Default: all',
-        enum: ['global', 'agent', 'all'],
+        description: 'Filter by scope: "global" for shared secrets, "assistant" for assistant-specific secrets, or "all" for both. Default: all',
+        enum: ['global', 'assistant', 'all'],
       },
     },
   },
@@ -31,7 +31,7 @@ export const secretsListTool: Tool = {
  */
 export const secretsGetTool: Tool = {
   name: 'secrets_get',
-  description: 'Get a secret value. Rate limited for security. If scope is not specified, checks agent scope first, then falls back to global.',
+  description: 'Get a secret value. Rate limited for security. If scope is not specified, checks assistant scope first, then falls back to global.',
   parameters: {
     type: 'object',
     properties: {
@@ -41,8 +41,8 @@ export const secretsGetTool: Tool = {
       },
       scope: {
         type: 'string',
-        description: 'Secret scope: "global" or "agent". Default: tries agent first, then global',
-        enum: ['global', 'agent'],
+        description: 'Secret scope: "global" or "assistant". Default: tries assistant first, then global',
+        enum: ['global', 'assistant'],
       },
       format: {
         type: 'string',
@@ -77,8 +77,8 @@ export const secretsSetTool: Tool = {
       },
       scope: {
         type: 'string',
-        description: 'Secret scope: "global" for shared across all agents, "agent" for this agent only. Default: agent',
-        enum: ['global', 'agent'],
+        description: 'Secret scope: "global" for shared across all assistants, "assistant" for this assistant only. Default: assistant',
+        enum: ['global', 'assistant'],
       },
     },
     required: ['name', 'value'],
@@ -100,8 +100,8 @@ export const secretsDeleteTool: Tool = {
       },
       scope: {
         type: 'string',
-        description: 'Secret scope: "global" or "agent". Default: agent',
-        enum: ['global', 'agent'],
+        description: 'Secret scope: "global" or "assistant". Default: assistant',
+        enum: ['global', 'assistant'],
       },
     },
     required: ['name'],
@@ -140,7 +140,7 @@ export function createSecretsToolExecutors(
 
         // Group by scope
         const globalSecrets = secrets.filter(s => s.scope === 'global');
-        const agentSecrets = secrets.filter(s => s.scope === 'agent');
+        const assistantSecrets = secrets.filter(s => s.scope === 'assistant');
 
         if (globalSecrets.length > 0) {
           lines.push('### Global Secrets');
@@ -150,9 +150,9 @@ export function createSecretsToolExecutors(
           lines.push('');
         }
 
-        if (agentSecrets.length > 0) {
-          lines.push('### Agent Secrets');
-          for (const secret of agentSecrets) {
+        if (assistantSecrets.length > 0) {
+          lines.push('### Assistant Secrets');
+          for (const secret of assistantSecrets) {
             lines.push(`- **${secret.name}**${secret.description ? ` - ${secret.description}` : ''}`);
           }
           lines.push('');
@@ -218,7 +218,7 @@ export function createSecretsToolExecutors(
       const name = String(input.name || '').trim();
       const value = String(input.value || '');
       const description = input.description ? String(input.description).trim() : undefined;
-      const scope = input.scope ? String(input.scope).toLowerCase() as SecretScope : 'agent';
+      const scope = input.scope ? String(input.scope).toLowerCase() as SecretScope : 'assistant';
 
       if (!name) {
         return 'Error: Secret name is required.';
@@ -252,7 +252,7 @@ export function createSecretsToolExecutors(
       }
 
       const name = String(input.name || '').trim();
-      const scope = (String(input.scope || 'agent').toLowerCase() as SecretScope);
+      const scope = (String(input.scope || 'assistant').toLowerCase() as SecretScope);
 
       if (!name) {
         return 'Error: Secret name is required.';

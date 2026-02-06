@@ -145,7 +145,7 @@ describe('UserDetailDialog', () => {
           name: 'Test User',
           role: 'user',
           isActive: true,
-          _counts: { sessions: 5, agents: 2 },
+          _counts: { sessions: 5, assistants: 2 },
         },
       }));
     });
@@ -255,7 +255,7 @@ describe('API response handling', () => {
         updatedAt: '2024-01-01T00:00:00Z',
         _counts: {
           sessions: 5,
-          agents: 2,
+          assistants: 2,
         },
       },
     };

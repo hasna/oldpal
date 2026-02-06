@@ -18,7 +18,7 @@ const DISMISS_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 function getTypeLabel(type: UsageStatus['type']): string {
   switch (type) {
-    case 'agents': return 'agents';
+    case 'assistants': return 'assistants';
     case 'messages': return 'messages today';
     case 'sessions': return 'sessions';
     case 'schedules': return 'schedules';

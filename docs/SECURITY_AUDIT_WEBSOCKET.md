@@ -121,7 +121,7 @@ try {
 | Finding | Status | Details |
 |---------|--------|---------|
 | Cleanup on Close | PASS | Unsubscribes and releases session ownership |
-| Agent Stop on Disconnect | PASS | Calls `stopSession()` to halt processing |
+| Assistant Stop on Disconnect | PASS | Calls `stopSession()` to halt processing |
 | Concurrent Send Protection | PASS | Guards against message ID clobbering |
 
 **Implementation:** `packages/web/src/pages/api/v1/ws.ts:479-488`

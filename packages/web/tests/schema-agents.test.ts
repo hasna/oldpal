@@ -1,74 +1,74 @@
 import { describe, expect, test } from 'bun:test';
 
-describe('agents schema', () => {
-  test('exports agents table', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents).toBeDefined();
+describe('assistants schema', () => {
+  test('exports assistants table', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants).toBeDefined();
   });
 
-  test('exports agentsRelations', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agentsRelations).toBeDefined();
+  test('exports assistantsRelations', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistantsRelations).toBeDefined();
   });
 
-  test('agents has id column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.id).toBeDefined();
+  test('assistants has id column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.id).toBeDefined();
   });
 
-  test('agents has userId column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.userId).toBeDefined();
+  test('assistants has userId column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.userId).toBeDefined();
   });
 
-  test('agents has name column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.name).toBeDefined();
+  test('assistants has name column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.name).toBeDefined();
   });
 
-  test('agents has description column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.description).toBeDefined();
+  test('assistants has description column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.description).toBeDefined();
   });
 
-  test('agents has avatar column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.avatar).toBeDefined();
+  test('assistants has avatar column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.avatar).toBeDefined();
   });
 
-  test('agents has model column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.model).toBeDefined();
+  test('assistants has model column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.model).toBeDefined();
   });
 
-  test('agents has systemPrompt column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.systemPrompt).toBeDefined();
+  test('assistants has systemPrompt column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.systemPrompt).toBeDefined();
   });
 
-  test('agents has settings column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.settings).toBeDefined();
+  test('assistants has settings column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.settings).toBeDefined();
   });
 
-  test('agents has isActive column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.isActive).toBeDefined();
+  test('assistants has isActive column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.isActive).toBeDefined();
   });
 
-  test('agents has createdAt column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.createdAt).toBeDefined();
+  test('assistants has createdAt column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.createdAt).toBeDefined();
   });
 
-  test('agents has updatedAt column', async () => {
-    const mod = await import('../src/db/schema/agents');
-    expect(mod.agents.updatedAt).toBeDefined();
+  test('assistants has updatedAt column', async () => {
+    const mod = await import('../src/db/schema/assistants');
+    expect(mod.assistants.updatedAt).toBeDefined();
   });
 
-  test('agents table has correct name', async () => {
-    const mod = await import('../src/db/schema/agents');
+  test('assistants table has correct name', async () => {
+    const mod = await import('../src/db/schema/assistants');
     // @ts-ignore - accessing internal drizzle property
-    expect(mod.agents[Symbol.for('drizzle:Name')]).toBe('agents');
+    expect(mod.assistants[Symbol.for('drizzle:Name')]).toBe('assistants');
   });
 });

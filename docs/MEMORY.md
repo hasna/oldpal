@@ -1,31 +1,31 @@
 # Memory System
 
-The assistants memory system provides persistent storage for agent knowledge across sessions. It supports three privacy scopes, automatic injection, and configurable retention.
+The assistants memory system provides persistent storage for assistant knowledge across sessions. It supports three privacy scopes, automatic injection, and configurable retention.
 
 ## Overview
 
-Memory allows agents to:
+Memory allows assistants to:
 - Remember user preferences and settings
 - Store learned facts and knowledge
 - Track session history
-- Share information across agents (shared scope)
+- Share information across assistants (shared scope)
 
 ## Privacy Scopes
 
 ### Global Scope
-- **Visibility**: All agents and sessions
+- **Visibility**: All assistants and sessions
 - **Use case**: System-wide settings, shared knowledge
 - **Example**: `user.timezone`, `system.version`
 
 ### Shared Scope
-- **Visibility**: Agents within the same scope ID (e.g., team, project)
+- **Visibility**: Assistants within the same scope ID (e.g., team, project)
 - **Use case**: Project-specific context, team preferences
 - **Example**: `project.stack`, `team.coding-style`
 
 ### Private Scope
-- **Visibility**: Single agent only
-- **Use case**: Agent-specific learning, personal context
-- **Example**: `agent.last-task`, `session.goals`
+- **Visibility**: Single assistant only
+- **Use case**: Assistant-specific learning, personal context
+- **Example**: `assistant.last-task`, `session.goals`
 
 ## Memory Categories
 
@@ -259,9 +259,9 @@ Use `memory_forget` or the `/memory delete` command to remove specific memories.
 
 ## Privacy Considerations
 
-1. **Private memories** are only accessible to the creating agent
+1. **Private memories** are only accessible to the creating assistant
 2. **Shared memories** require matching scope IDs
-3. **Global memories** are visible to all agents
+3. **Global memories** are visible to all assistants
 4. Memory contents are stored in a local SQLite database
 5. The database is located at `~/.assistants/memory.db`
 6. Memory injection can be disabled via configuration
@@ -272,7 +272,7 @@ When deploying the memory system in a multi-user web environment, consider the f
 
 ### Tenant Isolation
 
-- **ScopeId**: In web deployments, the `scopeId` is set to the agent ID (from the database) or session ID. Both are user-specific, providing tenant isolation at the data level.
+- **ScopeId**: In web deployments, the `scopeId` is set to the assistant ID (from the database) or session ID. Both are user-specific, providing tenant isolation at the data level.
 - **Session Ownership**: The web API enforces session ownership checks before allowing memory access. Users can only access memories for sessions they own.
 - **Database File**: All tenant data is stored in a single SQLite database file. Isolation is enforced through `scopeId` filtering in queries.
 
@@ -301,13 +301,13 @@ When deploying the memory system in a multi-user web environment, consider the f
 
 | Scope | Access Rule | Multi-tenant Safety |
 |-------|-------------|---------------------|
-| `private` | Only accessible if `scope_id` matches agent's scopeId | ✅ Safe - requires exact match |
-| `shared` | Accessible if `scope_id` is null OR matches agent's scopeId | ⚠️ Caution - null scopeId visible to all |
+| `private` | Only accessible if `scope_id` matches assistant's scopeId | ✅ Safe - requires exact match |
+| `shared` | Accessible if `scope_id` is null OR matches assistant's scopeId | ⚠️ Caution - null scopeId visible to all |
 | `global` | Accessible by all (scope_id must be null) | ❌ Not safe for multi-tenant |
 
 ### Best Practices for Multi-Tenant
 
-1. **Always use explicit scopeId**: When saving memories, explicitly set scopeId to the user/agent identifier
+1. **Always use explicit scopeId**: When saving memories, explicitly set scopeId to the user/assistant identifier
 2. **Avoid global scope**: Don't store tenant-specific data in global scope
 3. **Audit access**: Monitor the `memory_access_log` table for unusual access patterns
 4. **Regular cleanup**: Implement retention policies to remove old tenant data

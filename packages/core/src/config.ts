@@ -202,7 +202,7 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       privateEnabled: true,
     },
   },
-  subagents: {
+  subassistants: {
     maxDepth: 3,
     maxConcurrent: 5,
     maxTurns: 10,
@@ -216,8 +216,8 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       'web_fetch',
     ],
     forbiddenTools: [
-      'agent_spawn',      // Prevent recursive spawning at max depth
-      'agent_delegate',   // Prevent delegation at max depth
+      'assistant_spawn',      // Prevent recursive spawning at max depth
+      'assistant_delegate',   // Prevent delegation at max depth
       'wallet_get',       // No wallet access
       'wallet_list',
       'secrets_get',      // No secrets access
@@ -405,12 +405,12 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
         ...(override.memory?.scopes || {}),
       },
     },
-    subagents: {
-      ...(base.subagents || {}),
-      ...(override.subagents || {}),
+    subassistants: {
+      ...(base.subassistants || {}),
+      ...(override.subassistants || {}),
       // Arrays are replaced, not merged
-      defaultTools: override.subagents?.defaultTools ?? base.subagents?.defaultTools,
-      forbiddenTools: override.subagents?.forbiddenTools ?? base.subagents?.forbiddenTools,
+      defaultTools: override.subassistants?.defaultTools ?? base.subassistants?.defaultTools,
+      forbiddenTools: override.subassistants?.forbiddenTools ?? base.subassistants?.forbiddenTools,
     },
     input: {
       ...(base.input || {}),

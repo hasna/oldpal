@@ -13,7 +13,7 @@ interface EmptyStateAction {
 
 interface EmptyStateProps {
   icon?: ReactNode;
-  illustration?: 'sessions' | 'agents' | 'messages' | 'schedules' | 'search' | 'data';
+  illustration?: 'sessions' | 'assistants' | 'messages' | 'schedules' | 'search' | 'data';
   title: string;
   description?: string;
   tip?: string;
@@ -41,10 +41,10 @@ function EmptyIllustration({ type }: { type: EmptyStateProps['illustration'] }) 
         </svg>
       );
 
-    case 'agents':
+    case 'assistants':
       return (
         <svg className={baseClasses} viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Robot/agent illustration */}
+          {/* Robot/assistant illustration */}
           <rect x="34" y="30" width="60" height="50" rx="12" fill="#E0F2FE" stroke="#7DD3FC" strokeWidth="2"/>
           <circle cx="50" cy="50" r="6" fill="#38BDF8"/>
           <circle cx="78" cy="50" r="6" fill="#38BDF8"/>
@@ -192,25 +192,10 @@ export function EmptySessionsState({ onNewSession }: { onNewSession?: () => void
   );
 }
 
-export function EmptyAgentsState({ onCreate }: { onCreate?: () => void }) {
-  return (
-    <EmptyState
-      illustration="agents"
-      title="No agents configured"
-      description="Create your first AI agent to customize how your assistant responds and behaves."
-      tip="Each agent can have its own personality, skills, and system prompt."
-      action={{
-        label: 'Create your first agent',
-        onClick: onCreate,
-      }}
-    />
-  );
-}
-
 export function EmptyAssistantsState({ onCreate }: { onCreate?: () => void }) {
   return (
     <EmptyState
-      illustration="agents"
+      illustration="assistants"
       title="No assistants configured"
       description="Create your first AI assistant to customize how it responds and behaves."
       tip="Each assistant can have its own personality, skills, and system prompt."
@@ -232,9 +217,9 @@ export function EmptyMessagesState({ filter }: { filter?: 'all' | 'unread' | 'ar
       description={
         isFiltered
           ? `No ${filter} messages found. Try a different filter or check back later.`
-          : 'Messages from your agents and scheduled tasks will appear here.'
+          : 'Messages from your assistants and scheduled tasks will appear here.'
       }
-      tip={isFiltered ? undefined : "Agents can send you messages with updates, reminders, and notifications."}
+      tip={isFiltered ? undefined : "Assistants can send you messages with updates, reminders, and notifications."}
     />
   );
 }
@@ -244,7 +229,7 @@ export function EmptySchedulesState({ onNewSchedule }: { onNewSchedule?: () => v
     <EmptyState
       illustration="schedules"
       title="No schedules set up"
-      description="Automate recurring tasks by creating schedules. Your agents can run commands on a timer."
+      description="Automate recurring tasks by creating schedules. Your assistants can run commands on a timer."
       tip="Schedules can run at fixed intervals, random times, or using cron expressions."
       action={{
         label: 'Create a schedule',

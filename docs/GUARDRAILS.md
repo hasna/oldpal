@@ -1,6 +1,6 @@
 # Guardrails System Documentation
 
-The guardrails system provides security and safety policies for controlling agent behavior, protecting sensitive data, and enforcing approval workflows.
+The guardrails system provides security and safety policies for controlling assistant behavior, protecting sensitive data, and enforcing approval workflows.
 
 ## Overview
 
@@ -8,7 +8,7 @@ Guardrails enable you to:
 - **Control tool access** - Allow, deny, or require approval for specific tools
 - **Protect sensitive data** - Define data sensitivity rules and redaction
 - **Enforce approval workflows** - Require human approval for certain actions
-- **Limit agent depth** - Prevent runaway subagent spawning
+- **Limit assistant depth** - Prevent runaway subassistant spawning
 - **Apply rate limits** - Control execution speed
 
 ## Configuration
@@ -126,7 +126,7 @@ Rules can have conditions that must be met:
 | `input_contains` | Input contains the specified string |
 | `input_matches` | Input matches the regex pattern |
 | `context_has` | Context contains the specified key |
-| `depth_exceeds` | Agent depth exceeds the value |
+| `depth_exceeds` | Assistant depth exceeds the value |
 | `time_exceeds` | Execution time exceeds the value (ms) |
 
 ## Data Sensitivity
@@ -194,7 +194,7 @@ Require human approval for specific actions:
 
 ## Depth Policy
 
-Limit how deep subagent chains can go:
+Limit how deep subassistant chains can go:
 
 ```json
 {
@@ -230,7 +230,7 @@ The default system policy provides baseline protection:
 - Denies dangerous patterns (rm -rf /, fork bombs)
 - Requires approval for external service calls
 - Blocks access to credential files
-- Limits subagent depth to 5
+- Limits subassistant depth to 5
 
 ### Permissive Preset
 
@@ -369,7 +369,7 @@ interface PolicyEvaluationResult {
 1. **Start permissive, tighten gradually** - Begin with warnings to understand usage patterns
 2. **Use project-level policies** - Share consistent policies with your team
 3. **Protect credentials** - Always block access to `.env`, `.secret`, and key files
-4. **Limit subagent depth** - Prevent runaway agent chains
+4. **Limit subassistant depth** - Prevent runaway assistant chains
 5. **Review warnings regularly** - Warnings indicate potential issues
 6. **Use approval for external calls** - Review requests to external services
 
@@ -379,7 +379,7 @@ Guardrails and budgets work together:
 - Guardrails control *what* can be done
 - Budgets control *how much* can be done
 
-Both provide complementary protection for safe agent execution.
+Both provide complementary protection for safe assistant execution.
 
 ## Example Configurations
 

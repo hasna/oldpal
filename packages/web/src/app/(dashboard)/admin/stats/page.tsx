@@ -19,9 +19,9 @@ interface Stats {
   totals: {
     users: number;
     sessions: number;
-    agents: number;
+    assistants: number;
     messages: number;
-    agentMessages: number;
+    assistantMessages: number;
   };
   recent: {
     newUsersToday: number;
@@ -261,9 +261,9 @@ export default function AdminStatsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <StatCard title="Total Users" value={stats.totals.users} icon={Users} />
                 <StatCard title="Total Sessions" value={stats.totals.sessions} icon={MessageSquare} />
-                <StatCard title="Total Agents" value={stats.totals.agents} icon={Bot} />
+                <StatCard title="Total Assistants" value={stats.totals.assistants} icon={Bot} />
                 <StatCard title="Total Messages" value={stats.totals.messages} icon={MessageSquare} />
-                <StatCard title="Agent Messages" value={stats.totals.agentMessages} icon={Bot} />
+                <StatCard title="Assistant Messages" value={stats.totals.assistantMessages} icon={Bot} />
               </div>
             </section>
 

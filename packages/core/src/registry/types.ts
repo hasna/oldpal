@@ -1,48 +1,48 @@
 /**
- * Agent Registry Types
+ * Assistant Registry Types
  *
- * Defines the data model for tracking registered agents in the system.
+ * Defines the data model for tracking registered assistants in the system.
  * Supports both in-memory and persisted storage with TTL-based cleanup.
  */
 
-import type { AgentState as HeartbeatAgentState } from '../heartbeat';
+import type { AssistantState as HeartbeatAssistantState } from '../heartbeat';
 
 /**
- * Agent type classification
+ * Assistant type classification
  */
-export type AgentType = 'assistant' | 'subagent' | 'coordinator' | 'worker';
+export type AssistantType = 'assistant' | 'subassistant' | 'coordinator' | 'worker';
 
 /**
- * Agent operational state (extends heartbeat state with 'offline')
+ * Assistant operational state (extends heartbeat state with 'offline')
  */
-export type RegistryAgentState = HeartbeatAgentState | 'offline';
+export type RegistryAssistantState = HeartbeatAssistantState | 'offline';
 
 /**
- * Agent capabilities - what an agent can do
+ * Assistant capabilities - what an assistant can do
  */
-export interface AgentCapabilities {
-  /** Available tools this agent can use */
+export interface AssistantCapabilities {
+  /** Available tools this assistant can use */
   tools: string[];
-  /** Available skills this agent has access to */
+  /** Available skills this assistant has access to */
   skills: string[];
   /** Supported LLM models */
   models: string[];
   /** Domain expertise tags (e.g., 'code', 'research', 'data') */
   tags: string[];
-  /** Maximum concurrent tasks this agent can handle */
+  /** Maximum concurrent tasks this assistant can handle */
   maxConcurrent?: number;
-  /** Maximum subagent depth this agent can spawn */
+  /** Maximum subassistant depth this assistant can spawn */
   maxDepth?: number;
   /** Tool scope restrictions (allowed patterns) */
   toolScopes?: string[];
 }
 
 /**
- * Agent current status
+ * Assistant current status
  */
-export interface AgentStatus {
+export interface AssistantStatus {
   /** Current operational state */
-  state: RegistryAgentState;
+  state: RegistryAssistantState;
   /** Current task being executed (if any) */
   currentTask?: string;
   /** Task description or summary */
@@ -60,9 +60,9 @@ export interface AgentStatus {
 }
 
 /**
- * Agent resource usage and load
+ * Assistant resource usage and load
  */
-export interface AgentLoad {
+export interface AssistantLoad {
   /** Number of active/running tasks */
   activeTasks: number;
   /** Number of queued tasks waiting */
@@ -94,48 +94,48 @@ export interface HeartbeatInfo {
 }
 
 /**
- * Registered agent record
+ * Registered assistant record
  */
-export interface RegisteredAgent {
-  /** Unique agent identifier */
+export interface RegisteredAssistant {
+  /** Unique assistant identifier */
   id: string;
-  /** Human-readable agent name */
+  /** Human-readable assistant name */
   name: string;
   /** Optional description */
   description?: string;
-  /** Agent type classification */
-  type: AgentType;
+  /** Assistant type classification */
+  type: AssistantType;
 
   // Relationships
   /** Associated session ID */
   sessionId?: string;
-  /** Parent agent ID (for subagents) */
+  /** Parent assistant ID (for subassistants) */
   parentId?: string;
-  /** Child agent IDs */
+  /** Child assistant IDs */
   childIds: string[];
 
   // Capabilities
-  /** What this agent can do */
-  capabilities: AgentCapabilities;
+  /** What this assistant can do */
+  capabilities: AssistantCapabilities;
 
   // Status
   /** Current operational status */
-  status: AgentStatus;
+  status: AssistantStatus;
   /** Current resource load */
-  load: AgentLoad;
+  load: AssistantLoad;
   /** Heartbeat information */
   heartbeat: HeartbeatInfo;
 
   // Lifecycle timestamps
-  /** When agent was registered */
+  /** When assistant was registered */
   registeredAt: string;
-  /** When agent was last updated */
+  /** When assistant was last updated */
   updatedAt: string;
-  /** When agent was deregistered (if applicable) */
+  /** When assistant was deregistered (if applicable) */
   deregisteredAt?: string;
 
-  // Location (for remote agents)
-  /** Endpoint URL for remote agents */
+  // Location (for remote assistants)
+  /** Endpoint URL for remote assistants */
   endpoint?: string;
   /** Region/zone for distributed deployments */
   region?: string;
@@ -146,23 +146,23 @@ export interface RegisteredAgent {
 }
 
 /**
- * Agent registration request
+ * Assistant registration request
  */
-export interface AgentRegistration {
+export interface AssistantRegistration {
   /** Optional specific ID (generated if not provided) */
   id?: string;
-  /** Agent name */
+  /** Assistant name */
   name: string;
   /** Optional description */
   description?: string;
-  /** Agent type */
-  type: AgentType;
+  /** Assistant type */
+  type: AssistantType;
   /** Session ID */
   sessionId?: string;
-  /** Parent agent ID */
+  /** Parent assistant ID */
   parentId?: string;
   /** Initial capabilities */
-  capabilities: Partial<AgentCapabilities>;
+  capabilities: Partial<AssistantCapabilities>;
   /** Remote endpoint */
   endpoint?: string;
   /** Custom metadata */
@@ -170,31 +170,31 @@ export interface AgentRegistration {
 }
 
 /**
- * Agent update request
+ * Assistant update request
  */
-export interface AgentUpdate {
+export interface AssistantUpdate {
   /** Update name */
   name?: string;
   /** Update description */
   description?: string;
   /** Update capabilities */
-  capabilities?: Partial<AgentCapabilities>;
+  capabilities?: Partial<AssistantCapabilities>;
   /** Update status */
-  status?: Partial<AgentStatus>;
+  status?: Partial<AssistantStatus>;
   /** Update load */
-  load?: Partial<AgentLoad>;
+  load?: Partial<AssistantLoad>;
   /** Update metadata */
   metadata?: Record<string, unknown>;
 }
 
 /**
- * Query parameters for finding agents
+ * Query parameters for finding assistants
  */
-export interface AgentQuery {
-  /** Filter by agent type */
-  type?: AgentType | AgentType[];
+export interface AssistantQuery {
+  /** Filter by assistant type */
+  type?: AssistantType | AssistantType[];
   /** Filter by state */
-  state?: RegistryAgentState | RegistryAgentState[];
+  state?: RegistryAssistantState | RegistryAssistantState[];
   /** Filter by session ID */
   sessionId?: string;
   /** Filter by parent ID */
@@ -211,13 +211,13 @@ export interface AgentQuery {
     skills?: string[];
     tags?: string[];
   };
-  /** Exclude agents with these capabilities */
+  /** Exclude assistants with these capabilities */
   excludedCapabilities?: {
     tools?: string[];
     skills?: string[];
     tags?: string[];
   };
-  /** Include offline/stale agents */
+  /** Include offline/stale assistants */
   includeOffline?: boolean;
   /** Maximum load threshold (0-1) */
   maxLoadFactor?: number;
@@ -232,12 +232,12 @@ export interface AgentQuery {
 /**
  * Query result with scored matches
  */
-export interface AgentQueryResult {
-  /** Matching agents */
-  agents: RegisteredAgent[];
+export interface AssistantQueryResult {
+  /** Matching assistants */
+  assistants: RegisteredAssistant[];
   /** Total count (before limit) */
   total: number;
-  /** Match scores (0-1) for each agent */
+  /** Match scores (0-1) for each assistant */
   scores: Map<string, number>;
 }
 
@@ -251,15 +251,15 @@ export interface RegistryConfig {
   storage: 'memory' | 'file' | 'database';
   /** Storage path (for file mode) */
   storagePath?: string;
-  /** Time-to-live for stale agents in milliseconds (default: 5 minutes) */
+  /** Time-to-live for stale assistants in milliseconds (default: 5 minutes) */
   staleTTL: number;
   /** Cleanup interval in milliseconds (default: 1 minute) */
   cleanupInterval: number;
-  /** Maximum agents to track (default: 1000) */
-  maxAgents: number;
+  /** Maximum assistants to track (default: 1000) */
+  maxAssistants: number;
   /** Auto-register from heartbeat (default: true) */
   autoRegister: boolean;
-  /** Auto-deregister stale agents (default: true) */
+  /** Auto-deregister stale assistants (default: true) */
   autoDeregister: boolean;
   /** Heartbeat stale threshold in milliseconds (default: 30 seconds) */
   heartbeatStaleThreshold: number;
@@ -273,7 +273,7 @@ export const DEFAULT_REGISTRY_CONFIG: RegistryConfig = {
   storage: 'memory',
   staleTTL: 5 * 60 * 1000, // 5 minutes
   cleanupInterval: 60 * 1000, // 1 minute
-  maxAgents: 1000,
+  maxAssistants: 1000,
   autoRegister: true,
   autoDeregister: true,
   heartbeatStaleThreshold: 30 * 1000, // 30 seconds
@@ -283,21 +283,21 @@ export const DEFAULT_REGISTRY_CONFIG: RegistryConfig = {
  * Registry event types
  */
 export type RegistryEventType =
-  | 'agent:registered'
-  | 'agent:updated'
-  | 'agent:deregistered'
-  | 'agent:stale'
-  | 'agent:recovered'
-  | 'agent:error';
+  | 'assistant:registered'
+  | 'assistant:updated'
+  | 'assistant:deregistered'
+  | 'assistant:stale'
+  | 'assistant:recovered'
+  | 'assistant:error';
 
 /**
  * Registry event payload
  */
 export interface RegistryEvent {
   type: RegistryEventType;
-  agentId: string;
-  agent?: RegisteredAgent;
-  previousState?: Partial<RegisteredAgent>;
+  assistantId: string;
+  assistant?: RegisteredAssistant;
+  previousState?: Partial<RegisteredAssistant>;
   timestamp: string;
   metadata?: Record<string, unknown>;
 }
@@ -311,13 +311,13 @@ export type RegistryEventListener = (event: RegistryEvent) => void;
  * Registry statistics
  */
 export interface RegistryStats {
-  /** Total registered agents */
-  totalAgents: number;
-  /** Agents by type */
-  byType: Record<AgentType, number>;
-  /** Agents by state */
-  byState: Record<RegistryAgentState, number>;
-  /** Stale agents count */
+  /** Total registered assistants */
+  totalAssistants: number;
+  /** Assistants by type */
+  byType: Record<AssistantType, number>;
+  /** Assistants by state */
+  byState: Record<RegistryAssistantState, number>;
+  /** Stale assistants count */
   staleCount: number;
   /** Average load factor */
   averageLoad: number;

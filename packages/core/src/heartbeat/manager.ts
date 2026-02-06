@@ -1,11 +1,11 @@
 import { dirname } from 'path';
 import { mkdirSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
-import type { AgentState, Heartbeat, HeartbeatConfig, HeartbeatStats } from './types';
+import type { AssistantState, Heartbeat, HeartbeatConfig, HeartbeatStats } from './types';
 
 export class HeartbeatManager {
   private config: HeartbeatConfig;
-  private state: AgentState = 'idle';
+  private state: AssistantState = 'idle';
   private startTime: number;
   private lastActivity: number;
   private stats: HeartbeatStats;
@@ -45,7 +45,7 @@ export class HeartbeatManager {
     }
   }
 
-  setState(state: AgentState): void {
+  setState(state: AssistantState): void {
     this.state = state;
     this.touchActivity();
   }
@@ -61,7 +61,7 @@ export class HeartbeatManager {
     this.touchActivity();
   }
 
-  getState(): AgentState {
+  getState(): AssistantState {
     return this.state;
   }
 

@@ -1,7 +1,7 @@
 /**
  * Capability Tools
  *
- * Tools for querying and managing agent capabilities.
+ * Tools for querying and managing assistant capabilities.
  */
 
 import type { Tool } from '@hasna/assistants-shared';
@@ -36,7 +36,7 @@ export interface CapabilityToolContext {
  */
 export const capabilitiesGetTool: Tool = {
   name: 'capabilities_get',
-  description: 'Get the current capability settings and resolved permissions for this agent.',
+  description: 'Get the current capability settings and resolved permissions for this assistant.',
   parameters: {
     type: 'object',
     properties: {
@@ -70,9 +70,9 @@ export function createCapabilitiesGetExecutor(context: CapabilityToolContext) {
     if (section === 'all' || section === 'orchestration') {
       lines.push('## Orchestration');
       lines.push(`Level: ${capabilities.orchestration.level}`);
-      lines.push(`Can spawn subagents: ${capabilities.orchestration.canSpawnSubagents}`);
-      lines.push(`Max concurrent subagents: ${capabilities.orchestration.maxConcurrentSubagents}`);
-      lines.push(`Max subagent depth: ${capabilities.orchestration.maxSubagentDepth}`);
+      lines.push(`Can spawn subassistants: ${capabilities.orchestration.canSpawnSubassistants}`);
+      lines.push(`Max concurrent subassistants: ${capabilities.orchestration.maxConcurrentSubassistants}`);
+      lines.push(`Max subassistant depth: ${capabilities.orchestration.maxSubassistantDepth}`);
       lines.push(`Can coordinate swarms: ${capabilities.orchestration.canCoordinateSwarms}`);
       lines.push(`Can delegate: ${capabilities.orchestration.canDelegate}`);
       lines.push('');
@@ -242,7 +242,7 @@ export const capabilitiesCheckTool: Tool = {
       },
       target: {
         type: 'string',
-        description: 'Target of the action (tool name, skill name, agent ID, etc.)',
+        description: 'Target of the action (tool name, skill name, assistant ID, etc.)',
       },
     },
     required: ['action'],
@@ -268,10 +268,10 @@ export function createCapabilitiesCheckExecutor(context: CapabilityToolContext) 
 
     switch (action) {
       case 'spawn':
-        if (!capabilities.orchestration.canSpawnSubagents) {
-          return `Action 'spawn' is NOT allowed: Subagent spawning is disabled (level: ${capabilities.orchestration.level}).`;
+        if (!capabilities.orchestration.canSpawnSubassistants) {
+          return `Action 'spawn' is NOT allowed: Subassistant spawning is disabled (level: ${capabilities.orchestration.level}).`;
         }
-        return `Action 'spawn' is allowed. Max depth: ${capabilities.orchestration.maxSubagentDepth}, Max concurrent: ${capabilities.orchestration.maxConcurrentSubagents}.`;
+        return `Action 'spawn' is allowed. Max depth: ${capabilities.orchestration.maxSubassistantDepth}, Max concurrent: ${capabilities.orchestration.maxConcurrentSubassistants}.`;
 
       case 'delegate':
         if (!capabilities.orchestration.canDelegate) {

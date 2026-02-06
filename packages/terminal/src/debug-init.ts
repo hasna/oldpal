@@ -25,7 +25,7 @@ async function debugInit() {
   const registry = new SessionRegistry();
   log(`    Done in ${Date.now() - start1}ms`);
 
-  log('\n[2] Creating session (includes AgentLoop.initialize)...');
+  log('\n[2] Creating session (includes AssistantLoop.initialize)...');
   log('    This includes: config load, skill load, hook load, LLM client, identity system');
   const start2 = Date.now();
 

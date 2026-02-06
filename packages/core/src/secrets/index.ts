@@ -1,6 +1,6 @@
 /**
  * Secrets module exports
- * Provides secure secrets storage for agents using AWS Secrets Manager
+ * Provides secure secrets storage for assistants using AWS Secrets Manager
  *
  * SECURITY NOTE: Secrets are NEVER stored locally. All secret data is stored
  * exclusively in AWS Secrets Manager and fetched on-demand with rate limiting.

@@ -1,7 +1,7 @@
 /**
  * Voice Tools
  *
- * Tools that allow agents to control voice mode and interact with
+ * Tools that allow assistants to control voice mode and interact with
  * text-to-speech and speech-to-text capabilities.
  */
 

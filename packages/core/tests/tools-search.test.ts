@@ -20,7 +20,7 @@ const sampleTools: ToolMetadata[] = [
   { name: 'notion', description: 'Notion workspace integration', category: 'connectors', source: 'connector' },
   { name: 'gmail', description: 'Gmail email integration', category: 'connectors', source: 'connector', tags: ['email'] },
   { name: 'web_fetch', description: 'Fetch content from URL', category: 'web', source: 'builtin', tags: ['read', 'http'] },
-  { name: 'agent_spawn', description: 'Spawn a subagent', category: 'agents', source: 'builtin', tags: ['create'] },
+  { name: 'assistant_spawn', description: 'Spawn a subassistant', category: 'assistants', source: 'builtin', tags: ['create'] },
 ];
 
 describe('ToolIndex', () => {

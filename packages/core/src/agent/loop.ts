@@ -1,7 +1,7 @@
 import type { Message, Tool, StreamChunk, ToolCall, ToolResult, AssistantsConfig, ScheduledCommand, VoiceState, ActiveIdentityInfo, HeartbeatState } from '@hasna/assistants-shared';
 import { generateId } from '@hasna/assistants-shared';
 import { join } from 'path';
-import { AgentContext } from './context';
+import { AssistantContext } from './context';
 import {
   ContextManager,
   ContextInjector,
@@ -32,7 +32,7 @@ import { ImageTools } from '../tools/image';
 import { SkillTool, createSkillListTool, createSkillReadTool, createSkillExecuteTool } from '../tools/skills';
 import { createAskUserTool, type AskUserHandler } from '../tools/ask-user';
 import { WaitTool, SleepTool } from '../tools/wait';
-import { runHookAgent } from './subagent';
+import { runHookAssistant } from './subagent';
 import { SkillLoader } from '../skills/loader';
 import { SkillExecutor } from '../skills/executor';
 import {
@@ -49,7 +49,7 @@ import {
   HeartbeatManager,
   StatePersistence,
   RecoveryManager,
-  type AgentState,
+  type AssistantState,
   type Heartbeat,
   type HeartbeatConfig as HeartbeatRuntimeConfig,
 } from '../heartbeat';
@@ -78,22 +78,22 @@ import { registerSessionTools, type SessionContext, type SessionQueryFunctions }
 import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
 import { registerSelfAwarenessTools } from '../tools/self-awareness';
 import { registerMemoryTools } from '../tools/memory';
-import { registerAgentTools } from '../tools/agents';
-import { registerAgentRegistryTools } from '../tools/agent-registry';
+import { registerAssistantTools as registerAssistantSpawnTools } from '../tools/agents';
+import { registerAssistantRegistryTools } from '../tools/agent-registry';
 import { registerCapabilityTools } from '../tools/capabilities';
 import { registerVoiceTools } from '../tools/voice';
 import { registerTaskTools } from '../tools/tasks';
 import { registerSwarmTools, type SwarmToolContext } from '../tools/swarm';
 import { SwarmCoordinator, type SwarmCoordinatorContext } from '../swarm/coordinator';
 import { GlobalMemoryManager, MemoryInjector, type MemoryConfig } from '../memory';
-import { SubagentManager, type SubagentManagerContext, type SubagentResult, type SubagentLoopConfig } from './subagent-manager';
+import { SubassistantManager, type SubassistantManagerContext, type SubassistantResult, type SubassistantLoopConfig } from './subagent-manager';
 import { BudgetTracker, type BudgetScope } from '../budget';
 import { PolicyEvaluator, type GuardrailsConfig, type PolicyEvaluationResult } from '../guardrails';
-import { getGlobalRegistry, type AgentRegistryService, type RegisteredAgent, type AgentType } from '../registry';
+import { getGlobalRegistry, type AssistantRegistryService, type RegisteredAssistant, type AssistantType } from '../registry';
 import { CapabilityEnforcer, type CapabilityEnforcementResult } from '../capabilities';
 import type { BudgetConfig, CapabilitiesConfigShared } from '@hasna/assistants-shared';
 
-export interface AgentLoopOptions {
+export interface AssistantLoopOptions {
   config?: AssistantsConfig;
   cwd?: string;
   sessionId?: string;
@@ -101,7 +101,7 @@ export interface AgentLoopOptions {
   allowedTools?: string[];
   extraSystemPrompt?: string;
   llmClient?: LLMClient;
-  /** Override the model from config (e.g., agent-specific model selection) */
+  /** Override the model from config (e.g., assistant-specific model selection) */
   model?: string;
   onChunk?: (chunk: StreamChunk) => void;
   onToolStart?: (toolCall: ToolCall) => void;
@@ -112,7 +112,7 @@ export interface AgentLoopOptions {
     userId: string;
     queryFn: SessionQueryFunctions;
   };
-  /** Subagent depth level (0 = root agent, used internally) */
+  /** Subassistant depth level (0 = root assistant, used internally) */
   depth?: number;
   /** Budget configuration for resource limits */
   budgetConfig?: BudgetConfig;
@@ -125,10 +125,10 @@ export interface AgentLoopOptions {
 }
 
 /**
- * Main agent loop - orchestrates the conversation
+ * Main assistant loop - orchestrates the conversation
  */
-export class AgentLoop {
-  private context: AgentContext;
+export class AssistantLoop {
+  private context: AssistantContext;
   private contextManager: ContextManager | null = null;
   private contextConfig: ContextConfig | null = null;
   private heartbeatManager: HeartbeatManager | null = null;
@@ -179,7 +179,7 @@ export class AgentLoop {
   private memoryInjector: MemoryInjector | null = null;
   private contextInjector: ContextInjector | null = null;
   private pendingContextInjection: string | null = null;
-  private subagentManager: SubagentManager | null = null;
+  private subassistantManager: SubassistantManager | null = null;
   private depth: number = 0;
   private pendingMessagesContext: string | null = null;
   private pendingMemoryContext: string | null = null;
@@ -198,8 +198,8 @@ export class AgentLoop {
   private capabilityEnforcer: CapabilityEnforcer | null = null;
   private capabilitiesConfig: CapabilitiesConfigShared | null = null;
   private onCapabilityViolation?: (result: CapabilityEnforcementResult, context: string) => void;
-  private registryService: AgentRegistryService | null = null;
-  private registeredAgentId: string | null = null;
+  private registryService: AssistantRegistryService | null = null;
+  private registeredAssistantId: string | null = null;
   private swarmCoordinator: SwarmCoordinator | null = null;
 
   // Event callbacks
@@ -209,12 +209,12 @@ export class AgentLoop {
   private onTokenUsage?: (usage: TokenUsage) => void;
   private onBudgetWarning?: (warning: string) => void;
 
-  constructor(options: AgentLoopOptions = {}) {
+  constructor(options: AssistantLoopOptions = {}) {
     this.cwd = options.cwd || process.cwd();
     this.sessionId = options.sessionId || generateId();
     this.assistantId = options.assistantId || null;
     this.depth = options.depth ?? 0;
-    this.context = new AgentContext();
+    this.context = new AssistantContext();
     this.toolRegistry = new ToolRegistry();
     this.toolRegistry.setErrorAggregator(this.errorAggregator);
     this.connectorBridge = new ConnectorBridge(this.cwd);
@@ -253,7 +253,7 @@ export class AgentLoop {
   }
 
   /**
-   * Initialize the agent (parallelized for fast startup)
+   * Initialize the assistant (parallelized for fast startup)
    */
   async initialize(): Promise<void> {
     // Phase 1: Load config and ensure directories exist (fast, needed for phase 2)
@@ -262,7 +262,7 @@ export class AgentLoop {
       ensureConfigDir(this.sessionId),
     ]);
     this.config = config;
-    // Apply model override if provided (e.g., agent-specific model selection)
+    // Apply model override if provided (e.g., assistant-specific model selection)
     if (this.modelOverride) {
       this.config = {
         ...this.config,
@@ -408,11 +408,11 @@ export class AgentLoop {
     // Initialize inbox if enabled
     if (this.config?.inbox?.enabled) {
       const assistant = this.assistantManager?.getActive();
-      const agentId = assistant?.id || this.sessionId;
-      const agentName = assistant?.name || 'assistant';
+      const assistantId = assistant?.id || this.sessionId;
+      const assistantName = assistant?.name || 'assistant';
       this.inboxManager = createInboxManager(
-        agentId,
-        agentName,
+        assistantId,
+        assistantName,
         this.config.inbox,
         getConfigDir()
       );
@@ -422,25 +422,25 @@ export class AgentLoop {
     // Initialize wallet if enabled
     if (this.config?.wallet?.enabled) {
       const assistant = this.assistantManager?.getActive();
-      const agentId = assistant?.id || this.sessionId;
-      this.walletManager = createWalletManager(agentId, this.config.wallet);
+      const assistantId = assistant?.id || this.sessionId;
+      this.walletManager = createWalletManager(assistantId, this.config.wallet);
       registerWalletTools(this.toolRegistry, () => this.walletManager);
     }
 
     // Initialize secrets if enabled
     if (this.config?.secrets?.enabled) {
       const assistant = this.assistantManager?.getActive();
-      const agentId = assistant?.id || this.sessionId;
-      this.secretsManager = createSecretsManager(agentId, this.config.secrets);
+      const assistantId = assistant?.id || this.sessionId;
+      this.secretsManager = createSecretsManager(assistantId, this.config.secrets);
       registerSecretsTools(this.toolRegistry, () => this.secretsManager);
     }
 
     // Initialize messages if enabled
     if (this.config?.messages?.enabled) {
       const assistant = this.assistantManager?.getActive();
-      const agentId = assistant?.id || this.sessionId;
-      const agentName = assistant?.name || 'assistant';
-      this.messagesManager = createMessagesManager(agentId, agentName, this.config.messages);
+      const assistantId = assistant?.id || this.sessionId;
+      const assistantName = assistant?.name || 'assistant';
+      this.messagesManager = createMessagesManager(assistantId, assistantName, this.config.messages);
       await this.messagesManager.initialize();
       registerMessagesTools(this.toolRegistry, () => this.messagesManager);
     }
@@ -449,10 +449,10 @@ export class AgentLoop {
     const memoryConfig = this.config?.memory;
     if (memoryConfig?.enabled !== false) {
       const assistant = this.assistantManager?.getActive();
-      const agentScopeId = assistant?.id || this.sessionId;
+      const assistantScopeId = assistant?.id || this.sessionId;
       this.memoryManager = new GlobalMemoryManager({
         defaultScope: 'private',
-        scopeId: agentScopeId,
+        scopeId: assistantScopeId,
         sessionId: this.sessionId,
         config: {
           enabled: memoryConfig?.enabled ?? true,
@@ -507,7 +507,7 @@ export class AgentLoop {
       projectId: this.activeProjectId ?? undefined,
     });
 
-    // Register self-awareness tools (always available for agent introspection)
+    // Register self-awareness tools (always available for assistant introspection)
     registerSelfAwarenessTools(this.toolRegistry, {
       getContextManager: () => this.contextManager,
       getContextInfo: () => this.getContextInfo(),
@@ -587,28 +587,28 @@ export class AgentLoop {
       sessionId: this.sessionId,
     });
 
-    // Initialize subagent manager and register agent tools
-    this.initializeSubagentManager();
-    registerAgentTools(this.toolRegistry, {
-      getSubagentManager: () => this.subagentManager,
+    // Initialize subassistant manager and register assistant tools
+    this.initializeSubassistantManager();
+    registerAssistantSpawnTools(this.toolRegistry, {
+      getSubassistantManager: () => this.subassistantManager,
       getAssistantManager: () => this.assistantManager,
       getDepth: () => this.depth,
       getCwd: () => this.cwd,
       getSessionId: () => this.sessionId,
     });
 
-    // Register agent registry tools (for querying running agents)
-    registerAgentRegistryTools(this.toolRegistry, {
+    // Register assistant registry tools (for querying running assistants)
+    registerAssistantRegistryTools(this.toolRegistry, {
       getRegistryService: () => this.registryService,
     });
 
-    // Register swarm tools for multi-agent orchestration
+    // Register swarm tools for multi-assistant orchestration
     registerSwarmTools(this.toolRegistry, {
       getSwarmCoordinator: () => this.getOrCreateSwarmCoordinator(),
-      isSwarmEnabled: () => this.subagentManager !== null,
+      isSwarmEnabled: () => this.subassistantManager !== null,
     });
 
-    // Register capability tools (for querying agent capabilities)
+    // Register capability tools (for querying assistant capabilities)
     registerCapabilityTools(this.toolRegistry, {
       getCapabilities: () => this.capabilityEnforcer?.getResolvedCapabilities() ?? null,
       isEnabled: () => this.capabilityEnforcer?.isEnabled() ?? false,
@@ -673,8 +673,8 @@ export class AgentLoop {
       }
     }
 
-    this.hookExecutor.setAgentRunner((hook, input, timeout) =>
-      runHookAgent({ hook, input, timeout, cwd: this.cwd })
+    this.hookExecutor.setAssistantRunner((hook, input, timeout) =>
+      runHookAssistant({ hook, input, timeout, cwd: this.cwd })
     );
 
     // Set system prompt (store for re-use on clear)
@@ -695,7 +695,7 @@ export class AgentLoop {
     });
 
     this.startHeartbeat();
-    this.startAgentHeartbeat();
+    this.startAssistantHeartbeat();
     await this.startEnergySystem();
   }
 
@@ -704,7 +704,7 @@ export class AgentLoop {
    */
   async process(userMessage: string): Promise<void> {
     if (this.isRunning) {
-      throw new Error('Agent is already processing a message');
+      throw new Error('Assistant is already processing a message');
     }
 
     // Set isRunning early to prevent race conditions with scheduled commands.
@@ -734,7 +734,7 @@ export class AgentLoop {
     source: 'user' | 'schedule'
   ): Promise<{ ok: boolean; summary?: string; error?: string }> {
     if (!this.llmClient || !this.config) {
-      throw new Error('Agent not initialized. Call initialize() first.');
+      throw new Error('Assistant not initialized. Call initialize() first.');
     }
 
     this.isRunning = true;
@@ -910,7 +910,7 @@ export class AgentLoop {
   }
 
   /**
-   * Main agent loop - continues until no more tool calls
+   * Main assistant loop - continues until no more tool calls
    */
   private async runLoop(): Promise<void> {
     const maxTurns = 50;
@@ -1076,13 +1076,13 @@ export class AgentLoop {
       const result = await this.contextManager.processMessages(messagesBefore);
       if (!result.summarized) return;
 
-      // Check if the agent was actively working (had recent tool calls)
+      // Check if the assistant was actively working (had recent tool calls)
       const lastAssistantMessage = this.findLastAssistantMessage(messagesBefore);
       const wasActivelyWorking = lastAssistantMessage?.toolCalls && lastAssistantMessage.toolCalls.length > 0;
 
       this.context.import(result.messages);
 
-      // Inject continuation prompt if agent was actively working
+      // Inject continuation prompt if assistant was actively working
       if (wasActivelyWorking && lastAssistantMessage?.toolCalls) {
         const lastToolCall = lastAssistantMessage.toolCalls[lastAssistantMessage.toolCalls.length - 1];
         const continuationPrompt = this.buildContinuationPrompt(lastToolCall);
@@ -1119,13 +1119,13 @@ export class AgentLoop {
   }
 
   /**
-   * Build a continuation prompt to help the agent resume work after context compaction
+   * Build a continuation prompt to help the assistant resume work after context compaction
    */
   private buildContinuationPrompt(lastToolCall: ToolCall): string {
     const toolName = lastToolCall.name;
     const toolInput = lastToolCall.input;
 
-    // Build a descriptive hint about what the agent was doing
+    // Build a descriptive hint about what the assistant was doing
     let actionDescription = `using the ${toolName} tool`;
     if (toolName === 'bash' && toolInput && typeof toolInput === 'object' && 'command' in toolInput) {
       actionDescription = `running: ${String(toolInput.command).slice(0, 50)}${String(toolInput.command).length > 50 ? '...' : ''}`;
@@ -1206,7 +1206,7 @@ export class AgentLoop {
         break;
       }
 
-      // Ensure tools receive the agent's cwd by default
+      // Ensure tools receive the assistant's cwd by default
       const toolInput = { ...(toolCall.input || {}) } as Record<string, unknown>;
       if (toolInput.cwd === undefined) {
         toolInput.cwd = this.cwd;
@@ -1303,7 +1303,7 @@ export class AgentLoop {
         const capResult = this.capabilityEnforcer.canUseTool(toolCall.name, {
           depth: this.depth,
           sessionId: this.sessionId,
-          agentId: this.registeredAgentId || undefined,
+          assistantId: this.registeredAssistantId || undefined,
         });
 
         // Handle warnings
@@ -1919,7 +1919,7 @@ export class AgentLoop {
   /**
    * Get the current context
    */
-  getContext(): AgentContext {
+  getContext(): AssistantContext {
     return this.context;
   }
 
@@ -1995,7 +1995,7 @@ export class AgentLoop {
    */
   private async switchModel(modelId: string): Promise<void> {
     if (!this.config) {
-      throw new Error('Agent not initialized');
+      throw new Error('Assistant not initialized');
     }
 
     // Import dynamically to avoid circular dependency
@@ -2168,7 +2168,7 @@ export class AgentLoop {
     if (status.overallExceeded) {
       const onExceeded = this.budgetConfig?.onExceeded || 'warn';
       if (onExceeded === 'stop') {
-        this.onBudgetWarning?.('Budget exceeded - stopping agent');
+        this.onBudgetWarning?.('Budget exceeded - stopping assistant');
         this.stop();
       } else if (onExceeded === 'pause') {
         this.onBudgetWarning?.('Budget exceeded - pausing (requires user approval to continue)');
@@ -2195,7 +2195,7 @@ export class AgentLoop {
   }
 
   /**
-   * Check if agent is currently running
+   * Check if assistant is currently running
    */
   isProcessing(): boolean {
     return this.isRunning;
@@ -2237,7 +2237,7 @@ export class AgentLoop {
     this.resetContext();
   }
 
-  private startAgentHeartbeat(): void {
+  private startAssistantHeartbeat(): void {
     if (!this.config) return;
     if (this.config.heartbeat?.enabled === false) return;
 
@@ -2261,8 +2261,8 @@ export class AgentLoop {
     this.heartbeatManager.onHeartbeat((heartbeat) => {
       void this.persistHeartbeat(heartbeat);
       // Also send heartbeat to registry
-      if (this.registeredAgentId && this.registryService) {
-        this.registryService.heartbeat(this.registeredAgentId);
+      if (this.registeredAssistantId && this.registryService) {
+        this.registryService.heartbeat(this.registeredAssistantId);
       }
     });
 
@@ -2270,44 +2270,44 @@ export class AgentLoop {
     this.heartbeatManager.setState('idle');
     void this.checkRecovery();
 
-    // Register agent in registry
+    // Register assistant in registry
     this.registerInRegistry();
   }
 
   /**
-   * Register this agent in the global registry
+   * Register this assistant in the global registry
    */
   private registerInRegistry(): void {
     try {
       this.registryService = getGlobalRegistry();
       if (!this.registryService.isEnabled()) return;
 
-      // Cleanup stale agents on startup (from previous crashed sessions)
-      this.registryService.cleanupStaleAgents();
+      // Cleanup stale assistants on startup (from previous crashed sessions)
+      this.registryService.cleanupStaleAssistants();
 
-      // Determine agent type based on depth
-      const agentType: AgentType = this.depth > 0 ? 'subagent' : 'assistant';
+      // Determine assistant type based on depth
+      const assistantType: AssistantType = this.depth > 0 ? 'subassistant' : 'assistant';
 
       // Get tools and skills for capability registration
       const tools = this.toolRegistry.getTools().map((t: Tool) => t.name);
       const skills = this.skillLoader.getSkills().map((s) => s.name);
 
-      // Register the agent
-      const agentName = this.assistantManager?.getActive()?.name ||
+      // Register the assistant
+      const assistantName = this.assistantManager?.getActive()?.name ||
         this.identityManager?.getActive()?.profile?.displayName ||
-        `Agent ${this.sessionId.slice(0, 8)}`;
-      const agent = this.registryService.register({
-        id: `agent_${this.sessionId}`,
-        name: agentName,
-        type: agentType,
+        `Assistant ${this.sessionId.slice(0, 8)}`;
+      const registered = this.registryService.register({
+        id: `assistant_${this.sessionId}`,
+        name: assistantName,
+        type: assistantType,
         sessionId: this.sessionId,
         capabilities: {
           tools,
           skills,
           models: [this.config?.llm?.model || 'claude-sonnet-4-20250514'],
-          tags: this.depth > 0 ? ['subagent'] : ['main'],
+          tags: this.depth > 0 ? ['subassistant'] : ['main'],
           maxConcurrent: 5,
-          maxDepth: this.config?.subagents?.maxDepth ?? 3,
+          maxDepth: this.config?.subassistants?.maxDepth ?? 3,
         },
         metadata: {
           cwd: this.cwd,
@@ -2316,34 +2316,34 @@ export class AgentLoop {
         },
       });
 
-      this.registeredAgentId = agent.id;
+      this.registeredAssistantId = registered.id;
     } catch {
       // Registry registration failed, non-critical
     }
   }
 
   /**
-   * Deregister this agent from the global registry
+   * Deregister this assistant from the global registry
    */
   private deregisterFromRegistry(): void {
-    if (!this.registeredAgentId || !this.registryService) return;
+    if (!this.registeredAssistantId || !this.registryService) return;
 
     try {
-      this.registryService.deregister(this.registeredAgentId);
-      this.registeredAgentId = null;
+      this.registryService.deregister(this.registeredAssistantId);
+      this.registeredAssistantId = null;
     } catch {
       // Deregistration failed, non-critical
     }
   }
 
   /**
-   * Update agent status in registry
+   * Update assistant status in registry
    */
-  private updateRegistryStatus(state: AgentState, taskDescription?: string): void {
-    if (!this.registeredAgentId || !this.registryService) return;
+  private updateRegistryStatus(state: AssistantState, taskDescription?: string): void {
+    if (!this.registeredAssistantId || !this.registryService) return;
 
     try {
-      this.registryService.updateStatus(this.registeredAgentId, {
+      this.registryService.updateStatus(this.registeredAssistantId, {
         state,
         currentTask: state === 'processing' ? 'processing_message' : undefined,
         taskDescription,
@@ -2355,14 +2355,14 @@ export class AgentLoop {
   }
 
   /**
-   * Update agent load in registry
+   * Update assistant load in registry
    */
   private updateRegistryLoad(): void {
-    if (!this.registeredAgentId || !this.registryService) return;
+    if (!this.registeredAssistantId || !this.registryService) return;
 
     try {
       const stats = this.builtinCommands.getTokenUsage();
-      this.registryService.updateLoad(this.registeredAgentId, {
+      this.registryService.updateLoad(this.registeredAssistantId, {
         activeTasks: this.pendingToolCalls.size,
         tokensUsed: stats.inputTokens + stats.outputTokens,
         currentDepth: this.depth,
@@ -2397,7 +2397,7 @@ export class AgentLoop {
     this.emit({ type: 'text', content: message });
   }
 
-  private setHeartbeatState(state: AgentState): void {
+  private setHeartbeatState(state: AssistantState): void {
     this.heartbeatManager?.setState(state);
     // Also update registry
     this.updateRegistryStatus(state);
@@ -2623,7 +2623,7 @@ export class AgentLoop {
 
         try {
           // Determine what content to run based on action type
-          // 'message' type injects custom message into agent session
+          // 'message' type injects custom message into assistant session
           // 'command' type (or undefined for backwards compatibility) runs the command
           const contentToRun = current.actionType === 'message'
             ? (current.message || current.command)
@@ -2666,7 +2666,7 @@ export class AgentLoop {
    */
   private resetContext(): void {
     const maxMessages = this.contextConfig?.maxMessages ?? 100;
-    this.context = new AgentContext(maxMessages);
+    this.context = new AssistantContext(maxMessages);
 
     // Clear pending injections to prevent stale context
     this.pendingContextInjection = null;
@@ -2822,48 +2822,48 @@ export class AgentLoop {
   }
 
   /**
-   * Initialize the subagent manager for spawning child agents
+   * Initialize the subassistant manager for spawning child assistants
    */
-  private initializeSubagentManager(): void {
-    const context: SubagentManagerContext = {
-      createSubagentLoop: (config) => this.createSubagentLoop(config),
+  private initializeSubassistantManager(): void {
+    const context: SubassistantManagerContext = {
+      createSubassistantLoop: (config: SubassistantLoopConfig) => this.createSubassistantLoop(config),
       getTools: () => this.toolRegistry.getTools(),
       getParentAllowedTools: () => this.getEffectiveAllowedTools(),
       getLLMClient: () => this.llmClient,
       fireHook: async (input) => {
-        // Fire SubagentStart/SubagentStop hooks
+        // Fire SubassistantStart/SubassistantStop hooks
         const hooks = this.hookLoader.getHooks(input.hook_event_name);
         return this.hookExecutor.execute(hooks, input);
       },
     };
 
-    // Use subagent config from AssistantsConfig, with fallbacks to defaults
-    const subagentConfig = this.config?.subagents ?? {};
+    // Use subassistant config from AssistantsConfig, with fallbacks to defaults
+    const subassistantConfig = this.config?.subassistants ?? {};
 
-    this.subagentManager = new SubagentManager(
+    this.subassistantManager = new SubassistantManager(
       {
-        maxDepth: subagentConfig.maxDepth,
-        maxConcurrent: subagentConfig.maxConcurrent,
-        maxTurns: subagentConfig.maxTurns,
-        defaultTimeoutMs: subagentConfig.defaultTimeoutMs,
-        defaultTools: subagentConfig.defaultTools,
-        forbiddenTools: subagentConfig.forbiddenTools,
+        maxDepth: subassistantConfig.maxDepth,
+        maxConcurrent: subassistantConfig.maxConcurrent,
+        maxTurns: subassistantConfig.maxTurns,
+        defaultTimeoutMs: subassistantConfig.defaultTimeoutMs,
+        defaultTools: subassistantConfig.defaultTools,
+        forbiddenTools: subassistantConfig.forbiddenTools,
       },
       context
     );
   }
 
   /**
-   * Get or create the swarm coordinator for multi-agent orchestration
+   * Get or create the swarm coordinator for multi-assistant orchestration
    */
   private getOrCreateSwarmCoordinator(): SwarmCoordinator | null {
-    if (!this.subagentManager) {
+    if (!this.subassistantManager) {
       return null;
     }
 
     if (!this.swarmCoordinator) {
       const context: SwarmCoordinatorContext = {
-        subagentManager: this.subagentManager,
+        subassistantManager: this.subassistantManager,
         registry: this.registryService ?? undefined,
         sessionId: this.sessionId,
         cwd: this.cwd,
@@ -2879,10 +2879,10 @@ export class AgentLoop {
   }
 
   /**
-   * Create a subagent loop for spawning
+   * Create a subassistant loop for spawning
    */
-  private async createSubagentLoop(config: SubagentLoopConfig): Promise<{
-    run: () => Promise<SubagentResult>;
+  private async createSubassistantLoop(config: SubassistantLoopConfig): Promise<{
+    run: () => Promise<SubassistantResult>;
     stop: () => void;
   }> {
     let response = '';
@@ -2890,13 +2890,13 @@ export class AgentLoop {
     let toolCalls = 0;
     let stopped = false;
 
-    const subagent = new AgentLoop({
+    const subassistant = new AssistantLoop({
       cwd: config.cwd,
       sessionId: config.sessionId,
       allowedTools: config.tools,
       depth: config.depth,
       llmClient: config.llmClient,
-      extraSystemPrompt: `You are a subagent spawned to complete a specific task.
+      extraSystemPrompt: `You are a subassistant spawned to complete a specific task.
 
 Task: ${config.task}
 
@@ -2914,21 +2914,21 @@ Be concise but thorough. Focus only on this task.`,
       },
     });
 
-    await subagent.initialize();
+    await subassistant.initialize();
 
     return {
-      run: async (): Promise<SubagentResult> => {
+      run: async (): Promise<SubassistantResult> => {
         try {
-          // Process the task - process() already handles the full agentic loop
+          // Process the task - process() already handles the full assistant loop
           // including tool calls and multi-turn conversation internally
-          await subagent.process(config.task);
+          await subassistant.process(config.task);
 
           // Count actual turns from messages
-          const messages = subagent.getContext().getMessages();
+          const messages = subassistant.getContext().getMessages();
           turns = messages.filter((m) => m.role === 'assistant').length;
 
-          // Get token usage from subagent
-          const usage = subagent.getTokenUsage();
+          // Get token usage from subassistant
+          const usage = subassistant.getTokenUsage();
           const tokensUsed = usage.inputTokens + usage.outputTokens;
 
           return {
@@ -2940,7 +2940,7 @@ Be concise but thorough. Focus only on this task.`,
           };
         } catch (error) {
           // Get token usage even on error
-          const usage = subagent.getTokenUsage();
+          const usage = subassistant.getTokenUsage();
           const tokensUsed = usage.inputTokens + usage.outputTokens;
 
           return {
@@ -2951,12 +2951,12 @@ Be concise but thorough. Focus only on this task.`,
             tokensUsed,
           };
         } finally {
-          subagent.shutdown();
+          subassistant.shutdown();
         }
       },
       stop: () => {
         stopped = true;
-        subagent.stop();
+        subassistant.stop();
       },
     };
   }

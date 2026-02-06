@@ -12,7 +12,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
 
     const query = searchParams.get('q')?.trim();
     const sessionId = searchParams.get('sessionId');
-    const agentId = searchParams.get('agentId');
+    const assistantId = searchParams.get('assistantId');
     const role = searchParams.get('role'); // 'user' | 'assistant'
     const dateFrom = searchParams.get('from');
     const dateTo = searchParams.get('to');
@@ -41,8 +41,8 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       conditions.push(eq(messages.sessionId, sessionId));
     }
 
-    if (agentId) {
-      conditions.push(eq(sessions.agentId, agentId));
+    if (assistantId) {
+      conditions.push(eq(sessions.assistantId, assistantId));
     }
 
     if (role === 'user' || role === 'assistant') {
@@ -66,7 +66,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
         createdAt: messages.createdAt,
         sessionId: messages.sessionId,
         sessionLabel: sessions.label,
-        agentId: sessions.agentId,
+        assistantId: sessions.assistantId,
       })
       .from(messages)
       .innerJoin(sessions, eq(messages.sessionId, sessions.id))
@@ -107,7 +107,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
         createdAt: result.createdAt,
         sessionId: result.sessionId,
         sessionLabel: result.sessionLabel || 'Untitled Session',
-        agentId: result.agentId,
+        assistantId: result.assistantId,
         matchIndex,
       };
     });

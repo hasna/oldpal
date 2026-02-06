@@ -485,7 +485,7 @@ describe('GET /api/v1/users/me/api-keys/[id]', () => {
       name: 'Specific Key',
       keyPrefix: 'sk_live_spec',
       keyHash: 'secret_hash',
-      permissions: ['read:agents'],
+      permissions: ['read:assistants'],
       lastUsedAt: new Date(),
       expiresAt: null,
       createdAt: new Date(),
@@ -500,7 +500,7 @@ describe('GET /api/v1/users/me/api-keys/[id]', () => {
     expect(response.status).toBe(200);
     expect(data.data.key.name).toBe('Specific Key');
     expect(data.data.key.keyHash).toBeUndefined();
-    expect(data.data.key.permissions).toEqual(['read:agents']);
+    expect(data.data.key.permissions).toEqual(['read:assistants']);
   });
 });
 

@@ -21,7 +21,7 @@ const createEmail = (overrides?: Partial<Email>): Email => ({
 describe('LocalInboxCache', () => {
   test('saves, lists, and marks emails', async () => {
     await withTempDir(async (dir) => {
-      const cache = new LocalInboxCache({ agentId: 'agent-1', basePath: dir });
+      const cache = new LocalInboxCache({ assistantId: 'assistant-1', basePath: dir });
       await cache.saveEmail(createEmail());
 
       const list = await cache.listEmails();
@@ -40,7 +40,7 @@ describe('LocalInboxCache', () => {
 
   test('stores attachments and returns path', async () => {
     await withTempDir(async (dir) => {
-      const cache = new LocalInboxCache({ agentId: 'agent-1', basePath: dir });
+      const cache = new LocalInboxCache({ assistantId: 'assistant-1', basePath: dir });
       const path = await cache.saveAttachment('email-1', 'file.txt', Buffer.from('data'));
       const existing = await cache.getAttachmentPath('email-1', 'file.txt');
 
@@ -52,7 +52,7 @@ describe('LocalInboxCache', () => {
 
   test('cleanup removes expired emails', async () => {
     await withTempDir(async (dir) => {
-      const cache = new LocalInboxCache({ agentId: 'agent-1', basePath: dir });
+      const cache = new LocalInboxCache({ assistantId: 'assistant-1', basePath: dir });
       await cache.saveEmail(createEmail({ id: 'old-email', messageId: 'old-msg' }));
 
       const index = await cache.loadIndex();
@@ -68,14 +68,14 @@ describe('LocalInboxCache', () => {
 
   test('getCacheSize accounts for stored files', async () => {
     await withTempDir(async (dir) => {
-      const cache = new LocalInboxCache({ agentId: 'agent-1', basePath: dir });
+      const cache = new LocalInboxCache({ assistantId: 'assistant-1', basePath: dir });
       await cache.saveEmail(createEmail({ id: 'email-1', messageId: 'msg-1' }));
       await cache.saveAttachment('email-1', 'file.txt', Buffer.from('hello'));
 
       const size = await cache.getCacheSize();
       expect(size).toBeGreaterThan(0);
 
-      const emailPath = join(dir, 'agent-1', 'emails', 'email-1.json');
+      const emailPath = join(dir, 'assistant-1', 'emails', 'email-1.json');
       const emailJson = await readFile(emailPath, 'utf-8');
       expect(emailJson).toContain('Hello');
     });

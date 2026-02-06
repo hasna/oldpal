@@ -9,7 +9,7 @@ export const usageMetrics = pgTable(
     userId: uuid('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    metricType: varchar('metric_type', { length: 50 }).notNull(), // 'messages', 'agents', 'sessions'
+    metricType: varchar('metric_type', { length: 50 }).notNull(), // 'messages', 'assistants', 'sessions'
     count: integer('count').default(0).notNull(),
     periodStart: timestamp('period_start').notNull(),
     periodEnd: timestamp('period_end').notNull(),

@@ -8,20 +8,20 @@ import { sessions, assistants } from '@/db/schema';
 import { eq, desc, and, ilike } from 'drizzle-orm';
 import type {
   SessionQueryFunctions,
-  AgentSessionData,
+  AssistantSessionData,
   ListSessionsOptions,
   CreateSessionData,
   UpdateSessionData,
 } from '@hasna/assistants-core';
 
 /**
- * Convert a database session to AgentSessionData format
+ * Convert a database session to AssistantSessionData format
  */
-function toAgentSessionData(session: typeof sessions.$inferSelect): AgentSessionData {
+function toAssistantSessionData(session: typeof sessions.$inferSelect): AssistantSessionData {
   return {
     id: session.id,
     label: session.label,
-    agentId: session.agentId,
+    assistantId: session.assistantId,
     cwd: session.cwd,
     metadata: session.metadata,
     createdAt: session.createdAt.toISOString(),
@@ -32,7 +32,7 @@ function toAgentSessionData(session: typeof sessions.$inferSelect): AgentSession
 /**
  * Get a single session by ID
  */
-async function getSession(sessionId: string, userId: string): Promise<AgentSessionData | null> {
+async function getSession(sessionId: string, userId: string): Promise<AssistantSessionData | null> {
   const session = await db.query.sessions.findFirst({
     where: and(eq(sessions.id, sessionId), eq(sessions.userId, userId)),
   });
@@ -41,7 +41,7 @@ async function getSession(sessionId: string, userId: string): Promise<AgentSessi
     return null;
   }
 
-  return toAgentSessionData(session);
+  return toAssistantSessionData(session);
 }
 
 /**
@@ -50,14 +50,14 @@ async function getSession(sessionId: string, userId: string): Promise<AgentSessi
 async function listSessions(
   userId: string,
   options: ListSessionsOptions
-): Promise<AgentSessionData[]> {
-  const { limit = 20, search, agentId } = options;
+): Promise<AssistantSessionData[]> {
+  const { limit = 20, search, assistantId } = options;
 
   // Build conditions
   const conditions = [eq(sessions.userId, userId)];
 
-  if (agentId) {
-    conditions.push(eq(sessions.agentId, agentId));
+  if (assistantId) {
+    conditions.push(eq(sessions.assistantId, assistantId));
   }
 
   if (search) {
@@ -70,7 +70,7 @@ async function listSessions(
     limit: Math.min(limit, 50),
   });
 
-  return results.map(toAgentSessionData);
+  return results.map(toAssistantSessionData);
 }
 
 /**
@@ -79,7 +79,7 @@ async function listSessions(
 async function createSession(
   userId: string,
   data: CreateSessionData
-): Promise<AgentSessionData> {
+): Promise<AssistantSessionData> {
   const label = data.label || `Session ${new Date().toLocaleDateString()}`;
 
   const [newSession] = await db
@@ -87,13 +87,13 @@ async function createSession(
     .values({
       userId,
       label,
-      agentId: data.agentId,
+      assistantId: data.assistantId,
       cwd: data.cwd,
       metadata: data.metadata,
     })
     .returning();
 
-  return toAgentSessionData(newSession);
+  return toAssistantSessionData(newSession);
 }
 
 /**
@@ -103,7 +103,7 @@ async function updateSession(
   sessionId: string,
   userId: string,
   data: UpdateSessionData
-): Promise<AgentSessionData | null> {
+): Promise<AssistantSessionData | null> {
   // First verify ownership
   const existing = await db.query.sessions.findFirst({
     where: and(eq(sessions.id, sessionId), eq(sessions.userId, userId)),
@@ -136,7 +136,7 @@ async function updateSession(
     .where(eq(sessions.id, sessionId))
     .returning();
 
-  return toAgentSessionData(updated);
+  return toAssistantSessionData(updated);
 }
 
 /**
@@ -159,18 +159,18 @@ async function deleteSession(sessionId: string, userId: string): Promise<boolean
 }
 
 /**
- * Verify that a user owns an agent
+ * Verify that a user owns an assistant
  */
-async function verifyAgentOwnership(agentId: string, userId: string): Promise<boolean> {
-  const agent = await db.query.assistants.findFirst({
-    where: eq(assistants.id, agentId),
+async function verifyAssistantOwnership(assistantId: string, userId: string): Promise<boolean> {
+  const assistant = await db.query.assistants.findFirst({
+    where: eq(assistants.id, assistantId),
   });
 
-  if (!agent) {
+  if (!assistant) {
     return false;
   }
 
-  return agent.userId === userId;
+  return assistant.userId === userId;
 }
 
 /**
@@ -183,7 +183,7 @@ export function createSessionQueryFunctions(): SessionQueryFunctions {
     createSession,
     updateSession,
     deleteSession,
-    verifyAgentOwnership,
+    verifyAssistantOwnership,
   };
 }
 

@@ -1,6 +1,6 @@
 /**
- * Messages tools for agent use
- * Tools that allow agents to send and receive messages from other agents
+ * Messages tools for assistant use
+ * Tools that allow assistants to send and receive messages from other assistants
  */
 
 import type { Tool } from '@hasna/assistants-shared';
@@ -12,18 +12,18 @@ import type { MessagesManager } from './messages-manager';
 // ============================================
 
 /**
- * messages_send - Send a message to another agent
+ * messages_send - Send a message to another assistant
  */
 export const messagesSendTool: Tool = {
   name: 'messages_send',
   description:
-    'Send a message to another agent. Use agent name or ID as recipient. Messages are delivered instantly to the recipient\'s inbox.',
+    'Send a message to another assistant. Use assistant name or ID as recipient. Messages are delivered instantly to the recipient\'s inbox.',
   parameters: {
     type: 'object',
     properties: {
       to: {
         type: 'string',
-        description: 'Recipient agent name or ID',
+        description: 'Recipient assistant name or ID',
       },
       body: {
         type: 'string',
@@ -70,7 +70,7 @@ export const messagesListTool: Tool = {
       },
       from: {
         type: 'string',
-        description: 'Filter by sender agent name or ID (optional)',
+        description: 'Filter by sender assistant name or ID (optional)',
       },
     },
     required: [],
@@ -132,12 +132,12 @@ export const messagesDeleteTool: Tool = {
 };
 
 /**
- * messages_list_agents - List known agents
+ * messages_list_assistants - List known assistants
  */
-export const messagesListAgentsTool: Tool = {
-  name: 'messages_list_agents',
+export const messagesListAssistantsTool: Tool = {
+  name: 'messages_list_assistants',
   description:
-    'List all known agents that you can send messages to. Shows agent names and when they were last active.',
+    'List all known assistants that you can send messages to. Shows assistant names and when they were last active.',
   parameters: {
     type: 'object',
     properties: {},
@@ -232,7 +232,7 @@ export function createMessagesToolExecutors(
           const date = new Date(msg.createdAt).toLocaleDateString();
 
           lines.push(`${statusIcon}${priorityIcon} **${msg.id}**`);
-          lines.push(`   From: ${msg.fromAgentName}`);
+          lines.push(`   From: ${msg.fromAssistantName}`);
           if (msg.subject) {
             lines.push(`   Subject: ${msg.subject}`);
           }
@@ -294,7 +294,7 @@ export function createMessagesToolExecutors(
 
         for (const msg of messages) {
           lines.push('---');
-          lines.push(`### From: ${msg.fromAgentName} → ${msg.toAgentName}`);
+          lines.push(`### From: ${msg.fromAssistantName} → ${msg.toAssistantName}`);
           if (msg.subject) {
             lines.push(`**Subject:** ${msg.subject}`);
           }
@@ -330,32 +330,32 @@ export function createMessagesToolExecutors(
       }
     },
 
-    messages_list_agents: async () => {
+    messages_list_assistants: async () => {
       const manager = getMessagesManager();
       if (!manager) {
         return 'Error: Messages are not enabled or configured.';
       }
 
       try {
-        const agents = await manager.listAgents();
+        const assistants = await manager.listAssistants();
 
-        if (agents.length === 0) {
-          return 'No other agents found. Agents appear here after sending or receiving messages.';
+        if (assistants.length === 0) {
+          return 'No other assistants found. Assistants appear here after sending or receiving messages.';
         }
 
         const lines: string[] = [];
-        lines.push(`## Known Agents (${agents.length})`);
+        lines.push(`## Known Assistants (${assistants.length})`);
         lines.push('');
 
-        for (const agent of agents) {
-          const lastSeen = new Date(agent.lastSeen).toLocaleDateString();
-          lines.push(`- **${agent.name}** (ID: ${agent.id})`);
+        for (const assistant of assistants) {
+          const lastSeen = new Date(assistant.lastSeen).toLocaleDateString();
+          lines.push(`- **${assistant.name}** (ID: ${assistant.id})`);
           lines.push(`  Last seen: ${lastSeen}`);
         }
 
         return lines.join('\n');
       } catch (error) {
-        return `Error listing agents: ${error instanceof Error ? error.message : String(error)}`;
+        return `Error listing assistants: ${error instanceof Error ? error.message : String(error)}`;
       }
     },
   };
@@ -368,10 +368,10 @@ function formatMessageAsMarkdown(message: {
   id: string;
   threadId: string;
   parentId: string | null;
-  fromAgentId: string;
-  fromAgentName: string;
-  toAgentId: string;
-  toAgentName: string;
+  fromAssistantId: string;
+  fromAssistantName: string;
+  toAssistantId: string;
+  toAssistantName: string;
   subject?: string;
   body: string;
   priority: string;
@@ -383,8 +383,8 @@ function formatMessageAsMarkdown(message: {
 
   lines.push(`## Message: ${message.id}`);
   lines.push('');
-  lines.push(`**From:** ${message.fromAgentName} (${message.fromAgentId})`);
-  lines.push(`**To:** ${message.toAgentName} (${message.toAgentId})`);
+  lines.push(`**From:** ${message.fromAssistantName} (${message.fromAssistantId})`);
+  lines.push(`**To:** ${message.toAssistantName} (${message.toAssistantId})`);
   if (message.subject) {
     lines.push(`**Subject:** ${message.subject}`);
   }
@@ -414,7 +414,7 @@ export const messagesTools: Tool[] = [
   messagesReadTool,
   messagesReadThreadTool,
   messagesDeleteTool,
-  messagesListAgentsTool,
+  messagesListAssistantsTool,
 ];
 
 /**

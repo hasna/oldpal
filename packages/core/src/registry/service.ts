@@ -1,30 +1,30 @@
 /**
- * Agent Registry Service
+ * Assistant Registry Service
  *
- * Provides high-level API for agent registration, discovery, and lifecycle management.
+ * Provides high-level API for assistant registration, discovery, and lifecycle management.
  * Integrates with heartbeat system for automatic registration and health tracking.
  */
 
 import type {
-  RegisteredAgent,
-  AgentRegistration,
-  AgentUpdate,
-  AgentQuery,
-  AgentQueryResult,
+  RegisteredAssistant,
+  AssistantRegistration,
+  AssistantUpdate,
+  AssistantQuery,
+  AssistantQueryResult,
   RegistryConfig,
   RegistryStats,
   RegistryEvent,
   RegistryEventListener,
   RegistryEventType,
-  AgentCapabilities,
+  AssistantCapabilities,
 } from './types';
 import { DEFAULT_REGISTRY_CONFIG } from './types';
 import { RegistryStore } from './store';
 
 /**
- * Agent Registry Service
+ * Assistant Registry Service
  */
-export class AgentRegistryService {
+export class AssistantRegistryService {
   private store: RegistryStore;
   private config: RegistryConfig;
   private listeners: Set<RegistryEventListener> = new Set();
@@ -39,14 +39,14 @@ export class AgentRegistryService {
    */
   private emit(
     type: RegistryEventType,
-    agentId: string,
-    agent?: RegisteredAgent,
-    previousState?: Partial<RegisteredAgent>
+    assistantId: string,
+    assistant?: RegisteredAssistant,
+    previousState?: Partial<RegisteredAssistant>
   ): void {
     const event: RegistryEvent = {
       type,
-      agentId,
-      agent,
+      assistantId,
+      assistant,
       previousState,
       timestamp: new Date().toISOString(),
     };
@@ -83,46 +83,46 @@ export class AgentRegistryService {
   }
 
   /**
-   * Register a new agent
+   * Register a new assistant
    */
-  register(registration: AgentRegistration): RegisteredAgent {
+  register(registration: AssistantRegistration): RegisteredAssistant {
     if (!this.config.enabled) {
       throw new Error('Registry is disabled');
     }
 
-    const agent = this.store.register(registration);
-    this.emit('agent:registered', agent.id, agent);
+    const assistant = this.store.register(registration);
+    this.emit('assistant:registered', assistant.id, assistant);
 
-    return agent;
+    return assistant;
   }
 
   /**
    * Register from heartbeat data
-   * Used for auto-registration when agents start
+   * Used for auto-registration when assistants start
    */
   registerFromHeartbeat(data: {
-    agentId: string;
+    assistantId: string;
     name: string;
     sessionId?: string;
     parentId?: string;
     tools?: string[];
     skills?: string[];
-  }): RegisteredAgent {
+  }): RegisteredAssistant {
     if (!this.config.autoRegister) {
       throw new Error('Auto-registration is disabled');
     }
 
     // Check if already registered
-    const existing = this.store.get(data.agentId);
+    const existing = this.store.get(data.assistantId);
     if (existing) {
       // Just update heartbeat
-      return this.heartbeat(data.agentId) || existing;
+      return this.heartbeat(data.assistantId) || existing;
     }
 
     return this.register({
-      id: data.agentId,
+      id: data.assistantId,
       name: data.name,
-      type: data.parentId ? 'subagent' : 'assistant',
+      type: data.parentId ? 'subassistant' : 'assistant',
       sessionId: data.sessionId,
       parentId: data.parentId,
       capabilities: {
@@ -133,116 +133,116 @@ export class AgentRegistryService {
   }
 
   /**
-   * Get an agent by ID
+   * Get an assistant by ID
    */
-  get(id: string): RegisteredAgent | null {
+  get(id: string): RegisteredAssistant | null {
     return this.store.get(id);
   }
 
   /**
-   * Update an agent
+   * Update an assistant
    */
-  update(id: string, update: AgentUpdate): RegisteredAgent | null {
+  update(id: string, update: AssistantUpdate): RegisteredAssistant | null {
     const previous = this.store.get(id);
-    const agent = this.store.update(id, update);
+    const assistant = this.store.update(id, update);
 
-    if (agent) {
-      this.emit('agent:updated', id, agent, previous || undefined);
+    if (assistant) {
+      this.emit('assistant:updated', id, assistant, previous || undefined);
     }
 
-    return agent;
+    return assistant;
   }
 
   /**
-   * Update agent status
+   * Update assistant status
    */
   updateStatus(
     id: string,
-    status: Partial<RegisteredAgent['status']>
-  ): RegisteredAgent | null {
+    status: Partial<RegisteredAssistant['status']>
+  ): RegisteredAssistant | null {
     return this.update(id, { status });
   }
 
   /**
-   * Update agent load
+   * Update assistant load
    */
   updateLoad(
     id: string,
-    load: Partial<RegisteredAgent['load']>
-  ): RegisteredAgent | null {
+    load: Partial<RegisteredAssistant['load']>
+  ): RegisteredAssistant | null {
     return this.update(id, { load });
   }
 
   /**
-   * Update agent capabilities
+   * Update assistant capabilities
    */
   updateCapabilities(
     id: string,
-    capabilities: Partial<AgentCapabilities>
-  ): RegisteredAgent | null {
+    capabilities: Partial<AssistantCapabilities>
+  ): RegisteredAssistant | null {
     return this.update(id, { capabilities });
   }
 
   /**
-   * Record a heartbeat for an agent
+   * Record a heartbeat for an assistant
    */
-  heartbeat(id: string): RegisteredAgent | null {
+  heartbeat(id: string): RegisteredAssistant | null {
     const previous = this.store.get(id);
     const wasStale = previous?.heartbeat.isStale;
 
-    const agent = this.store.heartbeat(id);
+    const assistant = this.store.heartbeat(id);
 
-    if (agent && wasStale) {
-      this.emit('agent:recovered', id, agent);
+    if (assistant && wasStale) {
+      this.emit('assistant:recovered', id, assistant);
     }
 
-    return agent;
+    return assistant;
   }
 
   /**
-   * Deregister an agent
+   * Deregister an assistant
    */
   deregister(id: string): boolean {
-    const agent = this.store.get(id);
+    const assistant = this.store.get(id);
     const result = this.store.deregister(id);
 
-    if (result && agent) {
-      this.emit('agent:deregistered', id, undefined, agent);
+    if (result && assistant) {
+      this.emit('assistant:deregistered', id, undefined, assistant);
     }
 
     return result;
   }
 
   /**
-   * Query agents by criteria
+   * Query assistants by criteria
    */
-  query(query: AgentQuery): AgentQueryResult {
+  query(query: AssistantQuery): AssistantQueryResult {
     return this.store.query(query);
   }
 
   /**
-   * Find agents by capability
+   * Find assistants by capability
    */
   findByCapability(capability: {
     tools?: string[];
     skills?: string[];
     tags?: string[];
-  }): RegisteredAgent[] {
+  }): RegisteredAssistant[] {
     const result = this.store.query({
       requiredCapabilities: capability,
       includeOffline: false,
     });
-    return result.agents;
+    return result.assistants;
   }
 
   /**
-   * Find available agents (idle, low load)
+   * Find available assistants (idle, low load)
    */
   findAvailable(options?: {
-    type?: RegisteredAgent['type'];
+    type?: RegisteredAssistant['type'];
     maxLoadFactor?: number;
     limit?: number;
-  }): RegisteredAgent[] {
+  }): RegisteredAssistant[] {
     const result = this.store.query({
       type: options?.type,
       state: 'idle',
@@ -252,11 +252,11 @@ export class AgentRegistryService {
       sortDir: 'asc',
       includeOffline: false,
     });
-    return result.agents;
+    return result.assistants;
   }
 
   /**
-   * Find best agent for a task
+   * Find best assistant for a task
    * Considers capabilities, load, and preferences
    */
   findBestMatch(requirements: {
@@ -264,7 +264,7 @@ export class AgentRegistryService {
     preferred?: { tools?: string[]; skills?: string[]; tags?: string[] };
     excluded?: { tools?: string[]; skills?: string[]; tags?: string[] };
     maxLoadFactor?: number;
-  }): RegisteredAgent | null {
+  }): RegisteredAssistant | null {
     const result = this.store.query({
       requiredCapabilities: requirements.required,
       preferredCapabilities: requirements.preferred,
@@ -274,24 +274,24 @@ export class AgentRegistryService {
       includeOffline: false,
     });
 
-    return result.agents[0] || null;
+    return result.assistants[0] || null;
   }
 
   /**
-   * Get children of an agent
+   * Get children of an assistant
    */
-  getChildren(parentId: string): RegisteredAgent[] {
+  getChildren(parentId: string): RegisteredAssistant[] {
     const result = this.store.query({
       parentId,
       includeOffline: true,
     });
-    return result.agents;
+    return result.assistants;
   }
 
   /**
-   * List all registered agents
+   * List all registered assistants
    */
-  list(): RegisteredAgent[] {
+  list(): RegisteredAssistant[] {
     return this.store.list();
   }
 
@@ -318,23 +318,23 @@ export class AgentRegistryService {
   }
 
   /**
-   * Manually trigger cleanup of stale agents
-   * Useful on startup to clean up agents from crashed sessions
+   * Manually trigger cleanup of stale assistants
+   * Useful on startup to clean up assistants from crashed sessions
    */
-  cleanupStaleAgents(): void {
-    this.store.cleanupStaleAgents();
+  cleanupStaleAssistants(): void {
+    this.store.cleanupStaleAssistants();
   }
 }
 
 // Singleton instance
-let globalRegistry: AgentRegistryService | null = null;
+let globalRegistry: AssistantRegistryService | null = null;
 
 /**
  * Get or create the global registry instance
  */
-export function getGlobalRegistry(config?: Partial<RegistryConfig>): AgentRegistryService {
+export function getGlobalRegistry(config?: Partial<RegistryConfig>): AssistantRegistryService {
   if (!globalRegistry) {
-    globalRegistry = new AgentRegistryService(config);
+    globalRegistry = new AssistantRegistryService(config);
   }
   return globalRegistry;
 }

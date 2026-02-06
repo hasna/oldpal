@@ -2,14 +2,14 @@ import { describe, expect, test } from 'bun:test';
 import type { LLMClient } from '../src/llm/client';
 import { MockLLMClient } from './fixtures/mock-llm';
 
-const { runHookAgent } = await import('../src/agent/subagent');
+const { runHookAssistant } = await import('../src/agent/subagent');
 
-describe('runHookAgent', () => {
+describe('runHookAssistant', () => {
   test('collects response text and uses default allowed tools', async () => {
     const llm = new MockLLMClient();
     llm.queueResponse({ content: 'ALLOW\nReason' });
 
-    const result = await runHookAgent({
+    const result = await runHookAssistant({
       hook: { prompt: 'Check if allowed' },
       input: { action: 'test' },
       timeout: 1000,
@@ -25,7 +25,7 @@ describe('runHookAgent', () => {
     const llm = new MockLLMClient();
     llm.queueResponse({ content: 'ALLOW' });
 
-    await runHookAgent({
+    await runHookAssistant({
       hook: { prompt: 'Test' },
       input: { value: 1 },
       timeout: 1000,
@@ -45,7 +45,7 @@ describe('runHookAgent', () => {
       }
     }
 
-    const result = await runHookAgent({
+    const result = await runHookAssistant({
       hook: { prompt: 'Timeout' },
       input: { value: 1 },
       timeout: 0,

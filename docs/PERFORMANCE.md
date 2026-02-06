@@ -163,7 +163,7 @@ Apply to:
 - `/api/v1/auth/*` - Authentication endpoints
 - `/api/v1/sessions/*` - User session data
 - `/api/v1/messages/*` - User messages
-- `/api/v1/agents/*` - User agents
+- `/api/v1/assistants/*` - User assistants
 
 **Cache static assets aggressively:**
 ```

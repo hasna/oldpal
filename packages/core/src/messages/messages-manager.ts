@@ -1,12 +1,12 @@
 /**
- * MessagesManager - Core class for agent-to-agent messaging
+ * MessagesManager - Core class for assistant-to-assistant messaging
  * Handles sending, receiving, listing, and context injection of messages
  */
 
 import { generateId } from '@hasna/assistants-shared';
 import { LocalMessagesStorage, getMessagesBasePath } from './storage/local-storage';
 import type {
-  AgentMessage,
+  AssistantMessage,
   MessageListItem,
   MessageThread,
   SendMessageInput,
@@ -16,10 +16,10 @@ import type {
 } from './types';
 
 export interface MessagesManagerOptions {
-  /** Agent ID */
-  agentId: string;
-  /** Agent name */
-  agentName: string;
+  /** Assistant ID */
+  assistantId: string;
+  /** Assistant name */
+  assistantName: string;
   /** Messages configuration */
   config: MessagesConfig;
 }
@@ -49,17 +49,17 @@ function generateThreadId(): string {
 }
 
 /**
- * MessagesManager handles all messaging operations for an agent
+ * MessagesManager handles all messaging operations for an assistant
  */
 export class MessagesManager {
-  private agentId: string;
-  private agentName: string;
+  private assistantId: string;
+  private assistantName: string;
   private config: MessagesConfig;
   private storage: LocalMessagesStorage;
 
   constructor(options: MessagesManagerOptions) {
-    this.agentId = options.agentId;
-    this.agentName = options.agentName;
+    this.assistantId = options.assistantId;
+    this.assistantName = options.assistantName;
     this.config = options.config;
 
     this.storage = new LocalMessagesStorage({
@@ -68,10 +68,10 @@ export class MessagesManager {
   }
 
   /**
-   * Initialize the manager (register agent)
+   * Initialize the manager (register assistant)
    */
   async initialize(): Promise<void> {
-    await this.storage.registerAgent(this.agentId, this.agentName);
+    await this.storage.registerAssistant(this.assistantId, this.assistantName);
   }
 
   // ============================================
@@ -79,7 +79,7 @@ export class MessagesManager {
   // ============================================
 
   /**
-   * Send a message to another agent
+   * Send a message to another assistant
    */
   async send(input: SendMessageInput): Promise<MessagesOperationResult> {
     try {
@@ -88,7 +88,7 @@ export class MessagesManager {
       if (!recipient) {
         return {
           success: false,
-          message: `Agent "${input.to}" not found. Use messages_list_agents to see known agents.`,
+          message: `Assistant "${input.to}" not found. Use messages_list_assistants to see known assistants.`,
         };
       }
 
@@ -98,7 +98,7 @@ export class MessagesManager {
       let subject = input.subject;
 
       if (input.replyTo) {
-        const parentMessage = await this.storage.loadMessage(this.agentId, input.replyTo);
+        const parentMessage = await this.storage.loadMessage(this.assistantId, input.replyTo);
         if (!parentMessage) {
           return {
             success: false,
@@ -119,14 +119,14 @@ export class MessagesManager {
       const messageId = generateMessageId();
       const now = new Date().toISOString();
 
-      const message: AgentMessage = {
+      const message: AssistantMessage = {
         id: messageId,
         threadId,
         parentId,
-        fromAgentId: this.agentId,
-        fromAgentName: this.agentName,
-        toAgentId: recipient.id,
-        toAgentName: recipient.name,
+        fromAssistantId: this.assistantId,
+        fromAssistantName: this.assistantName,
+        toAssistantId: recipient.id,
+        toAssistantName: recipient.name,
         subject,
         body: input.body,
         priority: input.priority || 'normal',
@@ -139,7 +139,7 @@ export class MessagesManager {
       await this.storage.saveMessage(message);
 
       // Update sender's registry
-      await this.storage.registerAgent(this.agentId, this.agentName);
+      await this.storage.registerAssistant(this.assistantId, this.assistantName);
 
       return {
         success: true,
@@ -160,13 +160,13 @@ export class MessagesManager {
    */
   private async resolveRecipient(to: string): Promise<{ id: string; name: string } | null> {
     // Try by ID first
-    const byId = await this.storage.getAgentById(to);
+    const byId = await this.storage.getAssistantById(to);
     if (byId) {
       return { id: to, name: byId.name };
     }
 
     // Try by name
-    const byName = await this.storage.findAgentByName(to);
+    const byName = await this.storage.findAssistantByName(to);
     if (byName) {
       return { id: byName.id, name: byName.entry.name };
     }
@@ -183,30 +183,30 @@ export class MessagesManager {
     threadId?: string;
     from?: string;
   }): Promise<MessageListItem[]> {
-    let fromAgentId: string | undefined;
+    let fromAssistantId: string | undefined;
 
     if (options?.from) {
-      const agent = await this.resolveRecipient(options.from);
-      fromAgentId = agent?.id;
+      const recipient = await this.resolveRecipient(options.from);
+      fromAssistantId = recipient?.id;
     }
 
-    return this.storage.listMessages(this.agentId, {
+    return this.storage.listMessages(this.assistantId, {
       limit: options?.limit,
       unreadOnly: options?.unreadOnly,
       threadId: options?.threadId,
-      fromAgentId,
+      fromAssistantId,
     });
   }
 
   /**
    * Read a specific message
    */
-  async read(messageId: string): Promise<AgentMessage | null> {
-    const message = await this.storage.loadMessage(this.agentId, messageId);
+  async read(messageId: string): Promise<AssistantMessage | null> {
+    const message = await this.storage.loadMessage(this.assistantId, messageId);
 
     if (message && (message.status === 'unread' || message.status === 'injected')) {
       await this.storage.updateMessageStatus(
-        this.agentId,
+        this.assistantId,
         messageId,
         'read',
         new Date().toISOString()
@@ -221,14 +221,14 @@ export class MessagesManager {
   /**
    * Read an entire thread
    */
-  async readThread(threadId: string): Promise<AgentMessage[]> {
-    const messages = await this.storage.loadThreadMessages(this.agentId, threadId);
+  async readThread(threadId: string): Promise<AssistantMessage[]> {
+    const messages = await this.storage.loadThreadMessages(this.assistantId, threadId);
 
     // Mark all as read
     for (const message of messages) {
       if (message.status === 'unread' || message.status === 'injected') {
         await this.storage.updateMessageStatus(
-          this.agentId,
+          this.assistantId,
           message.id,
           'read',
           new Date().toISOString()
@@ -245,7 +245,7 @@ export class MessagesManager {
    * Delete a message
    */
   async delete(messageId: string): Promise<MessagesOperationResult> {
-    const deleted = await this.storage.deleteMessage(this.agentId, messageId);
+    const deleted = await this.storage.deleteMessage(this.assistantId, messageId);
 
     if (deleted) {
       return {
@@ -264,16 +264,16 @@ export class MessagesManager {
    * List conversation threads
    */
   async listThreads(): Promise<MessageThread[]> {
-    return this.storage.listThreads(this.agentId);
+    return this.storage.listThreads(this.assistantId);
   }
 
   /**
-   * List known agents
+   * List known assistants
    */
-  async listAgents(): Promise<Array<{ id: string; name: string; lastSeen: string }>> {
-    const agents = await this.storage.listAgents();
+  async listAssistants(): Promise<Array<{ id: string; name: string; lastSeen: string }>> {
+    const assistants = await this.storage.listAssistants();
     // Filter out self
-    return agents.filter((a) => a.id !== this.agentId);
+    return assistants.filter((a) => a.id !== this.assistantId);
   }
 
   /**
@@ -284,7 +284,7 @@ export class MessagesManager {
     unreadCount: number;
     threadCount: number;
   }> {
-    const index = await this.storage.loadIndex(this.agentId);
+    const index = await this.storage.loadIndex(this.assistantId);
     return index.stats;
   }
 
@@ -295,7 +295,7 @@ export class MessagesManager {
   /**
    * Get unread messages for context injection
    */
-  async getUnreadForInjection(): Promise<AgentMessage[]> {
+  async getUnreadForInjection(): Promise<AssistantMessage[]> {
     const injectionConfig = this.config.injection || {};
     if (injectionConfig.enabled === false) {
       return [];
@@ -306,7 +306,7 @@ export class MessagesManager {
     const minPriorityOrder = PRIORITY_ORDER[minPriority];
 
     // Get unread messages
-    const unread = await this.storage.listMessages(this.agentId, {
+    const unread = await this.storage.listMessages(this.assistantId, {
       unreadOnly: true,
     });
 
@@ -326,9 +326,9 @@ export class MessagesManager {
     const toInject = filtered.slice(0, maxPerTurn);
 
     // Load full messages
-    const messages: AgentMessage[] = [];
+    const messages: AssistantMessage[] = [];
     for (const item of toInject) {
-      const message = await this.storage.loadMessage(this.agentId, item.id);
+      const message = await this.storage.loadMessage(this.assistantId, item.id);
       if (message) {
         messages.push(message);
       }
@@ -343,26 +343,26 @@ export class MessagesManager {
   async markInjected(messageIds: string[]): Promise<void> {
     const now = new Date().toISOString();
     for (const id of messageIds) {
-      await this.storage.updateMessageStatus(this.agentId, id, 'injected', now);
+      await this.storage.updateMessageStatus(this.assistantId, id, 'injected', now);
     }
   }
 
   /**
    * Build context string for injection
    */
-  buildInjectionContext(messages: AgentMessage[]): string {
+  buildInjectionContext(messages: AssistantMessage[]): string {
     if (messages.length === 0) {
       return '';
     }
 
     const lines: string[] = [];
-    lines.push('## Pending Agent Messages');
+    lines.push('## Pending Assistant Messages');
     lines.push('');
     lines.push(`You have ${messages.length} unread message(s):`);
 
     for (const msg of messages) {
       lines.push('');
-      lines.push(`### From: ${msg.fromAgentName}`);
+      lines.push(`### From: ${msg.fromAssistantName}`);
       if (msg.subject) {
         lines.push(`**Subject:** ${msg.subject}`);
       }
@@ -393,8 +393,8 @@ export class MessagesManager {
     const maxAgeDays = this.config.storage?.maxAgeDays || 90;
     const maxMessages = this.config.storage?.maxMessages || 1000;
 
-    let deleted = await this.storage.cleanup(this.agentId, maxAgeDays);
-    deleted += await this.storage.enforceMaxMessages(this.agentId, maxMessages);
+    let deleted = await this.storage.cleanup(this.assistantId, maxAgeDays);
+    deleted += await this.storage.enforceMaxMessages(this.assistantId, maxMessages);
 
     return deleted;
   }
@@ -412,13 +412,13 @@ function formatDate(isoDate: string): string {
  * Create a MessagesManager from config
  */
 export function createMessagesManager(
-  agentId: string,
-  agentName: string,
+  assistantId: string,
+  assistantName: string,
   config: MessagesConfig
 ): MessagesManager {
   return new MessagesManager({
-    agentId,
-    agentName,
+    assistantId,
+    assistantName,
     config,
   });
 }

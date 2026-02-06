@@ -61,7 +61,7 @@ function getCategoryIcon(category: string) {
       return MessageSquare;
     case 'memory':
       return Brain;
-    case 'agents':
+    case 'assistants':
       return Bot;
     default:
       return Terminal;
@@ -88,7 +88,7 @@ function getCategoryVariant(category: string): 'default' | 'secondary' | 'succes
       return 'secondary';
     case 'memory':
       return 'success';
-    case 'agents':
+    case 'assistants':
       return 'warning';
     default:
       return 'default';

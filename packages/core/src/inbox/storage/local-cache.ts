@@ -9,7 +9,7 @@ import { createHash } from 'crypto';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
 
 /**
- * Pattern for agent IDs - strict alphanumeric, hyphens, and underscores only.
+ * Pattern for assistant IDs - strict alphanumeric, hyphens, and underscores only.
  * This is used for directory names where we control the ID format.
  */
 const STRICT_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -20,20 +20,20 @@ const STRICT_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const SAFE_FILENAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /**
- * Validate that an agent ID is safe to use in filesystem paths.
- * Agent IDs should be tightly controlled (we generate them).
+ * Validate that an assistant ID is safe to use in filesystem paths.
+ * Assistant IDs should be tightly controlled (we generate them).
  */
-function isValidAgentId(id: unknown): id is string {
+function isValidAssistantId(id: unknown): id is string {
   return typeof id === 'string' && id.length > 0 && STRICT_ID_PATTERN.test(id);
 }
 
 /**
- * Validate and throw if agent ID is invalid
+ * Validate and throw if assistant ID is invalid
  */
-function validateAgentId(id: string): void {
-  if (!isValidAgentId(id)) {
+function validateAssistantId(id: string): void {
+  if (!isValidAssistantId(id)) {
     throw new Error(
-      `Invalid agentId: "${id}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
+      `Invalid assistantId: "${id}" contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed.`
     );
   }
 }
@@ -83,8 +83,8 @@ function sanitizeFilename(filename: string): string {
 }
 
 export interface LocalInboxCacheOptions {
-  /** Agent ID for scoping */
-  agentId: string;
+  /** Assistant ID for scoping */
+  assistantId: string;
   /** Base path for cache (default: ~/.assistants/inbox) */
   basePath: string;
 }
@@ -121,17 +121,17 @@ export interface CachedEmailEntry {
  * Local cache for inbox emails
  */
 export class LocalInboxCache {
-  private agentId: string;
+  private assistantId: string;
   private basePath: string;
   private cacheDir: string;
   private index: CacheIndex | null = null;
 
   constructor(options: LocalInboxCacheOptions) {
-    // Validate agentId to prevent path traversal
-    validateAgentId(options.agentId);
-    this.agentId = options.agentId;
+    // Validate assistantId to prevent path traversal
+    validateAssistantId(options.assistantId);
+    this.assistantId = options.assistantId;
     this.basePath = options.basePath;
-    this.cacheDir = join(this.basePath, this.agentId);
+    this.cacheDir = join(this.basePath, this.assistantId);
   }
 
   /**
@@ -487,6 +487,6 @@ export class LocalInboxCache {
 export const __test__ = {
   emailIdToFilename,
   isValidMappedFilename,
-  isValidAgentId,
+  isValidAssistantId,
   sanitizeFilename,
 };

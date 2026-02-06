@@ -552,7 +552,7 @@ export default function IdentitiesPage() {
               />
             ) : (
               <EmptyState
-                illustration="agents"
+                illustration="assistants"
                 title="No identities created"
                 description="Create your first identity to personalize how your AI assistant interacts with you."
                 tip="Identities can have different communication styles, timezones, and contact info."

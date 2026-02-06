@@ -1,13 +1,13 @@
 /**
  * Capability Enforcer
  *
- * Enforces capability policies and permissions for agents.
+ * Enforces capability policies and permissions for assistants.
  * Checks orchestration rights, tool access, and approval requirements.
  */
 
 import type { CapabilitiesConfigShared } from '@hasna/assistants-shared';
 import type {
-  AgentCapabilitySet,
+  AssistantCapabilitySet,
   ResolvedCapabilities,
   CapabilityCheckResult,
   OrchestrationCapabilities,
@@ -23,18 +23,18 @@ import { configToCapabilities } from './storage';
  * Context for capability checks
  */
 export interface CapabilityCheckContext {
-  /** Current depth in subagent hierarchy */
+  /** Current depth in subassistant hierarchy */
   depth: number;
   /** Session ID */
   sessionId?: string;
-  /** Agent ID */
-  agentId?: string;
-  /** Parent agent ID (for subagents) */
+  /** Assistant ID */
+  assistantId?: string;
+  /** Parent assistant ID (for subassistants) */
   parentId?: string;
   /** Current token usage */
   tokensUsed?: number;
-  /** Active subagent count */
-  activeSubagents?: number;
+  /** Active subassistant count */
+  activeSubassistants?: number;
 }
 
 /**
@@ -115,9 +115,9 @@ export class CapabilityEnforcer {
   }
 
   /**
-   * Check if agent can spawn a subagent
+   * Check if assistant can spawn a subassistant
    */
-  canSpawnSubagent(context: CapabilityCheckContext): CapabilityEnforcementResult {
+  canSpawnSubassistant(context: CapabilityCheckContext): CapabilityEnforcementResult {
     if (!this.enabled) {
       return { allowed: true, reason: 'Capability enforcement disabled', requiresApproval: false, warnings: [] };
     }
@@ -125,30 +125,30 @@ export class CapabilityEnforcer {
     const orch = this.capabilities.orchestration;
 
     // Check if spawning is allowed at all
-    if (!orch.canSpawnSubagents) {
+    if (!orch.canSpawnSubassistants) {
       return {
         allowed: false,
-        reason: `Subagent spawning not allowed (orchestration level: ${orch.level})`,
+        reason: `Subassistant spawning not allowed (orchestration level: ${orch.level})`,
         requiresApproval: false,
         warnings: [],
       };
     }
 
     // Check depth limit
-    if (context.depth >= orch.maxSubagentDepth) {
+    if (context.depth >= orch.maxSubassistantDepth) {
       return {
         allowed: false,
-        reason: `Maximum subagent depth (${orch.maxSubagentDepth}) reached`,
+        reason: `Maximum subassistant depth (${orch.maxSubassistantDepth}) reached`,
         requiresApproval: false,
         warnings: [],
       };
     }
 
-    // Check concurrent subagent limit
-    if (context.activeSubagents !== undefined && context.activeSubagents >= orch.maxConcurrentSubagents) {
+    // Check concurrent subassistant limit
+    if (context.activeSubassistants !== undefined && context.activeSubassistants >= orch.maxConcurrentSubassistants) {
       return {
         allowed: false,
-        reason: `Maximum concurrent subagents (${orch.maxConcurrentSubagents}) reached`,
+        reason: `Maximum concurrent subassistants (${orch.maxConcurrentSubassistants}) reached`,
         requiresApproval: false,
         warnings: [],
       };
@@ -156,23 +156,23 @@ export class CapabilityEnforcer {
 
     // Build warnings for near-limit conditions
     const warnings: string[] = [];
-    if (context.activeSubagents !== undefined && context.activeSubagents >= orch.maxConcurrentSubagents - 1) {
-      warnings.push(`Approaching concurrent subagent limit (${context.activeSubagents + 1}/${orch.maxConcurrentSubagents})`);
+    if (context.activeSubassistants !== undefined && context.activeSubassistants >= orch.maxConcurrentSubassistants - 1) {
+      warnings.push(`Approaching concurrent subassistant limit (${context.activeSubassistants + 1}/${orch.maxConcurrentSubassistants})`);
     }
-    if (context.depth >= orch.maxSubagentDepth - 1) {
-      warnings.push(`Approaching maximum depth (${context.depth + 1}/${orch.maxSubagentDepth})`);
+    if (context.depth >= orch.maxSubassistantDepth - 1) {
+      warnings.push(`Approaching maximum depth (${context.depth + 1}/${orch.maxSubassistantDepth})`);
     }
 
     return {
       allowed: true,
-      reason: 'Subagent spawning allowed',
+      reason: 'Subassistant spawning allowed',
       requiresApproval: false,
       warnings,
     };
   }
 
   /**
-   * Check if agent can use a specific tool
+   * Check if assistant can use a specific tool
    */
   canUseTool(toolName: string, context: CapabilityCheckContext): CapabilityEnforcementResult {
     if (!this.enabled) {
@@ -264,9 +264,9 @@ export class CapabilityEnforcer {
   }
 
   /**
-   * Check if agent can delegate to another agent
+   * Check if assistant can delegate to another assistant
    */
-  canDelegate(targetAgentId: string, context: CapabilityCheckContext): CapabilityEnforcementResult {
+  canDelegate(targetAssistantId: string, context: CapabilityCheckContext): CapabilityEnforcementResult {
     if (!this.enabled) {
       return { allowed: true, reason: 'Capability enforcement disabled', requiresApproval: false, warnings: [] };
     }
@@ -276,7 +276,7 @@ export class CapabilityEnforcer {
     if (!orch.canDelegate) {
       return {
         allowed: false,
-        reason: 'Delegation not allowed for this agent',
+        reason: 'Delegation not allowed for this assistant',
         requiresApproval: false,
         warnings: [],
       };
@@ -287,15 +287,15 @@ export class CapabilityEnforcer {
       const isAllowed = orch.allowedDelegates.some((pattern) => {
         if (pattern === '*') return true;
         if (pattern.endsWith('*')) {
-          return targetAgentId.startsWith(pattern.slice(0, -1));
+          return targetAssistantId.startsWith(pattern.slice(0, -1));
         }
-        return targetAgentId === pattern;
+        return targetAssistantId === pattern;
       });
 
       if (!isAllowed) {
         return {
           allowed: false,
-          reason: `Delegation to '${targetAgentId}' not in allowed delegates list`,
+          reason: `Delegation to '${targetAssistantId}' not in allowed delegates list`,
           requiresApproval: false,
           warnings: [],
         };
@@ -311,7 +311,7 @@ export class CapabilityEnforcer {
   }
 
   /**
-   * Check if agent can coordinate swarms
+   * Check if assistant can coordinate swarms
    */
   canCoordinateSwarm(context: CapabilityCheckContext): CapabilityEnforcementResult {
     if (!this.enabled) {

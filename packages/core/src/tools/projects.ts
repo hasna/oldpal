@@ -1,6 +1,6 @@
 /**
- * Project and Plan tools for agent use
- * Native tools that allow agents to manage projects and implementation plans
+ * Project and Plan tools for assistant use
+ * Native tools that allow assistants to manage projects and implementation plans
  */
 
 import type { Tool } from '@hasna/assistants-shared';

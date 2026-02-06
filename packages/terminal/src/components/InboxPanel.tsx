@@ -85,7 +85,7 @@ function getStatusIcon(isRead: boolean): string {
 }
 
 /**
- * Interactive panel for managing agent inbox
+ * Interactive panel for managing assistant inbox
  */
 export function InboxPanel({
   emails,

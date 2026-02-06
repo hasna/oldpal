@@ -6,7 +6,7 @@
  */
 
 import type {
-  AgentCapabilitySet,
+  AssistantCapabilitySet,
   CapabilityChain,
   CapabilityScope,
   ResolvedCapabilities,
@@ -30,7 +30,7 @@ const SCOPE_PRECEDENCE: Record<CapabilityScope, number> = {
   identity: 2,
   assistant: 3,
   session: 4,
-  agent: 5,
+  instance: 5,
 };
 
 /**
@@ -59,14 +59,14 @@ function mergeOrchestration(
 ): OrchestrationCapabilities {
   return {
     level: override.level ?? base.level,
-    canSpawnSubagents: override.canSpawnSubagents ?? base.canSpawnSubagents,
-    maxConcurrentSubagents: Math.min(
-      override.maxConcurrentSubagents ?? base.maxConcurrentSubagents,
-      base.maxConcurrentSubagents
+    canSpawnSubassistants: override.canSpawnSubassistants ?? base.canSpawnSubassistants,
+    maxConcurrentSubassistants: Math.min(
+      override.maxConcurrentSubassistants ?? base.maxConcurrentSubassistants,
+      base.maxConcurrentSubassistants
     ),
-    maxSubagentDepth: Math.min(
-      override.maxSubagentDepth ?? base.maxSubagentDepth,
-      base.maxSubagentDepth
+    maxSubassistantDepth: Math.min(
+      override.maxSubassistantDepth ?? base.maxSubassistantDepth,
+      base.maxSubassistantDepth
     ),
     canCoordinateSwarms: (override.canCoordinateSwarms ?? base.canCoordinateSwarms) && base.canCoordinateSwarms,
     maxSwarmSize: Math.min(
@@ -101,7 +101,7 @@ function mergeBudget(
   return {
     limits: mergedLimits,
     canOverrideBudget: (override.canOverrideBudget ?? base.canOverrideBudget) && base.canOverrideBudget,
-    maxSubagentBudget: override.maxSubagentBudget ?? base.maxSubagentBudget,
+    maxSubassistantBudget: override.maxSubassistantBudget ?? base.maxSubassistantBudget,
     sharedBudget: override.sharedBudget ?? base.sharedBudget,
   };
 }
@@ -180,14 +180,14 @@ function mergeMemory(
  * Merge two capability sets
  */
 function mergeCapabilitySets(
-  base: AgentCapabilitySet,
-  override: Partial<AgentCapabilitySet>,
+  base: AssistantCapabilitySet,
+  override: Partial<AssistantCapabilitySet>,
   overrideScope: CapabilityScope
-): { merged: AgentCapabilitySet; sources: Record<string, CapabilityScope> } {
+): { merged: AssistantCapabilitySet; sources: Record<string, CapabilityScope> } {
   const sources: Record<string, CapabilityScope> = {};
 
   // Start with base
-  const merged: AgentCapabilitySet = { ...base };
+  const merged: AssistantCapabilitySet = { ...base };
 
   // Merge enabled (if disabled at any level, disabled)
   if (override.enabled === false) {
@@ -266,17 +266,17 @@ function mergeCapabilitySets(
  */
 export function resolveCapabilityChain(chain: CapabilityChain): ResolvedCapabilities {
   // Get scopes in precedence order (highest first)
-  const scopes: [CapabilityScope, Partial<AgentCapabilitySet> | undefined][] = [
+  const scopes: [CapabilityScope, Partial<AssistantCapabilitySet> | undefined][] = [
     ['system', chain.system],
     ['organization', chain.organization],
     ['identity', chain.identity],
     ['assistant', chain.assistant],
     ['session', chain.session],
-    ['agent', chain.agent],
+    ['instance', chain.instance],
   ];
 
   // Start with defaults
-  let current: AgentCapabilitySet = { ...DEFAULT_CAPABILITY_SET };
+  let current: AssistantCapabilitySet = { ...DEFAULT_CAPABILITY_SET };
   let allSources: Record<string, CapabilityScope> = {};
 
   // Apply each scope in order (highest precedence last to override)
@@ -301,7 +301,7 @@ export function resolveCapabilityChain(chain: CapabilityChain): ResolvedCapabili
  */
 export function createCapabilityChain(
   scope: CapabilityScope,
-  capabilities: Partial<AgentCapabilitySet>
+  capabilities: Partial<AssistantCapabilitySet>
 ): CapabilityChain {
   return {
     [scope]: capabilities,
@@ -314,7 +314,7 @@ export function createCapabilityChain(
 export function extendCapabilityChain(
   chain: CapabilityChain,
   scope: CapabilityScope,
-  capabilities: Partial<AgentCapabilitySet>
+  capabilities: Partial<AssistantCapabilitySet>
 ): CapabilityChain {
   return {
     ...chain,

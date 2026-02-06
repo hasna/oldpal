@@ -3,7 +3,7 @@
  *
  * Defines when and how to automatically trigger swarm execution.
  * Analyzes task complexity, parallelizability, and risk to determine
- * if a task should be handled by a single agent or a swarm.
+ * if a task should be handled by a single assistant or a swarm.
  */
 
 /**
@@ -20,7 +20,7 @@ export type RiskLevel = 'none' | 'low' | 'medium' | 'high' | 'critical';
  * Swarm trigger reason
  */
 export type SwarmTriggerReason =
-  | 'high_complexity'      // Task is too complex for single agent
+  | 'high_complexity'      // Task is too complex for single assistant
   | 'parallelizable'       // Task can be split into parallel subtasks
   | 'multi_domain'         // Task spans multiple domains/skills
   | 'time_sensitive'       // Task needs fast completion via parallelism
@@ -31,7 +31,7 @@ export type SwarmTriggerReason =
 /**
  * Decision result
  */
-export type SwarmDecision = 'single_agent' | 'swarm' | 'ask_user';
+export type SwarmDecision = 'single_assistant' | 'swarm' | 'ask_user';
 
 /**
  * Task analysis result
@@ -238,7 +238,7 @@ export class SwarmDecisionPolicy {
   } {
     if (!this.config.enabled) {
       return {
-        decision: 'single_agent',
+        decision: 'single_assistant',
         reasons: [],
         confidence: 1.0,
       };
@@ -289,7 +289,7 @@ export class SwarmDecisionPolicy {
     let confidence: number;
 
     if (reasons.length === 0) {
-      decision = 'single_agent';
+      decision = 'single_assistant';
       confidence = 1.0 - analysis.complexityScore;
     } else if (askScore > swarmScore && !this.config.autoSwarm) {
       decision = 'ask_user';

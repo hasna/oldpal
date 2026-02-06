@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { AgentLoop } from '../src/agent/loop';
+import { AssistantLoop } from '../src/agent/loop';
 
 let tempDir: string;
 let originalAssistantsDir: string | undefined;
@@ -31,12 +31,12 @@ afterEach(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-describe('AgentLoop initialize', () => {
+describe('AssistantLoop initialize', () => {
   test('initializes tools and commands', async () => {
-    const agent = new AgentLoop({ cwd: tempDir });
-    await agent.initialize();
+    const assistant = new AssistantLoop({ cwd: tempDir });
+    await assistant.initialize();
 
-    const tools = agent.getTools();
+    const tools = assistant.getTools();
     expect(tools.length).toBeGreaterThan(0);
   });
 

@@ -38,18 +38,18 @@ const COMMANDS = [
   { name: '/resume', description: 'resume a scheduled command' },
   // Identity and assistant
   { name: '/assistants', description: 'switch or list assistants' },
-  { name: '/identity', description: 'manage agent identity' },
+  { name: '/identity', description: 'manage assistant identity' },
   { name: '/whoami', description: 'show current identity' },
   // Voice features
   { name: '/voice', description: 'toggle voice mode' },
   { name: '/say', description: 'speak text aloud' },
   { name: '/listen', description: 'transcribe voice input' },
-  // Agent communication
-  { name: '/inbox', description: 'view agent messages' },
-  { name: '/messages', description: 'manage agent-to-agent messages' },
+  // Assistant communication
+  { name: '/inbox', description: 'view assistant messages' },
+  { name: '/messages', description: 'manage assistant-to-assistant messages' },
   // Resources
-  { name: '/wallet', description: 'manage agent wallet' },
-  { name: '/secrets', description: 'manage agent secrets' },
+  { name: '/wallet', description: 'manage assistant wallet' },
+  { name: '/secrets', description: 'manage assistant secrets' },
   { name: '/jobs', description: 'list background jobs' },
   // System
   { name: '/rest', description: 'enter rest mode' },

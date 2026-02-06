@@ -23,8 +23,8 @@ import type { SwarmConfig } from './types';
 export interface EnforcementContext {
   /** Current session ID */
   sessionId: string;
-  /** Current agent ID */
-  agentId?: string;
+  /** Current assistant ID */
+  assistantId?: string;
   /** Current depth */
   depth: number;
   /** Available tools */
@@ -122,8 +122,8 @@ export class SwarmPolicyEnforcer {
 
     // Check capability constraints
     if (context.capabilityEnforcer) {
-      const canSwarm = context.capabilityEnforcer.canSpawnSubagent({
-        agentId: context.agentId,
+      const canSwarm = context.capabilityEnforcer.canSpawnSubassistant({
+        assistantId: context.assistantId,
         sessionId: context.sessionId,
         depth: context.depth,
       });
@@ -135,15 +135,15 @@ export class SwarmPolicyEnforcer {
     // Check guardrails
     if (context.guardrailsPolicies && context.guardrailsPolicies.length > 0) {
       for (const policy of context.guardrailsPolicies) {
-        if (policy.tools?.rules?.some(r => r.pattern === 'agent_spawn' && r.action === 'deny')) {
-          blockedReasons.push(`Guardrails policy "${policy.name || 'unnamed'}" blocks agent spawning`);
+        if (policy.tools?.rules?.some(r => r.pattern === 'assistant_spawn' && r.action === 'deny')) {
+          blockedReasons.push(`Guardrails policy "${policy.name || 'unnamed'}" blocks assistant spawning`);
           break;
         }
       }
     }
 
     // Check tool availability
-    const requiredTools = ['agent_spawn', 'agent_delegate'];
+    const requiredTools = ['assistant_spawn', 'assistant_delegate'];
     const missingTools = requiredTools.filter(t => !context.availableTools.includes(t));
     if (missingTools.length > 0) {
       blockedReasons.push(`Missing required tools: ${missingTools.join(', ')}`);
@@ -154,7 +154,7 @@ export class SwarmPolicyEnforcer {
     let finalDecision = baseDecision;
 
     if (!allowed) {
-      finalDecision = 'single_agent';
+      finalDecision = 'single_assistant';
     }
 
     // Build rationale
@@ -196,11 +196,11 @@ export class SwarmPolicyEnforcer {
       case 'ask_user':
         parts.push('**Recommendation: This task may benefit from swarm execution**');
         break;
-      case 'single_agent':
+      case 'single_assistant':
         if (blockedReasons.length > 0) {
-          parts.push('**Decision: Single agent (swarm blocked)**');
+          parts.push('**Decision: Single assistant (swarm blocked)**');
         } else {
-          parts.push('**Decision: Single agent execution**');
+          parts.push('**Decision: Single assistant execution**');
         }
         break;
     }
@@ -303,12 +303,12 @@ export class SwarmPolicyEnforcer {
   generateExplanation(result: EnforcementResult): string {
     const { decision, analysis, reasons, warnings } = result;
 
-    if (decision === 'single_agent' && result.blockedReasons.length > 0) {
-      return `Single agent (blocked: ${result.blockedReasons[0]})`;
+    if (decision === 'single_assistant' && result.blockedReasons.length > 0) {
+      return `Single assistant (blocked: ${result.blockedReasons[0]})`;
     }
 
-    if (decision === 'single_agent') {
-      return 'Single agent - task is straightforward';
+    if (decision === 'single_assistant') {
+      return 'Single assistant - task is straightforward';
     }
 
     if (decision === 'swarm') {

@@ -6,7 +6,7 @@
  */
 
 import { generateId } from '@hasna/assistants-shared';
-import type { SubagentManager, SubagentConfig, SubagentResult } from '../agent/subagent-manager';
+import type { SubassistantManager, SubassistantConfig, SubassistantResult } from '../agent/subagent-manager';
 import type { SwarmTask, SwarmRole } from './types';
 import { ROLE_SYSTEM_PROMPTS } from './types';
 
@@ -36,10 +36,10 @@ export interface DispatchTask {
   status: DispatchTaskStatus;
   /** Number of attempts made */
   attempts: number;
-  /** Agent ID (if assigned) */
-  agentId?: string;
+  /** Assistant ID (if assigned) */
+  assistantId?: string;
   /** Result (if completed) */
-  result?: SubagentResult;
+  result?: SubassistantResult;
   /** Error message (if failed) */
   error?: string;
   /** When task was queued */
@@ -114,7 +114,7 @@ export interface DispatcherConfig {
   forbiddenTools: string[];
   /** Default tools for workers */
   defaultWorkerTools: string[];
-  /** Maximum turns per subagent */
+  /** Maximum turns per subassistant */
   maxTurnsPerTask: number;
 }
 
@@ -130,7 +130,7 @@ export const DEFAULT_DISPATCHER_CONFIG: DispatcherConfig = {
   maxBackoffMs: 30000,
   depTimeoutMs: 300000, // 5 minutes
   maxQueueSize: 50,
-  forbiddenTools: ['swarm_execute', 'agent_spawn'],
+  forbiddenTools: ['swarm_execute', 'assistant_spawn'],
   defaultWorkerTools: ['bash', 'read', 'write', 'edit', 'glob', 'grep'],
   maxTurnsPerTask: 15,
 };
@@ -176,7 +176,7 @@ export interface DispatchResult {
  */
 export class SwarmDispatcher {
   private config: DispatcherConfig;
-  private subagentManager: SubagentManager;
+  private subassistantManager: SubassistantManager;
   private sessionId: string;
   private cwd: string;
   private depth: number;
@@ -192,11 +192,11 @@ export class SwarmDispatcher {
 
   constructor(
     config: Partial<DispatcherConfig>,
-    subagentManager: SubagentManager,
+    subassistantManager: SubassistantManager,
     context: { sessionId: string; cwd: string; depth: number }
   ) {
     this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
-    this.subagentManager = subagentManager;
+    this.subassistantManager = subassistantManager;
     this.sessionId = context.sessionId;
     this.cwd = context.cwd;
     this.depth = context.depth;
@@ -564,15 +564,15 @@ export class SwarmDispatcher {
   /**
    * Execute task with timeout
    */
-  private async executeWithTimeout(dispatchTask: DispatchTask): Promise<SubagentResult> {
+  private async executeWithTimeout(dispatchTask: DispatchTask): Promise<SubassistantResult> {
     const { task } = dispatchTask;
 
-    // Build subagent config
+    // Build subassistant config
     const systemPrompt = ROLE_SYSTEM_PROMPTS[task.role];
     const tools = (task.requiredTools || this.config.defaultWorkerTools)
       .filter(t => !this.config.forbiddenTools.includes(t));
 
-    const config: SubagentConfig = {
+    const config: SubassistantConfig = {
       task: `${systemPrompt}\n\n---\n\n${task.description}`,
       tools,
       maxTurns: this.config.maxTurnsPerTask,
@@ -594,7 +594,7 @@ export class SwarmDispatcher {
     // Execute with race against timeout
     try {
       const result = await Promise.race([
-        this.subagentManager.spawn(config),
+        this.subassistantManager.spawn(config),
         timeoutPromise,
       ]);
       clearTimeout(timeoutId!);
@@ -686,9 +686,9 @@ export class SwarmDispatcher {
  * Create a dispatcher with default configuration
  */
 export function createSwarmDispatcher(
-  subagentManager: SubagentManager,
+  subassistantManager: SubassistantManager,
   context: { sessionId: string; cwd: string; depth: number },
   config?: Partial<DispatcherConfig>
 ): SwarmDispatcher {
-  return new SwarmDispatcher(config || {}, subagentManager, context);
+  return new SwarmDispatcher(config || {}, subassistantManager, context);
 }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the phased implementation plan for swarm foundations: agent registry, capability model, and integration with budgets/guardrails.
+This document outlines the phased implementation plan for swarm foundations: assistant registry, capability model, and integration with budgets/guardrails.
 
 ## Current Infrastructure Audit
 
@@ -10,11 +10,11 @@ This document outlines the phased implementation plan for swarm foundations: age
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| SubagentManager | `core/src/agent/subagent-manager.ts` | Complete - depth limiting, concurrent limits, tool filtering |
+| SubassistantManager | `core/src/assistant/subassistant-manager.ts` | Complete - depth limiting, concurrent limits, tool filtering |
 | Heartbeat | `core/src/heartbeat/` | Complete - state tracking, recovery, persistence |
 | Tasks | `core/src/tasks/` | Complete - CRUD, recurring, project-local |
-| Messages | `core/src/messages/` | Complete - agent-to-agent, threads, injection |
-| Budget | `core/src/budget/` | Complete - session/agent/swarm scopes |
+| Messages | `core/src/messages/` | Complete - assistant-to-assistant, threads, injection |
+| Budget | `core/src/budget/` | Complete - session/assistant/swarm scopes |
 | Guardrails | `core/src/guardrails/` | Complete - policies, enforcement |
 | Global Memory | `core/src/memory/` | Complete - categories, injection |
 
@@ -22,7 +22,7 @@ This document outlines the phased implementation plan for swarm foundations: age
 
 | Component | Priority | Effort |
 |-----------|----------|--------|
-| Agent Registry | P0 | High |
+| Assistant Registry | P0 | High |
 | Capability Model | P0 | High |
 | Swarm Coordinator | P0 | Very High |
 | Swarm Dispatcher | P1 | High |
@@ -35,10 +35,10 @@ This document outlines the phased implementation plan for swarm foundations: age
 
 ---
 
-## Phase 1: Agent Registry & Data Model
+## Phase 1: Assistant Registry & Data Model
 
 ### Deliverables
-1. Agent registry data model/schema
+1. Assistant registry data model/schema
 2. Registry service with CRUD
 3. Heartbeat integration for auto-registration
 4. Query APIs for lookup
@@ -48,18 +48,18 @@ This document outlines the phased implementation plan for swarm foundations: age
 ```typescript
 // packages/core/src/registry/types.ts
 
-interface RegisteredAgent {
+interface RegisteredAssistant {
   id: string;
   name: string;
   description?: string;
-  type: 'assistant' | 'subagent' | 'coordinator' | 'worker';
+  type: 'assistant' | 'subassistant' | 'coordinator' | 'worker';
 
   // Capabilities
-  capabilities: AgentCapabilities;
+  capabilities: AssistantCapabilities;
 
   // State
-  status: AgentStatus;
-  load: AgentLoad;
+  status: AssistantStatus;
+  load: AssistantLoad;
 
   // Lifecycle
   registeredAt: string;
@@ -68,27 +68,27 @@ interface RegisteredAgent {
   parentId?: string;
 
   // Location
-  endpoint?: string;  // For remote agents
+  endpoint?: string;  // For remote assistants
   metadata?: Record<string, unknown>;
 }
 
-interface AgentCapabilities {
+interface AssistantCapabilities {
   tools: string[];           // Available tools
   skills: string[];          // Available skills
   models: string[];          // Supported models
   tags: string[];            // Domain expertise
   maxConcurrent?: number;    // Max concurrent tasks
-  maxDepth?: number;         // Max subagent depth
+  maxDepth?: number;         // Max subassistant depth
 }
 
-interface AgentStatus {
+interface AssistantStatus {
   state: 'idle' | 'processing' | 'waiting' | 'error' | 'offline';
   currentTask?: string;
   errorMessage?: string;
   uptime: number;
 }
 
-interface AgentLoad {
+interface AssistantLoad {
   activeTasks: number;
   queuedTasks: number;
   tokensUsed: number;
@@ -117,7 +117,7 @@ interface AgentLoad {
 1. Capability schema with inheritance
 2. Capability matching algorithm
 3. Tool-to-capability mapping
-4. Capability enforcement in agent loop
+4. Capability enforcement in assistant loop
 
 ### Schema
 
@@ -145,7 +145,7 @@ interface Capability {
 
 interface CapabilityMatch {
   capability: string;
-  agents: string[];          // Matching agent IDs
+  assistants: string[];      // Matching assistant IDs
   confidence: number;        // 0-1 match quality
 }
 
@@ -157,7 +157,7 @@ interface CapabilityRequest {
 ```
 
 ### Matching Algorithm
-1. Filter agents by required capabilities
+1. Filter assistants by required capabilities
 2. Score by preferred capabilities
 3. Exclude blacklisted capabilities
 4. Rank by load/availability
@@ -174,8 +174,8 @@ interface CapabilityRequest {
 ## Phase 3: Swarm Coordinator
 
 ### Deliverables
-1. Swarm coordinator mode in SubagentManager
-2. Parallel agent spawning
+1. Swarm coordinator mode in SubassistantManager
+2. Parallel assistant spawning
 3. Task graph construction
 4. Dependency scheduling
 5. Results aggregation
@@ -186,7 +186,7 @@ interface CapabilityRequest {
 // packages/core/src/swarm/types.ts
 
 interface SwarmConfig {
-  maxAgents: number;
+  maxAssistants: number;
   strategy: 'parallel' | 'pipeline' | 'fan-out-fan-in';
   aggregation: 'merge' | 'vote' | 'consensus' | 'first';
   timeout: number;
@@ -199,7 +199,7 @@ interface SwarmTask {
   capability: CapabilityRequest;
   dependencies: string[];    // Task IDs
   status: 'pending' | 'assigned' | 'running' | 'completed' | 'failed';
-  assignedAgent?: string;
+  assignedAssistant?: string;
   result?: SwarmTaskResult;
 }
 
@@ -237,9 +237,9 @@ interface SwarmExecution {
 1. Coordinator receives task graph
 2. Scheduler builds execution DAG
 3. For each ready task:
-   a. Query registry for capable agents
-   b. Select best agent (load, capability match)
-   c. Dispatch task via SubagentManager
+   a. Query registry for capable assistants
+   b. Select best assistant (load, capability match)
+   c. Dispatch task via SubassistantManager
    d. Track progress
 4. On task completion:
    a. Update dependencies
@@ -257,22 +257,22 @@ interface SwarmExecution {
 
 | Tool | Description |
 |------|-------------|
-| `registry_list` | List registered agents |
+| `registry_list` | List registered assistants |
 | `registry_query` | Query by capability |
-| `registry_status` | Get agent status |
+| `registry_status` | Get assistant status |
 | `swarm_spawn` | Launch swarm execution |
 | `swarm_status` | Check swarm progress |
 | `swarm_cancel` | Cancel swarm execution |
 | `capability_list` | List available capabilities |
-| `capability_check` | Check agent capabilities |
+| `capability_check` | Check assistant capabilities |
 
 ### API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/registry` | GET | List agents |
+| `/api/v1/registry` | GET | List assistants |
 | `/api/v1/registry/query` | POST | Query by capability |
-| `/api/v1/registry/:id` | GET | Get agent details |
+| `/api/v1/registry/:id` | GET | Get assistant details |
 | `/api/v1/swarm` | POST | Start swarm |
 | `/api/v1/swarm/:id` | GET | Get swarm status |
 | `/api/v1/swarm/:id` | DELETE | Cancel swarm |
@@ -288,7 +288,7 @@ interface SwarmExecution {
 - Status bar indicators for active swarms
 
 ### Web UI
-- Registry dashboard with agent cards
+- Registry dashboard with assistant cards
 - Swarm execution timeline
 - Capability browser
 - Real-time status updates
@@ -334,7 +334,7 @@ Phase 5: UI (depends on Phase 4)
 | Complexity explosion | High | Start with simple registry, iterate |
 | Performance bottlenecks | Medium | Cache registry lookups, async dispatch |
 | Deadlocks in task graph | High | Detect cycles, timeout handling |
-| Agent failures | Medium | Retry with fallback agents |
+| Assistant failures | Medium | Retry with fallback assistants |
 | Resource exhaustion | High | Integrate with budget system |
 | Security/isolation | High | Leverage guardrails policies |
 
@@ -344,18 +344,18 @@ Phase 5: UI (depends on Phase 4)
 
 ### With Budget System
 - Swarm-level budget tracking (already exists)
-- Per-agent budget allocation
+- Per-assistant budget allocation
 - Coordinator respects budget limits
 
 ### With Guardrails
-- Policy enforcement on agent selection
+- Policy enforcement on assistant selection
 - Tool filtering per capability
 - Approval workflows for swarm spawning
 
 ### With Memory System
 - Shared swarm memory scope
 - Result persistence
-- Cross-agent context sharing
+- Cross-assistant context sharing
 
 ### With Heartbeat
 - Auto-registration on start
@@ -366,7 +366,7 @@ Phase 5: UI (depends on Phase 4)
 
 ## Task Breakdown
 
-### Phase 1 Tasks (Agent Registry)
+### Phase 1 Tasks (Assistant Registry)
 1. Create registry types.ts with schema
 2. Implement registry store with persistence
 3. Implement registry service
@@ -379,7 +379,7 @@ Phase 5: UI (depends on Phase 4)
 1. Create capability types.ts
 2. Define built-in capability schema
 3. Implement capability matcher
-4. Add capability enforcement in agent loop
+4. Add capability enforcement in assistant loop
 5. Add capability tools
 6. Add capability tests
 
@@ -425,7 +425,7 @@ Phase 5: UI (depends on Phase 4)
 The swarm foundations require building on top of the existing solid infrastructure (heartbeat, messaging, budget, guardrails). The phased approach ensures each component is complete before moving to dependent components.
 
 Key priorities:
-1. **Registry first** - Everything else depends on knowing what agents exist
+1. **Registry first** - Everything else depends on knowing what assistants exist
 2. **Capabilities second** - Enables intelligent routing
 3. **Coordinator third** - The actual swarm execution engine
 4. **APIs/UI last** - Exposure layer built on stable foundations

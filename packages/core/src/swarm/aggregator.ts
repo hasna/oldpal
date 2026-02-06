@@ -1,12 +1,12 @@
 /**
  * Swarm Results Aggregator
  *
- * Merges subagent outputs into a single coherent response.
+ * Merges subassistant outputs into a single coherent response.
  * Handles deduplication, conflict resolution, and partial results.
  * Attaches confidence and coverage metadata.
  */
 
-import type { SubagentResult } from '../agent/subagent-manager';
+import type { SubassistantResult } from '../agent/subagent-manager';
 import type { SwarmTask } from './types';
 
 /**
@@ -37,8 +37,8 @@ export interface TaskResultInput {
   taskId: string;
   /** Original task */
   task: SwarmTask;
-  /** Subagent result */
-  result: SubagentResult;
+  /** Subassistant result */
+  result: SubassistantResult;
   /** Task order/priority */
   order: number;
   /** Custom weight for this result */
@@ -155,7 +155,7 @@ export const DEFAULT_AGGREGATOR_CONFIG: AggregatorConfig = {
 /**
  * Swarm Results Aggregator
  *
- * Merges outputs from multiple subagents into a coherent response.
+ * Merges outputs from multiple subassistants into a coherent response.
  */
 export class SwarmResultsAggregator {
   private config: AggregatorConfig;
@@ -265,7 +265,7 @@ export class SwarmResultsAggregator {
   /**
    * Calculate confidence for a result
    */
-  calculateResultConfidence(result: SubagentResult): number {
+  calculateResultConfidence(result: SubassistantResult): number {
     if (!result.success) return 0;
 
     let confidence = 0.5; // Base confidence
@@ -637,7 +637,7 @@ export function createSwarmAggregator(
  * Quick aggregate helper function
  */
 export function quickAggregate(
-  results: Map<string, SubagentResult>,
+  results: Map<string, SubassistantResult>,
   tasks: SwarmTask[]
 ): AggregatedResult {
   const aggregator = new SwarmResultsAggregator();

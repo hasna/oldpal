@@ -6,7 +6,7 @@ export const subscriptionPlans = pgTable('subscription_plans', {
   displayName: varchar('display_name', { length: 100 }).notNull(),
   stripePriceId: varchar('stripe_price_id', { length: 255 }), // null for free tier
   priceMonthly: integer('price_monthly').notNull(), // cents
-  maxAgents: integer('max_agents').notNull(),
+  maxAssistants: integer('max_agents').notNull(),
   maxMessagesPerDay: integer('max_messages_per_day').notNull(),
   maxSessions: integer('max_sessions').notNull(), // -1 = unlimited
   features: jsonb('features').$type<string[]>().default([]),

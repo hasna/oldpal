@@ -384,17 +384,17 @@ export const SKELETON_COLUMNS = {
     { width: 'w-32' },      // Date
   ] as SkeletonColumnDef[],
 
-  // Sessions table: Label, Agent, Created, Updated, Actions
+  // Sessions table: Label, Assistant, Created, Updated, Actions
   sessions: [
     { width: 'w-48' },      // Label
-    { width: 'w-24' },      // Agent
+    { width: 'w-24' },      // Assistant
     { width: 'w-32' },      // Created
     { width: 'w-32' },      // Updated
     { width: 'w-8', height: 'h-8' },   // Actions
   ] as SkeletonColumnDef[],
 
-  // Agents table: Name, Description, Model, Sessions, Actions
-  agents: [
+  // Assistants table: Name, Description, Model, Sessions, Actions
+  assistants: [
     { width: 'w-32' },      // Name
     { width: 'w-48' },      // Description
     { width: 'w-20' },      // Model

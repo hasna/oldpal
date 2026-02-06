@@ -1,6 +1,6 @@
 /**
  * Wallet Types
- * Types for the agent wallet system (payment card storage)
+ * Types for the assistant wallet system (payment card storage)
  */
 
 /**

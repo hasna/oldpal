@@ -8,15 +8,15 @@ type ViewMode = 'list' | 'detail' | 'delete-confirm';
 
 interface SecretEntry {
   name: string;
-  scope: 'global' | 'agent';
+  scope: 'global' | 'assistant';
   createdAt?: string;
   updatedAt?: string;
 }
 
 interface SecretsPanelProps {
   secrets: SecretEntry[];
-  onGet: (name: string, scope?: 'global' | 'agent') => Promise<string>;
-  onDelete: (name: string, scope: 'global' | 'agent') => Promise<void>;
+  onGet: (name: string, scope?: 'global' | 'assistant') => Promise<string>;
+  onDelete: (name: string, scope: 'global' | 'assistant') => Promise<void>;
   onClose: () => void;
   error?: string | null;
 }
@@ -356,8 +356,8 @@ export function SecretsPanel({
         <Text dimColor>Legend: </Text>
         <Text color="yellow">global</Text>
         <Text dimColor> = shared | </Text>
-        <Text color="blue">agent</Text>
-        <Text dimColor> = agent-specific</Text>
+        <Text color="blue">assistant</Text>
+        <Text dimColor> = assistant-specific</Text>
       </Box>
 
       <Box marginTop={1}>

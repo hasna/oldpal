@@ -136,7 +136,7 @@ export interface CommandResult {
   /** Session number to switch to (1-based) */
   sessionNumber?: number;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'agents' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox';
   /** Initial value for panel (e.g., connector name) */
   panelInitialValue?: string;
 }

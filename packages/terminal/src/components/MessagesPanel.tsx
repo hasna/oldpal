@@ -9,8 +9,8 @@ type ViewMode = 'list' | 'detail' | 'delete-confirm' | 'inject-confirm';
 interface MessageEntry {
   id: string;
   threadId: string;
-  fromAgentId: string;
-  fromAgentName: string;
+  fromAssistantId: string;
+  fromAssistantName: string;
   subject?: string;
   preview: string;
   body?: string;
@@ -125,7 +125,7 @@ function getStatusIcon(status: MessageEntry['status']): string {
 }
 
 /**
- * Interactive panel for managing agent messages
+ * Interactive panel for managing assistant messages
  */
 export function MessagesPanel({
   messages,
@@ -306,7 +306,7 @@ export function MessagesPanel({
           paddingY={1}
         >
           <Text dimColor>No messages in inbox.</Text>
-          <Text dimColor>Use the messages_send tool to send messages to other agents.</Text>
+          <Text dimColor>Use the messages_send tool to send messages to other assistants.</Text>
         </Box>
         <Box marginTop={1}>
           <Text dimColor>q quit</Text>
@@ -330,7 +330,7 @@ export function MessagesPanel({
           paddingY={1}
         >
           <Text>Are you sure you want to delete this message?</Text>
-          <Text dimColor>From: {deleteTarget.fromAgentName}</Text>
+          <Text dimColor>From: {deleteTarget.fromAssistantName}</Text>
           {deleteTarget.subject && <Text dimColor>Subject: {deleteTarget.subject}</Text>}
           <Text dimColor>This action cannot be undone.</Text>
         </Box>
@@ -356,7 +356,7 @@ export function MessagesPanel({
           paddingY={1}
         >
           <Text>Inject this message into the current conversation?</Text>
-          <Text dimColor>From: {injectTarget.fromAgentName}</Text>
+          <Text dimColor>From: {injectTarget.fromAssistantName}</Text>
           {injectTarget.subject && <Text dimColor>Subject: {injectTarget.subject}</Text>}
           <Text dimColor>The message will be added to the context.</Text>
         </Box>
@@ -385,7 +385,7 @@ export function MessagesPanel({
         >
           <Box>
             <Text dimColor>From: </Text>
-            <Text>{detailMessage.fromAgentName}</Text>
+            <Text>{detailMessage.fromAssistantName}</Text>
           </Box>
 
           {detailMessage.subject && (
@@ -452,7 +452,7 @@ export function MessagesPanel({
           const prefix = isSelected ? '> ' : '  ';
           const statusIcon = getStatusIcon(msg.status);
           const priorityColor = getPriorityColor(msg.priority);
-          const fromName = msg.fromAgentName.slice(0, 12).padEnd(12);
+          const fromName = msg.fromAssistantName.slice(0, 12).padEnd(12);
           const subject = (msg.subject || msg.preview.slice(0, 25)).padEnd(25);
 
           return (

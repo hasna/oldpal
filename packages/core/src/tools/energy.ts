@@ -1,7 +1,7 @@
 /**
  * Energy Tools
  *
- * Tools for managing the agent's energy system.
+ * Tools for managing the assistant's energy system.
  */
 
 import type { Tool, EnergyState } from '@hasna/assistants-shared';

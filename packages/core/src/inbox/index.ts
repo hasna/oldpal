@@ -1,6 +1,6 @@
 /**
  * Inbox module exports
- * Provides email inbox functionality for agents
+ * Provides email inbox functionality for assistants
  */
 
 // Core manager

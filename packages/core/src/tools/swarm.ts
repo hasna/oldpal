@@ -1,7 +1,7 @@
 /**
  * Swarm Tools
  *
- * Tools for programmatic swarm execution from within agent loops.
+ * Tools for programmatic swarm execution from within assistant loops.
  */
 
 import type { Tool } from '@hasna/assistants-shared';
@@ -19,12 +19,12 @@ export interface SwarmToolContext {
 }
 
 /**
- * swarm_execute - Execute a multi-agent swarm
+ * swarm_execute - Execute a multi-assistant swarm
  */
 export const swarmExecuteTool: Tool = {
   name: 'swarm_execute',
-  description: `Execute a multi-agent swarm to accomplish a complex goal.
-The swarm uses specialized agents (planner, workers, critic) to break down and complete the goal.
+  description: `Execute a multi-assistant swarm to accomplish a complex goal.
+The swarm uses specialized assistants (planner, workers, critic) to break down and complete the goal.
 
 Use for complex tasks that benefit from parallel processing or multiple perspectives.`,
   parameters: {
@@ -41,7 +41,7 @@ Use for complex tasks that benefit from parallel processing or multiple perspect
       },
       maxConcurrent: {
         type: 'number',
-        description: 'Maximum concurrent worker agents (default: 3)',
+        description: 'Maximum concurrent worker assistants (default: 3)',
       },
       maxTasks: {
         type: 'number',
@@ -110,7 +110,7 @@ export function createSwarmExecuteExecutor(context: SwarmToolContext) {
 
     const coordinator = context.getSwarmCoordinator();
     if (!coordinator) {
-      return 'Swarm coordinator not available. Swarm execution requires full agent context.';
+      return 'Swarm coordinator not available. Swarm execution requires full assistant context.';
     }
 
     const swarmInput: SwarmInput = {

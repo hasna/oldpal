@@ -18,7 +18,7 @@ import type { Skill } from './SkillCard';
 interface SkillDetailResponse extends Skill {
   model?: string;
   context?: string;
-  agent?: string;
+  assistant?: string;
   content: string;
 }
 
@@ -152,7 +152,7 @@ export function SkillDetailDrawer({ skill, isOpen, onClose }: SkillDetailDrawerP
         {/* Metadata from Detail API */}
         {skillDetail && (
           <>
-            {(skillDetail.model || skillDetail.context || skillDetail.agent) && (
+            {(skillDetail.model || skillDetail.context || skillDetail.assistant) && (
               <>
                 <Separator className="my-4" />
                 <div className="space-y-3">
@@ -170,10 +170,10 @@ export function SkillDetailDrawer({ skill, isOpen, onClose }: SkillDetailDrawerP
                         <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{skillDetail.context}</code>
                       </div>
                     )}
-                    {skillDetail.agent && (
+                    {skillDetail.assistant && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Agent</span>
-                        <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{skillDetail.agent}</code>
+                        <span className="text-muted-foreground">Assistant</span>
+                        <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{skillDetail.assistant}</code>
                       </div>
                     )}
                   </div>

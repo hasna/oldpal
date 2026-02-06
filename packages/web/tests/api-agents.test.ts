@@ -2,26 +2,26 @@ import { describe, expect, test, beforeEach, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Mock state
-let mockAgents: any[] = [];
-let mockAgentCount = 0;
-let mockInsertedAgent: any = null;
+let mockAssistants: any[] = [];
+let mockAssistantCount = 0;
+let mockInsertedAssistant: any = null;
 let insertValuesData: any = null;
 
 // Mock database
 mock.module('@/db', () => ({
   db: {
     query: {
-      agents: {
+      assistants: {
         findMany: async ({ limit, offset }: any) => {
           const start = offset || 0;
-          const end = start + (limit || mockAgents.length);
-          return mockAgents.slice(start, end);
+          const end = start + (limit || mockAssistants.length);
+          return mockAssistants.slice(start, end);
         },
       },
     },
     select: () => ({
       from: () => ({
-        where: () => [{ total: mockAgentCount }],
+        where: () => [{ total: mockAssistantCount }],
       }),
     }),
     insert: (table: any) => ({
@@ -29,8 +29,8 @@ mock.module('@/db', () => ({
         insertValuesData = data;
         return {
           returning: () => [
-            mockInsertedAgent || {
-              id: 'new-agent-id',
+            mockInsertedAssistant || {
+              id: 'new-assistant-id',
               ...data,
               isActive: true,
               createdAt: new Date(),
@@ -45,7 +45,7 @@ mock.module('@/db', () => ({
 
 // Mock db schema
 mock.module('@/db/schema', () => ({
-  agents: 'agents',
+  assistants: 'assistants',
 }));
 
 // Mock auth middleware
@@ -78,13 +78,13 @@ mock.module('drizzle-orm', () => ({
   and: (...args: any[]) => ({ and: args }),
 }));
 
-const { GET, POST } = await import('../src/app/api/v1/agents/route');
+const { GET, POST } = await import('../src/app/api/v1/assistants/route');
 
 function createGetRequest(
   params: { page?: number; limit?: number; active?: string } = {},
   options: { token?: string } = {}
 ): NextRequest {
-  const url = new URL('http://localhost:3001/api/v1/agents');
+  const url = new URL('http://localhost:3001/api/v1/assistants');
   if (params.page) url.searchParams.set('page', params.page.toString());
   if (params.limit) url.searchParams.set('limit', params.limit.toString());
   if (params.active) url.searchParams.set('active', params.active);
@@ -103,7 +103,7 @@ function createPostRequest(
   body: Record<string, unknown>,
   options: { token?: string } = {}
 ): NextRequest {
-  const url = new URL('http://localhost:3001/api/v1/agents');
+  const url = new URL('http://localhost:3001/api/v1/assistants');
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -121,39 +121,39 @@ function createPostRequest(
   });
 }
 
-describe('GET /api/v1/agents', () => {
+describe('GET /api/v1/assistants', () => {
   beforeEach(() => {
-    mockAgents = [
+    mockAssistants = [
       {
-        id: 'agent-1',
+        id: 'assistant-1',
         userId: 'user-123',
-        name: 'Agent 1',
+        name: 'Assistant 1',
         isActive: true,
         updatedAt: new Date('2024-01-03'),
       },
       {
-        id: 'agent-2',
+        id: 'assistant-2',
         userId: 'user-123',
-        name: 'Agent 2',
+        name: 'Assistant 2',
         isActive: false,
         updatedAt: new Date('2024-01-02'),
       },
       {
-        id: 'agent-3',
+        id: 'assistant-3',
         userId: 'user-123',
-        name: 'Agent 3',
+        name: 'Assistant 3',
         isActive: true,
         updatedAt: new Date('2024-01-01'),
       },
     ];
-    mockAgentCount = 3;
-    mockInsertedAgent = null;
+    mockAssistantCount = 3;
+    mockInsertedAssistant = null;
     insertValuesData = null;
   });
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const request = new NextRequest('http://localhost:3001/api/v1/agents');
+      const request = new NextRequest('http://localhost:3001/api/v1/assistants');
 
       const response = await GET(request);
 
@@ -169,8 +169,8 @@ describe('GET /api/v1/agents', () => {
     });
   });
 
-  describe('listing agents', () => {
-    test('returns paginated agents', async () => {
+  describe('listing assistants', () => {
+    test('returns paginated assistants', async () => {
       const request = createGetRequest();
 
       const response = await GET(request);
@@ -182,9 +182,9 @@ describe('GET /api/v1/agents', () => {
       expect(data.data.total).toBe(3);
     });
 
-    test('returns empty list when no agents', async () => {
-      mockAgents = [];
-      mockAgentCount = 0;
+    test('returns empty list when no assistants', async () => {
+      mockAssistants = [];
+      mockAssistantCount = 0;
       const request = createGetRequest();
 
       const response = await GET(request);
@@ -218,7 +218,7 @@ describe('GET /api/v1/agents', () => {
       expect(data.success).toBe(true);
     });
 
-    test('returns all agents when active filter not set', async () => {
+    test('returns all assistants when active filter not set', async () => {
       const request = createGetRequest();
 
       const response = await GET(request);
@@ -270,20 +270,20 @@ describe('GET /api/v1/agents', () => {
   });
 });
 
-describe('POST /api/v1/agents', () => {
+describe('POST /api/v1/assistants', () => {
   beforeEach(() => {
-    mockAgents = [];
-    mockAgentCount = 0;
-    mockInsertedAgent = null;
+    mockAssistants = [];
+    mockAssistantCount = 0;
+    mockInsertedAssistant = null;
     insertValuesData = null;
   });
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const request = new NextRequest('http://localhost:3001/api/v1/agents', {
+      const request = new NextRequest('http://localhost:3001/api/v1/assistants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Test Agent' }),
+        body: JSON.stringify({ name: 'Test Assistant' }),
       });
 
       const response = await POST(request);
@@ -292,23 +292,23 @@ describe('POST /api/v1/agents', () => {
     });
   });
 
-  describe('agent creation', () => {
-    test('creates agent with required name only', async () => {
-      const request = createPostRequest({ name: 'My Agent' });
+  describe('assistant creation', () => {
+    test('creates assistant with required name only', async () => {
+      const request = createPostRequest({ name: 'My Assistant' });
 
       const response = await POST(request);
       const data = await response.json();
 
       expect(response.status).toBe(201);
       expect(data.success).toBe(true);
-      expect(insertValuesData.name).toBe('My Agent');
+      expect(insertValuesData.name).toBe('My Assistant');
       expect(insertValuesData.userId).toBe('user-123');
     });
 
-    test('creates agent with all optional fields', async () => {
+    test('creates assistant with all optional fields', async () => {
       const request = createPostRequest({
-        name: 'Full Agent',
-        description: 'A fully configured agent',
+        name: 'Full Assistant',
+        description: 'A fully configured assistant',
         avatar: 'https://example.com/avatar.png',
         model: 'claude-3-opus',
         systemPrompt: 'You are a helpful assistant',
@@ -324,7 +324,7 @@ describe('POST /api/v1/agents', () => {
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(insertValuesData.description).toBe('A fully configured agent');
+      expect(insertValuesData.description).toBe('A fully configured assistant');
       expect(insertValuesData.avatar).toBe('https://example.com/avatar.png');
       expect(insertValuesData.model).toBe('claude-3-opus');
       expect(insertValuesData.systemPrompt).toBe('You are a helpful assistant');
@@ -332,7 +332,7 @@ describe('POST /api/v1/agents', () => {
     });
 
     test('uses default model when not specified', async () => {
-      const request = createPostRequest({ name: 'Agent' });
+      const request = createPostRequest({ name: 'Assistant' });
 
       await POST(request);
 
@@ -340,7 +340,7 @@ describe('POST /api/v1/agents', () => {
     });
 
     test('sets userId from authenticated user', async () => {
-      const request = createPostRequest({ name: 'Agent' });
+      const request = createPostRequest({ name: 'Assistant' });
 
       await POST(request);
 
@@ -376,7 +376,7 @@ describe('POST /api/v1/agents', () => {
     });
 
     test('returns 422 for invalid avatar URL', async () => {
-      const request = createPostRequest({ name: 'Agent', avatar: 'not-a-url' });
+      const request = createPostRequest({ name: 'Assistant', avatar: 'not-a-url' });
 
       const response = await POST(request);
 
@@ -384,7 +384,7 @@ describe('POST /api/v1/agents', () => {
     });
 
     test('returns 422 when model exceeds 100 characters', async () => {
-      const request = createPostRequest({ name: 'Agent', model: 'a'.repeat(101) });
+      const request = createPostRequest({ name: 'Assistant', model: 'a'.repeat(101) });
 
       const response = await POST(request);
 
@@ -393,7 +393,7 @@ describe('POST /api/v1/agents', () => {
 
     test('returns 422 for invalid temperature (> 2)', async () => {
       const request = createPostRequest({
-        name: 'Agent',
+        name: 'Assistant',
         settings: { temperature: 3 },
       });
 
@@ -404,7 +404,7 @@ describe('POST /api/v1/agents', () => {
 
     test('returns 422 for negative temperature', async () => {
       const request = createPostRequest({
-        name: 'Agent',
+        name: 'Assistant',
         settings: { temperature: -1 },
       });
 
@@ -415,7 +415,7 @@ describe('POST /api/v1/agents', () => {
 
     test('returns 422 for non-positive maxTokens', async () => {
       const request = createPostRequest({
-        name: 'Agent',
+        name: 'Assistant',
         settings: { maxTokens: 0 },
       });
 

@@ -17,14 +17,14 @@ const HOOK_EVENTS: HookEvent[] = [
   'UserPromptSubmit',
   'SessionStart',
   'SessionEnd',
-  'SubagentStart',
-  'SubagentStop',
+  'SubassistantStart',
+  'SubassistantStop',
   'PreCompact',
   'Notification',
   'Stop',
 ];
 
-const HOOK_TYPES = ['command', 'prompt', 'agent'] as const;
+const HOOK_TYPES = ['command', 'prompt', 'assistant'] as const;
 type HookType = typeof HOOK_TYPES[number];
 
 const HOOK_LOCATIONS: HookLocation[] = ['project', 'user', 'local'];
@@ -318,11 +318,11 @@ export function HookWizard({ onSave, onCancel }: HookWizardProps) {
                     color={index === typeIndex ? 'cyan' : undefined}
                     dimColor={index !== typeIndex}
                   >
-                    {index === typeIndex ? '>' : ' '} {type === 'command' ? 'command' : type === 'prompt' ? 'prompt ' : 'agent  '}
+                    {index === typeIndex ? '>' : ' '} {type === 'command' ? 'command  ' : type === 'prompt' ? 'prompt   ' : 'assistant'}
                     <Text dimColor>
                       {type === 'command' && ' - Run a shell command'}
                       {type === 'prompt' && ' - Single-turn LLM decision'}
-                      {type === 'agent' && ' - Multi-turn agent with tools'}
+                      {type === 'assistant' && ' - Multi-turn assistant with tools'}
                     </Text>
                   </Text>
                 </Box>

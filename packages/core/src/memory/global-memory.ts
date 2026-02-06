@@ -146,7 +146,7 @@ export class GlobalMemoryManager {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         memory_id TEXT NOT NULL,
         session_id TEXT,
-        agent_id TEXT,
+        assistant_id TEXT,
         action TEXT NOT NULL,
         timestamp TEXT NOT NULL
       )
@@ -218,7 +218,7 @@ export class GlobalMemoryManager {
     // Determine scopeId based on scope type:
     // - global: always null (visible to all)
     // - shared: use explicit scopeId or null (for team/project sharing)
-    // - private: use explicit scopeId or defaultScopeId (agent-specific)
+    // - private: use explicit scopeId or defaultScopeId (assistant-specific)
     let scopeId: string | null;
     if (options.scopeId !== undefined) {
       // Explicit scopeId provided - use it
@@ -227,10 +227,10 @@ export class GlobalMemoryManager {
       // Global scope: never use defaultScopeId
       scopeId = null;
     } else if (scope === 'private') {
-      // Private scope: require scopeId (agent isolation)
+      // Private scope: require scopeId (assistant isolation)
       scopeId = this.defaultScopeId || null;
     } else {
-      // Shared scope: use explicit scopeId or null for "all agents" sharing
+      // Shared scope: use explicit scopeId or null for "all assistants" sharing
       scopeId = null;
     }
 
@@ -276,7 +276,7 @@ export class GlobalMemoryManager {
       summary: options.summary,
       importance: options.importance ?? 5,
       tags: options.tags || [],
-      source: options.source || 'agent',
+      source: options.source || 'assistant',
       createdAt: now,
       updatedAt: now,
       accessCount: 0,
@@ -467,16 +467,16 @@ export class GlobalMemoryManager {
   /**
    * Query memories with filters
    *
-   * Note: Scope isolation is enforced to prevent cross-agent leakage.
+   * Note: Scope isolation is enforced to prevent cross-assistant leakage.
    * - global: accessible by all (scope_id must be null) - only if enabled
-   * - shared: accessible if scope_id is null or matches this agent - only if enabled
-   * - private: only accessible if scope_id matches this agent - only if enabled
+   * - shared: accessible if scope_id is null or matches this assistant - only if enabled
+   * - private: only accessible if scope_id matches this assistant - only if enabled
    */
   async query(query: MemoryQuery): Promise<MemoryQueryResult> {
     const conditions: string[] = [];
     const params: unknown[] = [];
 
-    // Build scope isolation conditions based on requested scope(s) and this agent's scopeId
+    // Build scope isolation conditions based on requested scope(s) and this assistant's scopeId
     const scopeConditions: string[] = [];
 
     if (query.scope) {
@@ -490,7 +490,7 @@ export class GlobalMemoryManager {
         // Global: always accessible, but scope_id must be null
         scopeConditions.push("(scope = 'global' AND scope_id IS NULL)");
       } else if (query.scope === 'shared') {
-        // Shared: accessible if scope_id is null (general) or matches this agent
+        // Shared: accessible if scope_id is null (general) or matches this assistant
         if (this.defaultScopeId) {
           scopeConditions.push("(scope = 'shared' AND (scope_id IS NULL OR scope_id = ?))");
           params.push(this.defaultScopeId);
@@ -498,12 +498,12 @@ export class GlobalMemoryManager {
           scopeConditions.push("(scope = 'shared' AND scope_id IS NULL)");
         }
       } else if (query.scope === 'private') {
-        // Private: only accessible if scope_id matches this agent
+        // Private: only accessible if scope_id matches this assistant
         if (this.defaultScopeId) {
           scopeConditions.push("(scope = 'private' AND scope_id = ?)");
           params.push(this.defaultScopeId);
         } else {
-          // No agent scope set - can't access any private memories
+          // No assistant scope set - can't access any private memories
           return { memories: [], total: 0, hasMore: false };
         }
       }
@@ -514,7 +514,7 @@ export class GlobalMemoryManager {
         scopeConditions.push("(scope = 'global' AND scope_id IS NULL)");
       }
 
-      // Shared memories (scope_id is null or matches this agent)
+      // Shared memories (scope_id is null or matches this assistant)
       if (this.isScopeEnabled('shared')) {
         if (this.defaultScopeId) {
           scopeConditions.push("(scope = 'shared' AND (scope_id IS NULL OR scope_id = ?))");
@@ -524,7 +524,7 @@ export class GlobalMemoryManager {
         }
       }
 
-      // Private memories (scope_id must match this agent)
+      // Private memories (scope_id must match this assistant)
       if (this.isScopeEnabled('private') && this.defaultScopeId) {
         scopeConditions.push("(scope = 'private' AND scope_id = ?)");
         params.push(this.defaultScopeId);
@@ -543,12 +543,12 @@ export class GlobalMemoryManager {
     // If explicit scopeId filter is provided, add it as an additional constraint
     // (but only if it passes the isolation rules above)
     if (query.scopeId !== undefined && query.scopeId !== null) {
-      // Only allow filtering by the agent's own scopeId for private/shared
+      // Only allow filtering by the assistant's own scopeId for private/shared
       if (query.scopeId === this.defaultScopeId) {
         conditions.push('scope_id = ?');
         params.push(query.scopeId);
       }
-      // Otherwise ignore the scopeId filter (can't query other agents' data)
+      // Otherwise ignore the scopeId filter (can't query other assistants' data)
     }
 
     // Category filter
@@ -665,8 +665,8 @@ export class GlobalMemoryManager {
 
     // Scope isolation rules (only for enabled scopes):
     // - global: accessible by all (scope_id = null)
-    // - shared: accessible if scope_id is null OR matches agent's scopeId
-    // - private: only accessible if scope_id matches agent's scopeId (requires scopeId)
+    // - shared: accessible if scope_id is null OR matches assistant's scopeId
+    // - private: only accessible if scope_id matches assistant's scopeId (requires scopeId)
     const scopeConditions: string[] = [];
 
     // Global memories are always accessible (scope_id must be null)
@@ -674,7 +674,7 @@ export class GlobalMemoryManager {
       scopeConditions.push("(scope = 'global' AND scope_id IS NULL)");
     }
 
-    // Shared memories: accessible if scope_id is null (general) or matches this agent
+    // Shared memories: accessible if scope_id is null (general) or matches this assistant
     if (scopes.includes('shared')) {
       if (this.defaultScopeId) {
         scopeConditions.push("(scope = 'shared' AND (scope_id IS NULL OR scope_id = ?))");
@@ -684,7 +684,7 @@ export class GlobalMemoryManager {
       }
     }
 
-    // Private memories: only accessible if scope_id matches this agent (requires scopeId)
+    // Private memories: only accessible if scope_id matches this assistant (requires scopeId)
     if (scopes.includes('private') && this.defaultScopeId) {
       scopeConditions.push("(scope = 'private' AND scope_id = ?)");
       params.push(this.defaultScopeId);
@@ -990,7 +990,7 @@ export class GlobalMemoryManager {
 
   private logAccess(memoryId: string, action: MemoryAccessAction): void {
     this.db.prepare(`
-      INSERT INTO memory_access_log (memory_id, session_id, agent_id, action, timestamp)
+      INSERT INTO memory_access_log (memory_id, session_id, assistant_id, action, timestamp)
       VALUES (?, ?, ?, ?, ?)
     `).run(memoryId, this.sessionId || null, this.defaultScopeId || null, action, new Date().toISOString());
   }

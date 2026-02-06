@@ -333,11 +333,11 @@ describe('HookExecutor', () => {
       expect(result).toBeNull();
     });
 
-    test('should execute agent hook when matched', async () => {
+    test('should execute assistant hook when matched', async () => {
       const matchers: HookMatcher[] = [
         {
           matcher: 'bash',
-          hooks: [{ type: 'agent', prompt: 'Review request' }],
+          hooks: [{ type: 'assistant', prompt: 'Review request' }],
         },
       ];
 
@@ -418,11 +418,11 @@ describe('HookExecutor', () => {
     });
   });
 
-  describe('agent hook execution with runner', () => {
+  describe('assistant hook execution with runner', () => {
     test('should parse ALLOW response', async () => {
-      executor.setAgentRunner(async () => 'ALLOW ok');
-      const result = await (executor as any).executeAgentHook(
-        { type: 'agent', prompt: 'Review' },
+      executor.setAssistantRunner(async () => 'ALLOW ok');
+      const result = await (executor as any).executeAssistantHook(
+        { type: 'assistant', prompt: 'Review' },
         createInput(),
         1000
       );
@@ -430,9 +430,9 @@ describe('HookExecutor', () => {
     });
 
     test('should parse DENY response', async () => {
-      executor.setAgentRunner(async () => 'DENY blocked');
-      const result = await (executor as any).executeAgentHook(
-        { type: 'agent', prompt: 'Review' },
+      executor.setAssistantRunner(async () => 'DENY blocked');
+      const result = await (executor as any).executeAssistantHook(
+        { type: 'assistant', prompt: 'Review' },
         createInput(),
         1000
       );
@@ -461,10 +461,10 @@ describe('HookExecutor', () => {
       expect(result).toBeNull();
     });
 
-    test('should handle agent hooks (not yet implemented)', async () => {
+    test('should handle assistant hooks (not yet implemented)', async () => {
       const result = await executeHook(
         executor,
-        { type: 'agent', prompt: 'Validate input' },
+        { type: 'assistant', prompt: 'Validate input' },
         createInput()
       );
       // Currently returns null as not implemented
@@ -591,7 +591,7 @@ describe('HookExecutor', () => {
     });
   });
 
-  describe('prompt and agent hook execution', () => {
+  describe('prompt and assistant hook execution', () => {
     const executePromptHook = (
       executor: HookExecutor,
       hook: { type: string; prompt?: string },
@@ -601,13 +601,13 @@ describe('HookExecutor', () => {
       return (executor as any).executePromptHook(hook, input, timeout);
     };
 
-    const executeAgentHook = (
+    const executeAssistantHook = (
       executor: HookExecutor,
       hook: { type: string; prompt?: string },
       input: HookInput,
       timeout: number
     ) => {
-      return (executor as any).executeAgentHook(hook, input, timeout);
+      return (executor as any).executeAssistantHook(hook, input, timeout);
     };
 
     test('should return null when prompt is missing', async () => {
@@ -625,15 +625,15 @@ describe('HookExecutor', () => {
       expect(result).toBeNull();
     });
 
-    test('should return null when agent prompt is missing', async () => {
-      const result = await executeAgentHook(executor, { type: 'agent' }, createInput(), 1000);
+    test('should return null when assistant prompt is missing', async () => {
+      const result = await executeAssistantHook(executor, { type: 'assistant' }, createInput(), 1000);
       expect(result).toBeNull();
     });
 
-    test('should return null for agent hook with prompt', async () => {
-      const result = await executeAgentHook(
+    test('should return null for assistant hook with prompt', async () => {
+      const result = await executeAssistantHook(
         executor,
-        { type: 'agent', prompt: 'Investigate' },
+        { type: 'assistant', prompt: 'Investigate' },
         createInput(),
         1000
       );

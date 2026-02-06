@@ -47,34 +47,34 @@ mock.module('@/db/schema', () => ({
   messages: {},
 }));
 
-// Mock agent-pool to avoid loading real database and core dependencies
-const mockAgentPool = {
+// Mock assistant-pool to avoid loading real database and core dependencies
+const mockAssistantPool = {
   subscribers: new Map<string, { onChunk: Function; onError?: Function }>(),
   lastMessage: null as string | null,
   stopped: new Set<string>(),
 
   subscribeToSession: async (sessionId: string, onChunk: Function, onError?: Function) => {
-    mockAgentPool.subscribers.set(sessionId, { onChunk, onError });
+    mockAssistantPool.subscribers.set(sessionId, { onChunk, onError });
     return () => {
-      mockAgentPool.subscribers.delete(sessionId);
+      mockAssistantPool.subscribers.delete(sessionId);
     };
   },
 
   sendSessionMessage: async (sessionId: string, message: string) => {
-    mockAgentPool.lastMessage = message;
+    mockAssistantPool.lastMessage = message;
     // Emit a text chunk to the subscriber
-    const sub = mockAgentPool.subscribers.get(sessionId);
+    const sub = mockAssistantPool.subscribers.get(sessionId);
     if (sub) {
       sub.onChunk({ type: 'text', content: 'response' });
     }
   },
 
   stopSession: async (sessionId: string) => {
-    mockAgentPool.stopped.add(sessionId);
+    mockAssistantPool.stopped.add(sessionId);
   },
 };
 
-mock.module('@/lib/server/agent-pool', () => mockAgentPool);
+mock.module('@/lib/server/agent-pool', () => mockAssistantPool);
 
 const handler = (await import('../src/pages/api/v1/ws')).default;
 
@@ -88,10 +88,10 @@ function createRes() {
 describe('pages api ws handler', () => {
   beforeEach(() => {
     resetMockClients();
-    // Reset mock agent pool state
-    mockAgentPool.lastMessage = null;
-    mockAgentPool.stopped.clear();
-    mockAgentPool.subscribers.clear();
+    // Reset mock assistant pool state
+    mockAssistantPool.lastMessage = null;
+    mockAssistantPool.stopped.clear();
+    mockAssistantPool.subscribers.clear();
   });
 
   test('initializes WebSocket server and handles messages', async () => {
@@ -112,10 +112,10 @@ describe('pages api ws handler', () => {
 
     const message: ClientMessage = { type: 'message', content: 'Hi', messageId: 'msg-1', sessionId: 'ws-test-1' };
     await ws.handlers.message(JSON.stringify(message));
-    // Verify message was sent to the agent pool
-    expect(mockAgentPool.lastMessage).toBe('Hi');
+    // Verify message was sent to the assistant pool
+    expect(mockAssistantPool.lastMessage).toBe('Hi');
 
-    // The mock agent pool emits a text_delta when sendSessionMessage is called
+    // The mock assistant pool emits a text_delta when sendSessionMessage is called
     expect(sent.some((payload) => payload.includes('text_delta'))).toBe(true);
 
     await ws.handlers.message('not-json');
@@ -141,6 +141,6 @@ describe('pages api ws handler', () => {
     const cancel: ClientMessage = { type: 'cancel' };
     await ws.handlers.message(JSON.stringify(cancel));
     // Verify stopSession was called for the session
-    expect(mockAgentPool.stopped.has('ws-test-2')).toBe(true);
+    expect(mockAssistantPool.stopped.has('ws-test-2')).toBe(true);
   });
 });

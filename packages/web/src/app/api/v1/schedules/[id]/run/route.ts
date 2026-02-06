@@ -17,7 +17,7 @@ const EXECUTION_TIMEOUT_MS = 5 * 60 * 1000;
  */
 async function executeScheduleCommand(
   command: string,
-  agentId: string | null,
+  assistantId: string | null,
   userId: string
 ): Promise<{
   status: 'success' | 'failure' | 'timeout';
@@ -33,21 +33,21 @@ async function executeScheduleCommand(
     // Create a temporary session ID for this execution
     const sessionId = `schedule-exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    // Get agent settings if specified
+    // Get assistant settings if specified
     let allowedTools: string[] | undefined;
     let systemPrompt: string | undefined;
     let model: string | undefined;
 
-    if (agentId) {
-      const agent = await db.query.assistants.findFirst({
-        where: eq(assistants.id, agentId),
+    if (assistantId) {
+      const assistant = await db.query.assistants.findFirst({
+        where: eq(assistants.id, assistantId),
         columns: { settings: true, systemPrompt: true, model: true },
       });
 
-      if (agent) {
-        allowedTools = (agent.settings as any)?.tools;
-        systemPrompt = agent.systemPrompt || undefined;
-        model = agent.model || undefined;
+      if (assistant) {
+        allowedTools = (assistant.settings as any)?.tools;
+        systemPrompt = assistant.systemPrompt || undefined;
+        model = assistant.model || undefined;
       }
     }
 
@@ -146,7 +146,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest, { params }: {
     // Execute the schedule command
     const result = await executeScheduleCommand(
       schedule.command,
-      schedule.agentId,
+      schedule.assistantId,
       schedule.userId
     );
 

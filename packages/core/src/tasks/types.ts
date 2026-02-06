@@ -43,7 +43,7 @@ export interface Task {
   projectId?: string; // Optional association with project
   blockedBy?: string[]; // Task IDs that must complete before this task can start
   blocks?: string[]; // Task IDs that are blocked by this task
-  assignee?: string; // Agent or user assigned to this task
+  assignee?: string; // Assistant or user assigned to this task
   /** Recurrence configuration for recurring tasks */
   recurrence?: TaskRecurrence;
   /** Whether this is a recurring task template (instances are created from it) */

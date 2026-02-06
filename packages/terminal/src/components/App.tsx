@@ -24,7 +24,7 @@ import { ConfigPanel } from './ConfigPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
-import { AgentsPanel } from './AgentsPanel';
+import { AssistantsRegistryPanel } from './AssistantsRegistryPanel';
 import { SchedulesPanel } from './SchedulesPanel';
 import { ProjectsPanel } from './ProjectsPanel';
 import { PlansPanel } from './PlansPanel';
@@ -60,7 +60,7 @@ import {
   type PolicyInfo,
   type BudgetScope,
   type BudgetStatus,
-  type RegisteredAgent,
+  type RegisteredAssistant,
   type RegistryStats,
   listSchedules,
   deleteSchedule,
@@ -222,9 +222,9 @@ export function App({ cwd, version }: AppProps) {
   const [swarmBudgetStatus, setSwarmBudgetStatus] = useState<BudgetStatus | null>(null);
   const budgetTrackerRef = useRef<BudgetTracker | null>(null);
 
-  // Agents panel state
-  const [showAgentsPanel, setShowAgentsPanel] = useState(false);
-  const [agentsList, setAgentsList] = useState<RegisteredAgent[]>([]);
+  // Assistants panel state
+  const [showAssistantsRegistryPanel, setShowAssistantsRegistryPanel] = useState(false);
+  const [assistantsList, setAssistantsList] = useState<RegisteredAssistant[]>([]);
   const [registryStats, setRegistryStats] = useState<RegistryStats | null>(null);
 
   // Config panel state
@@ -240,8 +240,8 @@ export function App({ cwd, version }: AppProps) {
   const [messagesList, setMessagesList] = useState<Array<{
     id: string;
     threadId: string;
-    fromAgentId: string;
-    fromAgentName: string;
+    fromAssistantId: string;
+    fromAssistantName: string;
     subject?: string;
     preview: string;
     body?: string;
@@ -267,7 +267,7 @@ export function App({ cwd, version }: AppProps) {
 
   // Secrets panel state
   const [showSecretsPanel, setShowSecretsPanel] = useState(false);
-  const [secretsList, setSecretsList] = useState<Array<{ name: string; scope: 'global' | 'agent'; createdAt?: string; updatedAt?: string }>>([]);
+  const [secretsList, setSecretsList] = useState<Array<{ name: string; scope: 'global' | 'assistant'; createdAt?: string; updatedAt?: string }>>([]);
   const [secretsError, setSecretsError] = useState<string | null>(null);
 
   // Inbox panel state
@@ -738,7 +738,7 @@ export function App({ cwd, version }: AppProps) {
         setIdentityInfo(activeSession.client.getIdentityInfo() ?? undefined);
       }
     } else if (chunk.type === 'stopped') {
-      // Agent was stopped mid-processing (e.g., user pressed Ctrl+C)
+      // Assistant was stopped mid-processing (e.g., user pressed Ctrl+C)
       // Clear pending entries and trigger queue flush
       const active = registryRef.current.getActiveSession();
       if (active) {
@@ -771,7 +771,12 @@ export function App({ cwd, version }: AppProps) {
           setShowSchedulesPanel(true);
         });
       } else if (chunk.panel === 'assistants') {
-        // Show assistants panel
+        // Show assistants panel and load registry data
+        const assistantRegistry = getGlobalRegistry();
+        const assistants = assistantRegistry.list();
+        const stats = assistantRegistry.getStats();
+        setAssistantsList(assistants);
+        setRegistryStats(stats);
         setShowAssistantsPanel(true);
       } else if (chunk.panel === 'hooks') {
         // Load hooks and show panel
@@ -792,8 +797,8 @@ export function App({ cwd, version }: AppProps) {
           messagesManager.list({ limit: 50 }).then((msgs: Array<{
             id: string;
             threadId: string;
-            fromAgentId: string;
-            fromAgentName: string;
+            fromAssistantId: string;
+            fromAssistantName: string;
             subject?: string;
             preview: string;
             body?: string;
@@ -805,8 +810,8 @@ export function App({ cwd, version }: AppProps) {
             setMessagesList(msgs.map((m: typeof msgs[0]) => ({
               id: m.id,
               threadId: m.threadId,
-              fromAgentId: m.fromAgentId,
-              fromAgentName: m.fromAgentName,
+              fromAssistantId: m.fromAssistantId,
+              fromAssistantName: m.fromAssistantName,
               subject: m.subject,
               preview: m.preview,
               body: m.body,
@@ -847,14 +852,6 @@ export function App({ cwd, version }: AppProps) {
         setSessionBudgetStatus(sessionStatus);
         setSwarmBudgetStatus(swarmStatus);
         setShowBudgetPanel(true);
-      } else if (chunk.panel === 'agents') {
-        // Load agents from registry and show panel
-        const agentRegistry = getGlobalRegistry();
-        const agents = agentRegistry.list();
-        const stats = agentRegistry.getStats();
-        setAgentsList(agents);
-        setRegistryStats(stats);
-        setShowAgentsPanel(true);
       } else if (chunk.panel === 'projects') {
         // Load projects and show panel
         listProjects(cwd).then((projects) => {
@@ -901,7 +898,7 @@ export function App({ cwd, version }: AppProps) {
         // Load secrets and show panel
         const secretsManager = registry.getActiveSession()?.client.getSecretsManager?.();
         if (secretsManager) {
-          secretsManager.list('all').then((secrets: Array<{ name: string; scope: 'global' | 'agent'; createdAt?: string; updatedAt?: string }>) => {
+          secretsManager.list('all').then((secrets: Array<{ name: string; scope: 'global' | 'assistant'; createdAt?: string; updatedAt?: string }>) => {
             setSecretsList(secrets);
             setSecretsError(null);
             setShowSecretsPanel(true);
@@ -1481,7 +1478,7 @@ export function App({ cwd, version }: AppProps) {
       }
 
       // Check for ![command] bash execution syntax
-      // Converts to an instruction for the agent to run the bash command
+      // Converts to an instruction for the assistant to run the bash command
       if (trimmedInput.startsWith('![') && trimmedInput.endsWith(']')) {
         const bashCommand = trimmedInput.slice(2, -1).trim();
         if (bashCommand) {
@@ -1606,7 +1603,7 @@ export function App({ cwd, version }: AppProps) {
       }
 
       if (isClearCommand) {
-        // Reset UI state for this session before executing clear on the agent.
+        // Reset UI state for this session before executing clear on the assistant.
         setMessages([]);
         setMessageQueue((prev) => prev.filter((msg) => msg.sessionId !== activeSession.id));
         setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== activeSession.id));
@@ -1668,7 +1665,7 @@ export function App({ cwd, version }: AppProps) {
       // Mark session as processing
       registry.setProcessing(activeSession.id, true);
 
-      // Send to agent
+      // Send to assistant
       try {
         await activeSession.client.send(trimmedInput);
       } catch (err) {
@@ -1795,7 +1792,7 @@ export function App({ cwd, version }: AppProps) {
       await startTask(cwd, id);
       const task = tasksList.find((t) => t.id === id);
       if (task && activeSession) {
-        // Send the task to the agent
+        // Send the task to the assistant
         await activeSession.client.send(`Execute the following task:\n\n${task.description}\n\nWhen done, report the result.`);
       }
     };
@@ -2164,23 +2161,23 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
-  // Show agents panel
-  if (showAgentsPanel && registryStats) {
-    const handleAgentsRefresh = () => {
-      const agentRegistry = getGlobalRegistry();
-      const agents = agentRegistry.list();
-      const stats = agentRegistry.getStats();
-      setAgentsList(agents);
+  // Show assistants registry panel
+  if (showAssistantsRegistryPanel && registryStats) {
+    const handleAssistantsRefresh = () => {
+      const assistantRegistry = getGlobalRegistry();
+      const assistants = assistantRegistry.list();
+      const stats = assistantRegistry.getStats();
+      setAssistantsList(assistants);
       setRegistryStats(stats);
     };
 
     return (
       <Box flexDirection="column" padding={1}>
-        <AgentsPanel
-          agents={agentsList}
+        <AssistantsRegistryPanel
+          assistants={assistantsList}
           stats={registryStats}
-          onRefresh={handleAgentsRefresh}
-          onCancel={() => setShowAgentsPanel(false)}
+          onRefresh={handleAssistantsRefresh}
+          onCancel={() => setShowAssistantsRegistryPanel(false)}
         />
       </Box>
     );
@@ -2371,13 +2368,13 @@ export function App({ cwd, version }: AppProps) {
   if (showSecretsPanel) {
     const secretsManager = activeSession?.client.getSecretsManager?.();
 
-    const handleSecretsGet = async (name: string, scope?: 'global' | 'agent') => {
+    const handleSecretsGet = async (name: string, scope?: 'global' | 'assistant') => {
       if (!secretsManager) throw new Error('Secrets not available');
       const value = await secretsManager.get(name, scope, 'plain');
       return value || '';
     };
 
-    const handleSecretsDelete = async (name: string, scope: 'global' | 'agent') => {
+    const handleSecretsDelete = async (name: string, scope: 'global' | 'assistant') => {
       if (!secretsManager) throw new Error('Secrets not available');
       await secretsManager.delete(name, scope);
       const secrets = await secretsManager.list('all');
@@ -2530,8 +2527,8 @@ export function App({ cwd, version }: AppProps) {
       return {
         id: msg.id,
         threadId: msg.threadId,
-        fromAgentId: msg.fromAgentId,
-        fromAgentName: msg.fromAgentName,
+        fromAssistantId: msg.fromAssistantId,
+        fromAssistantName: msg.fromAssistantName,
         subject: msg.subject,
         preview: msg.preview,
         body: msg.body,
@@ -2547,11 +2544,11 @@ export function App({ cwd, version }: AppProps) {
       await messagesManager.delete(id);
       // Refresh the messages list
       const msgs = await messagesManager.list({ limit: 50 });
-      setMessagesList(msgs.map((m: { id: string; threadId: string; fromAgentId: string; fromAgentName: string; subject?: string; preview: string; body?: string; priority: string; status: string; createdAt: string; replyCount?: number }) => ({
+      setMessagesList(msgs.map((m: { id: string; threadId: string; fromAssistantId: string; fromAssistantName: string; subject?: string; preview: string; body?: string; priority: string; status: string; createdAt: string; replyCount?: number }) => ({
         id: m.id,
         threadId: m.threadId,
-        fromAgentId: m.fromAgentId,
-        fromAgentName: m.fromAgentName,
+        fromAssistantId: m.fromAssistantId,
+        fromAssistantName: m.fromAssistantName,
         subject: m.subject,
         preview: m.preview,
         body: m.body,
@@ -2567,17 +2564,17 @@ export function App({ cwd, version }: AppProps) {
       const msg = await messagesManager.read(id);
       // Inject the message content into the current conversation
       if (activeSession) {
-        activeSession.client.addSystemMessage(`[Injected message from ${msg.fromAgentName}]\n\n${msg.body || msg.preview}`);
+        activeSession.client.addSystemMessage(`[Injected message from ${msg.fromAssistantName}]\n\n${msg.body || msg.preview}`);
       }
       // Mark as injected
       await messagesManager.markStatus?.(id, 'injected');
       // Refresh the messages list
       const msgs = await messagesManager.list({ limit: 50 });
-      setMessagesList(msgs.map((m: { id: string; threadId: string; fromAgentId: string; fromAgentName: string; subject?: string; preview: string; body?: string; priority: string; status: string; createdAt: string; replyCount?: number }) => ({
+      setMessagesList(msgs.map((m: { id: string; threadId: string; fromAssistantId: string; fromAssistantName: string; subject?: string; preview: string; body?: string; priority: string; status: string; createdAt: string; replyCount?: number }) => ({
         id: m.id,
         threadId: m.threadId,
-        fromAgentId: m.fromAgentId,
-        fromAgentName: m.fromAgentName,
+        fromAssistantId: m.fromAssistantId,
+        fromAssistantName: m.fromAssistantName,
         subject: m.subject,
         preview: m.preview,
         body: m.body,
@@ -2593,7 +2590,7 @@ export function App({ cwd, version }: AppProps) {
       const msg = await messagesManager.read(id);
       // Send reply using the messages manager
       await messagesManager.send({
-        to: msg.fromAgentId,
+        to: msg.fromAssistantId,
         body,
         replyTo: id,
       });

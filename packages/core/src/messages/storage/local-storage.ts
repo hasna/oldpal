@@ -1,14 +1,14 @@
 /**
- * Local JSON file storage for agent messages
+ * Local JSON file storage for assistant messages
  */
 
 import { join } from 'path';
 import { homedir } from 'os';
 import { mkdir, readdir, rm, stat } from 'fs/promises';
 import type {
-  AgentMessage,
-  AgentRegistry,
-  AgentRegistryEntry,
+  AssistantMessage,
+  AssistantRegistry,
+  AssistantRegistryEntry,
   InboxIndex,
   MessageListItem,
   MessageThread,
@@ -35,7 +35,7 @@ export function getMessagesBasePath(): string {
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /**
- * Local storage for agent messages using JSON files
+ * Local storage for assistant messages using JSON files
  */
 export class LocalMessagesStorage {
   private basePath: string;
@@ -62,12 +62,12 @@ export class LocalMessagesStorage {
   /**
    * Ensure the storage directories exist
    */
-  async ensureDirectories(agentId: string): Promise<void> {
-    const agentPath = this.getAgentPath(agentId);
+  async ensureDirectories(assistantId: string): Promise<void> {
+    const assistantPath = this.getAssistantPath(assistantId);
     await Promise.all([
       mkdir(this.basePath, { recursive: true }),
-      mkdir(join(agentPath, 'messages'), { recursive: true }),
-      mkdir(join(agentPath, 'threads'), { recursive: true }),
+      mkdir(join(assistantPath, 'messages'), { recursive: true }),
+      mkdir(join(assistantPath, 'threads'), { recursive: true }),
     ]);
   }
 
@@ -75,23 +75,23 @@ export class LocalMessagesStorage {
   // Path Helpers
   // ============================================
 
-  private getAgentPath(agentId: string): string {
-    this.validateSafeId(agentId, 'agentId');
-    return join(this.basePath, agentId);
+  private getAssistantPath(assistantId: string): string {
+    this.validateSafeId(assistantId, 'assistantId');
+    return join(this.basePath, assistantId);
   }
 
-  private getIndexPath(agentId: string): string {
-    return join(this.getAgentPath(agentId), 'index.json');
+  private getIndexPath(assistantId: string): string {
+    return join(this.getAssistantPath(assistantId), 'index.json');
   }
 
-  private getMessagePath(agentId: string, messageId: string): string {
+  private getMessagePath(assistantId: string, messageId: string): string {
     this.validateSafeId(messageId, 'messageId');
-    return join(this.getAgentPath(agentId), 'messages', `${messageId}.json`);
+    return join(this.getAssistantPath(assistantId), 'messages', `${messageId}.json`);
   }
 
-  private getThreadPath(agentId: string, threadId: string): string {
+  private getThreadPath(assistantId: string, threadId: string): string {
     this.validateSafeId(threadId, 'threadId');
-    return join(this.getAgentPath(agentId), 'threads', `${threadId}.json`);
+    return join(this.getAssistantPath(assistantId), 'threads', `${threadId}.json`);
   }
 
   private getRegistryPath(): string {
@@ -99,40 +99,40 @@ export class LocalMessagesStorage {
   }
 
   // ============================================
-  // Agent Registry Operations
+  // Assistant Registry Operations
   // ============================================
 
   /**
-   * Load the global agent registry
+   * Load the global assistant registry
    */
-  async loadRegistry(): Promise<AgentRegistry> {
+  async loadRegistry(): Promise<AssistantRegistry> {
     try {
       const runtime = getRuntime();
       const file = runtime.file(this.getRegistryPath());
       if (!(await file.exists())) {
-        return { agents: {} };
+        return { assistants: {} };
       }
       return await file.json();
     } catch {
-      return { agents: {} };
+      return { assistants: {} };
     }
   }
 
   /**
-   * Save the global agent registry
+   * Save the global assistant registry
    */
-  async saveRegistry(registry: AgentRegistry): Promise<void> {
+  async saveRegistry(registry: AssistantRegistry): Promise<void> {
     const runtime = getRuntime();
     await mkdir(this.basePath, { recursive: true });
     await runtime.write(this.getRegistryPath(), JSON.stringify(registry, null, 2));
   }
 
   /**
-   * Register or update an agent in the registry
+   * Register or update an assistant in the registry
    */
-  async registerAgent(agentId: string, name: string): Promise<void> {
+  async registerAssistant(assistantId: string, name: string): Promise<void> {
     const registry = await this.loadRegistry();
-    registry.agents[agentId] = {
+    registry.assistants[assistantId] = {
       name,
       lastSeen: new Date().toISOString(),
     };
@@ -140,21 +140,21 @@ export class LocalMessagesStorage {
   }
 
   /**
-   * Get agent info by ID
+   * Get assistant info by ID
    */
-  async getAgentById(agentId: string): Promise<AgentRegistryEntry | null> {
+  async getAssistantById(assistantId: string): Promise<AssistantRegistryEntry | null> {
     const registry = await this.loadRegistry();
-    return registry.agents[agentId] || null;
+    return registry.assistants[assistantId] || null;
   }
 
   /**
-   * Find agent by name (case-insensitive)
+   * Find assistant by name (case-insensitive)
    */
-  async findAgentByName(name: string): Promise<{ id: string; entry: AgentRegistryEntry } | null> {
+  async findAssistantByName(name: string): Promise<{ id: string; entry: AssistantRegistryEntry } | null> {
     const registry = await this.loadRegistry();
     const lowerName = name.toLowerCase();
 
-    for (const [id, entry] of Object.entries(registry.agents)) {
+    for (const [id, entry] of Object.entries(registry.assistants)) {
       if (entry.name.toLowerCase() === lowerName) {
         return { id, entry };
       }
@@ -164,11 +164,11 @@ export class LocalMessagesStorage {
   }
 
   /**
-   * List all known agents
+   * List all known assistants
    */
-  async listAgents(): Promise<Array<{ id: string; name: string; lastSeen: string }>> {
+  async listAssistants(): Promise<Array<{ id: string; name: string; lastSeen: string }>> {
     const registry = await this.loadRegistry();
-    return Object.entries(registry.agents).map(([id, entry]) => ({
+    return Object.entries(registry.assistants).map(([id, entry]) => ({
       id,
       name: entry.name,
       lastSeen: entry.lastSeen,
@@ -180,12 +180,12 @@ export class LocalMessagesStorage {
   // ============================================
 
   /**
-   * Load inbox index for an agent
+   * Load inbox index for an assistant
    */
-  async loadIndex(agentId: string): Promise<InboxIndex> {
+  async loadIndex(assistantId: string): Promise<InboxIndex> {
     try {
       const runtime = getRuntime();
-      const file = runtime.file(this.getIndexPath(agentId));
+      const file = runtime.file(this.getIndexPath(assistantId));
       if (!(await file.exists())) {
         return {
           messages: [],
@@ -212,18 +212,18 @@ export class LocalMessagesStorage {
   }
 
   /**
-   * Save inbox index for an agent
+   * Save inbox index for an assistant
    */
-  async saveIndex(agentId: string, index: InboxIndex): Promise<void> {
+  async saveIndex(assistantId: string, index: InboxIndex): Promise<void> {
     const runtime = getRuntime();
-    await this.ensureDirectories(agentId);
-    await runtime.write(this.getIndexPath(agentId), JSON.stringify(index, null, 2));
+    await this.ensureDirectories(assistantId);
+    await runtime.write(this.getIndexPath(assistantId), JSON.stringify(index, null, 2));
   }
 
   /**
    * Update index after message operations
    */
-  private async rebuildIndexStats(agentId: string, index: InboxIndex): Promise<void> {
+  private async rebuildIndexStats(assistantId: string, index: InboxIndex): Promise<void> {
     const threadIds = new Set<string>();
     let unreadCount = 0;
 
@@ -249,23 +249,23 @@ export class LocalMessagesStorage {
   /**
    * Save a message to storage
    */
-  async saveMessage(message: AgentMessage): Promise<void> {
+  async saveMessage(message: AssistantMessage): Promise<void> {
     const runtime = getRuntime();
-    await this.ensureDirectories(message.toAgentId);
+    await this.ensureDirectories(message.toAssistantId);
 
     // Save full message
-    const messagePath = this.getMessagePath(message.toAgentId, message.id);
+    const messagePath = this.getMessagePath(message.toAssistantId, message.id);
     await runtime.write(messagePath, JSON.stringify(message, null, 2));
 
     // Update index
-    const index = await this.loadIndex(message.toAgentId);
+    const index = await this.loadIndex(message.toAssistantId);
 
     const listItem: MessageListItem = {
       id: message.id,
       threadId: message.threadId,
       parentId: message.parentId,
-      fromAgentId: message.fromAgentId,
-      fromAgentName: message.fromAgentName,
+      fromAssistantId: message.fromAssistantId,
+      fromAssistantName: message.fromAssistantName,
       subject: message.subject,
       preview: message.body.slice(0, 100) + (message.body.length > 100 ? '...' : ''),
       priority: message.priority,
@@ -286,20 +286,20 @@ export class LocalMessagesStorage {
       }
     }
 
-    await this.rebuildIndexStats(message.toAgentId, index);
-    await this.saveIndex(message.toAgentId, index);
+    await this.rebuildIndexStats(message.toAssistantId, index);
+    await this.saveIndex(message.toAssistantId, index);
 
     // Update thread metadata
-    await this.updateThread(message.toAgentId, message);
+    await this.updateThread(message.toAssistantId, message);
   }
 
   /**
    * Load a specific message
    */
-  async loadMessage(agentId: string, messageId: string): Promise<AgentMessage | null> {
+  async loadMessage(assistantId: string, messageId: string): Promise<AssistantMessage | null> {
     try {
       const runtime = getRuntime();
-      const file = runtime.file(this.getMessagePath(agentId, messageId));
+      const file = runtime.file(this.getMessagePath(assistantId, messageId));
       if (!(await file.exists())) {
         return null;
       }
@@ -313,13 +313,13 @@ export class LocalMessagesStorage {
    * Update message status
    */
   async updateMessageStatus(
-    agentId: string,
+    assistantId: string,
     messageId: string,
-    status: AgentMessage['status'],
+    status: AssistantMessage['status'],
     timestamp?: string
   ): Promise<void> {
     const runtime = getRuntime();
-    const message = await this.loadMessage(agentId, messageId);
+    const message = await this.loadMessage(assistantId, messageId);
     if (!message) return;
 
     message.status = status;
@@ -330,26 +330,26 @@ export class LocalMessagesStorage {
     }
 
     await runtime.write(
-      this.getMessagePath(agentId, messageId),
+      this.getMessagePath(assistantId, messageId),
       JSON.stringify(message, null, 2)
     );
 
     // Update index
-    const index = await this.loadIndex(agentId);
+    const index = await this.loadIndex(assistantId);
     const indexItem = index.messages.find((m) => m.id === messageId);
     if (indexItem) {
       indexItem.status = status;
     }
-    await this.rebuildIndexStats(agentId, index);
-    await this.saveIndex(agentId, index);
+    await this.rebuildIndexStats(assistantId, index);
+    await this.saveIndex(assistantId, index);
   }
 
   /**
    * Delete a message
    */
-  async deleteMessage(agentId: string, messageId: string): Promise<boolean> {
+  async deleteMessage(assistantId: string, messageId: string): Promise<boolean> {
     const runtime = getRuntime();
-    const messagePath = this.getMessagePath(agentId, messageId);
+    const messagePath = this.getMessagePath(assistantId, messageId);
     try {
       const file = runtime.file(messagePath);
       if (!(await file.exists())) {
@@ -359,12 +359,12 @@ export class LocalMessagesStorage {
       await rm(messagePath);
 
       // Update index
-      const index = await this.loadIndex(agentId);
+      const index = await this.loadIndex(assistantId);
       const msgIndex = index.messages.findIndex((m) => m.id === messageId);
       if (msgIndex >= 0) {
         index.messages.splice(msgIndex, 1);
-        await this.rebuildIndexStats(agentId, index);
-        await this.saveIndex(agentId, index);
+        await this.rebuildIndexStats(assistantId, index);
+        await this.saveIndex(assistantId, index);
       }
 
       return true;
@@ -374,18 +374,18 @@ export class LocalMessagesStorage {
   }
 
   /**
-   * List messages for an agent
+   * List messages for an assistant
    */
   async listMessages(
-    agentId: string,
+    assistantId: string,
     options?: {
       limit?: number;
       unreadOnly?: boolean;
       threadId?: string;
-      fromAgentId?: string;
+      fromAssistantId?: string;
     }
   ): Promise<MessageListItem[]> {
-    const index = await this.loadIndex(agentId);
+    const index = await this.loadIndex(assistantId);
     let messages = [...index.messages];
 
     // Apply filters
@@ -395,8 +395,8 @@ export class LocalMessagesStorage {
     if (options?.threadId) {
       messages = messages.filter((m) => m.threadId === options.threadId);
     }
-    if (options?.fromAgentId) {
-      messages = messages.filter((m) => m.fromAgentId === options.fromAgentId);
+    if (options?.fromAssistantId) {
+      messages = messages.filter((m) => m.fromAssistantId === options.fromAssistantId);
     }
 
     // Apply limit
@@ -414,9 +414,9 @@ export class LocalMessagesStorage {
   /**
    * Update thread metadata
    */
-  private async updateThread(agentId: string, message: AgentMessage): Promise<void> {
+  private async updateThread(assistantId: string, message: AssistantMessage): Promise<void> {
     const runtime = getRuntime();
-    const threadPath = this.getThreadPath(agentId, message.threadId);
+    const threadPath = this.getThreadPath(assistantId, message.threadId);
     let thread: MessageThread;
 
     try {
@@ -449,18 +449,18 @@ export class LocalMessagesStorage {
     }
 
     // Update participants
-    const fromExists = thread.participants.some((p) => p.agentId === message.fromAgentId);
+    const fromExists = thread.participants.some((p) => p.assistantId === message.fromAssistantId);
     if (!fromExists) {
       thread.participants.push({
-        agentId: message.fromAgentId,
-        agentName: message.fromAgentName,
+        assistantId: message.fromAssistantId,
+        assistantName: message.fromAssistantName,
       });
     }
-    const toExists = thread.participants.some((p) => p.agentId === message.toAgentId);
+    const toExists = thread.participants.some((p) => p.assistantId === message.toAssistantId);
     if (!toExists) {
       thread.participants.push({
-        agentId: message.toAgentId,
-        agentName: message.toAgentName,
+        assistantId: message.toAssistantId,
+        assistantName: message.toAssistantName,
       });
     }
 
@@ -475,8 +475,8 @@ export class LocalMessagesStorage {
       id: message.id,
       threadId: message.threadId,
       parentId: message.parentId,
-      fromAgentId: message.fromAgentId,
-      fromAgentName: message.fromAgentName,
+      fromAssistantId: message.fromAssistantId,
+      fromAssistantName: message.fromAssistantName,
       subject: message.subject,
       preview: message.body.slice(0, 100) + (message.body.length > 100 ? '...' : ''),
       priority: message.priority,
@@ -493,10 +493,10 @@ export class LocalMessagesStorage {
   /**
    * Load thread metadata
    */
-  async loadThread(agentId: string, threadId: string): Promise<MessageThread | null> {
+  async loadThread(assistantId: string, threadId: string): Promise<MessageThread | null> {
     try {
       const runtime = getRuntime();
-      const file = runtime.file(this.getThreadPath(agentId, threadId));
+      const file = runtime.file(this.getThreadPath(assistantId, threadId));
       if (!(await file.exists())) {
         return null;
       }
@@ -507,12 +507,12 @@ export class LocalMessagesStorage {
   }
 
   /**
-   * List all threads for an agent
+   * List all threads for an assistant
    */
-  async listThreads(agentId: string): Promise<MessageThread[]> {
+  async listThreads(assistantId: string): Promise<MessageThread[]> {
     const runtime = getRuntime();
-    const agentPath = this.getAgentPath(agentId);
-    const threadsDir = join(agentPath, 'threads');
+    const assistantPath = this.getAssistantPath(assistantId);
+    const threadsDir = join(assistantPath, 'threads');
 
     try {
       const files = await readdir(threadsDir);
@@ -541,15 +541,15 @@ export class LocalMessagesStorage {
   /**
    * Load all messages in a thread
    */
-  async loadThreadMessages(agentId: string, threadId: string): Promise<AgentMessage[]> {
-    const index = await this.loadIndex(agentId);
+  async loadThreadMessages(assistantId: string, threadId: string): Promise<AssistantMessage[]> {
+    const index = await this.loadIndex(assistantId);
     const threadMessageIds = index.messages
       .filter((m) => m.threadId === threadId)
       .map((m) => m.id);
 
-    const messages: AgentMessage[] = [];
+    const messages: AssistantMessage[] = [];
     for (const id of threadMessageIds) {
-      const message = await this.loadMessage(agentId, id);
+      const message = await this.loadMessage(assistantId, id);
       if (message) {
         messages.push(message);
       }
@@ -568,12 +568,12 @@ export class LocalMessagesStorage {
   /**
    * Clean up old messages
    */
-  async cleanup(agentId: string, maxAgeDays: number): Promise<number> {
+  async cleanup(assistantId: string, maxAgeDays: number): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
     const cutoffTime = cutoffDate.getTime();
 
-    const index = await this.loadIndex(agentId);
+    const index = await this.loadIndex(assistantId);
     const toDelete: string[] = [];
 
     for (const msg of index.messages) {
@@ -584,7 +584,7 @@ export class LocalMessagesStorage {
     }
 
     for (const id of toDelete) {
-      await this.deleteMessage(agentId, id);
+      await this.deleteMessage(assistantId, id);
     }
 
     return toDelete.length;
@@ -593,8 +593,8 @@ export class LocalMessagesStorage {
   /**
    * Enforce max messages limit
    */
-  async enforceMaxMessages(agentId: string, maxMessages: number): Promise<number> {
-    const index = await this.loadIndex(agentId);
+  async enforceMaxMessages(assistantId: string, maxMessages: number): Promise<number> {
+    const index = await this.loadIndex(assistantId);
     if (index.messages.length <= maxMessages) {
       return 0;
     }
@@ -607,7 +607,7 @@ export class LocalMessagesStorage {
     const toDelete = sorted.slice(0, index.messages.length - maxMessages);
 
     for (const msg of toDelete) {
-      await this.deleteMessage(agentId, msg.id);
+      await this.deleteMessage(assistantId, msg.id);
     }
 
     return toDelete.length;

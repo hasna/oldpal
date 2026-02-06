@@ -27,8 +27,8 @@ const features = [
   },
   {
     icon: Sparkles,
-    title: 'Custom Agents',
-    description: 'Create specialized agents for different tasks',
+    title: 'Custom Assistants',
+    description: 'Create specialized assistants for different tasks',
   },
   {
     icon: Calendar,
@@ -122,7 +122,7 @@ export function WelcomeModal({ open, onClose, onStartTour, userName }: WelcomeMo
                   2
                 </div>
                 <div>
-                  <p className="text-sm font-medium">Create custom agents</p>
+                  <p className="text-sm font-medium">Create custom assistants</p>
                   <p className="text-xs text-muted-foreground">Build AI helpers for specific tasks</p>
                 </div>
               </div>

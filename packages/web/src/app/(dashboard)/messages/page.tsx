@@ -26,7 +26,7 @@ import {
   usePagination,
 } from '@/components/shared/DataTable';
 
-interface AgentMessage {
+interface AssistantMessage {
   id: string;
   threadId: string;
   subject: string | null;
@@ -45,7 +45,7 @@ type MessageFilters = {
 
 export default function MessagesPage() {
   const { fetchWithAuth } = useAuth();
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
+  const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedThread, setSelectedThread] = useState<{
@@ -68,7 +68,7 @@ export default function MessagesPage() {
   });
 
   // Selection state for bulk actions
-  const selection = useSelection<AgentMessage>();
+  const selection = useSelection<AssistantMessage>();
 
   const loadMessages = useCallback(async () => {
     setError(''); // Clear any previous errors
@@ -178,7 +178,7 @@ export default function MessagesPage() {
 
   // Bulk mark as read
   const bulkMarkAsRead = useCallback(
-    async (messagesToUpdate: AgentMessage[]) => {
+    async (messagesToUpdate: AssistantMessage[]) => {
       const results = await Promise.allSettled(
         messagesToUpdate.map((m) =>
           fetchWithAuth(`/api/v1/messages/${m.id}`, {
@@ -208,7 +208,7 @@ export default function MessagesPage() {
 
   // Bulk archive
   const bulkArchive = useCallback(
-    async (messagesToArchive: AgentMessage[]) => {
+    async (messagesToArchive: AssistantMessage[]) => {
       const results = await Promise.allSettled(
         messagesToArchive.map((m) =>
           fetchWithAuth(`/api/v1/messages/${m.id}`, {
@@ -238,7 +238,7 @@ export default function MessagesPage() {
 
   // Bulk delete
   const bulkDelete = useCallback(
-    async (messagesToDelete: AgentMessage[]) => {
+    async (messagesToDelete: AssistantMessage[]) => {
       const ids = messagesToDelete.map((m) => m.id);
       await Promise.allSettled(
         ids.map((id) =>
@@ -253,7 +253,7 @@ export default function MessagesPage() {
   );
 
   // Bulk actions configuration
-  const bulkActions: BulkAction<AgentMessage>[] = [
+  const bulkActions: BulkAction<AssistantMessage>[] = [
     {
       id: 'mark-read',
       label: 'Mark as read',

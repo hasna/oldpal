@@ -2,11 +2,11 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The core runtime library for building AI assistants. Provides the agent loop, tool system, skills, hooks, and context management.
+The core runtime library for building AI assistants. Provides the assistant loop, tool system, skills, hooks, and context management.
 
 ## Features
 
-- **Agent Loop**: Full conversation orchestration with Claude
+- **Assistant Loop**: Full conversation orchestration with Claude
 - **Tool System**: Bash, filesystem, web tools + custom tool support
 - **Skills**: Reusable prompt templates (SKILL.md format)
 - **Hooks**: Pre/post tool execution hooks for validation
@@ -28,34 +28,34 @@ import { bunRuntime } from '@hasna/runtime-bun';
 // Initialize runtime first
 setRuntime(bunRuntime);
 
-import { AgentLoop } from '@hasna/assistants-core';
+import { AssistantLoop } from '@hasna/assistants-core';
 
-// Create agent loop
-const agent = new AgentLoop({
+// Create assistant loop
+const assistant = new AssistantLoop({
   cwd: process.cwd(),
 });
 
 // Initialize
-await agent.initialize();
+await assistant.initialize();
 
 // Send a message
-const response = await agent.processMessage('Hello!');
+const response = await assistant.processMessage('Hello!');
 console.log(response);
 
 // Cleanup
-agent.stop();
+assistant.stop();
 ```
 
 ## Core Components
 
-### AgentLoop
+### AssistantLoop
 
 The main orchestrator that manages conversation flow, tool execution, and context.
 
 ```typescript
-import { AgentLoop } from '@hasna/assistants-core';
+import { AssistantLoop } from '@hasna/assistants-core';
 
-const agent = new AgentLoop({
+const assistant = new AssistantLoop({
   cwd: '/path/to/working/directory',
   sessionId: 'optional-session-id',
   config: {
@@ -93,7 +93,7 @@ client.disconnect();
 
 ### Tool Registry
 
-Register custom tools for the agent to use.
+Register custom tools for the assistant to use.
 
 ```typescript
 import { ToolRegistry, type Tool, type ToolExecutor } from '@hasna/assistants-core';
@@ -142,7 +142,7 @@ const expandedPrompt = await executor.execute('code-review', 'src/main.ts');
 
 ### Hooks
 
-Hooks allow you to intercept and modify agent behavior at key lifecycle points. They can validate inputs, block actions, inject context, or perform cleanup.
+Hooks allow you to intercept and modify assistant behavior at key lifecycle points. They can validate inputs, block actions, inject context, or perform cleanup.
 
 #### Hook Events
 
@@ -155,11 +155,11 @@ Hooks allow you to intercept and modify agent behavior at key lifecycle points. 
 | **UserPromptSubmit** | When user sends a message | Input sanitization, context injection |
 | **SessionStart** | When a new session begins | Initialize state, log session |
 | **SessionEnd** | When session ends | Cleanup, analytics, summary |
-| **SubagentStart** | When spawning a subagent | Validate task, modify config |
-| **SubagentStop** | When subagent completes | Process results, cleanup |
+| **SubassistantStart** | When spawning a subassistant | Validate task, modify config |
+| **SubassistantStop** | When subassistant completes | Process results, cleanup |
 | **PreCompact** | Before context compaction | Skip/delay compaction |
 | **Notification** | When notification sent | Custom delivery, filtering |
-| **Stop** | When agent is stopping | Goal verification, cleanup |
+| **Stop** | When assistant is stopping | Goal verification, cleanup |
 
 #### Hook Types
 
@@ -167,7 +167,7 @@ Hooks allow you to intercept and modify agent behavior at key lifecycle points. 
 |------|-------------|
 | **command** | Execute a shell command. Input passed as JSON via stdin. Exit 0 = allow, Exit 2 = block |
 | **prompt** | Single-turn LLM query. Must respond with `{"allow": boolean, "reason": string}` |
-| **agent** | Multi-turn agent with tools. Must respond with ALLOW or DENY |
+| **assistant** | Multi-turn assistant with tools. Must respond with ALLOW or DENY |
 
 #### Configuration
 
@@ -224,9 +224,9 @@ interface HookInput {
   error?: string;            // PostToolUseFailure
   user_prompt?: string;      // UserPromptSubmit
   notification_type?: string; // Notification
-  subagent_id?: string;      // SubagentStart, SubagentStop
-  task?: string;             // SubagentStart
-  status?: string;           // SubagentStop
+  subassistant_id?: string;  // SubassistantStart, SubassistantStop
+  task?: string;             // SubassistantStart
+  status?: string;           // SubassistantStop
   strategy?: string;         // PreCompact
   reason?: string;           // SessionEnd, Stop
 }
@@ -356,15 +356,15 @@ Create `~/.assistants/config.json` or `.assistants/config.json`:
 
 ## Memory System
 
-The memory system provides persistent storage for agent memories across sessions. Memories are scoped, categorized, and can be automatically injected into conversations.
+The memory system provides persistent storage for assistant memories across sessions. Memories are scoped, categorized, and can be automatically injected into conversations.
 
 ### Scopes
 
 | Scope | Description |
 |-------|-------------|
-| **global** | Accessible to all agents and sessions |
-| **shared** | Shared between agents (visible to current agent + agents it delegates to) |
-| **private** | Private to the current agent only |
+| **global** | Accessible to all assistants and sessions |
+| **shared** | Shared between assistants (visible to current assistant + assistants it delegates to) |
+| **private** | Private to the current assistant only |
 
 ### Categories
 
@@ -383,7 +383,7 @@ import { GlobalMemoryManager } from '@hasna/assistants-core';
 const manager = new GlobalMemoryManager({
   dbPath: '/path/to/memory.db',
   defaultScope: 'private',
-  scopeId: 'my-agent-123',
+  scopeId: 'my-assistant-123',
 });
 
 // Store a memory
@@ -458,7 +458,7 @@ Users can manage memories via slash commands:
 
 ### Memory Tools
 
-Agents can use memory tools programmatically:
+Assistants can use memory tools programmatically:
 
 | Tool | Description |
 |------|-------------|
@@ -473,9 +473,9 @@ Agents can use memory tools programmatically:
 
 ### Privacy Boundaries
 
-- **Global memories** are accessible to all agents
-- **Private memories** are isolated by `scopeId` (typically the agent ID)
-- **Shared memories** can be accessed by the agent and its delegates
+- **Global memories** are accessible to all assistants
+- **Private memories** are isolated by `scopeId` (typically the assistant ID)
+- **Shared memories** can be accessed by the assistant and its delegates
 - Memory queries enforce scope isolation to prevent data leakage
 - Access logs track all read/write operations
 

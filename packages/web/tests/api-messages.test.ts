@@ -2,33 +2,33 @@ import { describe, expect, test, beforeEach, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Mock state
-let mockUserAgents: any[] = [];
+let mockUserAssistants: any[] = [];
 let mockMessages: any[] = [];
 let mockMessageCount = 0;
-let mockFromAgent: any = null;
-let mockToAgent: any = null;
+let mockFromAssistant: any = null;
+let mockToAssistant: any = null;
 let mockInsertedMessage: any = null;
 let insertValuesData: any = null;
 
-// Track which agent is being queried
-let agentQueryCount = 0;
+// Track which assistant is being queried
+let assistantQueryCount = 0;
 
 // Mock database
 mock.module('@/db', () => ({
   db: {
     query: {
-      agents: {
-        findMany: async () => mockUserAgents,
+      assistants: {
+        findMany: async () => mockUserAssistants,
         findFirst: async () => {
-          agentQueryCount++;
-          // First query is for fromAgent, second is for toAgent
-          if (agentQueryCount === 1) {
-            return mockFromAgent;
+          assistantQueryCount++;
+          // First query is for fromAssistant, second is for toAssistant
+          if (assistantQueryCount === 1) {
+            return mockFromAssistant;
           }
-          return mockToAgent;
+          return mockToAssistant;
         },
       },
-      agentMessages: {
+      assistantMessages: {
         findMany: async ({ limit, offset }: any) => {
           const start = offset || 0;
           const end = start + (limit || mockMessages.length);
@@ -60,8 +60,8 @@ mock.module('@/db', () => ({
 
 // Mock db schema
 mock.module('@/db/schema', () => ({
-  agentMessages: 'agentMessages',
-  agents: 'agents',
+  assistantMessages: 'assistantMessages',
+  assistants: 'assistants',
 }));
 
 // Mock auth middleware
@@ -99,14 +99,14 @@ mock.module('drizzle-orm', () => ({
 const { GET, POST } = await import('../src/app/api/v1/messages/route');
 
 function createGetRequest(
-  params: { page?: number; limit?: number; status?: string; agentId?: string } = {},
+  params: { page?: number; limit?: number; status?: string; assistantId?: string } = {},
   options: { token?: string } = {}
 ): NextRequest {
   const url = new URL('http://localhost:3001/api/v1/messages');
   if (params.page) url.searchParams.set('page', params.page.toString());
   if (params.limit) url.searchParams.set('limit', params.limit.toString());
   if (params.status) url.searchParams.set('status', params.status);
-  if (params.agentId) url.searchParams.set('agentId', params.agentId);
+  if (params.assistantId) url.searchParams.set('assistantId', params.assistantId);
 
   const headers: Record<string, string> = {};
   if (options.token !== undefined) {
@@ -142,18 +142,18 @@ function createPostRequest(
 
 describe('GET /api/v1/messages', () => {
   beforeEach(() => {
-    mockUserAgents = [{ id: 'agent-1' }, { id: 'agent-2' }];
+    mockUserAssistants = [{ id: 'assistant-1' }, { id: 'assistant-2' }];
     mockMessages = [
-      { id: 'msg-1', toAgentId: 'agent-1', subject: 'Test 1', status: 'unread' },
-      { id: 'msg-2', toAgentId: 'agent-2', subject: 'Test 2', status: 'read' },
-      { id: 'msg-3', toAgentId: 'agent-1', subject: 'Test 3', status: 'unread' },
+      { id: 'msg-1', toAssistantId: 'assistant-1', subject: 'Test 1', status: 'unread' },
+      { id: 'msg-2', toAssistantId: 'assistant-2', subject: 'Test 2', status: 'read' },
+      { id: 'msg-3', toAssistantId: 'assistant-1', subject: 'Test 3', status: 'unread' },
     ];
     mockMessageCount = 3;
-    mockFromAgent = null;
-    mockToAgent = null;
+    mockFromAssistant = null;
+    mockToAssistant = null;
     mockInsertedMessage = null;
     insertValuesData = null;
-    agentQueryCount = 0;
+    assistantQueryCount = 0;
   });
 
   describe('authentication', () => {
@@ -187,8 +187,8 @@ describe('GET /api/v1/messages', () => {
       expect(data.data.total).toBe(3);
     });
 
-    test('returns empty list when user has no agents', async () => {
-      mockUserAgents = [];
+    test('returns empty list when user has no assistants', async () => {
+      mockUserAssistants = [];
       const request = createGetRequest();
 
       const response = await GET(request);
@@ -222,8 +222,8 @@ describe('GET /api/v1/messages', () => {
       expect(data.success).toBe(true);
     });
 
-    test('filters by agentId when user owns the agent', async () => {
-      const request = createGetRequest({ agentId: 'agent-1' });
+    test('filters by assistantId when user owns the assistant', async () => {
+      const request = createGetRequest({ assistantId: 'assistant-1' });
 
       const response = await GET(request);
       const data = await response.json();
@@ -267,14 +267,14 @@ describe('GET /api/v1/messages', () => {
 
 describe('POST /api/v1/messages', () => {
   beforeEach(() => {
-    mockUserAgents = [{ id: 'agent-1' }, { id: 'agent-2' }];
+    mockUserAssistants = [{ id: 'assistant-1' }, { id: 'assistant-2' }];
     mockMessages = [];
     mockMessageCount = 0;
-    mockFromAgent = { id: 'agent-1', userId: 'user-123' };
-    mockToAgent = { id: 'agent-2', userId: 'other-user' };
+    mockFromAssistant = { id: 'assistant-1', userId: 'user-123' };
+    mockToAssistant = { id: 'assistant-2', userId: 'other-user' };
     mockInsertedMessage = null;
     insertValuesData = null;
-    agentQueryCount = 0;
+    assistantQueryCount = 0;
   });
 
   describe('authentication', () => {
@@ -283,7 +283,7 @@ describe('POST /api/v1/messages', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          toAgentId: 'agent-2',
+          toAssistantId: 'assistant-2',
           body: 'Hello',
         }),
       });
@@ -297,7 +297,7 @@ describe('POST /api/v1/messages', () => {
   describe('sending messages', () => {
     test('creates message with required fields', async () => {
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
         body: 'Hello, world!',
       });
 
@@ -311,8 +311,8 @@ describe('POST /api/v1/messages', () => {
 
     test('creates message with all optional fields', async () => {
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
-        fromAgentId: '550e8400-e29b-41d4-a716-446655440001',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
+        fromAssistantId: '550e8400-e29b-41d4-a716-446655440001',
         subject: 'Test Subject',
         body: 'Hello, world!',
         priority: 'high',
@@ -330,7 +330,7 @@ describe('POST /api/v1/messages', () => {
 
     test('generates threadId if not provided', async () => {
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
         body: 'Hello',
       });
 
@@ -341,7 +341,7 @@ describe('POST /api/v1/messages', () => {
 
     test('defaults priority to normal', async () => {
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
         body: 'Hello',
       });
 
@@ -352,11 +352,11 @@ describe('POST /api/v1/messages', () => {
   });
 
   describe('authorization', () => {
-    test('returns 403 when user does not own sender agent', async () => {
-      mockFromAgent = { id: 'agent-other', userId: 'different-user' };
+    test('returns 403 when user does not own sender assistant', async () => {
+      mockFromAssistant = { id: 'assistant-other', userId: 'different-user' };
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
-        fromAgentId: '550e8400-e29b-41d4-a716-446655440001',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
+        fromAssistantId: '550e8400-e29b-41d4-a716-446655440001',
         body: 'Hello',
       });
 
@@ -364,14 +364,14 @@ describe('POST /api/v1/messages', () => {
       const data = await response.json();
 
       expect(response.status).toBe(403);
-      expect(data.error.message).toContain('do not own the sender agent');
+      expect(data.error.message).toContain('do not own the sender assistant');
     });
 
-    test('returns 403 when sender agent not found', async () => {
-      mockFromAgent = null;
+    test('returns 403 when sender assistant not found', async () => {
+      mockFromAssistant = null;
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
-        fromAgentId: '550e8400-e29b-41d4-a716-446655440001',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
+        fromAssistantId: '550e8400-e29b-41d4-a716-446655440001',
         body: 'Hello',
       });
 
@@ -381,13 +381,13 @@ describe('POST /api/v1/messages', () => {
       expect(response.status).toBe(403);
     });
 
-    test('returns 404 when recipient agent not found', async () => {
-      mockFromAgent = null; // Skip fromAgent check
-      mockToAgent = null;
-      agentQueryCount = 0;
+    test('returns 404 when recipient assistant not found', async () => {
+      mockFromAssistant = null; // Skip fromAssistant check
+      mockToAssistant = null;
+      assistantQueryCount = 0;
 
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
         body: 'Hello',
       });
 
@@ -395,14 +395,14 @@ describe('POST /api/v1/messages', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error.message).toContain('Recipient agent not found');
+      expect(data.error.message).toContain('Recipient assistant not found');
     });
   });
 
   describe('validation', () => {
-    test('returns 422 for invalid toAgentId format', async () => {
+    test('returns 422 for invalid toAssistantId format', async () => {
       const request = createPostRequest({
-        toAgentId: 'not-a-uuid',
+        toAssistantId: 'not-a-uuid',
         body: 'Hello',
       });
 
@@ -415,7 +415,7 @@ describe('POST /api/v1/messages', () => {
 
     test('returns 422 when body is empty', async () => {
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
         body: '',
       });
 
@@ -427,7 +427,7 @@ describe('POST /api/v1/messages', () => {
 
     test('returns 422 when body is missing', async () => {
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       const response = await POST(request);
@@ -438,7 +438,7 @@ describe('POST /api/v1/messages', () => {
 
     test('returns 422 for invalid priority value', async () => {
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
         body: 'Hello',
         priority: 'invalid',
       });
@@ -451,7 +451,7 @@ describe('POST /api/v1/messages', () => {
 
     test('returns 422 when subject exceeds 500 characters', async () => {
       const request = createPostRequest({
-        toAgentId: '550e8400-e29b-41d4-a716-446655440000',
+        toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
         body: 'Hello',
         subject: 'a'.repeat(501),
       });

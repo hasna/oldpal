@@ -1,22 +1,22 @@
 /**
- * Agent Spawning and Management Tools
+ * Assistant Spawning and Management Tools
  *
- * Tools that enable agents to spawn subagents, delegate tasks to named assistants,
- * and manage async agent jobs.
+ * Tools that enable assistants to spawn subassistants, delegate tasks to named assistants,
+ * and manage async assistant jobs.
  */
 
 import type { Tool, Assistant } from '@hasna/assistants-shared';
 import type { ToolExecutor, ToolRegistry } from './registry';
-import type { SubagentManager, SubagentConfig, SubagentJob, SubagentInfo } from '../agent/subagent-manager';
+import type { SubassistantManager, SubassistantConfig, SubassistantJob, SubassistantInfo } from '../agent/subagent-manager';
 import type { AssistantManager } from '../identity';
 
 // ============================================
 // Types
 // ============================================
 
-export interface AgentToolContext {
-  /** Get the subagent manager */
-  getSubagentManager: () => SubagentManager | null;
+export interface AssistantToolContext {
+  /** Get the subassistant manager */
+  getSubassistantManager: () => SubassistantManager | null;
   /** Get the assistant manager */
   getAssistantManager: () => AssistantManager | null;
   /** Get current recursion depth */
@@ -31,35 +31,35 @@ export interface AgentToolContext {
 // Tool Definitions
 // ============================================
 
-export const agentSpawnTool: Tool = {
-  name: 'agent_spawn',
-  description: `Spawn a subagent to handle a specific task. The subagent runs with limited context and tools.
+export const assistantSpawnTool: Tool = {
+  name: 'assistant_spawn',
+  description: `Spawn a subassistant to handle a specific task. The subassistant runs with limited context and tools.
 
 Use this to delegate discrete tasks like:
 - Searching and analyzing files
 - Running a specific operation
 - Gathering information
 
-The subagent has no memory of the parent conversation - provide all needed context in the task and context parameters.`,
+The subassistant has no memory of the parent conversation - provide all needed context in the task and context parameters.`,
   parameters: {
     type: 'object',
     properties: {
       task: {
         type: 'string',
-        description: 'The task/instruction for the subagent to complete. Be specific and include all necessary context.',
+        description: 'The task/instruction for the subassistant to complete. Be specific and include all necessary context.',
       },
       tools: {
         type: 'array',
-        description: 'List of tool names the subagent can use. Default: read, glob, grep, bash, web_search, web_fetch',
+        description: 'List of tool names the subassistant can use. Default: read, glob, grep, bash, web_search, web_fetch',
         items: { type: 'string', description: 'Tool name' },
       },
       context: {
         type: 'string',
-        description: 'Additional context to pass to the subagent (file contents, previous findings, etc.)',
+        description: 'Additional context to pass to the subassistant (file contents, previous findings, etc.)',
       },
       maxTurns: {
         type: 'number',
-        description: 'Maximum turns the subagent can take (default: 10, max: 25)',
+        description: 'Maximum turns the subassistant can take (default: 10, max: 25)',
       },
       async: {
         type: 'boolean',
@@ -70,27 +70,27 @@ The subagent has no memory of the parent conversation - provide all needed conte
   },
 };
 
-export const agentListTool: Tool = {
-  name: 'agent_list',
-  description: 'List available assistants and currently running subagents.',
+export const assistantListTool: Tool = {
+  name: 'assistant_list',
+  description: 'List available assistants and currently running subassistants.',
   parameters: {
     type: 'object',
     properties: {
       includeActive: {
         type: 'boolean',
-        description: 'Include currently running subagents (default: true)',
+        description: 'Include currently running subassistants (default: true)',
       },
       includeJobs: {
         type: 'boolean',
-        description: 'Include async subagent jobs (default: true)',
+        description: 'Include async subassistant jobs (default: true)',
       },
     },
     required: [],
   },
 };
 
-export const agentDelegateTool: Tool = {
-  name: 'agent_delegate',
+export const assistantDelegateTool: Tool = {
+  name: 'assistant_delegate',
   description: `Delegate a task to a specific named assistant. The assistant runs with its configured tools and system prompt.
 
 Use this when you want to leverage a specialized assistant's capabilities.`,
@@ -118,15 +118,15 @@ Use this when you want to leverage a specialized assistant's capabilities.`,
   },
 };
 
-export const agentJobStatusTool: Tool = {
-  name: 'agent_job_status',
-  description: 'Check status of an async agent job or wait for it to complete.',
+export const assistantJobStatusTool: Tool = {
+  name: 'assistant_job_status',
+  description: 'Check status of an async assistant job or wait for it to complete.',
   parameters: {
     type: 'object',
     properties: {
       jobId: {
         type: 'string',
-        description: 'The job ID returned from agent_spawn or agent_delegate with async=true',
+        description: 'The job ID returned from assistant_spawn or assistant_delegate with async=true',
       },
       wait: {
         type: 'boolean',
@@ -145,18 +145,18 @@ export const agentJobStatusTool: Tool = {
 // Tool array for convenience
 // ============================================
 
-export const agentTools: Tool[] = [
-  agentSpawnTool,
-  agentListTool,
-  agentDelegateTool,
-  agentJobStatusTool,
+export const assistantTools: Tool[] = [
+  assistantSpawnTool,
+  assistantListTool,
+  assistantDelegateTool,
+  assistantJobStatusTool,
 ];
 
 // ============================================
 // Response Types
 // ============================================
 
-interface AgentSpawnResponse {
+interface AssistantSpawnResponse {
   success: boolean;
   result?: string;
   error?: string;
@@ -165,14 +165,14 @@ interface AgentSpawnResponse {
   jobId?: string;
 }
 
-interface AgentListResponse {
+interface AssistantListResponse {
   assistants: Array<{
     id: string;
     name: string;
     description?: string;
     isActive: boolean;
   }>;
-  activeSubagents: Array<{
+  activeSubassistants: Array<{
     id: string;
     task: string;
     status: string;
@@ -188,7 +188,7 @@ interface AgentListResponse {
   }>;
 }
 
-interface AgentDelegateResponse {
+interface AssistantDelegateResponse {
   success: boolean;
   result?: string;
   error?: string;
@@ -196,7 +196,7 @@ interface AgentDelegateResponse {
   jobId?: string;
 }
 
-interface AgentJobStatusResponse {
+interface AssistantJobStatusResponse {
   found: boolean;
   jobId: string;
   status?: string;
@@ -212,23 +212,23 @@ interface AgentJobStatusResponse {
 // Tool Executors Factory
 // ============================================
 
-export function createAgentToolExecutors(
-  context: AgentToolContext
+export function createAssistantToolExecutors(
+  context: AssistantToolContext
 ): Record<string, ToolExecutor> {
   return {
-    agent_spawn: async (input: Record<string, unknown>): Promise<string> => {
-      const manager = context.getSubagentManager();
+    assistant_spawn: async (input: Record<string, unknown>): Promise<string> => {
+      const manager = context.getSubassistantManager();
       if (!manager) {
-        const response: AgentSpawnResponse = {
+        const response: AssistantSpawnResponse = {
           success: false,
-          error: 'Subagent spawning is not enabled',
+          error: 'Subassistant spawning is not enabled',
         };
         return JSON.stringify(response, null, 2);
       }
 
       const task = String(input.task || '');
       if (!task.trim()) {
-        const response: AgentSpawnResponse = {
+        const response: AssistantSpawnResponse = {
           success: false,
           error: 'Task is required',
         };
@@ -242,7 +242,7 @@ export function createAgentToolExecutors(
       const maxTurns = typeof input.maxTurns === 'number' ? input.maxTurns : undefined;
       const async = input.async === true;
 
-      const config: SubagentConfig = {
+      const config: SubassistantConfig = {
         task,
         tools,
         context: contextStr,
@@ -256,7 +256,7 @@ export function createAgentToolExecutors(
       // Check if spawning is allowed
       const canSpawn = manager.canSpawn(config.depth);
       if (!canSpawn.allowed) {
-        const response: AgentSpawnResponse = {
+        const response: AssistantSpawnResponse = {
           success: false,
           error: canSpawn.reason,
         };
@@ -267,14 +267,14 @@ export function createAgentToolExecutors(
         // Spawn asynchronously
         try {
           const jobId = await manager.spawnAsync(config);
-          const response: AgentSpawnResponse = {
+          const response: AssistantSpawnResponse = {
             success: true,
             jobId,
-            result: `Subagent job started with ID: ${jobId}. Use agent_job_status to check progress.`,
+            result: `Subassistant job started with ID: ${jobId}. Use assistant_job_status to check progress.`,
           };
           return JSON.stringify(response, null, 2);
         } catch (error) {
-          const response: AgentSpawnResponse = {
+          const response: AssistantSpawnResponse = {
             success: false,
             error: error instanceof Error ? error.message : String(error),
           };
@@ -283,7 +283,7 @@ export function createAgentToolExecutors(
       } else {
         // Spawn synchronously
         const result = await manager.spawn(config);
-        const response: AgentSpawnResponse = {
+        const response: AssistantSpawnResponse = {
           success: result.success,
           result: result.result,
           error: result.error,
@@ -294,8 +294,8 @@ export function createAgentToolExecutors(
       }
     },
 
-    agent_list: async (input: Record<string, unknown>): Promise<string> => {
-      const manager = context.getSubagentManager();
+    assistant_list: async (input: Record<string, unknown>): Promise<string> => {
+      const manager = context.getSubassistantManager();
       const assistantManager = context.getAssistantManager();
 
       const includeActive = input.includeActive !== false;
@@ -305,21 +305,21 @@ export function createAgentToolExecutors(
       const assistants = assistantManager?.listAssistants() ?? [];
       const activeAssistantId = assistantManager?.getActiveId();
 
-      const response: AgentListResponse = {
+      const response: AssistantListResponse = {
         assistants: assistants.map((a) => ({
           id: a.id,
           name: a.name,
           description: a.description,
           isActive: a.id === activeAssistantId,
         })),
-        activeSubagents: [],
+        activeSubassistants: [],
         asyncJobs: [],
       };
 
       if (manager) {
         if (includeActive) {
           const now = Date.now();
-          response.activeSubagents = manager.listActive().map((info) => ({
+          response.activeSubassistants = manager.listActive().map((info) => ({
             id: info.id,
             task: info.task.slice(0, 100) + (info.task.length > 100 ? '...' : ''),
             status: info.status,
@@ -342,20 +342,20 @@ export function createAgentToolExecutors(
       return JSON.stringify(response, null, 2);
     },
 
-    agent_delegate: async (input: Record<string, unknown>): Promise<string> => {
-      const manager = context.getSubagentManager();
+    assistant_delegate: async (input: Record<string, unknown>): Promise<string> => {
+      const manager = context.getSubassistantManager();
       const assistantManager = context.getAssistantManager();
 
       if (!manager) {
-        const response: AgentDelegateResponse = {
+        const response: AssistantDelegateResponse = {
           success: false,
-          error: 'Agent delegation is not enabled',
+          error: 'Assistant delegation is not enabled',
         };
         return JSON.stringify(response, null, 2);
       }
 
       if (!assistantManager) {
-        const response: AgentDelegateResponse = {
+        const response: AssistantDelegateResponse = {
           success: false,
           error: 'Assistant manager not available',
         };
@@ -368,7 +368,7 @@ export function createAgentToolExecutors(
       const async = input.async === true;
 
       if (!assistantQuery.trim()) {
-        const response: AgentDelegateResponse = {
+        const response: AssistantDelegateResponse = {
           success: false,
           error: 'Assistant name or ID is required',
         };
@@ -376,7 +376,7 @@ export function createAgentToolExecutors(
       }
 
       if (!task.trim()) {
-        const response: AgentDelegateResponse = {
+        const response: AssistantDelegateResponse = {
           success: false,
           error: 'Task is required',
         };
@@ -392,7 +392,7 @@ export function createAgentToolExecutors(
       );
 
       if (!assistant) {
-        const response: AgentDelegateResponse = {
+        const response: AssistantDelegateResponse = {
           success: false,
           error: `Assistant "${assistantQuery}" not found. Available: ${assistants.map((a) => a.name).join(', ')}`,
         };
@@ -415,7 +415,7 @@ export function createAgentToolExecutors(
         .filter(Boolean)
         .join('\n');
 
-      const config: SubagentConfig = {
+      const config: SubassistantConfig = {
         task,
         tools,
         context: enhancedContext,
@@ -427,7 +427,7 @@ export function createAgentToolExecutors(
       // Check if spawning is allowed
       const canSpawn = manager.canSpawn(config.depth);
       if (!canSpawn.allowed) {
-        const response: AgentDelegateResponse = {
+        const response: AssistantDelegateResponse = {
           success: false,
           error: canSpawn.reason,
           assistant: assistant.name,
@@ -438,7 +438,7 @@ export function createAgentToolExecutors(
       if (async) {
         try {
           const jobId = await manager.spawnAsync(config);
-          const response: AgentDelegateResponse = {
+          const response: AssistantDelegateResponse = {
             success: true,
             jobId,
             assistant: assistant.name,
@@ -446,7 +446,7 @@ export function createAgentToolExecutors(
           };
           return JSON.stringify(response, null, 2);
         } catch (error) {
-          const response: AgentDelegateResponse = {
+          const response: AssistantDelegateResponse = {
             success: false,
             error: error instanceof Error ? error.message : String(error),
             assistant: assistant.name,
@@ -455,7 +455,7 @@ export function createAgentToolExecutors(
         }
       } else {
         const result = await manager.spawn(config);
-        const response: AgentDelegateResponse = {
+        const response: AssistantDelegateResponse = {
           success: result.success,
           result: result.result,
           error: result.error,
@@ -465,14 +465,14 @@ export function createAgentToolExecutors(
       }
     },
 
-    agent_job_status: async (input: Record<string, unknown>): Promise<string> => {
-      const manager = context.getSubagentManager();
+    assistant_job_status: async (input: Record<string, unknown>): Promise<string> => {
+      const manager = context.getSubassistantManager();
 
       if (!manager) {
-        const response: AgentJobStatusResponse = {
+        const response: AssistantJobStatusResponse = {
           found: false,
           jobId: String(input.jobId || ''),
-          error: 'Subagent system not available',
+          error: 'Subassistant system not available',
         };
         return JSON.stringify(response, null, 2);
       }
@@ -482,7 +482,7 @@ export function createAgentToolExecutors(
       const timeout = typeof input.timeout === 'number' ? input.timeout : 30000;
 
       if (!jobId.trim()) {
-        const response: AgentJobStatusResponse = {
+        const response: AssistantJobStatusResponse = {
           found: false,
           jobId: '',
           error: 'Job ID is required',
@@ -496,7 +496,7 @@ export function createAgentToolExecutors(
         const job = manager.getJobStatus(jobId);
 
         if (!job) {
-          const response: AgentJobStatusResponse = {
+          const response: AssistantJobStatusResponse = {
             found: false,
             jobId,
             error: 'Job not found',
@@ -504,7 +504,7 @@ export function createAgentToolExecutors(
           return JSON.stringify(response, null, 2);
         }
 
-        const response: AgentJobStatusResponse = {
+        const response: AssistantJobStatusResponse = {
           found: true,
           jobId,
           status: job.status,
@@ -521,7 +521,7 @@ export function createAgentToolExecutors(
         const job = manager.getJobStatus(jobId);
 
         if (!job) {
-          const response: AgentJobStatusResponse = {
+          const response: AssistantJobStatusResponse = {
             found: false,
             jobId,
             error: 'Job not found',
@@ -529,7 +529,7 @@ export function createAgentToolExecutors(
           return JSON.stringify(response, null, 2);
         }
 
-        const response: AgentJobStatusResponse = {
+        const response: AssistantJobStatusResponse = {
           found: true,
           jobId,
           status: job.status,
@@ -550,13 +550,13 @@ export function createAgentToolExecutors(
 // Registration Function
 // ============================================
 
-export function registerAgentTools(
+export function registerAssistantTools(
   registry: ToolRegistry,
-  context: AgentToolContext
+  context: AssistantToolContext
 ): void {
-  const executors = createAgentToolExecutors(context);
+  const executors = createAssistantToolExecutors(context);
 
-  for (const tool of agentTools) {
+  for (const tool of assistantTools) {
     registry.register(tool, executors[tool.name]);
   }
 }

@@ -48,21 +48,21 @@ interface Session {
   label: string | null;
   createdAt: string;
   updatedAt: string;
-  agent?: {
+  assistant?: {
     id: string;
     name: string;
     avatar: string | null;
   } | null;
 }
 
-interface Agent {
+interface AssistantOption {
   id: string;
   name: string;
 }
 
 type SessionFilters = {
   search: string | undefined;
-  agentId: string | undefined;
+  assistantId: string | undefined;
   startDate: string | undefined;
   endDate: string | undefined;
 } & Record<string, string | undefined>;
@@ -71,7 +71,7 @@ export default function SessionsPage() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [assistantOptions, setAssistantOptions] = useState<AssistantOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -84,7 +84,7 @@ export default function SessionsPage() {
   // Filter state
   const filters = useFilters<SessionFilters>({
     search: undefined,
-    agentId: undefined,
+    assistantId: undefined,
     startDate: undefined,
     endDate: undefined,
   });
@@ -99,15 +99,15 @@ export default function SessionsPage() {
   // Selection state for bulk actions
   const selection = useSelection<Session>();
 
-  const loadAgents = useCallback(async () => {
+  const loadAssistants = useCallback(async () => {
     try {
-      const response = await fetchWithAuth('/api/v1/agents');
+      const response = await fetchWithAuth('/api/v1/assistants');
       const data = await response.json();
       if (data.success) {
-        setAgents(data.data.items || []);
+        setAssistantOptions(data.data.items || []);
       }
     } catch {
-      // Silently fail - agents filter is optional
+      // Silently fail - assistants filter is optional
     }
   }, [fetchWithAuth]);
 
@@ -147,10 +147,10 @@ export default function SessionsPage() {
     }
   }, [fetchWithAuth, filters, getSortParams, page, pageSize, setTotalItems]);
 
-  // Load agents on mount
+  // Load assistants on mount
   useEffect(() => {
-    loadAgents();
-  }, [loadAgents]);
+    loadAssistants();
+  }, [loadAssistants]);
 
   // Load sessions when filters, sorting, or pagination change
   useEffect(() => {
@@ -297,7 +297,7 @@ export default function SessionsPage() {
       const exportData = sessionsToExport.map((s) => ({
         id: s.id,
         label: s.label,
-        agent: s.agent?.name || null,
+        assistant: s.assistant?.name || null,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
       }));
@@ -388,12 +388,12 @@ export default function SessionsPage() {
         {/* Filters and Sort Row */}
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex flex-wrap gap-3 items-center">
-            {/* Agent Filter */}
+            {/* Assistant Filter */}
             <SelectFilter
-              value={filters.values.agentId || 'all'}
-              onChange={(value) => filters.updateFilter('agentId', value === 'all' ? undefined : value)}
-              options={agents.map((a) => ({ value: a.id, label: a.name }))}
-              placeholder="All Agents"
+              value={filters.values.assistantId || 'all'}
+              onChange={(value) => filters.updateFilter('assistantId', value === 'all' ? undefined : value)}
+              options={assistantOptions.map((a) => ({ value: a.id, label: a.name }))}
+              placeholder="All Assistants"
               icon={<Bot className="h-4 w-4 text-muted-foreground" />}
             />
 
@@ -527,9 +527,9 @@ export default function SessionsPage() {
                     <p className="text-sm text-muted-foreground mt-1">
                       {new Date(session.updatedAt).toLocaleDateString()} at{' '}
                       {new Date(session.updatedAt).toLocaleTimeString()}
-                      {session.agent && (
+                      {session.assistant && (
                         <span className="ml-2">
-                          Agent: {session.agent.name}
+                          Assistant: {session.assistant.name}
                         </span>
                       )}
                     </p>

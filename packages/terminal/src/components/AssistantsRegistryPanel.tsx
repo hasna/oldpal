@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
-import type { RegisteredAgent, RegistryStats, RegistryAgentState, AgentType } from '@hasna/assistants-core';
+import type { RegisteredAssistant, RegistryStats, RegistryAssistantState, AssistantType } from '@hasna/assistants-core';
 
-interface AgentsPanelProps {
-  agents: RegisteredAgent[];
+interface AssistantsPanelProps {
+  assistants: RegisteredAssistant[];
   stats: RegistryStats;
   onRefresh: () => void;
   onCancel: () => void;
@@ -11,7 +11,7 @@ interface AgentsPanelProps {
 
 type Mode = 'overview' | 'list' | 'details';
 
-const STATE_COLORS: Record<RegistryAgentState, string> = {
+const STATE_COLORS: Record<RegistryAssistantState, string> = {
   idle: 'green',
   processing: 'yellow',
   waiting_input: 'cyan',
@@ -20,9 +20,9 @@ const STATE_COLORS: Record<RegistryAgentState, string> = {
   stopped: 'gray',
 };
 
-const TYPE_COLORS: Record<AgentType, string> = {
+const TYPE_COLORS: Record<AssistantType, string> = {
   assistant: 'cyan',
-  subagent: 'magenta',
+  subassistant: 'magenta',
   coordinator: 'yellow',
   worker: 'green',
 };
@@ -44,23 +44,23 @@ function formatTimestamp(iso: string): string {
   return date.toLocaleDateString();
 }
 
-export function AgentsPanel({
-  agents,
+export function AssistantsRegistryPanel({
+  assistants,
   stats,
   onRefresh,
   onCancel,
-}: AgentsPanelProps) {
+}: AssistantsPanelProps) {
   const [mode, setMode] = useState<Mode>('overview');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Sort agents by registration time (most recent first)
-  const sortedAgents = useMemo(() => {
-    return [...agents].sort((a, b) =>
+  // Sort assistants by registration time (most recent first)
+  const sortedAssistants = useMemo(() => {
+    return [...assistants].sort((a, b) =>
       new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime()
     );
-  }, [agents]);
+  }, [assistants]);
 
-  const totalItems = sortedAgents.length;
+  const totalItems = sortedAssistants.length;
 
   useInput((input, key) => {
     // Navigation in list/details mode
@@ -76,7 +76,7 @@ export function AgentsPanel({
 
       // Show details
       if (mode === 'list' && (key.return || input === 'd' || input === 'D')) {
-        if (sortedAgents.length > 0) {
+        if (sortedAssistants.length > 0) {
           setMode('details');
         }
         return;
@@ -96,7 +96,7 @@ export function AgentsPanel({
 
     // Overview mode shortcuts
     if (mode === 'overview') {
-      // View agents list
+      // View assistants list
       if (input === 'a' || input === 'A') {
         setMode('list');
         setSelectedIndex(0);
@@ -117,27 +117,27 @@ export function AgentsPanel({
     }
   }, { isActive: true });
 
-  // Details mode - show full agent info
-  if (mode === 'details' && sortedAgents.length > 0) {
-    const agent = sortedAgents[selectedIndex];
+  // Details mode - show full assistant info
+  if (mode === 'details' && sortedAssistants.length > 0) {
+    const assistant = sortedAssistants[selectedIndex];
 
     return (
       <Box flexDirection="column" paddingY={1}>
         <Box marginBottom={1} justifyContent="space-between">
-          <Text bold>Agent Details</Text>
-          <Text dimColor>{selectedIndex + 1} of {sortedAgents.length}</Text>
+          <Text bold>Assistant Details</Text>
+          <Text dimColor>{selectedIndex + 1} of {sortedAssistants.length}</Text>
         </Box>
 
         <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} paddingY={1}>
           {/* Identity */}
           <Box marginBottom={1} flexDirection="column">
             <Box>
-              <Text bold>{agent.name}</Text>
-              <Text dimColor> ({agent.id.slice(0, 12)}...)</Text>
+              <Text bold>{assistant.name}</Text>
+              <Text dimColor> ({assistant.id.slice(0, 12)}...)</Text>
             </Box>
-            {agent.description && (
+            {assistant.description && (
               <Box paddingLeft={1}>
-                <Text dimColor>{agent.description}</Text>
+                <Text dimColor>{assistant.description}</Text>
               </Box>
             )}
           </Box>
@@ -146,30 +146,30 @@ export function AgentsPanel({
           <Box marginBottom={1} flexDirection="column">
             <Box>
               <Text dimColor>Type: </Text>
-              <Text color={TYPE_COLORS[agent.type]}>{agent.type}</Text>
+              <Text color={TYPE_COLORS[assistant.type]}>{assistant.type}</Text>
             </Box>
             <Box>
               <Text dimColor>State: </Text>
-              <Text color={STATE_COLORS[agent.status.state]}>{agent.status.state}</Text>
-              {agent.status.currentTask && (
-                <Text dimColor> ({agent.status.currentTask})</Text>
+              <Text color={STATE_COLORS[assistant.status.state]}>{assistant.status.state}</Text>
+              {assistant.status.currentTask && (
+                <Text dimColor> ({assistant.status.currentTask})</Text>
               )}
             </Box>
           </Box>
 
           {/* Relationships */}
-          {(agent.parentId || agent.childIds.length > 0) && (
+          {(assistant.parentId || assistant.childIds.length > 0) && (
             <Box marginBottom={1} flexDirection="column">
-              {agent.parentId && (
+              {assistant.parentId && (
                 <Box>
                   <Text dimColor>Parent: </Text>
-                  <Text>{agent.parentId.slice(0, 16)}...</Text>
+                  <Text>{assistant.parentId.slice(0, 16)}...</Text>
                 </Box>
               )}
-              {agent.childIds.length > 0 && (
+              {assistant.childIds.length > 0 && (
                 <Box>
                   <Text dimColor>Children: </Text>
-                  <Text>{agent.childIds.length}</Text>
+                  <Text>{assistant.childIds.length}</Text>
                 </Box>
               )}
             </Box>
@@ -178,25 +178,25 @@ export function AgentsPanel({
           {/* Capabilities */}
           <Box marginBottom={1} flexDirection="column">
             <Text bold dimColor>Capabilities:</Text>
-            {agent.capabilities.tools.length > 0 && (
+            {assistant.capabilities.tools.length > 0 && (
               <Box paddingLeft={1}>
                 <Text dimColor>Tools: </Text>
-                <Text>{agent.capabilities.tools.slice(0, 5).join(', ')}</Text>
-                {agent.capabilities.tools.length > 5 && (
-                  <Text dimColor> +{agent.capabilities.tools.length - 5} more</Text>
+                <Text>{assistant.capabilities.tools.slice(0, 5).join(', ')}</Text>
+                {assistant.capabilities.tools.length > 5 && (
+                  <Text dimColor> +{assistant.capabilities.tools.length - 5} more</Text>
                 )}
               </Box>
             )}
-            {agent.capabilities.skills.length > 0 && (
+            {assistant.capabilities.skills.length > 0 && (
               <Box paddingLeft={1}>
                 <Text dimColor>Skills: </Text>
-                <Text>{agent.capabilities.skills.join(', ')}</Text>
+                <Text>{assistant.capabilities.skills.join(', ')}</Text>
               </Box>
             )}
-            {agent.capabilities.tags.length > 0 && (
+            {assistant.capabilities.tags.length > 0 && (
               <Box paddingLeft={1}>
                 <Text dimColor>Tags: </Text>
-                <Text>{agent.capabilities.tags.join(', ')}</Text>
+                <Text>{assistant.capabilities.tags.join(', ')}</Text>
               </Box>
             )}
           </Box>
@@ -206,21 +206,21 @@ export function AgentsPanel({
             <Text bold dimColor>Load:</Text>
             <Box paddingLeft={1}>
               <Text dimColor>Active Tasks: </Text>
-              <Text>{agent.load.activeTasks}</Text>
+              <Text>{assistant.load.activeTasks}</Text>
               <Text dimColor> | Queued: </Text>
-              <Text>{agent.load.queuedTasks}</Text>
+              <Text>{assistant.load.queuedTasks}</Text>
             </Box>
             <Box paddingLeft={1}>
               <Text dimColor>Tokens: </Text>
-              <Text>{agent.load.tokensUsed.toLocaleString()}</Text>
+              <Text>{assistant.load.tokensUsed.toLocaleString()}</Text>
               <Text dimColor> | LLM Calls: </Text>
-              <Text>{agent.load.llmCalls}</Text>
+              <Text>{assistant.load.llmCalls}</Text>
             </Box>
             <Box paddingLeft={1}>
               <Text dimColor>Depth: </Text>
-              <Text>{agent.load.currentDepth}</Text>
-              {agent.capabilities.maxDepth && (
-                <Text dimColor>/{agent.capabilities.maxDepth}</Text>
+              <Text>{assistant.load.currentDepth}</Text>
+              {assistant.capabilities.maxDepth && (
+                <Text dimColor>/{assistant.capabilities.maxDepth}</Text>
               )}
             </Box>
           </Box>
@@ -230,19 +230,19 @@ export function AgentsPanel({
             <Text bold dimColor>Metrics:</Text>
             <Box paddingLeft={1}>
               <Text dimColor>Uptime: </Text>
-              <Text>{formatUptime(agent.status.uptime)}</Text>
+              <Text>{formatUptime(assistant.status.uptime)}</Text>
             </Box>
             <Box paddingLeft={1}>
               <Text dimColor>Messages: </Text>
-              <Text>{agent.status.messagesProcessed}</Text>
+              <Text>{assistant.status.messagesProcessed}</Text>
             </Box>
             <Box paddingLeft={1}>
               <Text dimColor>Tool Calls: </Text>
-              <Text>{agent.status.toolCallsExecuted}</Text>
+              <Text>{assistant.status.toolCallsExecuted}</Text>
             </Box>
             <Box paddingLeft={1}>
               <Text dimColor>Errors: </Text>
-              <Text color={agent.status.errorsCount > 0 ? 'red' : 'white'}>{agent.status.errorsCount}</Text>
+              <Text color={assistant.status.errorsCount > 0 ? 'red' : 'white'}>{assistant.status.errorsCount}</Text>
             </Box>
           </Box>
 
@@ -251,8 +251,8 @@ export function AgentsPanel({
             <Text bold dimColor>Heartbeat:</Text>
             <Box paddingLeft={1}>
               <Text dimColor>Last: </Text>
-              <Text>{formatTimestamp(agent.heartbeat.lastHeartbeat)}</Text>
-              {agent.heartbeat.isStale && (
+              <Text>{formatTimestamp(assistant.heartbeat.lastHeartbeat)}</Text>
+              {assistant.heartbeat.isStale && (
                 <Text color="red"> (stale)</Text>
               )}
             </Box>
@@ -266,13 +266,13 @@ export function AgentsPanel({
     );
   }
 
-  // List mode - show all agents
+  // List mode - show all assistants
   if (mode === 'list') {
     return (
       <Box flexDirection="column" paddingY={1}>
         <Box marginBottom={1} justifyContent="space-between">
-          <Text bold>Registered Agents</Text>
-          <Text dimColor>{sortedAgents.length} agent{sortedAgents.length !== 1 ? 's' : ''}</Text>
+          <Text bold>Registered Assistants</Text>
+          <Text dimColor>{sortedAssistants.length} assistant{sortedAssistants.length !== 1 ? 's' : ''}</Text>
         </Box>
 
         <Box
@@ -280,27 +280,27 @@ export function AgentsPanel({
           borderStyle="round"
           borderColor="gray"
           paddingX={1}
-          height={Math.min(14, sortedAgents.length + 2)}
+          height={Math.min(14, sortedAssistants.length + 2)}
           overflowY="hidden"
         >
-          {sortedAgents.length === 0 ? (
+          {sortedAssistants.length === 0 ? (
             <Box paddingY={1}>
-              <Text dimColor>No agents registered.</Text>
+              <Text dimColor>No assistants registered.</Text>
             </Box>
           ) : (
-            sortedAgents.map((agent, index) => {
+            sortedAssistants.map((item, index) => {
               const isSelected = index === selectedIndex;
-              const stateColor = STATE_COLORS[agent.status.state];
-              const typeColor = TYPE_COLORS[agent.type];
+              const stateColor = STATE_COLORS[item.status.state];
+              const typeColor = TYPE_COLORS[item.type];
 
               return (
-                <Box key={agent.id}>
+                <Box key={item.id}>
                   <Text inverse={isSelected}>
                     {isSelected ? '>' : ' '}{' '}
-                    <Text color={stateColor}>[{agent.status.state.slice(0, 4).padEnd(4)}]</Text>{' '}
-                    <Text bold={isSelected}>{agent.name.slice(0, 18).padEnd(18)}</Text>{' '}
-                    <Text color={typeColor}>{agent.type.slice(0, 8).padEnd(8)}</Text>{' '}
-                    <Text dimColor>{formatTimestamp(agent.registeredAt)}</Text>
+                    <Text color={stateColor}>[{item.status.state.slice(0, 4).padEnd(4)}]</Text>{' '}
+                    <Text bold={isSelected}>{item.name.slice(0, 18).padEnd(18)}</Text>{' '}
+                    <Text color={typeColor}>{item.type.slice(0, 8).padEnd(8)}</Text>{' '}
+                    <Text dimColor>{formatTimestamp(item.registeredAt)}</Text>
                   </Text>
                 </Box>
               );
@@ -316,15 +316,15 @@ export function AgentsPanel({
   }
 
   // Overview mode (default)
-  const activeAgents = sortedAgents.filter(a => a.status.state !== 'offline' && !a.heartbeat.isStale);
-  const processingAgents = sortedAgents.filter(a => a.status.state === 'processing');
+  const activeAssistants = sortedAssistants.filter(a => a.status.state !== 'offline' && !a.heartbeat.isStale);
+  const processingAssistants = sortedAssistants.filter(a => a.status.state === 'processing');
 
   return (
     <Box flexDirection="column" paddingY={1}>
       <Box marginBottom={1} justifyContent="space-between">
-        <Text bold>Agent Registry</Text>
+        <Text bold>Assistant Registry</Text>
         <Text dimColor>
-          {activeAgents.length}/{sortedAgents.length} active
+          {activeAssistants.length}/{sortedAssistants.length} active
         </Text>
       </Box>
 
@@ -332,16 +332,16 @@ export function AgentsPanel({
         {/* Summary Stats */}
         <Box marginBottom={1} flexDirection="column">
           <Box>
-            <Text dimColor>Total Agents: </Text>
-            <Text bold>{stats.totalAgents}</Text>
+            <Text dimColor>Total Assistants: </Text>
+            <Text bold>{stats.totalAssistants}</Text>
           </Box>
           <Box>
             <Text dimColor>Active: </Text>
-            <Text color="green">{activeAgents.length}</Text>
-            {processingAgents.length > 0 && (
+            <Text color="green">{activeAssistants.length}</Text>
+            {processingAssistants.length > 0 && (
               <>
                 <Text dimColor> | Processing: </Text>
-                <Text color="yellow">{processingAgents.length}</Text>
+                <Text color="yellow">{processingAssistants.length}</Text>
               </>
             )}
             {stats.staleCount > 0 && (
@@ -359,7 +359,7 @@ export function AgentsPanel({
           <Box paddingLeft={1}>
             <Text color="cyan">Assistants: {stats.byType.assistant}</Text>
             <Text dimColor> | </Text>
-            <Text color="magenta">Subagents: {stats.byType.subagent}</Text>
+            <Text color="magenta">Subassistants: {stats.byType.subassistant}</Text>
           </Box>
           <Box paddingLeft={1}>
             <Text color="yellow">Coordinators: {stats.byType.coordinator}</Text>
@@ -401,20 +401,20 @@ export function AgentsPanel({
           </Box>
         </Box>
 
-        {/* Quick agent list preview */}
-        {sortedAgents.length > 0 && (
+        {/* Quick assistant list preview */}
+        {sortedAssistants.length > 0 && (
           <Box marginTop={1} flexDirection="column">
-            <Text bold dimColor>Recent Agents:</Text>
-            {sortedAgents.slice(0, 3).map((agent) => (
-              <Box key={agent.id} paddingLeft={1}>
-                <Text color={STATE_COLORS[agent.status.state]}>●</Text>
-                <Text> {agent.name}</Text>
-                <Text dimColor> ({agent.type})</Text>
+            <Text bold dimColor>Recent Assistants:</Text>
+            {sortedAssistants.slice(0, 3).map((item) => (
+              <Box key={item.id} paddingLeft={1}>
+                <Text color={STATE_COLORS[item.status.state]}>●</Text>
+                <Text> {item.name}</Text>
+                <Text dimColor> ({item.type})</Text>
               </Box>
             ))}
-            {sortedAgents.length > 3 && (
+            {sortedAssistants.length > 3 && (
               <Box paddingLeft={1}>
-                <Text dimColor>+ {sortedAgents.length - 3} more</Text>
+                <Text dimColor>+ {sortedAssistants.length - 3} more</Text>
               </Box>
             )}
           </Box>
@@ -422,7 +422,7 @@ export function AgentsPanel({
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>[a]gents list [r]efresh [q]uit</Text>
+        <Text dimColor>[a]ssistants list [r]efresh [q]uit</Text>
       </Box>
     </Box>
   );

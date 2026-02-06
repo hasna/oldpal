@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/db';
-import { agentMessages, assistants } from '@/db/schema';
+import { assistantMessages, assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
@@ -24,29 +24,29 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     }
     validateUUID(threadId, 'thread id');
 
-    // Get user's agents
-    const userAgents = await db.query.assistants.findMany({
+    // Get user's assistants
+    const userAssistants = await db.query.assistants.findMany({
       where: eq(assistants.userId, request.user.userId),
       columns: { id: true },
     });
 
-    const agentIds = userAgents.map((a) => a.id);
+    const assistantIds = userAssistants.map((a) => a.id);
 
-    if (agentIds.length === 0) {
+    if (assistantIds.length === 0) {
       return errorResponse(new ForbiddenError('Access denied'));
     }
 
-    // Get all messages in the thread that belong to user's agents
-    const allThreadMessages = await db.query.agentMessages.findMany({
-      where: eq(agentMessages.threadId, threadId),
-      orderBy: [asc(agentMessages.createdAt)],
+    // Get all messages in the thread that belong to user's assistants
+    const allThreadMessages = await db.query.assistantMessages.findMany({
+      where: eq(assistantMessages.threadId, threadId),
+      orderBy: [asc(assistantMessages.createdAt)],
     });
 
     // Filter to only messages where user owns sender or recipient
     const accessibleMessages = allThreadMessages.filter((msg) => {
       return (
-        (msg.fromAgentId && agentIds.includes(msg.fromAgentId)) ||
-        (msg.toAgentId && agentIds.includes(msg.toAgentId))
+        (msg.fromAssistantId && assistantIds.includes(msg.fromAssistantId)) ||
+        (msg.toAssistantId && assistantIds.includes(msg.toAssistantId))
       );
     });
 

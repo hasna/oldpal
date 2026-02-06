@@ -34,7 +34,7 @@ mock.module('@/lib/auth/middleware', () => ({
     if (token === TOKEN_NO_SCOPE) {
       permissions = [];
     } else if (token === TOKEN_WRONG_SCOPE) {
-      permissions = ['read:agents', 'write:agents'];
+      permissions = ['read:assistants', 'write:assistants'];
     } else if (token === TOKEN_WITH_SCOPE) {
       permissions = ['read:skills'];
     } else if (token === TOKEN_ADMIN) {

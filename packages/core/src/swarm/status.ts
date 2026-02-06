@@ -9,12 +9,12 @@ import type { SwarmState, SwarmTask, SwarmMetrics, SwarmStatus } from './types';
 import type { DispatchTask, DispatcherStats } from './dispatcher';
 
 /**
- * Agent status for display
+ * Assistant status for display
  */
-export interface SwarmAgentStatus {
-  /** Agent ID */
+export interface SwarmAssistantStatus {
+  /** Assistant ID */
   id: string;
-  /** Agent name/role */
+  /** Assistant name/role */
   name: string;
   /** Current state */
   state: 'idle' | 'running' | 'completed' | 'failed';
@@ -44,8 +44,8 @@ export interface SwarmTaskDisplayStatus {
   status: 'pending' | 'waiting' | 'running' | 'completed' | 'failed' | 'cancelled';
   /** Progress (0-100) */
   progress: number;
-  /** Assigned agent ID */
-  agentId?: string;
+  /** Assigned assistant ID */
+  assistantId?: string;
   /** Duration (if completed or running) */
   durationMs?: number;
   /** Error message (if failed) */
@@ -79,8 +79,8 @@ export interface SwarmStatusSummary {
   phaseDescription: string;
   /** Overall progress (0-100) */
   progress: number;
-  /** Active agents */
-  activeAgents: SwarmAgentStatus[];
+  /** Active assistants */
+  activeAssistants: SwarmAssistantStatus[];
   /** Task statuses */
   tasks: SwarmTaskDisplayStatus[];
   /** Metrics */
@@ -139,7 +139,7 @@ export interface TaskDetail {
  * Status update event
  */
 export interface StatusUpdateEvent {
-  type: 'task_update' | 'phase_change' | 'agent_update' | 'progress' | 'error' | 'complete';
+  type: 'task_update' | 'phase_change' | 'assistant_update' | 'progress' | 'error' | 'complete';
   swarmId: string;
   data: unknown;
   timestamp: number;
@@ -185,7 +185,7 @@ export class SwarmStatusProvider {
   private sessionId: string;
   private state: SwarmState | null = null;
   private tasks: Map<string, SwarmTaskDisplayStatus> = new Map();
-  private agents: Map<string, SwarmAgentStatus> = new Map();
+  private assistants: Map<string, SwarmAssistantStatus> = new Map();
   private logs: Map<string, TaskLogEntry[]> = new Map();
   private listeners: Set<StatusUpdateListener> = new Set();
   private startTime: number = 0;
@@ -268,7 +268,7 @@ export class SwarmStatusProvider {
         : task.role,
       status: this.mapStatus(isDispatchTask ? (task as DispatchTask).status : task.status),
       progress: this.calculateTaskProgress(task),
-      agentId: isDispatchTask ? (task as DispatchTask).agentId : task.assignedAgentId,
+      assistantId: isDispatchTask ? (task as DispatchTask).assistantId : task.assignedAssistantId,
       durationMs: this.calculateDuration(task),
       error: isDispatchTask ? (task as DispatchTask).error : task.result?.error,
       dependsOn: isDispatchTask
@@ -293,11 +293,11 @@ export class SwarmStatusProvider {
   }
 
   /**
-   * Update agent status
+   * Update assistant status
    */
-  updateAgent(agent: SwarmAgentStatus): void {
-    this.agents.set(agent.id, agent);
-    this.emit('agent_update', agent);
+  updateAssistant(assistant: SwarmAssistantStatus): void {
+    this.assistants.set(assistant.id, assistant);
+    this.emit('assistant_update', assistant);
   }
 
   /**
@@ -335,7 +335,7 @@ export class SwarmStatusProvider {
       phase: this.state?.status || 'idle',
       phaseDescription: this.getPhaseDescription(this.state?.status || 'idle'),
       progress,
-      activeAgents: Array.from(this.agents.values()).filter(a => a.state === 'running'),
+      activeAssistants: Array.from(this.assistants.values()).filter(a => a.state === 'running'),
       tasks: Array.from(this.tasks.values()),
       metrics: this.state?.metrics || this.getDefaultMetrics(),
       startedAt: this.startTime,
@@ -423,14 +423,14 @@ export class SwarmStatusProvider {
     lines.push(this.formatProgress('bar', 30));
     lines.push('');
 
-    // Active agents
-    if (summary.activeAgents.length > 0) {
-      lines.push('Active Agents:');
-      for (const agent of summary.activeAgents) {
-        const taskInfo = agent.currentTask
-          ? ` → ${agent.currentTask.description.slice(0, 30)}...`
+    // Active assistants
+    if (summary.activeAssistants.length > 0) {
+      lines.push('Active Assistants:');
+      for (const assistant of summary.activeAssistants) {
+        const taskInfo = assistant.currentTask
+          ? ` → ${assistant.currentTask.description.slice(0, 30)}...`
           : '';
-        lines.push(`  ${agent.name}${taskInfo}`);
+        lines.push(`  ${assistant.name}${taskInfo}`);
       }
       lines.push('');
     }

@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/Button';
 
-type LimitType = 'agents' | 'messages' | 'sessions' | 'schedules';
+type LimitType = 'assistants' | 'messages' | 'sessions' | 'schedules';
 
 interface UpgradePromptDialogProps {
   open: boolean;
@@ -29,10 +29,10 @@ const limitTypeConfig: Record<
   LimitType,
   { icon: typeof Bot; title: string; description: string }
 > = {
-  agents: {
+  assistants: {
     icon: Bot,
-    title: 'Agent Limit Reached',
-    description: 'You have reached the maximum number of agents for your plan.',
+    title: 'Assistant Limit Reached',
+    description: 'You have reached the maximum number of assistants for your plan.',
   },
   messages: {
     icon: MessageSquare,
@@ -108,7 +108,7 @@ export function UpgradePromptDialog({
                 Upgrade for more capacity
               </p>
               <ul className="mt-2 text-sm text-muted-foreground space-y-1">
-                <li>• More agents, sessions, and schedules</li>
+                <li>• More assistants, sessions, and schedules</li>
                 <li>• Higher daily message limits</li>
                 <li>• Priority support</li>
               </ul>

@@ -5,7 +5,7 @@
 
 ## Executive Summary
 
-Context compaction is **entirely internal** - the Anthropic API does NOT auto-compact. The issue causing agent work interruption occurs because:
+Context compaction is **entirely internal** - the Anthropic API does NOT auto-compact. The issue causing assistant work interruption occurs because:
 
 1. Compaction runs **before every LLM call** and silently replaces context
 2. Tool calls in progress may get **summarized out** of context
@@ -16,10 +16,10 @@ Context compaction is **entirely internal** - the Anthropic API does NOT auto-co
 
 ### 1. Compaction Trigger Location
 
-**File:** `packages/core/src/agent/loop.ts`
+**File:** `packages/core/src/assistant/loop.ts`
 **Line 591:** `await this.maybeSummarizeContext();`
 
-This is called at the start of **every agent loop iteration**, before the LLM call.
+This is called at the start of **every assistant loop iteration**, before the LLM call.
 
 ```typescript
 while (turn < maxTurns && !this.shouldStop) {
@@ -42,7 +42,7 @@ if (estimated >= ratioThreshold) {
 }
 ```
 
-**Default Configuration:** (`packages/core/src/agent/loop.ts:1664-1688`)
+**Default Configuration:** (`packages/core/src/assistant/loop.ts:1664-1688`)
 - `maxContextTokens`: 128,000 (Anthropic's limit)
 - `summaryTriggerRatio`: 0.8 (80% = 102,400 tokens)
 - `summaryStrategy`: "hybrid" (extraction + LLM summary)
@@ -66,7 +66,7 @@ return Math.ceil(text.length / CHARS_PER_TOKEN);
 this.context.import(result.messages);  // Replace old messages with summarized ones
 ```
 
-The agent then emits a notification but **immediately continues** to the next LLM call:
+The assistant then emits a notification but **immediately continues** to the next LLM call:
 ```typescript
 const notice = `[Context summarized: ... messages, ... tokens]`;
 this.emit({ type: 'text', content: notice });
@@ -78,20 +78,20 @@ When compaction happens mid-task:
 
 1. **Tool calls in progress get summarized** - The LLM loses track of pending tool execution
 2. **Intermediate results disappear** - Step 2 of a 3-step task may be gone
-3. **No pause for acknowledgment** - The agent continues with new, fragmented context
+3. **No pause for acknowledgment** - The assistant continues with new, fragmented context
 4. **No continuation instructions** - The LLM doesn't know it should resume
 
-### 6. What Causes Actual Agent Stoppage
+### 6. What Causes Actual Assistant Stoppage
 
-The agent stops when:
+The assistant stops when:
 
 | Trigger | Location | What Happens |
 |---------|----------|--------------|
 | API context error | `llm/anthropic.ts:311-318` | Returns `LLM_CONTEXT_TOO_LONG` error |
-| Stream error | `agent/loop.ts:622-625` | Loop breaks, error thrown |
-| User stop | `agent/loop.ts:637` | `shouldStop = true`, loop exits |
-| Max turns | `agent/loop.ts:583` | 50 iteration limit reached |
-| No tool calls | `agent/loop.ts:641` | Natural completion |
+| Stream error | `assistant/loop.ts:622-625` | Loop breaks, error thrown |
+| User stop | `assistant/loop.ts:637` | `shouldStop = true`, loop exits |
+| Max turns | `assistant/loop.ts:583` | 50 iteration limit reached |
+| No tool calls | `assistant/loop.ts:641` | Natural completion |
 
 ### 7. Anthropic API Behavior
 
@@ -105,12 +105,12 @@ The Anthropic API does **NOT** auto-compact. When context is too long:
 | Point | Location | Issue |
 |-------|----------|-------|
 | During Summarization | `context/manager.ts:85-166` | Messages replaced silently |
-| Lost Tool Results | `agent/context.ts:183-219` | Old messages pruned |
-| Mid-Tool Execution | `agent/loop.ts:656-659` | Results may be orphaned |
+| Lost Tool Results | `assistant/context.ts:183-219` | Old messages pruned |
+| Mid-Tool Execution | `assistant/loop.ts:656-659` | Results may be orphaned |
 
 ## Root Cause
 
-The root cause of task #821 ("Context compaction interrupts active agent work") is:
+The root cause of task #821 ("Context compaction interrupts active assistant work") is:
 
 **After summarization completes and context is replaced, the LLM receives fragmented or missing context about ongoing work, causing it to:**
 - Stop responding (no more tool calls)
@@ -119,7 +119,7 @@ The root cause of task #821 ("Context compaction interrupts active agent work") 
 
 ## Proposed Fix
 
-Task #822 ("Preserve last N tool calls and results in context summarization") and Task #823 ("Auto-continue agent work after context compaction") should:
+Task #822 ("Preserve last N tool calls and results in context summarization") and Task #823 ("Auto-continue assistant work after context compaction") should:
 
 1. **Preserve active tool context** through summarization
 2. **Add continuation prompts** after compaction to remind the LLM what it was doing
@@ -129,7 +129,7 @@ Task #822 ("Preserve last N tool calls and results in context summarization") an
 ## Files Reviewed
 
 ```
-packages/core/src/agent/loop.ts - Agent loop with compaction trigger
+packages/core/src/assistant/loop.ts - Assistant loop with compaction trigger
 packages/core/src/context/manager.ts - Compaction logic
 packages/core/src/context/token-counter.ts - Token estimation
 packages/core/src/context/summarizer.ts - Summary generation

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
-import { agentMessages, assistants } from '@/db/schema';
+import { assistantMessages, assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, isValidUUID } from '@/lib/api/errors';
@@ -11,8 +11,8 @@ import { eq, desc, asc, count, and, or, isNull, ilike } from 'drizzle-orm';
 const MAX_BODY_LENGTH = 50_000;
 
 const createMessageSchema = z.object({
-  toAgentId: z.string().uuid(),
-  fromAgentId: z.string().uuid().optional(),
+  toAssistantId: z.string().uuid(),
+  fromAssistantId: z.string().uuid().optional(),
   subject: z.string().max(500).optional(),
   body: z.string().min(1).max(MAX_BODY_LENGTH, `Body must be at most ${MAX_BODY_LENGTH} characters`),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
@@ -24,7 +24,7 @@ const createMessageSchema = z.object({
 const VALID_STATUSES = ['unread', 'read', 'archived', 'injected'] as const;
 type MessageStatus = (typeof VALID_STATUSES)[number];
 
-// GET /api/v1/messages - List agent messages (inbox)
+// GET /api/v1/messages - List assistant messages (inbox)
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url);
@@ -35,7 +35,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     );
     const offset = (page - 1) * limit;
     const statusParam = searchParams.get('status');
-    const agentId = searchParams.get('agentId');
+    const assistantId = searchParams.get('assistantId');
     const priorityParam = searchParams.get('priority');
     const search = searchParams.get('search')?.trim();
 
@@ -65,46 +65,46 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       priority = priorityParam as MessagePriority;
     }
 
-    // Validate agentId as UUID if provided
-    if (agentId && !isValidUUID(agentId)) {
-      return errorResponse(new BadRequestError('Invalid agentId: must be a valid UUID'));
+    // Validate assistantId as UUID if provided
+    if (assistantId && !isValidUUID(assistantId)) {
+      return errorResponse(new BadRequestError('Invalid assistantId: must be a valid UUID'));
     }
 
-    // Get user's agents
-    const userAgents = await db.query.assistants.findMany({
+    // Get user's assistants
+    const userAssistants = await db.query.assistants.findMany({
       where: eq(assistants.userId, request.user.userId),
       columns: { id: true },
     });
 
-    const agentIds = userAgents.map((a) => a.id);
+    const assistantIds = userAssistants.map((a) => a.id);
 
-    if (agentIds.length === 0) {
+    if (assistantIds.length === 0) {
       return paginatedResponse([], 0, page, limit);
     }
 
     // Build where clause conditions
     const conditions = [];
 
-    // Base filter: messages to user's agents
-    if (agentId && agentIds.includes(agentId)) {
-      conditions.push(eq(agentMessages.toAgentId, agentId));
+    // Base filter: messages to user's assistants
+    if (assistantId && assistantIds.includes(assistantId)) {
+      conditions.push(eq(assistantMessages.toAssistantId, assistantId));
     } else {
-      conditions.push(or(...agentIds.map((id) => eq(agentMessages.toAgentId, id))));
+      conditions.push(or(...assistantIds.map((id) => eq(assistantMessages.toAssistantId, id))));
     }
 
     if (status) {
-      conditions.push(eq(agentMessages.status, status));
+      conditions.push(eq(assistantMessages.status, status));
     }
 
     if (priority) {
-      conditions.push(eq(agentMessages.priority, priority));
+      conditions.push(eq(assistantMessages.priority, priority));
     }
 
     if (search) {
       conditions.push(
         or(
-          ilike(agentMessages.subject, `%${search}%`),
-          ilike(agentMessages.body, `%${search}%`)
+          ilike(assistantMessages.subject, `%${search}%`),
+          ilike(assistantMessages.body, `%${search}%`)
         )
       );
     }
@@ -115,25 +115,25 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const getOrderBy = () => {
       switch (sortColumn) {
         case 'subject':
-          return [sortDirection(agentMessages.subject)];
+          return [sortDirection(assistantMessages.subject)];
         case 'priority':
-          return [sortDirection(agentMessages.priority)];
+          return [sortDirection(assistantMessages.priority)];
         case 'status':
-          return [sortDirection(agentMessages.status)];
+          return [sortDirection(assistantMessages.status)];
         case 'createdAt':
         default:
-          return [sortDirection(agentMessages.createdAt)];
+          return [sortDirection(assistantMessages.createdAt)];
       }
     };
 
     const [messagesList, [{ total }]] = await Promise.all([
-      db.query.agentMessages.findMany({
+      db.query.assistantMessages.findMany({
         where: whereClause,
         orderBy: getOrderBy(),
         limit,
         offset,
       }),
-      db.select({ total: count() }).from(agentMessages).where(whereClause!),
+      db.select({ total: count() }).from(assistantMessages).where(whereClause!),
     ]);
 
     return paginatedResponse(messagesList, total, page, limit);
@@ -148,41 +148,41 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
     const body = await request.json();
     const data = createMessageSchema.parse(body);
 
-    // Verify sender agent ownership (if specified)
-    if (data.fromAgentId) {
-      const fromAgent = await db.query.assistants.findFirst({
-        where: eq(assistants.id, data.fromAgentId),
+    // Verify sender assistant ownership (if specified)
+    if (data.fromAssistantId) {
+      const fromAssistant = await db.query.assistants.findFirst({
+        where: eq(assistants.id, data.fromAssistantId),
       });
 
-      if (!fromAgent || fromAgent.userId !== request.user.userId) {
-        return errorResponse(new ForbiddenError('You do not own the sender agent'));
+      if (!fromAssistant || fromAssistant.userId !== request.user.userId) {
+        return errorResponse(new ForbiddenError('You do not own the sender assistant'));
       }
     }
 
-    // Verify recipient agent exists and user owns it
-    const toAgent = await db.query.assistants.findFirst({
-      where: eq(assistants.id, data.toAgentId),
+    // Verify recipient assistant exists and user owns it
+    const toAssistant = await db.query.assistants.findFirst({
+      where: eq(assistants.id, data.toAssistantId),
     });
 
-    if (!toAgent) {
-      return errorResponse(new NotFoundError('Recipient agent not found'));
+    if (!toAssistant) {
+      return errorResponse(new NotFoundError('Recipient assistant not found'));
     }
 
-    if (toAgent.userId !== request.user.userId) {
-      return errorResponse(new ForbiddenError('You do not own the recipient agent'));
+    if (toAssistant.userId !== request.user.userId) {
+      return errorResponse(new ForbiddenError('You do not own the recipient assistant'));
     }
 
-    // Get all user's agents for ownership checks
-    const userAgents = await db.query.assistants.findMany({
+    // Get all user's assistants for ownership checks
+    const userAssistants = await db.query.assistants.findMany({
       where: eq(assistants.userId, request.user.userId),
       columns: { id: true },
     });
-    const agentIds = userAgents.map((a) => a.id);
+    const assistantIds = userAssistants.map((a) => a.id);
 
     // Validate parentId ownership if provided
     if (data.parentId) {
-      const parentMessage = await db.query.agentMessages.findFirst({
-        where: eq(agentMessages.id, data.parentId),
+      const parentMessage = await db.query.assistantMessages.findFirst({
+        where: eq(assistantMessages.id, data.parentId),
       });
 
       if (!parentMessage) {
@@ -191,8 +191,8 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
 
       // Verify user owns either sender or recipient of parent message
       const hasParentAccess =
-        (parentMessage.fromAgentId && agentIds.includes(parentMessage.fromAgentId)) ||
-        (parentMessage.toAgentId && agentIds.includes(parentMessage.toAgentId));
+        (parentMessage.fromAssistantId && assistantIds.includes(parentMessage.fromAssistantId)) ||
+        (parentMessage.toAssistantId && assistantIds.includes(parentMessage.toAssistantId));
 
       if (!hasParentAccess) {
         return errorResponse(new ForbiddenError('Access denied to parent message'));
@@ -206,15 +206,15 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
 
     // Validate threadId ownership if provided (and no parentId)
     if (data.threadId && !data.parentId) {
-      const existingThreadMessage = await db.query.agentMessages.findFirst({
-        where: eq(agentMessages.threadId, data.threadId),
+      const existingThreadMessage = await db.query.assistantMessages.findFirst({
+        where: eq(assistantMessages.threadId, data.threadId),
       });
 
       if (existingThreadMessage) {
-        // Thread exists - verify user owns at least one agent in the thread
+        // Thread exists - verify user owns at least one assistant in the thread
         const hasThreadAccess =
-          (existingThreadMessage.fromAgentId && agentIds.includes(existingThreadMessage.fromAgentId)) ||
-          (existingThreadMessage.toAgentId && agentIds.includes(existingThreadMessage.toAgentId));
+          (existingThreadMessage.fromAssistantId && assistantIds.includes(existingThreadMessage.fromAssistantId)) ||
+          (existingThreadMessage.toAssistantId && assistantIds.includes(existingThreadMessage.toAssistantId));
 
         if (!hasThreadAccess) {
           return errorResponse(new ForbiddenError('Access denied to thread'));
@@ -225,16 +225,16 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
 
     // Generate thread ID if not provided
     const threadId = data.threadId || (data.parentId
-      ? (await db.query.agentMessages.findFirst({ where: eq(agentMessages.id, data.parentId) }))?.threadId
+      ? (await db.query.assistantMessages.findFirst({ where: eq(assistantMessages.id, data.parentId) }))?.threadId
       : null) || crypto.randomUUID();
 
     const [newMessage] = await db
-      .insert(agentMessages)
+      .insert(assistantMessages)
       .values({
         threadId,
         parentId: data.parentId || null,
-        fromAgentId: data.fromAgentId || null,
-        toAgentId: data.toAgentId,
+        fromAssistantId: data.fromAssistantId || null,
+        toAssistantId: data.toAssistantId,
         subject: data.subject || null,
         body: data.body,
         priority: data.priority,

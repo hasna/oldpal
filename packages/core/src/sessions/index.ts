@@ -10,7 +10,7 @@ export {
   registerSessionTools,
   type SessionContext,
   type SessionQueryFunctions,
-  type AgentSessionData,
+  type AssistantSessionData,
   type SessionMetadata,
   type ListSessionsOptions,
   type CreateSessionData,

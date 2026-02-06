@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
-import { agentMessages, assistants } from '@/db/schema';
+import { assistantMessages, assistants } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
@@ -29,24 +29,24 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     }
     validateUUID(id, 'message id');
 
-    const message = await db.query.agentMessages.findFirst({
-      where: eq(agentMessages.id, id),
+    const message = await db.query.assistantMessages.findFirst({
+      where: eq(assistantMessages.id, id),
     });
 
     if (!message) {
       return errorResponse(new NotFoundError('Message not found'));
     }
 
-    // Verify user owns either the sender or recipient agent
-    const userAgents = await db.query.assistants.findMany({
+    // Verify user owns either the sender or recipient assistant
+    const userAssistants = await db.query.assistants.findMany({
       where: eq(assistants.userId, request.user.userId),
       columns: { id: true },
     });
 
-    const agentIds = userAgents.map((a) => a.id);
+    const assistantIds = userAssistants.map((a) => a.id);
     const hasAccess =
-      (message.fromAgentId && agentIds.includes(message.fromAgentId)) ||
-      (message.toAgentId && agentIds.includes(message.toAgentId));
+      (message.fromAssistantId && assistantIds.includes(message.fromAssistantId)) ||
+      (message.toAssistantId && assistantIds.includes(message.toAssistantId));
 
     if (!hasAccess) {
       return errorResponse(new ForbiddenError('Access denied'));
@@ -76,24 +76,24 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
       return errorResponse(new BadRequestError('No updatable fields provided'));
     }
 
-    const message = await db.query.agentMessages.findFirst({
-      where: eq(agentMessages.id, id),
+    const message = await db.query.assistantMessages.findFirst({
+      where: eq(assistantMessages.id, id),
     });
 
     if (!message) {
       return errorResponse(new NotFoundError('Message not found'));
     }
 
-    // Verify user owns either the sender or recipient agent
-    const userAgents = await db.query.assistants.findMany({
+    // Verify user owns either the sender or recipient assistant
+    const userAssistants = await db.query.assistants.findMany({
       where: eq(assistants.userId, request.user.userId),
       columns: { id: true },
     });
 
-    const agentIds = userAgents.map((a) => a.id);
+    const assistantIds = userAssistants.map((a) => a.id);
     const hasAccess =
-      (message.fromAgentId && agentIds.includes(message.fromAgentId)) ||
-      (message.toAgentId && agentIds.includes(message.toAgentId));
+      (message.fromAssistantId && assistantIds.includes(message.fromAssistantId)) ||
+      (message.toAssistantId && assistantIds.includes(message.toAssistantId));
 
     if (!hasAccess) {
       return errorResponse(new ForbiddenError('Access denied'));
@@ -112,9 +112,9 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
     }
 
     const [updatedMessage] = await db
-      .update(agentMessages)
+      .update(assistantMessages)
       .set(updateData)
-      .where(eq(agentMessages.id, id))
+      .where(eq(assistantMessages.id, id))
       .returning();
 
     return successResponse(updatedMessage);

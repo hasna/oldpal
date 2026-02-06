@@ -32,7 +32,7 @@ interface SearchResult {
   createdAt: string;
   sessionId: string;
   sessionLabel: string;
-  agentId: string | null;
+  assistantId: string | null;
   matchIndex: number;
 }
 

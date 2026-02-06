@@ -173,7 +173,7 @@ export class BuiltinCommands {
     loader.register(this.compactCommand());
     loader.register(this.configCommand());
     loader.register(this.budgetCommand());
-    loader.register(this.agentsCommand());
+    loader.register(this.assistantsCommand());
     loader.register(this.swarmCommand());
     loader.register(this.initCommand());
     loader.register(this.costCommand());
@@ -1056,7 +1056,7 @@ export class BuiltinCommands {
         message += '  - Create custom commands in .assistants/commands/*.md\n';
         message += '  - Global commands go in ~/.assistants/commands/*.md\n';
         message += '  - Use /init to create a starter command\n';
-        message += '  - The agent can use the wait/sleep tool to pause between actions\n';
+        message += '  - The assistant can use the wait/sleep tool to pause between actions\n';
 
         context.emit('text', message);
         context.emit('done');
@@ -1438,7 +1438,7 @@ export class BuiltinCommands {
         if (depthPolicies.length > 0) {
           const minDepth = Math.min(...depthPolicies.map((p) => p.depth!.maxDepth));
           message += `\n## Depth Limits\n`;
-          message += `  Max agent depth: ${minDepth}\n`;
+          message += `  Max assistant depth: ${minDepth}\n`;
         }
 
         // Check rate limits
@@ -1577,12 +1577,12 @@ export class BuiltinCommands {
    * /exit - Exit assistants
    */
   /**
-   * /inbox - Manage agent inbox
+   * /inbox - Manage assistant inbox
    */
   private inboxCommand(): Command {
     return {
       name: 'inbox',
-      description: 'Manage agent inbox (list, fetch, read, send emails)',
+      description: 'Manage assistant inbox (list, fetch, read, send emails)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -1760,7 +1760,7 @@ export class BuiltinCommands {
         // /inbox address
         if (subcommand === 'address') {
           const address = manager.getEmailAddress();
-          context.emit('text', `Agent email address: ${address}\n`);
+          context.emit('text', `Assistant email address: ${address}\n`);
           context.emit('done');
           return { handled: true };
         }
@@ -1775,7 +1775,7 @@ export class BuiltinCommands {
           context.emit('text', '/inbox download <id> <n>   Download attachment\n');
           context.emit('text', '/inbox send <to> <subject> Compose and send email\n');
           context.emit('text', '/inbox reply <id>          Reply to an email\n');
-          context.emit('text', '/inbox address             Show agent email address\n');
+          context.emit('text', '/inbox address             Show assistant email address\n');
           context.emit('text', '/inbox help                Show this help\n');
           context.emit('done');
           return { handled: true };
@@ -1790,12 +1790,12 @@ export class BuiltinCommands {
   }
 
   /**
-   * /wallet - Manage agent payment cards
+   * /wallet - Manage assistant payment cards
    */
   private walletCommand(): Command {
     return {
       name: 'wallet',
-      description: 'Manage payment cards in the agent wallet',
+      description: 'Manage payment cards in the assistant wallet',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -1922,7 +1922,7 @@ export class BuiltinCommands {
           context.emit('text', '**This wallet system provides:**\n');
           context.emit('text', '- Encryption at rest via AWS Secrets Manager\n');
           context.emit('text', '- Rate limiting to prevent abuse\n');
-          context.emit('text', '- Agent isolation (cards scoped by agent ID)\n');
+          context.emit('text', '- Assistant isolation (cards scoped by assistant ID)\n');
           context.emit('text', '- 30-day soft delete for recovery\n');
           context.emit('text', '- No local storage of card data\n\n');
           context.emit('text', '**You are responsible for:**\n');
@@ -1961,7 +1961,7 @@ export class BuiltinCommands {
   }
 
   /**
-   * /secrets - Manage agent secrets (API keys, tokens, passwords)
+   * /secrets - Manage assistant secrets (API keys, tokens, passwords)
    */
   private secretsCommand(): Command {
     return {
@@ -2002,7 +2002,7 @@ export class BuiltinCommands {
         if (subcommand === 'list') {
           try {
             const scope = parts[1]?.toLowerCase() || 'all';
-            const secrets = await manager.list(scope as 'global' | 'agent' | 'all');
+            const secrets = await manager.list(scope as 'global' | 'assistant' | 'all');
 
             if (secrets.length === 0) {
               context.emit('text', 'No secrets stored.\n');
@@ -2012,7 +2012,7 @@ export class BuiltinCommands {
 
               // Group by scope
               const globalSecrets = secrets.filter(s => s.scope === 'global');
-              const agentSecrets = secrets.filter(s => s.scope === 'agent');
+              const assistantSecrets = secrets.filter(s => s.scope === 'assistant');
 
               if (globalSecrets.length > 0) {
                 context.emit('text', '### Global Secrets\n');
@@ -2022,9 +2022,9 @@ export class BuiltinCommands {
                 context.emit('text', '\n');
               }
 
-              if (agentSecrets.length > 0) {
-                context.emit('text', '### Agent Secrets\n');
-                for (const secret of agentSecrets) {
+              if (assistantSecrets.length > 0) {
+                context.emit('text', '### Assistant Secrets\n');
+                for (const secret of assistantSecrets) {
                   context.emit('text', `- **${secret.name}**${secret.description ? ` - ${secret.description}` : ''}\n`);
                 }
                 context.emit('text', '\n');
@@ -2049,7 +2049,7 @@ export class BuiltinCommands {
             return { handled: true };
           }
 
-          const scope = parts[2]?.toLowerCase() as 'global' | 'agent' | undefined;
+          const scope = parts[2]?.toLowerCase() as 'global' | 'assistant' | undefined;
 
           try {
             const value = await manager.get(name, scope, 'plain');
@@ -2081,7 +2081,7 @@ export class BuiltinCommands {
           context.emit('text', '- name: Secret name (e.g., "GITHUB_TOKEN", "STRIPE_API_KEY")\n');
           context.emit('text', '- value: Secret value\n');
           context.emit('text', '- description: Optional description\n');
-          context.emit('text', '- scope: "global" or "agent" (default: agent)\n\n');
+          context.emit('text', '- scope: "global" or "assistant" (default: assistant)\n\n');
           context.emit('text', 'Secrets are stored securely in AWS Secrets Manager, never locally.\n');
           context.emit('done');
           return { handled: true };
@@ -2096,7 +2096,7 @@ export class BuiltinCommands {
             return { handled: true };
           }
 
-          const scope = (parts[2]?.toLowerCase() as 'global' | 'agent') || 'agent';
+          const scope = (parts[2]?.toLowerCase() as 'global' | 'assistant') || 'assistant';
 
           try {
             const result = await manager.delete(name, scope);
@@ -2114,7 +2114,7 @@ export class BuiltinCommands {
 
         // /secrets export [scope]
         if (subcommand === 'export') {
-          const scope = (parts[1]?.toLowerCase() as 'global' | 'agent' | 'all') || 'all';
+          const scope = (parts[1]?.toLowerCase() as 'global' | 'assistant' | 'all') || 'all';
 
           try {
             const envLines = await manager.export(scope);
@@ -2169,9 +2169,9 @@ export class BuiltinCommands {
           context.emit('text', 'secrets_set               Create or update a secret\n');
           context.emit('text', 'secrets_delete            Delete a secret\n\n');
           context.emit('text', '## Scopes\n\n');
-          context.emit('text', 'global - Shared across all agents\n');
-          context.emit('text', 'agent  - Specific to this agent only\n');
-          context.emit('text', 'all    - Both global and agent (default for list)\n');
+          context.emit('text', 'global - Shared across all assistants\n');
+          context.emit('text', 'assistant - Specific to this assistant only\n');
+          context.emit('text', 'all       - Both global and assistant (default for list)\n');
           context.emit('done');
           return { handled: true };
         }
@@ -2380,12 +2380,12 @@ Created: ${new Date(job.createdAt).toISOString()}
   }
 
   /**
-   * /messages - Agent-to-agent messaging
+   * /messages - Assistant-to-assistant messaging
    */
   private messagesCommand(): Command {
     return {
       name: 'messages',
-      description: 'Agent-to-agent messaging (list, send, read, threads)',
+      description: 'Assistant-to-assistant messaging (list, send, read, threads)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -2436,7 +2436,7 @@ Created: ${new Date(job.createdAt).toISOString()}
                     : '';
                 const date = new Date(msg.createdAt).toLocaleDateString();
                 context.emit('text', `${statusIcon}${priorityIcon} **${msg.id}**\n`);
-                context.emit('text', `   From: ${msg.fromAgentName}\n`);
+                context.emit('text', `   From: ${msg.fromAssistantName}\n`);
                 if (msg.subject) {
                   context.emit('text', `   Subject: ${msg.subject}\n`);
                 }
@@ -2460,7 +2460,7 @@ Created: ${new Date(job.createdAt).toISOString()}
             } else {
               context.emit('text', `\n## Threads (${threads.length})\n\n`);
               for (const thread of threads) {
-                const participants = thread.participants.map((p) => p.agentName).join(', ');
+                const participants = thread.participants.map((p) => p.assistantName).join(', ');
                 const updated = new Date(thread.updatedAt).toLocaleDateString();
                 context.emit('text', `**${thread.threadId}**\n`);
                 if (thread.subject) {
@@ -2493,8 +2493,8 @@ Created: ${new Date(job.createdAt).toISOString()}
               context.emit('text', `Message ${messageId} not found.\n`);
             } else {
               context.emit('text', `\n## Message: ${message.id}\n\n`);
-              context.emit('text', `**From:** ${message.fromAgentName} (${message.fromAgentId})\n`);
-              context.emit('text', `**To:** ${message.toAgentName} (${message.toAgentId})\n`);
+              context.emit('text', `**From:** ${message.fromAssistantName} (${message.fromAssistantId})\n`);
+              context.emit('text', `**To:** ${message.toAssistantName} (${message.toAssistantId})\n`);
               if (message.subject) {
                 context.emit('text', `**Subject:** ${message.subject}\n`);
               }
@@ -2535,7 +2535,7 @@ Created: ${new Date(job.createdAt).toISOString()}
               context.emit('text', `**${messages.length} message(s)**\n\n`);
               for (const msg of messages) {
                 context.emit('text', '---\n');
-                context.emit('text', `### From: ${msg.fromAgentName} → ${msg.toAgentName}\n`);
+                context.emit('text', `### From: ${msg.fromAssistantName} → ${msg.toAssistantName}\n`);
                 if (msg.subject) {
                   context.emit('text', `**Subject:** ${msg.subject}\n`);
                 }
@@ -2557,7 +2557,7 @@ Created: ${new Date(job.createdAt).toISOString()}
           context.emit('text', 'Example:\n');
           context.emit('text', '```\n');
           context.emit('text', 'Use messages_send with:\n');
-          context.emit('text', '  to: "AgentName"  (or agent ID)\n');
+          context.emit('text', '  to: "AssistantName"  (or assistant ID)\n');
           context.emit('text', '  body: "Your message content"\n');
           context.emit('text', '  subject: "Optional subject" (optional)\n');
           context.emit('text', '  priority: "normal" (optional: low, normal, high, urgent)\n');
@@ -2606,17 +2606,17 @@ Created: ${new Date(job.createdAt).toISOString()}
           return { handled: true };
         }
 
-        // /messages agents
-        if (subcommand === 'agents') {
+        // /messages assistants
+        if (subcommand === 'assistants') {
           try {
-            const agents = await manager.listAgents();
-            if (agents.length === 0) {
-              context.emit('text', 'No other agents found. Agents appear here after sending or receiving messages.\n');
+            const assistants = await manager.listAssistants();
+            if (assistants.length === 0) {
+              context.emit('text', 'No other assistants found. Assistants appear here after sending or receiving messages.\n');
             } else {
-              context.emit('text', `\n## Known Agents (${agents.length})\n\n`);
-              for (const agent of agents) {
-                const lastSeen = new Date(agent.lastSeen).toLocaleDateString();
-                context.emit('text', `- **${agent.name}** (ID: ${agent.id})\n`);
+              context.emit('text', `\n## Known Assistants (${assistants.length})\n\n`);
+              for (const assistant of assistants) {
+                const lastSeen = new Date(assistant.lastSeen).toLocaleDateString();
+                context.emit('text', `- **${assistant.name}** (ID: ${assistant.id})\n`);
                 context.emit('text', `  Last seen: ${lastSeen}\n`);
               }
             }
@@ -2653,16 +2653,16 @@ Created: ${new Date(job.createdAt).toISOString()}
           context.emit('text', '/messages send           Show how to send messages\n');
           context.emit('text', '/messages reply <id>     Show how to reply\n');
           context.emit('text', '/messages delete <id>    Delete a message\n');
-          context.emit('text', '/messages agents         List known agents\n');
+          context.emit('text', '/messages assistants     List known assistants\n');
           context.emit('text', '/messages stats          Show inbox statistics\n');
           context.emit('text', '/messages help           Show this help\n\n');
           context.emit('text', '## Tools\n\n');
-          context.emit('text', 'messages_send            Send a message to another agent\n');
+          context.emit('text', 'messages_send            Send a message to another assistant\n');
           context.emit('text', 'messages_list            List inbox messages\n');
           context.emit('text', 'messages_read            Read a specific message\n');
           context.emit('text', 'messages_read_thread     Read entire thread\n');
           context.emit('text', 'messages_delete          Delete a message\n');
-          context.emit('text', 'messages_list_agents     List known agents\n');
+          context.emit('text', 'messages_list_assistants  List known assistants\n');
           context.emit('done');
           return { handled: true };
         }
@@ -2681,7 +2681,7 @@ Created: ${new Date(job.createdAt).toISOString()}
   private tasksCommand(): Command {
     return {
       name: 'tasks',
-      description: 'Manage task queue for agent to execute',
+      description: 'Manage task queue for assistant to execute',
       tags: ['tasks', 'queue', 'automation'],
       builtin: true,
       selfHandled: true,
@@ -2702,7 +2702,7 @@ Created: ${new Date(job.createdAt).toISOString()}
           const counts = await getTaskCounts(context.cwd);
           const paused = await isPaused(context.cwd);
 
-          let output = '\n📋 **Tasks** - Queue tasks for the agent to execute\n\n';
+          let output = '\n📋 **Tasks** - Queue tasks for the assistant to execute\n\n';
 
           // Show current status
           const pendingCount = counts.pending;
@@ -3835,11 +3835,11 @@ Created: ${new Date(job.createdAt).toISOString()}
           if (messagesManager) {
             try {
               const assistant = context.getAssistantManager?.()?.getActive();
-              const agentId = assistant?.id || context.sessionId;
-              const agentName = assistant?.name || 'assistant';
+              const assistantId = assistant?.id || context.sessionId;
+              const assistantName = assistant?.name || 'assistant';
 
               await messagesManager.send({
-                to: agentId, // Send to self for visibility in inbox
+                to: assistantId, // Send to self for visibility in inbox
                 body: summaryMessage,
                 subject: 'Context Summary',
                 priority: 'normal',
@@ -4363,10 +4363,10 @@ Format the summary as a brief bullet-point list. This summary will replace the c
         // /budget reset [scope]
         if (action.startsWith('reset')) {
           const parts = action.split(/\s+/);
-          const scope = parts[1] as 'session' | 'agent' | 'swarm' | undefined;
+          const scope = parts[1] as 'session' | 'assistant' | 'swarm' | undefined;
 
           if (context.resetBudget) {
-            if (scope && ['session', 'agent', 'swarm'].includes(scope)) {
+            if (scope && ['session', 'assistant', 'swarm'].includes(scope)) {
               context.resetBudget(scope);
               context.emit('text', `\n✓ Reset ${scope} budget usage\n`);
             } else {
@@ -4396,12 +4396,12 @@ Format the summary as a brief bullet-point list. This summary will replace the c
             message += '  No limits configured\n';
           }
 
-          message += '\n## Agent Limits\n';
-          if (config.agent) {
-            message += `  Max tokens: ${config.agent.maxTotalTokens?.toLocaleString() || 'unlimited'}\n`;
-            message += `  Max LLM calls: ${config.agent.maxLlmCalls?.toLocaleString() || 'unlimited'}\n`;
-            message += `  Max tool calls: ${config.agent.maxToolCalls?.toLocaleString() || 'unlimited'}\n`;
-            const maxDurationMin = config.agent.maxDurationMs ? Math.round(config.agent.maxDurationMs / 60000) : null;
+          message += '\n## Assistant Limits\n';
+          if (config.assistant) {
+            message += `  Max tokens: ${config.assistant.maxTotalTokens?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max LLM calls: ${config.assistant.maxLlmCalls?.toLocaleString() || 'unlimited'}\n`;
+            message += `  Max tool calls: ${config.assistant.maxToolCalls?.toLocaleString() || 'unlimited'}\n`;
+            const maxDurationMin = config.assistant.maxDurationMs ? Math.round(config.assistant.maxDurationMs / 60000) : null;
             message += `  Max duration: ${maxDurationMin ? `${maxDurationMin} min` : 'unlimited'}\n`;
           } else {
             message += '  No limits configured\n';
@@ -4474,9 +4474,9 @@ Format the summary as a brief bullet-point list. This summary will replace the c
           message += `\n  ⚡ ${summary.session.warningsCount} warning(s) - approaching limits\n`;
         }
 
-        // Show agent count if any
-        if (summary.agentCount > 0) {
-          message += `\n## Agents: ${summary.agentCount} tracked\n`;
+        // Show assistant count if any
+        if (summary.assistantCount > 0) {
+          message += `\n## Assistants: ${summary.assistantCount} tracked\n`;
         }
 
         // Overall status
@@ -4496,12 +4496,12 @@ Format the summary as a brief bullet-point list. This summary will replace the c
   }
 
   /**
-   * /agents - View and manage registered agents
+   * /assistants - View and manage registered assistants
    */
-  private agentsCommand(): Command {
+  private assistantsCommand(): Command {
     return {
-      name: 'agents',
-      description: 'View and manage registered agents',
+      name: 'assistants',
+      description: 'View and manage registered assistants',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4512,31 +4512,31 @@ Format the summary as a brief bullet-point list. This summary will replace the c
         const action = args.trim().toLowerCase();
         const registry = getGlobalRegistry();
 
-        // /agents help
+        // /assistants help
         if (action === 'help') {
-          let message = '\n## Agents Commands\n\n';
-          message += '/agents                       Open interactive panel\n';
-          message += '/agents list                  List all registered agents\n';
-          message += '/agents status                Show registry statistics\n';
-          message += '/agents cleanup               Remove stale/offline agents\n';
-          message += '/agents help                  Show this help\n';
+          let message = '\n## Assistants Commands\n\n';
+          message += '/assistants                       Open interactive panel\n';
+          message += '/assistants list                  List all registered assistants\n';
+          message += '/assistants status                Show registry statistics\n';
+          message += '/assistants cleanup               Remove stale/offline assistants\n';
+          message += '/assistants help                  Show this help\n';
           context.emit('text', message);
           context.emit('done');
           return { handled: true };
         }
 
-        // /agents list - Show all agents
+        // /assistants list - Show all assistants
         if (action === 'list') {
-          const agents = registry.list();
-          if (agents.length === 0) {
-            context.emit('text', '\nNo agents currently registered.\n');
+          const assistants = registry.list();
+          if (assistants.length === 0) {
+            context.emit('text', '\nNo assistants currently registered.\n');
             context.emit('done');
             return { handled: true };
           }
 
-          let message = '\n**Registered Agents**\n\n';
-          for (const agent of agents) {
-            const state = agent.status.state;
+          let message = '\n**Registered Assistants**\n\n';
+          for (const entry of assistants) {
+            const state = entry.status.state;
             const stateIcon = state === 'idle' ? '●' :
               state === 'processing' ? '◐' :
               state === 'error' ? '✗' :
@@ -4545,32 +4545,32 @@ Format the summary as a brief bullet-point list. This summary will replace the c
               state === 'processing' ? 'yellow' :
               state === 'error' ? 'red' : 'gray';
 
-            message += `${stateIcon} **${agent.name}** (${agent.type})\n`;
-            message += `   ID: ${agent.id.slice(0, 16)}...\n`;
+            message += `${stateIcon} **${entry.name}** (${entry.type})\n`;
+            message += `   ID: ${entry.id.slice(0, 16)}...\n`;
             message += `   State: ${state}\n`;
-            if (agent.status.currentTask) {
-              message += `   Task: ${agent.status.currentTask}\n`;
+            if (entry.status.currentTask) {
+              message += `   Task: ${entry.status.currentTask}\n`;
             }
-            message += `   Tools: ${agent.capabilities.tools.length} | Skills: ${agent.capabilities.skills.length}\n`;
-            message += `   Load: ${agent.load.activeTasks} active, ${agent.load.queuedTasks} queued\n\n`;
+            message += `   Tools: ${entry.capabilities.tools.length} | Skills: ${entry.capabilities.skills.length}\n`;
+            message += `   Load: ${entry.load.activeTasks} active, ${entry.load.queuedTasks} queued\n\n`;
           }
           context.emit('text', message);
           context.emit('done');
           return { handled: true };
         }
 
-        // /agents status - Show registry stats
+        // /assistants status - Show registry stats
         if (action === 'status') {
           const stats = registry.getStats();
-          let message = '\n**Agent Registry Status**\n\n';
-          message += `Total Agents: ${stats.totalAgents}\n`;
+          let message = '\n**Assistant Registry Status**\n\n';
+          message += `Total Assistants: ${stats.totalAssistants}\n`;
           message += `Stale: ${stats.staleCount}\n`;
           message += `Average Load: ${(stats.averageLoad * 100).toFixed(0)}%\n`;
           message += `Uptime: ${Math.floor(stats.uptime / 60)} minutes\n\n`;
 
           message += '**By Type:**\n';
           message += `  Assistants: ${stats.byType.assistant}\n`;
-          message += `  Subagents: ${stats.byType.subagent}\n`;
+          message += `  Subassistants: ${stats.byType.subassistant}\n`;
           message += `  Coordinators: ${stats.byType.coordinator}\n`;
           message += `  Workers: ${stats.byType.worker}\n\n`;
 
@@ -4586,31 +4586,31 @@ Format the summary as a brief bullet-point list. This summary will replace the c
           return { handled: true };
         }
 
-        // /agents cleanup - Clean up stale agents
+        // /assistants cleanup - Clean up stale assistants
         if (action === 'cleanup') {
           const beforeCount = registry.list().length;
-          registry.cleanupStaleAgents();
+          registry.cleanupStaleAssistants();
           const afterCount = registry.list().length;
           const removed = beforeCount - afterCount;
 
           if (removed > 0) {
-            context.emit('text', `\n✓ Removed ${removed} stale agent${removed > 1 ? 's' : ''}\n`);
+            context.emit('text', `\n✓ Removed ${removed} stale assistant${removed > 1 ? 's' : ''}\n`);
           } else {
-            context.emit('text', '\n✓ No stale agents to clean up\n');
+            context.emit('text', '\n✓ No stale assistants to clean up\n');
           }
           context.emit('done');
           return { handled: true };
         }
 
-        // /agents - Show interactive panel
+        // /assistants - Show interactive panel
         if (!action || action === 'ui') {
           context.emit('done');
-          return { handled: true, showPanel: 'agents' };
+          return { handled: true, showPanel: 'assistants' };
         }
 
         // Unknown subcommand
-        context.emit('text', `\n⚠ Unknown command: /agents ${action}\n`);
-        context.emit('text', 'Use /agents help for available commands.\n');
+        context.emit('text', `\n⚠ Unknown command: /assistants ${action}\n`);
+        context.emit('text', 'Use /assistants help for available commands.\n');
         context.emit('done');
         return { handled: true };
       },
@@ -4618,12 +4618,12 @@ Format the summary as a brief bullet-point list. This summary will replace the c
   }
 
   /**
-   * /swarm - Multi-agent swarm execution
+   * /swarm - Multi-assistant swarm execution
    */
   private swarmCommand(): Command {
     return {
       name: 'swarm',
-      description: 'Execute multi-agent swarm for complex tasks',
+      description: 'Execute multi-assistant swarm for complex tasks',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4633,7 +4633,7 @@ Format the summary as a brief bullet-point list. This summary will replace the c
 
         const trimmedArgs = args.trim();
 
-        // Get swarm coordinator from context (available when running in full agent loop)
+        // Get swarm coordinator from context (available when running in full assistant loop)
         const coordinator = context.getSwarmCoordinator?.();
 
         // /swarm help
@@ -4703,8 +4703,8 @@ Format the summary as a brief bullet-point list. This summary will replace the c
             }
             message += `  Tool Calls: ${state.metrics.toolCalls}\n`;
           }
-          if (state.activeAgents && state.activeAgents.size > 0) {
-            message += `\n**Active Agents:** ${state.activeAgents.size}\n`;
+          if (state.activeAssistants && state.activeAssistants.size > 0) {
+            message += `\n**Active Assistants:** ${state.activeAssistants.size}\n`;
           }
           if (state.errors && state.errors.length > 0) {
             message += '\n**Errors:**\n';
@@ -4740,10 +4740,10 @@ Format the summary as a brief bullet-point list. This summary will replace the c
         // /swarm <goal> - Execute swarm
         if (!coordinator) {
           context.emit('text', '\n⚠️ Swarm coordinator not available.\n');
-          context.emit('text', 'Swarm execution requires full agent context with subagent support.\n');
+          context.emit('text', 'Swarm execution requires full assistant context with subassistant support.\n');
           context.emit('text', '\n**Alternatives:**\n');
           context.emit('text', '- Use the `swarm_execute` tool programmatically\n');
-          context.emit('text', '- Use the `agent_delegate` tool for complex tasks\n');
+          context.emit('text', '- Use the `assistant_delegate` tool for complex tasks\n');
           context.emit('done');
           return { handled: true };
         }
@@ -5499,7 +5499,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
             // Validate each memory entry
             const VALID_SCOPES = new Set(['global', 'shared', 'private']);
             const VALID_CATEGORIES = new Set(['preference', 'fact', 'knowledge', 'history']);
-            const VALID_SOURCES = new Set(['user', 'agent', 'system']);
+            const VALID_SOURCES = new Set(['user', 'assistant', 'system']);
             const validMemories: unknown[] = [];
             const errors: string[] = [];
 
@@ -5534,7 +5534,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
               }
 
               if (entry.source && !VALID_SOURCES.has(entry.source as string)) {
-                errors.push(`Entry ${i}: Invalid "source" (must be one of: user, agent, system)`);
+                errors.push(`Entry ${i}: Invalid "source" (must be one of: user, assistant, system)`);
                 continue;
               }
 

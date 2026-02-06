@@ -144,7 +144,7 @@ export class SkillLoader {
         userInvocable: frontmatter['user-invocable'] !== false,
         model: frontmatter.model,
         context: frontmatter.context,
-        agent: frontmatter.agent,
+        assistant: frontmatter.assistant,
         hooks: frontmatter.hooks,
         content: includeContent ? markdownContent : '',
         filePath,

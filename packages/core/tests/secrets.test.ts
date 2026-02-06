@@ -21,7 +21,7 @@ const mockSecrets: Map<string, { value: string; description?: string; createdAt:
 
 // Mock SecretsStorageClient
 const mockStorageClient = {
-  listSecrets: mock(async (scope: SecretScope | 'all', agentId?: string): Promise<SecretListItem[]> => {
+  listSecrets: mock(async (scope: SecretScope | 'all', assistantId?: string): Promise<SecretListItem[]> => {
     const items: SecretListItem[] = [];
     for (const [name, data] of mockSecrets.entries()) {
       const [secretScope] = name.split(':');
@@ -38,7 +38,7 @@ const mockStorageClient = {
     }
     return items;
   }),
-  getSecret: mock(async (name: string, scope: SecretScope, agentId?: string): Promise<Secret | null> => {
+  getSecret: mock(async (name: string, scope: SecretScope, assistantId?: string): Promise<Secret | null> => {
     const key = `${scope}:${name}`;
     const data = mockSecrets.get(key);
     if (!data) return null;
@@ -51,7 +51,7 @@ const mockStorageClient = {
       updatedAt: data.updatedAt,
     };
   }),
-  setSecret: mock(async (name: string, value: string, scope: SecretScope, agentId?: string, description?: string): Promise<void> => {
+  setSecret: mock(async (name: string, value: string, scope: SecretScope, assistantId?: string, description?: string): Promise<void> => {
     const key = `${scope}:${name}`;
     const now = Date.now();
     const existing = mockSecrets.get(key);
@@ -62,7 +62,7 @@ const mockStorageClient = {
       updatedAt: now,
     });
   }),
-  deleteSecret: mock(async (name: string, scope: SecretScope, agentId?: string): Promise<void> => {
+  deleteSecret: mock(async (name: string, scope: SecretScope, assistantId?: string): Promise<void> => {
     const key = `${scope}:${name}`;
     mockSecrets.delete(key);
   }),
@@ -108,7 +108,7 @@ describe('Secrets Management', () => {
   describe('SecretsManager', () => {
     test('isConfigured returns false without storage config', () => {
       const config: SecretsConfig = { enabled: true };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
       expect(manager.isConfigured()).toBe(false);
     });
 
@@ -117,7 +117,7 @@ describe('Secrets Management', () => {
         enabled: true,
         storage: { region: 'us-east-1' },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
       expect(manager.isConfigured()).toBe(true);
     });
 
@@ -127,7 +127,7 @@ describe('Secrets Management', () => {
         storage: { region: 'us-east-1' },
         security: { maxReadsPerHour: 50 },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
       const status = manager.getRateLimitStatus();
 
       expect(status.readsUsed).toBe(0);
@@ -140,7 +140,7 @@ describe('Secrets Management', () => {
         enabled: true,
         storage: { region: 'us-east-1' },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
       const status = manager.getRateLimitStatus();
 
       expect(status.maxReads).toBe(100); // default value
@@ -198,7 +198,7 @@ describe('Secrets Management', () => {
         enabled: true,
         storage: { region: 'us-east-1' },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
       const executors = createSecretsToolExecutors(() => manager);
 
       const result = await executors.secrets_get({});
@@ -210,7 +210,7 @@ describe('Secrets Management', () => {
         enabled: true,
         storage: { region: 'us-east-1' },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
       const executors = createSecretsToolExecutors(() => manager);
 
       const result = await executors.secrets_set({ value: 'test' });
@@ -222,7 +222,7 @@ describe('Secrets Management', () => {
         enabled: true,
         storage: { region: 'us-east-1' },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
       const executors = createSecretsToolExecutors(() => manager);
 
       const result = await executors.secrets_set({ name: 'TEST' });
@@ -234,7 +234,7 @@ describe('Secrets Management', () => {
         enabled: true,
         storage: { region: 'us-east-1' },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
       const executors = createSecretsToolExecutors(() => manager);
 
       const result = await executors.secrets_delete({});
@@ -245,24 +245,24 @@ describe('Secrets Management', () => {
   describe('Secret Types', () => {
     test('SecretScope type accepts valid values', () => {
       const globalScope: SecretScope = 'global';
-      const agentScope: SecretScope = 'agent';
+      const assistantScope: SecretScope = 'assistant';
 
       expect(globalScope).toBe('global');
-      expect(agentScope).toBe('agent');
+      expect(assistantScope).toBe('assistant');
     });
 
     test('Secret interface has all required fields', () => {
       const secret: Secret = {
         name: 'TEST_SECRET',
         value: 'secret-value',
-        scope: 'agent',
+        scope: 'assistant',
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
 
       expect(secret.name).toBe('TEST_SECRET');
       expect(secret.value).toBe('secret-value');
-      expect(secret.scope).toBe('agent');
+      expect(secret.scope).toBe('assistant');
       expect(typeof secret.createdAt).toBe('number');
       expect(typeof secret.updatedAt).toBe('number');
     });
@@ -286,7 +286,7 @@ describe('Secrets Management', () => {
         enabled: true,
         storage: { region: 'us-east-1' },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
 
       const result = await manager.set({
         name: '123invalid',
@@ -302,7 +302,7 @@ describe('Secrets Management', () => {
         enabled: true,
         storage: { region: 'us-east-1' },
       };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
 
       const result = await manager.set({
         name: 'VALID_NAME',
@@ -315,7 +315,7 @@ describe('Secrets Management', () => {
 
     test('list returns empty array when not configured', async () => {
       const config: SecretsConfig = { enabled: true };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
 
       const result = await manager.list();
       expect(result).toEqual([]);
@@ -323,14 +323,14 @@ describe('Secrets Management', () => {
 
     test('get throws error when not configured', async () => {
       const config: SecretsConfig = { enabled: true };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
 
       await expect(manager.get('TEST')).rejects.toThrow('not configured');
     });
 
     test('delete returns error when not configured', async () => {
       const config: SecretsConfig = { enabled: true };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
 
       const result = await manager.delete('TEST');
       expect(result.success).toBe(false);
@@ -339,7 +339,7 @@ describe('Secrets Management', () => {
 
     test('set returns error when not configured', async () => {
       const config: SecretsConfig = { enabled: true };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
 
       const result = await manager.set({ name: 'TEST', value: 'value' });
       expect(result.success).toBe(false);
@@ -348,7 +348,7 @@ describe('Secrets Management', () => {
 
     test('checkCredentials returns error when not configured', async () => {
       const config: SecretsConfig = { enabled: true };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
 
       const result = await manager.checkCredentials();
       expect(result.valid).toBe(false);
@@ -357,7 +357,7 @@ describe('Secrets Management', () => {
 
     test('export returns empty array when not configured', async () => {
       const config: SecretsConfig = { enabled: true };
-      const manager = createSecretsManager('agent-123', config);
+      const manager = createSecretsManager('assistant-123', config);
 
       const result = await manager.export();
       expect(result).toEqual([]);
@@ -391,7 +391,7 @@ describe('Secrets Management', () => {
       const scopeProp = secretsListTool.parameters.properties.scope;
       expect(scopeProp).toBeDefined();
       expect(scopeProp.enum).toContain('global');
-      expect(scopeProp.enum).toContain('agent');
+      expect(scopeProp.enum).toContain('assistant');
       expect(scopeProp.enum).toContain('all');
     });
 

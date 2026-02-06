@@ -1,5 +1,5 @@
 /**
- * SecretsManager - Core class for managing agent secrets
+ * SecretsManager - Core class for managing assistant secrets
  * Handles secret storage, rate limiting, and retrieval
  *
  * SECURITY: Secrets are NEVER stored locally on disk.
@@ -24,8 +24,8 @@ import type {
 } from './types';
 
 export interface SecretsManagerOptions {
-  /** Agent ID for scoping secrets */
-  agentId: string;
+  /** Assistant ID for scoping secrets */
+  assistantId: string;
   /** Secrets configuration */
   config: SecretsConfig;
 }
@@ -39,17 +39,17 @@ export function isValidSecretName(name: string): boolean {
 }
 
 /**
- * SecretsManager handles all secrets operations for an agent
+ * SecretsManager handles all secrets operations for an assistant
  */
 export class SecretsManager {
-  private agentId: string;
+  private assistantId: string;
   private config: SecretsConfig;
   private storageClient: SecretsStorageClient | null = null;
   private rateLimit: SecretsRateLimitState;
   private maxReadsPerHour: number;
 
   constructor(options: SecretsManagerOptions) {
-    this.agentId = options.agentId;
+    this.assistantId = options.assistantId;
     this.config = options.config;
     this.maxReadsPerHour = options.config.security?.maxReadsPerHour ?? 100;
     this.rateLimit = {
@@ -76,7 +76,7 @@ export class SecretsManager {
 
   /**
    * List all secrets (safe summaries only, no values)
-   * @param scope - 'global', 'agent', or 'all' (default: 'all')
+   * @param scope - 'global', 'assistant', or 'all' (default: 'all')
    */
   async list(scope: SecretScope | 'all' = 'all'): Promise<SecretListItem[]> {
     if (!this.storageClient) {
@@ -84,7 +84,7 @@ export class SecretsManager {
     }
 
     try {
-      return await this.storageClient.listSecrets(scope, this.agentId);
+      return await this.storageClient.listSecrets(scope, this.assistantId);
     } catch (error) {
       this.logError('list', error);
       throw error;
@@ -94,7 +94,7 @@ export class SecretsManager {
   /**
    * Get a secret value
    * @param name - Secret name
-   * @param scope - 'global' or 'agent'. If not specified, tries agent first, then global
+   * @param scope - 'global' or 'assistant'. If not specified, tries assistant first, then global
    * @param format - Output format: 'plain', 'metadata', or 'env'
    */
   async get(
@@ -119,10 +119,10 @@ export class SecretsManager {
 
     if (scope) {
       // If scope specified, use that scope
-      secret = await this.storageClient.getSecret(name, scope, this.agentId);
+      secret = await this.storageClient.getSecret(name, scope, this.assistantId);
     } else {
-      // If scope not specified, try agent scope first, then global
-      secret = await this.storageClient.getSecret(name, 'agent', this.agentId);
+      // If scope not specified, try assistant scope first, then global
+      secret = await this.storageClient.getSecret(name, 'assistant', this.assistantId);
       if (!secret) {
         secret = await this.storageClient.getSecret(name, 'global');
       }
@@ -179,14 +179,14 @@ export class SecretsManager {
       };
     }
 
-    const scope = input.scope || 'agent';
+    const scope = input.scope || 'assistant';
 
     try {
       await this.storageClient.setSecret(
         input.name,
         input.value,
         scope,
-        this.agentId,
+        this.assistantId,
         input.description
       );
 
@@ -210,7 +210,7 @@ export class SecretsManager {
   /**
    * Delete a secret
    */
-  async delete(name: string, scope: SecretScope = 'agent'): Promise<SecretsOperationResult> {
+  async delete(name: string, scope: SecretScope = 'assistant'): Promise<SecretsOperationResult> {
     if (!this.storageClient) {
       return {
         success: false,
@@ -220,7 +220,7 @@ export class SecretsManager {
 
     try {
       // Verify secret exists
-      const secret = await this.storageClient.getSecret(name, scope, this.agentId);
+      const secret = await this.storageClient.getSecret(name, scope, this.assistantId);
       if (!secret) {
         return {
           success: false,
@@ -229,7 +229,7 @@ export class SecretsManager {
         };
       }
 
-      await this.storageClient.deleteSecret(name, scope, this.agentId);
+      await this.storageClient.deleteSecret(name, scope, this.assistantId);
       this.logOperation('delete', name, true);
 
       return {
@@ -249,7 +249,7 @@ export class SecretsManager {
 
   /**
    * Export secrets in environment format
-   * @param scope - 'global', 'agent', or 'all'
+   * @param scope - 'global', 'assistant', or 'all'
    */
   async export(scope: SecretScope | 'all' = 'all'): Promise<string[]> {
     if (!this.storageClient) {
@@ -343,7 +343,7 @@ export class SecretsManager {
     // Log operation without sensitive data
     const logEntry = {
       timestamp: new Date().toISOString(),
-      agentId: this.agentId,
+      assistantId: this.assistantId,
       operation,
       secretName,
       success,
@@ -359,7 +359,7 @@ export class SecretsManager {
     const message = error instanceof Error ? error.message : String(error);
     const logEntry = {
       timestamp: new Date().toISOString(),
-      agentId: this.agentId,
+      assistantId: this.assistantId,
       operation,
       error: message,
     };
@@ -372,11 +372,11 @@ export class SecretsManager {
  * Create a SecretsManager from config
  */
 export function createSecretsManager(
-  agentId: string,
+  assistantId: string,
   config: SecretsConfig
 ): SecretsManager {
   return new SecretsManager({
-    agentId,
+    assistantId,
     config,
   });
 }

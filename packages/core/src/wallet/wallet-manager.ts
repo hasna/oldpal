@@ -1,5 +1,5 @@
 /**
- * WalletManager - Core class for managing agent payment cards
+ * WalletManager - Core class for managing assistant payment cards
  * Handles card storage, rate limiting, and card data transformations
  *
  * SECURITY: Cards are NEVER stored locally on disk.
@@ -24,24 +24,24 @@ import type {
 } from './types';
 
 export interface WalletManagerOptions {
-  /** Agent ID for scoping cards */
-  agentId: string;
+  /** Assistant ID for scoping cards */
+  assistantId: string;
   /** Wallet configuration */
   config: WalletConfig;
 }
 
 /**
- * WalletManager handles all wallet operations for an agent
+ * WalletManager handles all wallet operations for an assistant
  */
 export class WalletManager {
-  private agentId: string;
+  private assistantId: string;
   private config: WalletConfig;
   private secretsClient: SecretsClient | null = null;
   private rateLimit: RateLimitState;
   private maxReadsPerHour: number;
 
   constructor(options: WalletManagerOptions) {
-    this.agentId = options.agentId;
+    this.assistantId = options.assistantId;
     this.config = options.config;
     this.maxReadsPerHour = options.config.security?.maxReadsPerHour ?? 10;
     this.rateLimit = {
@@ -75,7 +75,7 @@ export class WalletManager {
     }
 
     try {
-      return await this.secretsClient.listCards(this.agentId);
+      return await this.secretsClient.listCards(this.assistantId);
     } catch (error) {
       this.logError('list', error);
       throw error;
@@ -136,7 +136,7 @@ export class WalletManager {
     };
 
     try {
-      await this.secretsClient.createCard(this.agentId, card);
+      await this.secretsClient.createCard(this.assistantId, card);
       this.logOperation('add', cardId, true);
       return {
         success: true,
@@ -170,7 +170,7 @@ export class WalletManager {
     }
 
     try {
-      const card = await this.secretsClient.getCard(this.agentId, cardId);
+      const card = await this.secretsClient.getCard(this.assistantId, cardId);
       if (card) {
         this.incrementRateLimit();
         this.logOperation('get', cardId, true);
@@ -238,7 +238,7 @@ export class WalletManager {
 
     try {
       // Verify card exists
-      const card = await this.secretsClient.getCard(this.agentId, cardId);
+      const card = await this.secretsClient.getCard(this.assistantId, cardId);
       if (!card) {
         return {
           success: false,
@@ -246,7 +246,7 @@ export class WalletManager {
         };
       }
 
-      await this.secretsClient.deleteCard(this.agentId, cardId);
+      await this.secretsClient.deleteCard(this.assistantId, cardId);
       this.logOperation('remove', cardId, true);
       return {
         success: true,
@@ -386,7 +386,7 @@ export class WalletManager {
     // In production, this would go to a secure audit log
     const logEntry = {
       timestamp: new Date().toISOString(),
-      agentId: this.agentId,
+      assistantId: this.assistantId,
       operation,
       cardId,
       success,
@@ -402,7 +402,7 @@ export class WalletManager {
     const message = error instanceof Error ? error.message : String(error);
     const logEntry = {
       timestamp: new Date().toISOString(),
-      agentId: this.agentId,
+      assistantId: this.assistantId,
       operation,
       error: message,
     };
@@ -415,11 +415,11 @@ export class WalletManager {
  * Create a WalletManager from config
  */
 export function createWalletManager(
-  agentId: string,
+  assistantId: string,
   config: WalletConfig
 ): WalletManager {
   return new WalletManager({
-    agentId,
+    assistantId,
     config,
   });
 }

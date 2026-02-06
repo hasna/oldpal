@@ -8,7 +8,7 @@
 import type { SwarmTask, SwarmResult, SwarmPlan, SwarmMetrics } from './types';
 import type { AggregatedResult, AggregationMetadata } from './aggregator';
 import type { CriticReview, CriticIssue, FollowUpAction } from './critic';
-import type { SubagentResult } from '../agent/subagent-manager';
+import type { SubassistantResult } from '../agent/subagent-manager';
 
 /**
  * Artifact type
@@ -474,7 +474,7 @@ export class SwarmPostback {
    */
   private extractArtifactsFromResult(
     taskId: string,
-    result?: SubagentResult
+    result?: SubassistantResult
   ): SwarmArtifact[] {
     if (!result?.result) return [];
 
@@ -536,7 +536,7 @@ export class SwarmPostback {
    */
   private mapTaskStatus(
     taskStatus: string,
-    result?: SubagentResult
+    result?: SubassistantResult
   ): TaskOutcome['status'] {
     if (taskStatus === 'completed' && result?.success) return 'completed';
     if (taskStatus === 'completed' && !result?.success) return 'partial';

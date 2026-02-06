@@ -79,7 +79,7 @@ class TruncatingContext {
 let lastOptions: any;
 let shutdownCalled = false;
 
-class MockAgentLoop {
+class MockAssistantLoop {
   private context = new MockContext();
   private processing = false;
 
@@ -146,7 +146,7 @@ class MockAgentLoop {
   }
 }
 
-class TruncatingAgentLoop {
+class TruncatingAssistantLoop {
   private context = new TruncatingContext();
   private processing = false;
 
@@ -199,7 +199,7 @@ class TruncatingAgentLoop {
   }
 }
 
-class BlockingAgentLoop {
+class BlockingAssistantLoop {
   private context = new MockContext();
   private processing = false;
   private block = true;
@@ -286,13 +286,13 @@ describe('EmbeddedClient', () => {
     shutdownCalled = false;
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => new MockAgentLoop(options) as any,
+      assistantFactory: (options) => new MockAssistantLoop(options) as any,
     });
     await client.initialize();
     client.disconnect();
     expect(shutdownCalled).toBe(true);
   });
-  test('uses default agent factory when none provided', () => {
+  test('uses default assistant factory when none provided', () => {
     const client = new EmbeddedClient(tempDir, { sessionId: 'sess-default' });
     expect(client.getSessionId()).toBe('sess-default');
   });
@@ -306,7 +306,7 @@ describe('EmbeddedClient', () => {
     const client = new EmbeddedClient(tempDir, {
       initialMessages,
       sessionId: 'sess',
-      agentFactory: (options) => new MockAgentLoop(options) as any,
+      assistantFactory: (options) => new MockAssistantLoop(options) as any,
     });
     await client.initialize();
 
@@ -318,7 +318,7 @@ describe('EmbeddedClient', () => {
   test('send updates messages and emits chunks', async () => {
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => new MockAgentLoop(options) as any,
+      assistantFactory: (options) => new MockAssistantLoop(options) as any,
     });
     const chunks: StreamChunk[] = [];
     client.onChunk((chunk) => chunks.push(chunk));
@@ -334,7 +334,7 @@ describe('EmbeddedClient', () => {
   test('retains full history even if context prunes', async () => {
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => new TruncatingAgentLoop(options) as any,
+      assistantFactory: (options) => new TruncatingAssistantLoop(options) as any,
     });
 
     await client.send('one');
@@ -347,7 +347,7 @@ describe('EmbeddedClient', () => {
   test('clearConversation resets messages', async () => {
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => new MockAgentLoop(options) as any,
+      assistantFactory: (options) => new MockAssistantLoop(options) as any,
     });
     await client.send('hello');
     expect(client.getMessages().length).toBeGreaterThan(0);
@@ -358,7 +358,7 @@ describe('EmbeddedClient', () => {
   test('proxies tools, skills, and commands', async () => {
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => new MockAgentLoop(options) as any,
+      assistantFactory: (options) => new MockAssistantLoop(options) as any,
     });
     expect((await client.getTools())[0].name).toBe('tool');
     expect((await client.getSkills())[0].name).toBe('skill');
@@ -368,7 +368,7 @@ describe('EmbeddedClient', () => {
   test('stop, disconnect, and token usage work', async () => {
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => new MockAgentLoop(options) as any,
+      assistantFactory: (options) => new MockAssistantLoop(options) as any,
     });
     await client.send('hello');
     expect(client.getTokenUsage().totalTokens).toBe(3);
@@ -385,7 +385,7 @@ describe('EmbeddedClient', () => {
   test('propagates errors to callbacks', async () => {
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => new MockAgentLoop(options) as any,
+      assistantFactory: (options) => new MockAssistantLoop(options) as any,
     });
     const errors: Error[] = [];
     client.onError((err) => errors.push(err));
@@ -399,7 +399,7 @@ describe('EmbeddedClient', () => {
   test('does not propagate errors when error chunk already emitted', async () => {
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => new MockAgentLoop(options) as any,
+      assistantFactory: (options) => new MockAssistantLoop(options) as any,
     });
     const errors: Error[] = [];
     const chunks: StreamChunk[] = [];
@@ -412,13 +412,13 @@ describe('EmbeddedClient', () => {
     expect(chunks.some((chunk) => chunk.type === 'error')).toBe(true);
   });
 
-  test('drains queued messages when agent finishes', async () => {
-    let agent: BlockingAgentLoop | null = null;
+  test('drains queued messages when assistant finishes', async () => {
+    let assistant: BlockingAssistantLoop | null = null;
     const client = new EmbeddedClient(tempDir, {
       sessionId: 'sess',
-      agentFactory: (options) => {
-        agent = new BlockingAgentLoop(options);
-        return agent as any;
+      assistantFactory: (options) => {
+        assistant = new BlockingAssistantLoop(options);
+        return assistant as any;
       },
     });
     await client.initialize();
@@ -429,7 +429,7 @@ describe('EmbeddedClient', () => {
     await client.send('second');
     expect(client.getQueueLength()).toBe(1);
 
-    agent?.release();
+    assistant?.release();
     await first;
 
     await new Promise((resolve) => setTimeout(resolve, 0));

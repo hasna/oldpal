@@ -37,8 +37,8 @@ const HOOK_EVENTS: HookEvent[] = [
   'PostToolUseFailure',
   'PermissionRequest',
   'Notification',
-  'SubagentStart',
-  'SubagentStop',
+  'SubassistantStart',
+  'SubassistantStop',
   'PreCompact',
   'Stop',
 ];
@@ -201,7 +201,7 @@ export function HooksPanel({
     switch (type) {
       case 'command': return 'cmd';
       case 'prompt': return 'llm';
-      case 'agent': return 'agt';
+      case 'assistant': return 'ast';
       default: return type.slice(0, 3);
     }
   };

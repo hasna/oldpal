@@ -66,7 +66,7 @@ const updateScheduleSchema = z.object({
   status: z.enum(['active', 'paused']).optional(),
   command: z.string().min(1).max(1000).optional(),
   description: z.string().max(500).optional(),
-  agentId: z.string().uuid().nullable().optional(),
+  assistantId: z.string().uuid().nullable().optional(),
   scheduleKind: z.enum(['once', 'cron', 'random', 'interval']).optional(),
   scheduleAt: z.string().datetime().nullable().optional(),
   scheduleCron: z.string().max(100).nullable().optional(),
@@ -89,7 +89,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { 
     const schedule = await db.query.schedules.findFirst({
       where: and(eq(schedules.id, id), eq(schedules.userId, request.user.userId)),
       with: {
-        agent: {
+        assistant: {
           columns: {
             id: true,
             name: true,
@@ -134,18 +134,18 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
       return errorResponse(new ForbiddenError('You do not own this schedule'));
     }
 
-    // Verify agent ownership if agentId is being changed
-    if (data.agentId !== undefined && data.agentId !== null) {
-      const agent = await db.query.assistants.findFirst({
-        where: eq(assistants.id, data.agentId),
+    // Verify assistant ownership if assistantId is being changed
+    if (data.assistantId !== undefined && data.assistantId !== null) {
+      const assistant = await db.query.assistants.findFirst({
+        where: eq(assistants.id, data.assistantId),
       });
 
-      if (!agent) {
-        return errorResponse(new NotFoundError('Agent not found'));
+      if (!assistant) {
+        return errorResponse(new NotFoundError('Assistant not found'));
       }
 
-      if (agent.userId !== request.user.userId) {
-        return errorResponse(new ForbiddenError('You do not own this agent'));
+      if (assistant.userId !== request.user.userId) {
+        return errorResponse(new ForbiddenError('You do not own this assistant'));
       }
     }
 
@@ -158,7 +158,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, { params }: 
     if (data.status !== undefined) updateData.status = data.status;
     if (data.command !== undefined) updateData.command = data.command;
     if (data.description !== undefined) updateData.description = data.description;
-    if (data.agentId !== undefined) updateData.agentId = data.agentId;
+    if (data.assistantId !== undefined) updateData.assistantId = data.assistantId;
     if (data.scheduleKind !== undefined) updateData.scheduleKind = data.scheduleKind;
     if (data.scheduleAt !== undefined) updateData.scheduleAt = data.scheduleAt ? new Date(data.scheduleAt) : null;
     if (data.scheduleCron !== undefined) updateData.scheduleCron = data.scheduleCron;

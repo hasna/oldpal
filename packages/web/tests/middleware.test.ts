@@ -115,7 +115,7 @@ describe('middleware', () => {
     });
 
     test('uses default limit (100KB) for unspecified routes', async () => {
-      const request = createRequest('/api/v1/agents', {
+      const request = createRequest('/api/v1/assistants', {
         method: 'POST',
         contentLength: 150 * 1024, // 150KB exceeds 100KB default
       });
@@ -154,7 +154,7 @@ describe('middleware', () => {
     });
 
     test('applies api rate limit to general API endpoints', async () => {
-      const request = createRequest('/api/v1/agents', { method: 'GET' });
+      const request = createRequest('/api/v1/assistants', { method: 'GET' });
       await middleware(request);
 
       expect(rateLimitCalls.length).toBe(1);
@@ -209,7 +209,7 @@ describe('middleware', () => {
 
   describe('request without content-length', () => {
     test('allows GET requests without content-length', async () => {
-      const request = createRequest('/api/v1/agents', { method: 'GET' });
+      const request = createRequest('/api/v1/assistants', { method: 'GET' });
       const response = await middleware(request);
 
       expect(response.status).not.toBe(413);

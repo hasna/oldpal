@@ -94,7 +94,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     mockSession = {
       id: 'session-123',
       userId: 'user-123',
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       createdAt: new Date(),
     };
     mockMessages = [
@@ -141,7 +141,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
       mockSession = {
         id: 'session-123',
         userId: 'different-user',
-        agentId: 'agent-1',
+        assistantId: 'assistant-1',
       };
       const [request, context] = createRequest('session-123');
 

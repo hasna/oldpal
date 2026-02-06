@@ -1,12 +1,12 @@
 /**
  * Secrets Types
- * Types for the agent secrets management system (API keys, tokens, passwords)
+ * Types for the assistant secrets management system (API keys, tokens, passwords)
  */
 
 /**
  * Secret scope - determines where the secret is accessible
  */
-export type SecretScope = 'global' | 'agent';
+export type SecretScope = 'global' | 'assistant';
 
 /**
  * Secret retrieval format
@@ -23,7 +23,7 @@ export interface Secret {
   value: string;
   /** Optional description */
   description?: string;
-  /** Scope: 'global' or 'agent' */
+  /** Scope: 'global' or 'assistant' */
   scope: SecretScope;
   /** Creation timestamp */
   createdAt: number;
@@ -39,7 +39,7 @@ export interface SecretListItem {
   name: string;
   /** Optional description */
   description?: string;
-  /** Scope: 'global' or 'agent' */
+  /** Scope: 'global' or 'assistant' */
   scope: SecretScope;
   /** Creation timestamp */
   createdAt: number;
@@ -79,6 +79,6 @@ export interface SetSecretInput {
   value: string;
   /** Optional description */
   description?: string;
-  /** Scope: 'global' or 'agent' (default: 'agent') */
+  /** Scope: 'global' or 'assistant' (default: 'assistant') */
   scope?: SecretScope;
 }

@@ -125,21 +125,21 @@ describe('GET /api/v1/sessions', () => {
         id: 'session-1',
         userId: 'user-123',
         label: 'Session 1',
-        agent: { id: 'agent-1', name: 'Agent 1', avatar: null },
+        assistant: { id: 'assistant-1', name: 'Assistant 1', avatar: null },
         updatedAt: new Date('2024-01-03'),
       },
       {
         id: 'session-2',
         userId: 'user-123',
         label: 'Session 2',
-        agent: { id: 'agent-2', name: 'Agent 2', avatar: null },
+        assistant: { id: 'assistant-2', name: 'Assistant 2', avatar: null },
         updatedAt: new Date('2024-01-02'),
       },
       {
         id: 'session-3',
         userId: 'user-123',
         label: 'Session 3',
-        agent: null,
+        assistant: null,
         updatedAt: new Date('2024-01-01'),
       },
     ];
@@ -179,14 +179,14 @@ describe('GET /api/v1/sessions', () => {
       expect(data.data.total).toBe(3);
     });
 
-    test('includes agent relation in response', async () => {
+    test('includes assistant relation in response', async () => {
       const request = createGetRequest();
 
       const response = await GET(request);
       const data = await response.json();
 
-      expect(data.data.items[0].agent).toBeDefined();
-      expect(data.data.items[0].agent.name).toBe('Agent 1');
+      expect(data.data.items[0].assistant).toBeDefined();
+      expect(data.data.items[0].assistant.name).toBe('Assistant 1');
     });
 
     test('returns empty list when no sessions', async () => {
@@ -293,7 +293,7 @@ describe('POST /api/v1/sessions', () => {
       const request = createPostRequest({
         label: 'My Session',
         cwd: '/home/user',
-        agentId: '550e8400-e29b-41d4-a716-446655440000',
+        assistantId: '550e8400-e29b-41d4-a716-446655440000',
         metadata: { key: 'value' },
       });
 
@@ -303,7 +303,7 @@ describe('POST /api/v1/sessions', () => {
       expect(response.status).toBe(201);
       expect(insertValuesData.label).toBe('My Session');
       expect(insertValuesData.cwd).toBe('/home/user');
-      expect(insertValuesData.agentId).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(insertValuesData.assistantId).toBe('550e8400-e29b-41d4-a716-446655440000');
       expect(insertValuesData.metadata).toEqual({ key: 'value' });
     });
 
@@ -339,9 +339,9 @@ describe('POST /api/v1/sessions', () => {
       expect(data.error.code).toBe('VALIDATION_ERROR');
     });
 
-    test('returns 422 for invalid agentId format', async () => {
+    test('returns 422 for invalid assistantId format', async () => {
       const request = createPostRequest({
-        agentId: 'not-a-uuid',
+        assistantId: 'not-a-uuid',
       });
 
       const response = await POST(request);

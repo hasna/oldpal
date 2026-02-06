@@ -17,8 +17,8 @@ assistants is a personal AI assistant that runs in the terminal, uses existing `
 
 ```
 packages/
-├── core/           # Platform-agnostic agent runtime
-│   ├── agent/      # Agent loop and context management
+├── core/           # Platform-agnostic assistant runtime
+│   ├── assistant/  # Assistant loop and context management
 │   ├── tools/      # Tool registry and built-in tools
 │   ├── skills/     # Skill loading and execution
 │   ├── hooks/      # Hook loading and execution

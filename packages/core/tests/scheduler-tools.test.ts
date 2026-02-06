@@ -12,7 +12,7 @@ const buildSchedule = (overrides?: Partial<ScheduledCommand>): ScheduledCommand 
   id: 'sched-1',
   createdAt: Date.now(),
   updatedAt: Date.now(),
-  createdBy: 'agent',
+  createdBy: 'assistant',
   command: 'cmd',
   status: 'active',
   schedule: { kind: 'once', at: new Date(Date.now() + 60000).toISOString() },

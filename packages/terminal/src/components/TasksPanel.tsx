@@ -484,7 +484,7 @@ export function TasksPanel({
                 value={newAssignee}
                 onChange={setNewAssignee}
                 onSubmit={handleCreateSubmit}
-                placeholder="agent name or leave empty"
+                placeholder="assistant name or leave empty"
               />
             ) : (
               <Text dimColor={!newAssignee}>{newAssignee || '(unassigned)'}</Text>

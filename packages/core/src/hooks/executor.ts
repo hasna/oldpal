@@ -10,22 +10,22 @@ function killSpawnedProcess(proc: { kill: () => void }): void {
   proc.kill();
 }
 
-type AgentRunner = (hook: HookHandler, input: HookInput, timeout: number) => Promise<string | null>;
+type AssistantRunner = (hook: HookHandler, input: HookInput, timeout: number) => Promise<string | null>;
 
 /**
  * Hook executor - runs hooks and collects results
  */
 export class HookExecutor {
   private llmClient?: LLMClient;
-  private agentRunner?: AgentRunner;
+  private assistantRunner?: AssistantRunner;
   private logger?: HookLogger;
 
   setLLMClient(client: LLMClient): void {
     this.llmClient = client;
   }
 
-  setAgentRunner(runner: AgentRunner): void {
-    this.agentRunner = runner;
+  setAssistantRunner(runner: AssistantRunner): void {
+    this.assistantRunner = runner;
   }
 
   setLogger(logger: HookLogger): void {
@@ -113,12 +113,12 @@ export class HookExecutor {
       case 'Notification':
         value = input.notification_type as string;
         break;
-      case 'SubagentStart':
-        // Match on task pattern for subagent hooks
+      case 'SubassistantStart':
+        // Match on task pattern for subassistant hooks
         value = input.task as string;
         break;
-      case 'SubagentStop':
-        // Match on status pattern for subagent stop hooks (completed, failed, timeout)
+      case 'SubassistantStop':
+        // Match on status pattern for subassistant stop hooks (completed, failed, timeout)
         value = input.status as string;
         break;
       case 'PreCompact':
@@ -159,8 +159,8 @@ export class HookExecutor {
         case 'prompt':
           result = await this.executePromptHook(hook, input, timeout);
           break;
-        case 'agent':
-          result = await this.executeAgentHook(hook, input, timeout);
+        case 'assistant':
+          result = await this.executeAssistantHook(hook, input, timeout);
           break;
         default:
           return null;
@@ -302,9 +302,13 @@ export class HookExecutor {
       } | null;
       if (stdin?.getWriter) {
         const writer = stdin.getWriter();
-        void Promise.resolve(writer.write(inputData)).then(() => writer.close());
+        void Promise.resolve(writer.write(inputData)).then(() => writer.close()).catch((err) => {
+          console.error(`[Hook] Async hook stdin error (${hook.id || hook.command}):`, err);
+        });
       } else if (stdin?.write) {
-        void Promise.resolve(stdin.write(inputData)).then(() => stdin.end?.());
+        void Promise.resolve(stdin.write(inputData)).then(() => stdin.end?.()).catch((err) => {
+          console.error(`[Hook] Async hook stdin error (${hook.id || hook.command}):`, err);
+        });
       }
 
       // Set up cleanup when process exits
@@ -360,17 +364,17 @@ Respond with JSON only: {"allow": boolean, "reason": string}`;
   }
 
   /**
-   * Execute an agent hook (multi-turn with tools)
+   * Execute an assistant hook (multi-turn with tools)
    */
-  private async executeAgentHook(
+  private async executeAssistantHook(
     hook: HookHandler,
     input: HookInput,
     timeout: number
   ): Promise<HookOutput | null> {
-    if (!hook.prompt || !this.agentRunner) return null;
+    if (!hook.prompt || !this.assistantRunner) return null;
 
     try {
-      const response = await this.agentRunner(hook, input, timeout);
+      const response = await this.assistantRunner(hook, input, timeout);
       if (!response) return null;
       const decision = this.parseAllowDeny(response);
       if (!decision) return null;
@@ -379,7 +383,7 @@ Respond with JSON only: {"allow": boolean, "reason": string}`;
         stopReason: decision.allow ? undefined : decision.reason,
       };
     } catch (error) {
-      console.error('Agent hook error:', error);
+      console.error('Assistant hook error:', error);
       return null;
     }
   }

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db';
-import { users, assistants, agentMessages } from '@/db/schema';
+import { users, assistants, assistantMessages } from '@/db/schema';
 import { withAuth, type AuthenticatedRequest } from '@/lib/auth/middleware';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { NotFoundError, ForbiddenError, BadRequestError, validateUUID } from '@/lib/api/errors';
@@ -143,12 +143,12 @@ export const DELETE = withAuth(async (request: AuthenticatedRequest, context?: {
       });
       const assistantIds = userAssistants.map((a: { id: string }) => a.id);
 
-      // 2. Delete agent_messages where fromAgentId or toAgentId belongs to user's assistants
+      // 2. Delete assistant_messages where fromAssistantId or toAssistantId belongs to user's assistants
       // (these would be orphaned with SET NULL, so clean them up properly)
       if (assistantIds.length > 0) {
         await tx
-          .delete(agentMessages)
-          .where(or(inArray(agentMessages.fromAgentId, assistantIds), inArray(agentMessages.toAgentId, assistantIds)));
+          .delete(assistantMessages)
+          .where(or(inArray(assistantMessages.fromAssistantId, assistantIds), inArray(assistantMessages.toAssistantId, assistantIds)));
       }
 
       // 3. Delete the user - cascades will handle:

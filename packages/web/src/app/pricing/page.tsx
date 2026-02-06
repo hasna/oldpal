@@ -21,7 +21,7 @@ interface Plan {
   displayName: string;
   stripePriceId: string | null;
   priceMonthly: number;
-  maxAgents: number;
+  maxAssistants: number;
   maxMessagesPerDay: number;
   maxSessions: number;
   features: string[];
@@ -152,8 +152,8 @@ export default function PricingPage() {
                   {/* Limits */}
                   <div className="space-y-3 mb-6 pb-6 border-b border-border">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Agents</span>
-                      <span className="font-medium">{formatLimit(plan.maxAgents)}</span>
+                      <span className="text-muted-foreground">Assistants</span>
+                      <span className="font-medium">{formatLimit(plan.maxAssistants)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Messages/day</span>

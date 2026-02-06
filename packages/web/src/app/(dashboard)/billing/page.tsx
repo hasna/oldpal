@@ -39,7 +39,7 @@ interface Plan {
   name: string;
   displayName: string;
   priceMonthly: number;
-  maxAgents: number;
+  maxAssistants: number;
   maxMessagesPerDay: number;
   maxSessions: number;
   features: string[];
@@ -73,7 +73,7 @@ interface BillingData {
 }
 
 interface UsageData {
-  agents: number;
+  assistants: number;
   sessions: number;
   messagestoday: number;
 }
@@ -208,9 +208,9 @@ export default function BillingPage() {
 
   // Compute usage display data from real API data
   const usageDisplay = {
-    agents: {
-      current: usageData?.agents ?? 0,
-      limit: billingData?.plan?.maxAgents ?? 5,
+    assistants: {
+      current: usageData?.assistants ?? 0,
+      limit: billingData?.plan?.maxAssistants ?? 5,
     },
     messages: {
       current: usageData?.messagestoday ?? 0,
@@ -388,16 +388,16 @@ export default function BillingPage() {
             <div className="space-y-6">
               <div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-muted-foreground">Agents</span>
+                  <span className="text-muted-foreground">Assistants</span>
                   <span className="font-medium">
-                    {usageDisplay.agents.current} / {formatLimit(usageDisplay.agents.limit)}
+                    {usageDisplay.assistants.current} / {formatLimit(usageDisplay.assistants.limit)}
                   </span>
                 </div>
                 <Progress
                   value={
-                    usageDisplay.agents.limit === -1
+                    usageDisplay.assistants.limit === -1
                       ? 0
-                      : (usageDisplay.agents.current / usageDisplay.agents.limit) * 100
+                      : (usageDisplay.assistants.current / usageDisplay.assistants.limit) * 100
                   }
                   className="h-2"
                 />
@@ -530,7 +530,7 @@ export default function BillingPage() {
                   Unlock more with a paid plan
                 </h3>
                 <p className="text-muted-foreground mb-4">
-                  Get more agents, messages, and premium features to supercharge your workflow.
+                  Get more assistants, messages, and premium features to supercharge your workflow.
                 </p>
                 <Button onClick={() => router.push('/pricing')}>
                   View Plans

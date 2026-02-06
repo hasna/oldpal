@@ -141,17 +141,17 @@ export class S3InboxClient {
   }
 
   /**
-   * Get the full prefix path for an agent
+   * Get the full prefix path for an assistant
    */
-  getAgentPrefix(agentId: string): string {
-    return `${this.prefix}${agentId}/`;
+  getAssistantPrefix(assistantId: string): string {
+    return `${this.prefix}${assistantId}/`;
   }
 
   /**
    * Extract email ID from S3 key
    */
   extractEmailId(key: string): string {
-    // Key format: inbox/{agent-id}/{email-id}
+    // Key format: inbox/{assistant-id}/{email-id}
     const parts = key.split('/');
     return parts[parts.length - 1] || key;
   }

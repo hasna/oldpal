@@ -185,14 +185,14 @@ assistants -p "Continue from where we left off" --resume abc123
 | `/voice` | Toggle voice mode |
 | `/say <text>` | Speak text aloud |
 | `/listen` | Listen for voice input |
-| `/identity` | Manage agent identity |
+| `/identity` | Manage assistant identity |
 | `/whoami` | Show current identity |
 | `/assistant` | Configure assistant settings |
 | `/inbox` | Check email inbox |
 | `/wallet` | Manage crypto wallet |
 | `/secrets` | Manage secrets |
 | `/jobs` | View background jobs |
-| `/messages` | Agent-to-agent messages |
+| `/messages` | Assistant-to-assistant messages |
 | `/verification` | Manage verification sessions |
 | `/memory` | View memory usage |
 | `/rest` | Enter rest mode |
@@ -290,7 +290,7 @@ Use with `/skill code-review src/auth.ts` or `$code-review src/auth.ts`.
 
 ## Hooks
 
-Hooks intercept agent behavior at key lifecycle points. Use them to validate inputs, block dangerous actions, log activity, or inject context.
+Hooks intercept assistant behavior at key lifecycle points. Use them to validate inputs, block dangerous actions, log activity, or inject context.
 
 ### Managing Hooks
 
@@ -318,11 +318,11 @@ Or manage via commands:
 | **UserPromptSubmit** | User sends message |
 | **SessionStart** | Session begins |
 | **SessionEnd** | Session ends |
-| **SubagentStart** | Subagent spawning |
-| **SubagentStop** | Subagent completes |
+| **SubassistantStart** | Subassistant spawning |
+| **SubassistantStop** | Subassistant completes |
 | **PreCompact** | Before context compaction |
 | **Notification** | Notification sent |
-| **Stop** | Agent stopping |
+| **Stop** | Assistant stopping |
 
 ### Configuration
 
@@ -367,7 +367,7 @@ Press `a` in the hooks panel to launch the interactive wizard:
 
 1. Select event type (PreToolUse, PostToolUse, etc.)
 2. Enter matcher pattern (regex or `*` for all)
-3. Choose hook type (command, prompt, agent)
+3. Choose hook type (command, prompt, assistant)
 4. Enter command or prompt
 5. Set timeout and async options
 6. Choose save location (user, project, local)

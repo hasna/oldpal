@@ -8,7 +8,7 @@
 
 import { generateId } from '@hasna/assistants-shared';
 import type { SwarmTask, SwarmTaskStatus, SwarmRole } from './types';
-import type { SubagentResult } from '../agent/subagent-manager';
+import type { SubassistantResult } from '../agent/subagent-manager';
 
 /**
  * Task definition for graph construction
@@ -31,7 +31,7 @@ export interface TaskDefinition {
 export interface TaskExecutionResult {
   taskId: string;
   success: boolean;
-  result?: SubagentResult;
+  result?: SubassistantResult;
   error?: string;
   retryCount: number;
   durationMs: number;
@@ -215,7 +215,7 @@ export class TaskGraph {
   /**
    * Set task result
    */
-  setTaskResult(taskId: string, result: SubagentResult): void {
+  setTaskResult(taskId: string, result: SubassistantResult): void {
     const task = this.tasks.get(taskId);
     if (task) {
       task.result = result;
@@ -418,7 +418,7 @@ export class TaskGraphScheduler {
    * Execute all tasks in the graph
    */
   async execute(
-    executor: (task: SwarmTask) => Promise<SubagentResult>
+    executor: (task: SwarmTask) => Promise<SubassistantResult>
   ): Promise<Map<string, TaskExecutionResult>> {
     const results = new Map<string, TaskExecutionResult>();
     this.stopped = false;
@@ -494,7 +494,7 @@ export class TaskGraphScheduler {
    */
   private async executeTask(
     task: SwarmTask,
-    executor: (task: SwarmTask) => Promise<SubagentResult>
+    executor: (task: SwarmTask) => Promise<SubassistantResult>
   ): Promise<TaskExecutionResult> {
     const maxRetries = (task.metadata?.maxRetries as number) ?? this.options.maxRetries;
     let retryCount = 0;

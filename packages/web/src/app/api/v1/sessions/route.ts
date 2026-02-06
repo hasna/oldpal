@@ -11,7 +11,7 @@ import { eq, desc, asc, count, and, or, ilike, gte, lte, inArray, sql } from 'dr
 const createSessionSchema = z.object({
   label: z.string().max(255).optional(),
   cwd: z.string().optional(),
-  agentId: z.string().uuid().optional(),
+  assistantId: z.string().uuid().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -28,7 +28,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
 
     // Search and filter parameters
     const search = searchParams.get('search')?.trim();
-    const agentId = searchParams.get('agentId');
+    const assistantId = searchParams.get('assistantId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
@@ -44,9 +44,9 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     // Build filter conditions
     const conditions = [eq(sessions.userId, request.user.userId)];
 
-    // Filter by agent
-    if (agentId) {
-      conditions.push(eq(sessions.agentId, agentId));
+    // Filter by assistant
+    if (assistantId) {
+      conditions.push(eq(sessions.assistantId, assistantId));
     }
 
     // Filter by date range
@@ -123,7 +123,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
         limit,
         offset,
         with: {
-          agent: {
+          assistant: {
             columns: {
               id: true,
               name: true,
@@ -147,18 +147,18 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
     const body = await request.json();
     const data = createSessionSchema.parse(body);
 
-    // Verify agent ownership if agentId is provided
-    if (data.agentId) {
-      const agent = await db.query.assistants.findFirst({
-        where: eq(assistants.id, data.agentId),
+    // Verify assistant ownership if assistantId is provided
+    if (data.assistantId) {
+      const assistant = await db.query.assistants.findFirst({
+        where: eq(assistants.id, data.assistantId),
       });
 
-      if (!agent) {
-        return errorResponse(new NotFoundError('Agent not found'));
+      if (!assistant) {
+        return errorResponse(new NotFoundError('Assistant not found'));
       }
 
-      if (agent.userId !== request.user.userId) {
-        return errorResponse(new ForbiddenError('You do not own this agent'));
+      if (assistant.userId !== request.user.userId) {
+        return errorResponse(new ForbiddenError('You do not own this assistant'));
       }
     }
 
@@ -168,7 +168,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
         userId: request.user.userId,
         label: data.label,
         cwd: data.cwd,
-        agentId: data.agentId,
+        assistantId: data.assistantId,
         metadata: data.metadata,
       })
       .returning();

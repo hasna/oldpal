@@ -10,7 +10,7 @@ export const sessions = pgTable('sessions', {
     .notNull(),
   label: varchar('label', { length: 255 }),
   cwd: text('cwd'),
-  agentId: uuid('agent_id').references(() => assistants.id, { onDelete: 'set null' }),
+  assistantId: uuid('agent_id').references(() => assistants.id, { onDelete: 'set null' }),
   metadata: jsonb('metadata').$type<SessionMetadata>(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -21,8 +21,8 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
     fields: [sessions.userId],
     references: [users.id],
   }),
-  agent: one(assistants, {
-    fields: [sessions.agentId],
+  assistant: one(assistants, {
+    fields: [sessions.assistantId],
     references: [assistants.id],
   }),
 }));

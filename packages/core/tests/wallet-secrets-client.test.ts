@@ -101,8 +101,8 @@ describe('Wallet SecretsClient', () => {
       if (command.constructor.name === 'ListSecretsCommand') {
         return {
           SecretList: [
-            { Name: 'assistants/wallet/agent-1/card-1' },
-            { Name: 'assistants/wallet/agent-1/bad' },
+            { Name: 'assistants/wallet/assistant-1/card-1' },
+            { Name: 'assistants/wallet/assistant-1/bad' },
           ],
         };
       }
@@ -116,7 +116,7 @@ describe('Wallet SecretsClient', () => {
     };
 
     const client = new SecretsClient({ region: 'us-east-1' });
-    const cards = await client.listCards('agent-1');
+    const cards = await client.listCards('assistant-1');
     expect(cards).toEqual([
       {
         id: 'card-1',
@@ -138,13 +138,13 @@ describe('Wallet SecretsClient', () => {
     };
 
     const client = new SecretsClient({ region: 'us-east-1' });
-    const card = await client.getCard('agent-1', 'card-1');
+    const card = await client.getCard('assistant-1', 'card-1');
     expect(card?.id).toBe('card-1');
 
     sendImpl = async () => {
       throw new ResourceNotFoundException('missing');
     };
-    const missing = await client.getCard('agent-1', 'missing');
+    const missing = await client.getCard('assistant-1', 'missing');
     expect(missing).toBeNull();
   });
 
@@ -161,7 +161,7 @@ describe('Wallet SecretsClient', () => {
     };
 
     const client = new SecretsClient({ region: 'us-east-1' });
-    await client.createCard('agent-1', buildCard());
+    await client.createCard('assistant-1', buildCard());
     expect(seen).toEqual(['CreateSecretCommand', 'UpdateSecretCommand']);
   });
 
@@ -169,13 +169,13 @@ describe('Wallet SecretsClient', () => {
     sendImpl = async () => ({}) as any;
     const client = new SecretsClient({ region: 'us-east-1' });
 
-    await client.updateCard('agent-1', buildCard({ id: 'card-2' }));
-    await client.deleteCard('agent-1', 'card-2');
+    await client.updateCard('assistant-1', buildCard({ id: 'card-2' }));
+    await client.deleteCard('assistant-1', 'card-2');
 
     const updateCommand = sentCommands.find((command) => command.constructor.name === 'UpdateSecretCommand');
     const deleteCommand = sentCommands.find((command) => command.constructor.name === 'DeleteSecretCommand');
 
-    expect(updateCommand.input.SecretId).toContain('assistants/wallet/agent-1/card-2');
+    expect(updateCommand.input.SecretId).toContain('assistants/wallet/assistant-1/card-2');
     expect(deleteCommand.input.RecoveryWindowInDays).toBe(30);
   });
 

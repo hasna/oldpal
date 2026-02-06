@@ -31,9 +31,9 @@ describe('sessions schema', () => {
     expect(mod.sessions.cwd).toBeDefined();
   });
 
-  test('sessions has agentId column', async () => {
+  test('sessions has assistantId column', async () => {
     const mod = await import('../src/db/schema/sessions');
-    expect(mod.sessions.agentId).toBeDefined();
+    expect(mod.sessions.assistantId).toBeDefined();
   });
 
   test('sessions has metadata column', async () => {

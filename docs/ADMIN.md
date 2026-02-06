@@ -37,7 +37,7 @@ The users table includes these admin-relevant fields:
 
 Admins can perform the following actions on users:
 
-1. **View Details** - See full user profile with session/agent counts
+1. **View Details** - See full user profile with session/assistant counts
 2. **Edit User** - Update name, email, role, and suspension status
 3. **Suspend User** - Disable login with a reason
 4. **Activate User** - Re-enable a suspended user
@@ -192,7 +192,7 @@ GET /api/v1/admin/users/:id
     "updatedAt": "2024-01-15T10:00:00.000Z",
     "_counts": {
       "sessions": 5,
-      "agents": 2
+      "assistants": 2
     }
   }
 }

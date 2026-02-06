@@ -44,7 +44,7 @@ mock.module('@/lib/auth/middleware', () => ({
   },
 }));
 
-// Mock agent pool
+// Mock assistant pool
 mock.module('@/lib/server/agent-pool', () => ({
   stopSession: async (sessionId: string) => {
     stopSessionCalled = true;
@@ -86,7 +86,7 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
     mockSession = {
       id: 'session-123',
       userId: 'user-123',
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       createdAt: new Date(),
     };
     stopSessionCalled = false;
@@ -130,7 +130,7 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
       mockSession = {
         id: 'session-123',
         userId: 'different-user',
-        agentId: 'agent-1',
+        assistantId: 'assistant-1',
       };
       const [request, context] = createRequest('session-123');
 

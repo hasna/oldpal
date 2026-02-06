@@ -707,7 +707,7 @@ export class FilesystemTools {
       const buffer = await file.arrayBuffer();
       const base64Data = Buffer.from(buffer).toString('base64');
 
-      // Return a special format that the agent loop will recognize
+      // Return a special format that the assistant loop will recognize
       // and convert to a document attachment
       return JSON.stringify({
         __pdf_attachment__: true,

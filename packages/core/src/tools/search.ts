@@ -244,8 +244,8 @@ function inferToolMetadata(tool: Tool): ToolMetadata {
   // Categorize by name prefix patterns
   if (name.startsWith('memory_')) {
     category = 'memory';
-  } else if (name.startsWith('agent_') || name === 'agent_spawn' || name === 'agent_list') {
-    category = 'agents';
+  } else if (name.startsWith('assistant_') || name === 'assistant_spawn' || name === 'assistant_list') {
+    category = 'assistants';
   } else if (name.startsWith('task') || name.startsWith('tasks_')) {
     category = 'tasks';
   } else if (name.startsWith('session_')) {
@@ -328,7 +328,7 @@ export const toolsSearchTool: Tool = {
       },
       category: {
         type: 'string',
-        description: 'Filter by category (e.g., "memory", "filesystem", "web", "agents")',
+        description: 'Filter by category (e.g., "memory", "filesystem", "web", "assistants")',
       },
       tags: {
         type: 'array',

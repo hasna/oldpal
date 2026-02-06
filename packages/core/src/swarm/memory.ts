@@ -1,8 +1,8 @@
 /**
  * Swarm Memory
  *
- * Shared memory store for swarm agents. Provides a knowledge base that
- * agents can read from and write to, enabling collaboration and context sharing.
+ * Shared memory store for swarm assistants. Provides a knowledge base that
+ * assistants can read from and write to, enabling collaboration and context sharing.
  */
 
 import { generateId } from '@hasna/assistants-shared';
@@ -30,8 +30,8 @@ export interface SwarmMemoryEntry {
   category: SwarmMemoryCategory;
   /** Entry content */
   content: string;
-  /** Source agent ID */
-  sourceAgentId?: string;
+  /** Source assistant ID */
+  sourceAssistantId?: string;
   /** Source task ID */
   sourceTaskId?: string;
   /** Tags for search */
@@ -58,8 +58,8 @@ export interface SwarmMemoryQuery {
   tags?: string[];
   /** Text search in content */
   search?: string;
-  /** Filter by source agent */
-  sourceAgentId?: string;
+  /** Filter by source assistant */
+  sourceAssistantId?: string;
   /** Filter by source task */
   sourceTaskId?: string;
   /** Minimum relevance score */
@@ -111,7 +111,7 @@ export class SwarmMemory {
   add(params: {
     category: SwarmMemoryCategory;
     content: string;
-    sourceAgentId?: string;
+    sourceAssistantId?: string;
     sourceTaskId?: string;
     tags?: string[];
     relevance?: number;
@@ -127,7 +127,7 @@ export class SwarmMemory {
       id: generateId(),
       category: params.category,
       content: params.content,
-      sourceAgentId: params.sourceAgentId,
+      sourceAssistantId: params.sourceAssistantId,
       sourceTaskId: params.sourceTaskId,
       tags: params.tags || [],
       relevance: params.relevance ?? 0.5,
@@ -203,9 +203,9 @@ export class SwarmMemory {
       );
     }
 
-    // Filter by source agent
-    if (query.sourceAgentId) {
-      results = results.filter(e => e.sourceAgentId === query.sourceAgentId);
+    // Filter by source assistant
+    if (query.sourceAssistantId) {
+      results = results.filter(e => e.sourceAssistantId === query.sourceAssistantId);
     }
 
     // Filter by source task
@@ -304,7 +304,7 @@ export class SwarmMemory {
   }
 
   /**
-   * Build context string for agent injection
+   * Build context string for assistant injection
    */
   buildContextInjection(options?: {
     categories?: SwarmMemoryCategory[];
@@ -381,7 +381,7 @@ export class SwarmMemory {
 }
 
 /**
- * Create memory tools for swarm agents
+ * Create memory tools for swarm assistants
  */
 export function createSwarmMemoryTools(memory: SwarmMemory): {
   remember: (params: { category: SwarmMemoryCategory; content: string; tags?: string[] }) => string;

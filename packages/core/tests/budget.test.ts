@@ -6,7 +6,7 @@ import {
   BudgetTracker,
   DEFAULT_BUDGET_CONFIG,
   DEFAULT_SESSION_LIMITS,
-  DEFAULT_AGENT_LIMITS,
+  DEFAULT_ASSISTANT_LIMITS,
   DEFAULT_SWARM_LIMITS,
   WARNING_THRESHOLD,
 } from '../src/budget';
@@ -85,18 +85,18 @@ describe('BudgetTracker', () => {
       expect(usage.llmCalls).toBe(2);
     });
 
-    test('tracks agent-specific usage', () => {
+    test('tracks assistant-specific usage', () => {
       const tracker = new BudgetTracker('test-session');
       tracker.recordUsage({
         inputTokens: 1000,
         outputTokens: 500,
         totalTokens: 1500,
         llmCalls: 1,
-      }, 'agent', 'agent-1');
+      }, 'assistant', 'assistant-1');
 
-      const agentUsage = tracker.getUsage('agent', 'agent-1');
-      expect(agentUsage.inputTokens).toBe(1000);
-      expect(agentUsage.llmCalls).toBe(1);
+      const assistantUsage = tracker.getUsage('assistant', 'assistant-1');
+      expect(assistantUsage.inputTokens).toBe(1000);
+      expect(assistantUsage.llmCalls).toBe(1);
 
       // Session usage should also be updated
       const sessionUsage = tracker.getUsage('session');
@@ -202,16 +202,16 @@ describe('BudgetTracker', () => {
       expect(usage.llmCalls).toBe(0);
     });
 
-    test('resets agent-specific usage', () => {
+    test('resets assistant-specific usage', () => {
       const tracker = new BudgetTracker('test-session');
       tracker.recordUsage({
         inputTokens: 1000,
         llmCalls: 1,
-      }, 'agent', 'agent-1');
+      }, 'assistant', 'assistant-1');
 
-      tracker.resetUsage('agent', 'agent-1');
+      tracker.resetUsage('assistant', 'assistant-1');
 
-      const usage = tracker.getUsage('agent', 'agent-1');
+      const usage = tracker.getUsage('assistant', 'assistant-1');
       expect(usage.inputTokens).toBe(0);
     });
 
@@ -220,7 +220,7 @@ describe('BudgetTracker', () => {
       tracker.recordLlmCall(1000, 500, 100);
       tracker.recordUsage({
         inputTokens: 500,
-      }, 'agent', 'agent-1');
+      }, 'assistant', 'assistant-1');
       tracker.recordUsage({
         inputTokens: 2000,
       }, 'swarm');
@@ -229,7 +229,7 @@ describe('BudgetTracker', () => {
 
       expect(tracker.getUsage('session').inputTokens).toBe(0);
       expect(tracker.getUsage('swarm').inputTokens).toBe(0);
-      expect(tracker.getAgentUsages().size).toBe(0);
+      expect(tracker.getAssistantUsages().size).toBe(0);
     });
   });
 
@@ -248,13 +248,13 @@ describe('BudgetTracker', () => {
       expect(summary.anyExceeded).toBe(false);
     });
 
-    test('counts agent usages', () => {
+    test('counts assistant usages', () => {
       const tracker = new BudgetTracker('test-session');
-      tracker.recordUsage({ inputTokens: 100 }, 'agent', 'agent-1');
-      tracker.recordUsage({ inputTokens: 200 }, 'agent', 'agent-2');
+      tracker.recordUsage({ inputTokens: 100 }, 'assistant', 'assistant-1');
+      tracker.recordUsage({ inputTokens: 200 }, 'assistant', 'assistant-2');
 
       const summary = tracker.getSummary();
-      expect(summary.agentCount).toBe(2);
+      expect(summary.assistantCount).toBe(2);
     });
   });
 
@@ -335,7 +335,7 @@ describe('Default configs', () => {
   test('DEFAULT_BUDGET_CONFIG has expected structure', () => {
     expect(DEFAULT_BUDGET_CONFIG.enabled).toBe(false);
     expect(DEFAULT_BUDGET_CONFIG.session).toBeDefined();
-    expect(DEFAULT_BUDGET_CONFIG.agent).toBeDefined();
+    expect(DEFAULT_BUDGET_CONFIG.assistant).toBeDefined();
     expect(DEFAULT_BUDGET_CONFIG.swarm).toBeDefined();
     expect(DEFAULT_BUDGET_CONFIG.onExceeded).toBe('warn');
   });
@@ -346,9 +346,9 @@ describe('Default configs', () => {
     expect(DEFAULT_SESSION_LIMITS.maxToolCalls).toBe(1000);
   });
 
-  test('DEFAULT_AGENT_LIMITS is more restrictive than session', () => {
-    expect(DEFAULT_AGENT_LIMITS.maxTotalTokens).toBeLessThan(DEFAULT_SESSION_LIMITS.maxTotalTokens!);
-    expect(DEFAULT_AGENT_LIMITS.maxLlmCalls).toBeLessThan(DEFAULT_SESSION_LIMITS.maxLlmCalls!);
+  test('DEFAULT_ASSISTANT_LIMITS is more restrictive than session', () => {
+    expect(DEFAULT_ASSISTANT_LIMITS.maxTotalTokens).toBeLessThan(DEFAULT_SESSION_LIMITS.maxTotalTokens!);
+    expect(DEFAULT_ASSISTANT_LIMITS.maxLlmCalls).toBeLessThan(DEFAULT_SESSION_LIMITS.maxLlmCalls!);
   });
 
   test('WARNING_THRESHOLD is at 80%', () => {

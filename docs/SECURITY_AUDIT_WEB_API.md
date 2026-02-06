@@ -33,7 +33,7 @@ The web API has a solid security foundation with proper JWT authentication, susp
 | Admin User Billing | YES | Protected (60/min) |
 | Sessions | NO | Add API preset rate limiting |
 | Messages | NO | Add API preset rate limiting |
-| Agents | NO | Add API preset rate limiting |
+| Assistants | NO | Add API preset rate limiting |
 
 ### Input Validation
 
@@ -64,7 +64,7 @@ The web API has a solid security foundation with proper JWT authentication, susp
 - `/api/v1/admin/system` - 120/min (Relaxed preset)
 
 **Still needed:** Add rate limiting to remaining user-facing endpoints:
-- Sessions/Agents/Messages: `RateLimitPresets.relaxed` (120/min)
+- Sessions/Assistants/Messages: `RateLimitPresets.relaxed` (120/min)
 - Billing webhooks: Already has Stripe signature verification
 
 ### Priority 2: Add CORS Configuration
@@ -128,4 +128,4 @@ packages/web/src/app/api/v1/admin/system/route.ts - System health
 
 ## Conclusion
 
-The security posture is good with proper auth patterns established. Rate limiting has been added to all admin API endpoints. Remaining endpoints (sessions, messages, agents) should also receive rate limiting in a follow-up. No critical vulnerabilities found.
+The security posture is good with proper auth patterns established. Rate limiting has been added to all admin API endpoints. Remaining endpoints (sessions, messages, assistants) should also receive rate limiting in a follow-up. No critical vulnerabilities found.

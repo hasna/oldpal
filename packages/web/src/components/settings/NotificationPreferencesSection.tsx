@@ -232,7 +232,7 @@ export function NotificationPreferencesSection() {
             <NotificationToggle
               id="messageReceived"
               label="New messages"
-              description="When you receive a new message from an agent"
+              description="When you receive a new message from an assistant"
               checked={preferences.messageReceived}
               onCheckedChange={(v) => updatePreference('messageReceived', v)}
               disabled={updatingField === 'messageReceived'}

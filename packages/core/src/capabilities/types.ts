@@ -1,7 +1,7 @@
 /**
- * Agent Capability Model Types
+ * Assistant Capability Model Types
  *
- * Defines the comprehensive capability schema for agents, including
+ * Defines the comprehensive capability schema for assistants, including
  * orchestration rights, tool access, budget limits, and approval policies.
  */
 
@@ -10,15 +10,15 @@ import type { BudgetLimits } from '@hasna/assistants-shared';
 /**
  * Capability scope levels (for inheritance)
  */
-export type CapabilityScope = 'system' | 'organization' | 'identity' | 'assistant' | 'session' | 'agent';
+export type CapabilityScope = 'system' | 'organization' | 'identity' | 'assistant' | 'session' | 'instance';
 
 /**
  * Orchestration capability level
  */
 export type OrchestrationLevel =
-  | 'none'        // Cannot spawn any subagents
-  | 'limited'     // Can spawn limited subagents
-  | 'standard'    // Can spawn subagents normally
+  | 'none'        // Cannot spawn any subassistants
+  | 'limited'     // Can spawn limited subassistants
+  | 'standard'    // Can spawn subassistants normally
   | 'full'        // Can orchestrate swarms
   | 'coordinator'; // Full swarm coordinator capabilities
 
@@ -87,12 +87,12 @@ export interface ModelCapability {
 export interface OrchestrationCapabilities {
   /** Orchestration level */
   level: OrchestrationLevel;
-  /** Can spawn subagents */
-  canSpawnSubagents: boolean;
-  /** Maximum concurrent subagents */
-  maxConcurrentSubagents: number;
-  /** Maximum subagent depth */
-  maxSubagentDepth: number;
+  /** Can spawn subassistants */
+  canSpawnSubassistants: boolean;
+  /** Maximum concurrent subassistants */
+  maxConcurrentSubassistants: number;
+  /** Maximum subassistant depth */
+  maxSubassistantDepth: number;
   /** Can coordinate swarms */
   canCoordinateSwarms: boolean;
   /** Maximum swarm size */
@@ -107,12 +107,12 @@ export interface OrchestrationCapabilities {
  * Budget capabilities
  */
 export interface BudgetCapabilities {
-  /** Budget limits for this agent */
+  /** Budget limits for this assistant */
   limits: BudgetLimits;
   /** Can override parent budget */
   canOverrideBudget: boolean;
-  /** Maximum budget allocation to subagents */
-  maxSubagentBudget?: Partial<BudgetLimits>;
+  /** Maximum budget allocation to subassistants */
+  maxSubassistantBudget?: Partial<BudgetLimits>;
   /** Share budget with children */
   sharedBudget: boolean;
 }
@@ -137,11 +137,11 @@ export interface ApprovalPolicy {
  * Communication capabilities
  */
 export interface CommunicationCapabilities {
-  /** Can send messages to other agents */
+  /** Can send messages to other assistants */
   canSendMessages: boolean;
   /** Can receive messages */
   canReceiveMessages: boolean;
-  /** Can broadcast to multiple agents */
+  /** Can broadcast to multiple assistants */
   canBroadcast: boolean;
   /** Allowed recipient patterns */
   allowedRecipients?: string[];
@@ -155,7 +155,7 @@ export interface CommunicationCapabilities {
 export interface MemoryCapabilities {
   /** Can access global memory */
   canAccessGlobalMemory: boolean;
-  /** Memory scopes this agent can access */
+  /** Memory scopes this assistant can access */
   allowedMemoryScopes: string[];
   /** Can write to memory */
   canWriteMemory: boolean;
@@ -166,7 +166,7 @@ export interface MemoryCapabilities {
 /**
  * Full capability definition
  */
-export interface AgentCapabilitySet {
+export interface AssistantCapabilitySet {
   /** Unique capability set ID */
   id?: string;
   /** Human-readable name */
@@ -220,23 +220,23 @@ export interface AgentCapabilitySet {
  */
 export interface CapabilityChain {
   /** System-level capabilities (highest priority) */
-  system?: Partial<AgentCapabilitySet>;
+  system?: Partial<AssistantCapabilitySet>;
   /** Organization-level capabilities */
-  organization?: Partial<AgentCapabilitySet>;
+  organization?: Partial<AssistantCapabilitySet>;
   /** Identity-level capabilities */
-  identity?: Partial<AgentCapabilitySet>;
+  identity?: Partial<AssistantCapabilitySet>;
   /** Assistant-level capabilities */
-  assistant?: Partial<AgentCapabilitySet>;
+  assistant?: Partial<AssistantCapabilitySet>;
   /** Session-level capabilities */
-  session?: Partial<AgentCapabilitySet>;
-  /** Agent-level capabilities (lowest priority) */
-  agent?: Partial<AgentCapabilitySet>;
+  session?: Partial<AssistantCapabilitySet>;
+  /** Instance-level capabilities (lowest priority) */
+  instance?: Partial<AssistantCapabilitySet>;
 }
 
 /**
  * Resolved/merged capability set
  */
-export interface ResolvedCapabilities extends AgentCapabilitySet {
+export interface ResolvedCapabilities extends AssistantCapabilitySet {
   /** Sources of each capability (for debugging) */
   sources: Record<string, CapabilityScope>;
   /** When capabilities were resolved */
@@ -267,45 +267,45 @@ export interface CapabilityCheckResult {
 export const ORCHESTRATION_DEFAULTS: Record<OrchestrationLevel, OrchestrationCapabilities> = {
   none: {
     level: 'none',
-    canSpawnSubagents: false,
-    maxConcurrentSubagents: 0,
-    maxSubagentDepth: 0,
+    canSpawnSubassistants: false,
+    maxConcurrentSubassistants: 0,
+    maxSubassistantDepth: 0,
     canCoordinateSwarms: false,
     maxSwarmSize: 0,
     canDelegate: false,
   },
   limited: {
     level: 'limited',
-    canSpawnSubagents: true,
-    maxConcurrentSubagents: 2,
-    maxSubagentDepth: 1,
+    canSpawnSubassistants: true,
+    maxConcurrentSubassistants: 2,
+    maxSubassistantDepth: 1,
     canCoordinateSwarms: false,
     maxSwarmSize: 0,
     canDelegate: false,
   },
   standard: {
     level: 'standard',
-    canSpawnSubagents: true,
-    maxConcurrentSubagents: 5,
-    maxSubagentDepth: 3,
+    canSpawnSubassistants: true,
+    maxConcurrentSubassistants: 5,
+    maxSubassistantDepth: 3,
     canCoordinateSwarms: false,
     maxSwarmSize: 0,
     canDelegate: true,
   },
   full: {
     level: 'full',
-    canSpawnSubagents: true,
-    maxConcurrentSubagents: 10,
-    maxSubagentDepth: 5,
+    canSpawnSubassistants: true,
+    maxConcurrentSubassistants: 10,
+    maxSubassistantDepth: 5,
     canCoordinateSwarms: true,
     maxSwarmSize: 10,
     canDelegate: true,
   },
   coordinator: {
     level: 'coordinator',
-    canSpawnSubagents: true,
-    maxConcurrentSubagents: 20,
-    maxSubagentDepth: 10,
+    canSpawnSubassistants: true,
+    maxConcurrentSubassistants: 20,
+    maxSubassistantDepth: 10,
     canCoordinateSwarms: true,
     maxSwarmSize: 50,
     canDelegate: true,
@@ -313,10 +313,10 @@ export const ORCHESTRATION_DEFAULTS: Record<OrchestrationLevel, OrchestrationCap
 };
 
 /**
- * Default capability set for new agents
+ * Default capability set for new assistants
  */
-export const DEFAULT_CAPABILITY_SET: AgentCapabilitySet = {
-  scope: 'agent',
+export const DEFAULT_CAPABILITY_SET: AssistantCapabilitySet = {
+  scope: 'instance',
   enabled: true,
 
   orchestration: ORCHESTRATION_DEFAULTS.standard,
@@ -362,9 +362,9 @@ export const DEFAULT_CAPABILITY_SET: AgentCapabilitySet = {
 };
 
 /**
- * Restricted capability set (for untrusted/sandboxed agents)
+ * Restricted capability set (for untrusted/sandboxed assistants)
  */
-export const RESTRICTED_CAPABILITY_SET: Partial<AgentCapabilitySet> = {
+export const RESTRICTED_CAPABILITY_SET: Partial<AssistantCapabilitySet> = {
   orchestration: ORCHESTRATION_DEFAULTS.none,
 
   tools: {
@@ -414,7 +414,7 @@ export const RESTRICTED_CAPABILITY_SET: Partial<AgentCapabilitySet> = {
 /**
  * Coordinator capability set (for swarm coordinators)
  */
-export const COORDINATOR_CAPABILITY_SET: Partial<AgentCapabilitySet> = {
+export const COORDINATOR_CAPABILITY_SET: Partial<AssistantCapabilitySet> = {
   orchestration: ORCHESTRATION_DEFAULTS.coordinator,
 
   tools: {

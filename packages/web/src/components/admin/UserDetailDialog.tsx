@@ -46,7 +46,7 @@ interface UserDetail {
   updatedAt: string;
   _counts: {
     sessions: number;
-    agents: number;
+    assistants: number;
   };
 }
 
@@ -265,9 +265,9 @@ export function UserDetailDialog({
               <div className="rounded-lg border p-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Bot className="h-4 w-4 text-muted-foreground" />
-                  Agents
+                  Assistants
                 </div>
-                <p className="text-2xl font-bold mt-1">{user._counts.agents}</p>
+                <p className="text-2xl font-bold mt-1">{user._counts.assistants}</p>
               </div>
             </div>
 

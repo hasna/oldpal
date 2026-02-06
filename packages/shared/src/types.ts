@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'agents' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -188,7 +188,7 @@ export interface Skill {
   userInvocable?: boolean;
   model?: string;
   context?: 'fork';
-  agent?: string;
+  assistant?: string;
   hooks?: HookConfig;
   content: string;
   filePath: string;
@@ -204,7 +204,7 @@ export interface SkillFrontmatter {
   'user-invocable'?: boolean;
   model?: string;
   context?: 'fork';
-  agent?: string;
+  assistant?: string;
   hooks?: HookConfig;
   [key: string]: unknown;  // Allow additional properties
 }
@@ -222,8 +222,8 @@ export type HookEvent =
   | 'PostToolUseFailure'
   | 'PermissionRequest'
   | 'Notification'
-  | 'SubagentStart'
-  | 'SubagentStop'
+  | 'SubassistantStart'
+  | 'SubassistantStop'
   | 'PreCompact'
   | 'Stop';
 
@@ -241,7 +241,7 @@ export interface HookHandler {
   name?: string; // Human-readable name
   description?: string; // What this hook does
   enabled?: boolean; // Whether hook is active (default true)
-  type: 'command' | 'prompt' | 'agent';
+  type: 'command' | 'prompt' | 'assistant';
   command?: string;
   prompt?: string;
   model?: string;
@@ -422,7 +422,7 @@ export interface AssistantsConfig {
   jobs?: JobsConfig;
   messages?: MessagesConfig;
   memory?: MemoryConfigShared;
-  subagents?: SubagentConfigShared;
+  subassistants?: SubassistantConfigShared;
   input?: InputConfig;
   budget?: BudgetConfig;
   guardrails?: GuardrailsConfigShared;
@@ -431,16 +431,16 @@ export interface AssistantsConfig {
 
 /**
  * Budget configuration for resource limits
- * Controls token, time, and tool-call limits per session/agent/swarm
+ * Controls token, time, and tool-call limits per session/assistant/swarm
  */
 export interface BudgetConfig {
   /** Whether budget enforcement is enabled (default: false) */
   enabled?: boolean;
   /** Session-level limits */
   session?: BudgetLimits;
-  /** Per-agent limits (for multi-agent scenarios) */
-  agent?: BudgetLimits;
-  /** Swarm-level limits (aggregate across all agents) */
+  /** Per-assistant limits (for multi-assistant scenarios) */
+  assistant?: BudgetLimits;
+  /** Swarm-level limits (aggregate across all assistants) */
   swarm?: BudgetLimits;
   /** Action to take when budget is exceeded */
   onExceeded?: 'warn' | 'pause' | 'stop';
@@ -540,7 +540,7 @@ export interface GuardrailsConfigShared {
 }
 
 /**
- * Capabilities configuration for agent permissions and limits
+ * Capabilities configuration for assistant permissions and limits
  * Controls orchestration rights, tool access, and resource constraints
  */
 export interface CapabilitiesConfigShared {
@@ -548,10 +548,10 @@ export interface CapabilitiesConfigShared {
   enabled?: boolean;
   /** Orchestration level preset: 'none' | 'limited' | 'standard' | 'full' | 'coordinator' */
   orchestrationLevel?: 'none' | 'limited' | 'standard' | 'full' | 'coordinator';
-  /** Maximum concurrent subagents this agent can spawn */
-  maxConcurrentSubagents?: number;
-  /** Maximum subagent depth (nesting level) */
-  maxSubagentDepth?: number;
+  /** Maximum concurrent subassistants this assistant can spawn */
+  maxConcurrentSubassistants?: number;
+  /** Maximum subassistant depth (nesting level) */
+  maxSubassistantDepth?: number;
   /** Tool access policy: 'allow_all' | 'allow_list' | 'deny_list' */
   toolPolicy?: 'allow_all' | 'allow_list' | 'deny_list';
   /** Allowed tool patterns (when policy is 'allow_list') */
@@ -592,21 +592,21 @@ export interface ConnectorsConfigShared {
 }
 
 /**
- * Subagent configuration for AssistantsConfig (shared types)
- * Controls limits and behavior of spawned subagents
+ * Subassistant configuration for AssistantsConfig (shared types)
+ * Controls limits and behavior of spawned subassistants
  */
-export interface SubagentConfigShared {
-  /** Maximum recursion depth for nested subagents (default: 3) */
+export interface SubassistantConfigShared {
+  /** Maximum recursion depth for nested subassistants (default: 3) */
   maxDepth?: number;
-  /** Maximum concurrent subagents per parent (default: 5) */
+  /** Maximum concurrent subassistants per parent (default: 5) */
   maxConcurrent?: number;
-  /** Maximum turns per subagent (default: 10, max: 25) */
+  /** Maximum turns per subassistant (default: 10, max: 25) */
   maxTurns?: number;
   /** Default timeout in milliseconds (default: 120000 = 2 minutes) */
   defaultTimeoutMs?: number;
-  /** Default tools for subagents if not specified */
+  /** Default tools for subassistants if not specified */
   defaultTools?: string[];
-  /** Tools that subagents cannot use (security) */
+  /** Tools that subassistants cannot use (security) */
   forbiddenTools?: string[];
 }
 
@@ -690,11 +690,11 @@ export interface VoiceState {
   ttsProvider?: string;
 }
 
-export type HeartbeatAgentState = 'idle' | 'processing' | 'waiting_input' | 'error' | 'stopped';
+export type HeartbeatAssistantState = 'idle' | 'processing' | 'waiting_input' | 'error' | 'stopped';
 
 export interface HeartbeatState {
   enabled: boolean;
-  state: HeartbeatAgentState;
+  state: HeartbeatAssistantState;
   lastActivity: string;
   uptimeSeconds: number;
   isStale: boolean;
@@ -845,7 +845,7 @@ export interface ContextConfig {
   maxMessages?: number;
   /**
    * Number of recent tool calls to always preserve during summarization.
-   * Ensures the agent remembers what it just did and can continue
+   * Ensures the assistant remembers what it just did and can continue
    * multi-step operations after context compaction.
    * Default: 5
    */
@@ -925,13 +925,13 @@ export interface ScheduledCommand {
   id: string;
   createdAt: number;
   updatedAt: number;
-  createdBy: 'user' | 'agent';
+  createdBy: 'user' | 'assistant';
   sessionId?: string;
   /** Type of action to perform when the schedule fires */
   actionType?: 'command' | 'message';
   /** Command to execute (used when actionType is 'command' or undefined for backwards compatibility) */
   command: string;
-  /** Custom message to inject into agent session (used when actionType is 'message') */
+  /** Custom message to inject into assistant session (used when actionType is 'message') */
   message?: string;
   description?: string;
   status: 'active' | 'paused' | 'completed' | 'error';
@@ -964,8 +964,8 @@ export interface ScheduledCommand {
 
 export interface AssistantClient {
   send(message: string): Promise<void>;
-  onChunk(callback: (chunk: StreamChunk) => void): void;
-  onError(callback: (error: Error) => void): void;
+  onChunk(callback: (chunk: StreamChunk) => void): void | (() => void);
+  onError(callback: (error: Error) => void): void | (() => void);
   getTools(): Promise<Tool[]>;
   getSkills(): Promise<Skill[]>;
   getEnergyState(): EnergyState | null;
@@ -981,7 +981,7 @@ export interface AssistantClient {
 // ============================================
 
 /**
- * Configuration for agent inbox feature
+ * Configuration for assistant inbox feature
  */
 export interface InboxConfig {
   /** Whether inbox is enabled (default: false) */
@@ -990,7 +990,7 @@ export interface InboxConfig {
   provider?: 'ses' | 'resend';
   /** Email domain (e.g., "mail.example.com") */
   domain?: string;
-  /** Email address format (default: "{agent-name}@{domain}") */
+  /** Email address format (default: "{assistant-name}@{domain}") */
   addressFormat?: string;
 
   /** S3 storage configuration */
@@ -1037,7 +1037,7 @@ export interface InboxConfig {
 // ============================================
 
 /**
- * Configuration for agent wallet (payment card storage)
+ * Configuration for assistant wallet (payment card storage)
  *
  * SECURITY NOTE: Cards are NEVER stored locally. All card data is stored
  * exclusively in AWS Secrets Manager and fetched on-demand with rate limiting.
@@ -1068,7 +1068,7 @@ export interface WalletConfig {
 // ============================================
 
 /**
- * Configuration for agent secrets management (API keys, tokens, passwords)
+ * Configuration for assistant secrets management (API keys, tokens, passwords)
  *
  * SECURITY NOTE: Secrets are NEVER stored locally. All secret data is stored
  * exclusively in AWS Secrets Manager and fetched on-demand with rate limiting.
@@ -1095,7 +1095,7 @@ export interface SecretsConfig {
 }
 
 // ============================================
-// Messages Types (Agent-to-Agent)
+// Messages Types (Assistant-to-Assistant)
 // ============================================
 
 /**
@@ -1104,7 +1104,7 @@ export interface SecretsConfig {
 export type MessagePriority = 'low' | 'normal' | 'high' | 'urgent';
 
 /**
- * Configuration for agent-to-agent messaging
+ * Configuration for assistant-to-assistant messaging
  */
 export interface MessagesConfig {
   /** Whether messages are enabled (default: false) */
@@ -1272,13 +1272,13 @@ export interface DbSession {
   userId: string;
   label: string | null;
   cwd: string | null;
-  agentId: string | null;
+  assistantId: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface DbAgent {
+export interface DbAssistant {
   id: string;
   userId: string;
   name: string;
@@ -1303,12 +1303,12 @@ export interface DbMessage {
   createdAt: string;
 }
 
-export interface DbAgentMessage {
+export interface DbAssistantMessage {
   id: string;
   threadId: string;
   parentId: string | null;
-  fromAgentId: string | null;
-  toAgentId: string | null;
+  fromAssistantId: string | null;
+  toAssistantId: string | null;
   subject: string | null;
   body: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';

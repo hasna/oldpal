@@ -101,7 +101,7 @@ export function ChatContainer() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Processing indicator - shows when agent is working */}
+      {/* Processing indicator - shows when assistant is working */}
       <ProcessingIndicator />
       <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
         <div className="px-6 py-8">

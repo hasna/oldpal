@@ -1,9 +1,9 @@
 /**
- * Subagent Manager
+ * Subassistant Manager
  *
- * Manages the lifecycle of spawned subagents including:
+ * Manages the lifecycle of spawned subassistants including:
  * - Recursion depth limiting
- * - Concurrent agent limiting
+ * - Concurrent assistant limiting
  * - Resource budgeting
  * - Async job tracking
  */
@@ -16,98 +16,98 @@ import type { LLMClient } from '../llm/client';
 // Types
 // ============================================
 
-export interface SubagentConfig {
-  /** The task/instruction for the subagent to complete */
+export interface SubassistantConfig {
+  /** The task/instruction for the subassistant to complete */
   task: string;
-  /** List of tool names the subagent can use */
+  /** List of tool names the subassistant can use */
   tools?: string[];
-  /** Additional context to pass to the subagent */
+  /** Additional context to pass to the subassistant */
   context?: string;
-  /** Maximum turns the subagent can take (default: 10, max: 25) */
+  /** Maximum turns the subassistant can take (default: 10, max: 25) */
   maxTurns?: number;
-  /** Model to use for subagent (default: inherit from parent) */
+  /** Model to use for subassistant (default: inherit from parent) */
   model?: string;
   /** Run asynchronously and return job ID (default: false) */
   async?: boolean;
   /** Parent session ID */
   parentSessionId: string;
-  /** Current depth level (0 = root agent) */
+  /** Current depth level (0 = root assistant) */
   depth: number;
   /** Working directory */
   cwd: string;
-  /** Timeout in ms (default: uses SubagentManagerConfig.defaultTimeoutMs) */
+  /** Timeout in ms (default: uses SubassistantManagerConfig.defaultTimeoutMs) */
   timeoutMs?: number;
 }
 
-export interface SubagentResult {
-  /** Whether the subagent completed successfully */
+export interface SubassistantResult {
+  /** Whether the subassistant completed successfully */
   success: boolean;
-  /** The result content from the subagent */
+  /** The result content from the subassistant */
   result?: string;
   /** Error message if failed */
   error?: string;
-  /** Number of turns the subagent took */
+  /** Number of turns the subassistant took */
   turns: number;
   /** Number of tool calls made */
   toolCalls: number;
   /** Total tokens used (input + output) */
   tokensUsed?: number;
-  /** The unique ID of the subagent that produced this result */
-  subagentId?: string;
+  /** The unique ID of the subassistant that produced this result */
+  subassistantId?: string;
 }
 
-export interface SubagentInfo {
+export interface SubassistantInfo {
   id: string;
   task: string;
   status: 'running' | 'completed' | 'failed' | 'timeout';
   startedAt: number;
   completedAt?: number;
-  result?: SubagentResult;
+  result?: SubassistantResult;
   depth: number;
 }
 
-export type SubagentJobStatus = 'running' | 'completed' | 'failed' | 'timeout';
+export type SubassistantJobStatus = 'running' | 'completed' | 'failed' | 'timeout';
 
-export interface SubagentJob {
+export interface SubassistantJob {
   id: string;
-  status: SubagentJobStatus;
-  config: SubagentConfig;
+  status: SubassistantJobStatus;
+  config: SubassistantConfig;
   startedAt: number;
   completedAt?: number;
-  result?: SubagentResult;
+  result?: SubassistantResult;
 }
 
-export interface SubagentManagerConfig {
+export interface SubassistantManagerConfig {
   /** Maximum recursion depth (default: 3) */
   maxDepth?: number;
-  /** Maximum concurrent subagents per parent (default: 5) */
+  /** Maximum concurrent subassistants per parent (default: 5) */
   maxConcurrent?: number;
-  /** Maximum turns per subagent (default: 10) */
+  /** Maximum turns per subassistant (default: 10) */
   maxTurns?: number;
   /** Default timeout in ms (default: 120000 = 2 minutes) */
   defaultTimeoutMs?: number;
-  /** Default tools for subagents */
+  /** Default tools for subassistants */
   defaultTools?: string[];
-  /** Tools that subagents cannot use */
+  /** Tools that subassistants cannot use */
   forbiddenTools?: string[];
 }
 
-export interface SubagentManagerContext {
-  /** Function to create a subagent loop */
-  createSubagentLoop: (config: SubagentLoopConfig) => Promise<SubagentRunner>;
+export interface SubassistantManagerContext {
+  /** Function to create a subassistant loop */
+  createSubassistantLoop: (config: SubassistantLoopConfig) => Promise<SubassistantRunner>;
   /** Get available tools */
   getTools: () => Tool[];
   /** Get parent's allowed tools (null = all allowed) */
   getParentAllowedTools: () => Set<string> | null;
-  /** Get LLM client (for reference only - subagents should create their own) */
+  /** Get LLM client (for reference only - subassistants should create their own) */
   getLLMClient: () => LLMClient | null;
-  /** Get LLM config to create a new client for subagents (avoids sharing client) */
+  /** Get LLM config to create a new client for subassistants (avoids sharing client) */
   getLLMConfig?: () => import('@hasna/assistants-shared').LLMConfig | null;
-  /** Fire a hook and return the result (optional - for SubagentStart/Stop hooks) */
+  /** Fire a hook and return the result (optional - for SubassistantStart/Stop hooks) */
   fireHook?: (input: HookInput) => Promise<HookOutput | null>;
 }
 
-export interface SubagentLoopConfig {
+export interface SubassistantLoopConfig {
   task: string;
   tools: string[];
   context?: string;
@@ -119,8 +119,8 @@ export interface SubagentLoopConfig {
   onChunk?: (chunk: StreamChunk) => void;
 }
 
-export interface SubagentRunner {
-  run(): Promise<SubagentResult>;
+export interface SubassistantRunner {
+  run(): Promise<SubassistantResult>;
   stop(): void;
 }
 
@@ -134,7 +134,7 @@ const DEFAULT_MAX_TURNS = 10;
 const MAX_ALLOWED_TURNS = 25;
 const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
 
-const DEFAULT_SUBAGENT_TOOLS = [
+const DEFAULT_SUBASSISTANT_TOOLS = [
   'read',
   'glob',
   'grep',
@@ -143,9 +143,9 @@ const DEFAULT_SUBAGENT_TOOLS = [
   'web_fetch',
 ];
 
-const FORBIDDEN_SUBAGENT_TOOLS = [
-  'agent_spawn',      // Prevent recursive spawning at max depth
-  'agent_delegate',   // Prevent delegation at max depth
+const FORBIDDEN_SUBASSISTANT_TOOLS = [
+  'assistant_spawn',      // Prevent recursive spawning at max depth
+  'assistant_delegate',   // Prevent delegation at max depth
   'wallet_get',       // No wallet access
   'wallet_list',
   'secrets_get',      // No secrets access
@@ -156,25 +156,25 @@ const FORBIDDEN_SUBAGENT_TOOLS = [
 ];
 
 // ============================================
-// SubagentManager Class
+// SubassistantManager Class
 // ============================================
 
-export class SubagentManager {
-  private config: Required<SubagentManagerConfig>;
-  private activeSubagents: Map<string, SubagentInfo> = new Map();
-  private activeRunners: Map<string, SubagentRunner> = new Map();
+export class SubassistantManager {
+  private config: Required<SubassistantManagerConfig>;
+  private activeSubassistants: Map<string, SubassistantInfo> = new Map();
+  private activeRunners: Map<string, SubassistantRunner> = new Map();
   private activeTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
-  private asyncJobs: Map<string, SubagentJob> = new Map();
-  private context: SubagentManagerContext;
+  private asyncJobs: Map<string, SubassistantJob> = new Map();
+  private context: SubassistantManagerContext;
 
-  constructor(config: SubagentManagerConfig, context: SubagentManagerContext) {
+  constructor(config: SubassistantManagerConfig, context: SubassistantManagerContext) {
     this.config = {
       maxDepth: config.maxDepth ?? DEFAULT_MAX_DEPTH,
       maxConcurrent: config.maxConcurrent ?? DEFAULT_MAX_CONCURRENT,
       maxTurns: config.maxTurns ?? DEFAULT_MAX_TURNS,
       defaultTimeoutMs: config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS,
-      defaultTools: config.defaultTools ?? DEFAULT_SUBAGENT_TOOLS,
-      forbiddenTools: config.forbiddenTools ?? FORBIDDEN_SUBAGENT_TOOLS,
+      defaultTools: config.defaultTools ?? DEFAULT_SUBASSISTANT_TOOLS,
+      forbiddenTools: config.forbiddenTools ?? FORBIDDEN_SUBASSISTANT_TOOLS,
     };
     this.context = context;
   }
@@ -182,28 +182,28 @@ export class SubagentManager {
   /**
    * Get current configuration
    */
-  getConfig(): Required<SubagentManagerConfig> {
+  getConfig(): Required<SubassistantManagerConfig> {
     return { ...this.config };
   }
 
   /**
-   * Check if we can spawn a new subagent at the given depth
+   * Check if we can spawn a new subassistant at the given depth
    */
   canSpawn(depth: number): { allowed: boolean; reason?: string } {
     // Check depth limit
     if (depth >= this.config.maxDepth) {
       return {
         allowed: false,
-        reason: `Maximum subagent depth (${this.config.maxDepth}) exceeded`,
+        reason: `Maximum subassistant depth (${this.config.maxDepth}) exceeded`,
       };
     }
 
     // Check concurrent limit
-    const activeCount = this.activeSubagents.size;
+    const activeCount = this.activeSubassistants.size;
     if (activeCount >= this.config.maxConcurrent) {
       return {
         allowed: false,
-        reason: `Maximum concurrent subagents (${this.config.maxConcurrent}) reached`,
+        reason: `Maximum concurrent subassistants (${this.config.maxConcurrent}) reached`,
       };
     }
 
@@ -211,17 +211,17 @@ export class SubagentManager {
   }
 
   /**
-   * Filter tools for subagent based on depth, configuration, and parent restrictions
+   * Filter tools for subassistant based on depth, configuration, and parent restrictions
    */
-  filterToolsForSubagent(requestedTools: string[] | undefined, depth: number): string[] {
+  filterToolsForSubassistant(requestedTools: string[] | undefined, depth: number): string[] {
     // Start with requested tools or defaults
     let tools = requestedTools ?? this.config.defaultTools;
 
     // At max depth - 1, also forbid spawning tools to prevent depth violation
     const forbiddenSet = new Set(this.config.forbiddenTools);
     if (depth >= this.config.maxDepth - 1) {
-      forbiddenSet.add('agent_spawn');
-      forbiddenSet.add('agent_delegate');
+      forbiddenSet.add('assistant_spawn');
+      forbiddenSet.add('assistant_delegate');
     }
 
     // Filter out forbidden tools
@@ -232,7 +232,7 @@ export class SubagentManager {
     tools = tools.filter((tool) => availableTools.has(tool));
 
     // SECURITY: Intersect with parent's allowed tools to prevent privilege escalation
-    // A subagent should never have access to tools its parent doesn't have
+    // A subassistant should never have access to tools its parent doesn't have
     const parentAllowed = this.context.getParentAllowedTools();
     if (parentAllowed) {
       tools = tools.filter((tool) => parentAllowed.has(tool.toLowerCase()));
@@ -242,10 +242,10 @@ export class SubagentManager {
   }
 
   /**
-   * Spawn a subagent synchronously
+   * Spawn a subassistant synchronously
    */
-  async spawn(config: SubagentConfig): Promise<SubagentResult> {
-    const subagentId = generateId();
+  async spawn(config: SubassistantConfig): Promise<SubassistantResult> {
+    const subassistantId = generateId();
 
     // Check limits
     const canSpawnResult = this.canSpawn(config.depth);
@@ -255,17 +255,17 @@ export class SubagentManager {
         error: canSpawnResult.reason,
         turns: 0,
         toolCalls: 0,
-        subagentId,
+        subassistantId,
       };
     }
 
-    // Fire SubagentStart hook if available
+    // Fire SubassistantStart hook if available
     if (this.context.fireHook) {
       const hookInput: HookInput = {
         session_id: config.parentSessionId,
-        hook_event_name: 'SubagentStart',
+        hook_event_name: 'SubassistantStart',
         cwd: config.cwd,
-        subagent_id: subagentId,
+        subassistant_id: subassistantId,
         parent_session_id: config.parentSessionId,
         task: config.task,
         allowed_tools: config.tools ?? this.config.defaultTools,
@@ -275,14 +275,14 @@ export class SubagentManager {
 
       const hookResult = await this.context.fireHook(hookInput);
 
-      // Hook can block subagent creation
+      // Hook can block subassistant creation
       if (hookResult && hookResult.continue === false) {
         return {
           success: false,
-          error: hookResult.stopReason || 'Blocked by SubagentStart hook',
+          error: hookResult.stopReason || 'Blocked by SubassistantStart hook',
           turns: 0,
           toolCalls: 0,
-          subagentId,
+          subassistantId,
         };
       }
 
@@ -305,19 +305,19 @@ export class SubagentManager {
       }
     }
 
-    const info: SubagentInfo = {
-      id: subagentId,
+    const info: SubassistantInfo = {
+      id: subassistantId,
       task: config.task,
       status: 'running',
       startedAt: Date.now(),
       depth: config.depth,
     };
 
-    this.activeSubagents.set(subagentId, info);
+    this.activeSubassistants.set(subassistantId, info);
 
     try {
       // Filter tools
-      const tools = this.filterToolsForSubagent(config.tools, config.depth);
+      const tools = this.filterToolsForSubassistant(config.tools, config.depth);
 
       // Clamp max turns
       const maxTurns = Math.min(
@@ -325,28 +325,28 @@ export class SubagentManager {
         MAX_ALLOWED_TURNS
       );
 
-      // Create and run subagent
+      // Create and run subassistant
       // Note: We don't pass the parent LLM client to avoid concurrency issues
-      // when multiple subagents run in parallel. Each subagent creates its own client.
-      const runner = await this.context.createSubagentLoop({
+      // when multiple subassistants run in parallel. Each subassistant creates its own client.
+      const runner = await this.context.createSubassistantLoop({
         task: config.task,
         tools,
         context: config.context,
         maxTurns,
         cwd: config.cwd,
-        sessionId: `subagent-${subagentId}`,
+        sessionId: `subassistant-${subassistantId}`,
         depth: config.depth + 1,
-        // llmClient intentionally not passed - subagent creates its own
+        // llmClient intentionally not passed - subassistant creates its own
       });
 
       // Track the runner so we can stop it if needed
-      this.activeRunners.set(subagentId, runner);
+      this.activeRunners.set(subassistantId, runner);
 
       // Run with timeout (use config-specific timeout if provided, otherwise use default)
       const timeoutMs = config.timeoutMs ?? this.config.defaultTimeoutMs;
       const result = await Promise.race([
         runner.run(),
-        this.createTimeout(timeoutMs, runner, subagentId),
+        this.createTimeout(timeoutMs, runner, subassistantId),
       ]);
 
       // Update info - detect timeout from error message
@@ -360,9 +360,9 @@ export class SubagentManager {
       info.completedAt = Date.now();
       info.result = result;
 
-      // Fire SubagentStop hook
-      const finalResult = await this.fireSubagentStopHook(
-        subagentId,
+      // Fire SubassistantStop hook
+      const finalResult = await this.fireSubassistantStopHook(
+        subassistantId,
         config,
         info,
         result
@@ -378,32 +378,32 @@ export class SubagentManager {
         error: errorMessage,
         turns: 0,
         toolCalls: 0,
-        subagentId,
+        subassistantId,
       };
 
-      // Fire SubagentStop hook for error case too
-      const finalResult = await this.fireSubagentStopHook(
-        subagentId,
+      // Fire SubassistantStop hook for error case too
+      const finalResult = await this.fireSubassistantStopHook(
+        subassistantId,
         config,
         info,
         info.result
       );
       return finalResult;
     } finally {
-      // Clean up all tracking for this subagent
-      this.cancelTimeout(subagentId);
-      this.activeSubagents.delete(subagentId);
-      this.activeRunners.delete(subagentId);
+      // Clean up all tracking for this subassistant
+      this.cancelTimeout(subassistantId);
+      this.activeSubassistants.delete(subassistantId);
+      this.activeRunners.delete(subassistantId);
     }
   }
 
   /**
-   * Stop a specific subagent by ID
+   * Stop a specific subassistant by ID
    */
-  stopSubagent(subagentId: string): boolean {
-    const runner = this.activeRunners.get(subagentId);
+  stopSubassistant(subassistantId: string): boolean {
+    const runner = this.activeRunners.get(subassistantId);
     if (runner) {
-      this.cancelTimeout(subagentId);
+      this.cancelTimeout(subassistantId);
       runner.stop();
       return true;
     }
@@ -411,7 +411,7 @@ export class SubagentManager {
   }
 
   /**
-   * Stop all active subagents
+   * Stop all active subassistants
    */
   stopAll(): number {
     let stopped = 0;
@@ -424,9 +424,9 @@ export class SubagentManager {
   }
 
   /**
-   * Spawn a subagent asynchronously and return job ID
+   * Spawn a subassistant asynchronously and return job ID
    */
-  async spawnAsync(config: SubagentConfig): Promise<string> {
+  async spawnAsync(config: SubassistantConfig): Promise<string> {
     // Check limits
     const canSpawnResult = this.canSpawn(config.depth);
     if (!canSpawnResult.allowed) {
@@ -434,7 +434,7 @@ export class SubagentManager {
     }
 
     const jobId = generateId();
-    const job: SubagentJob = {
+    const job: SubassistantJob = {
       id: jobId,
       status: 'running',
       config,
@@ -454,14 +454,14 @@ export class SubagentManager {
   /**
    * Get status of an async job
    */
-  getJobStatus(jobId: string): SubagentJob | null {
+  getJobStatus(jobId: string): SubassistantJob | null {
     return this.asyncJobs.get(jobId) ?? null;
   }
 
   /**
    * Wait for an async job to complete
    */
-  async waitForJob(jobId: string, timeoutMs?: number): Promise<SubagentResult | null> {
+  async waitForJob(jobId: string, timeoutMs?: number): Promise<SubassistantResult | null> {
     const job = this.asyncJobs.get(jobId);
     if (!job) return null;
 
@@ -490,16 +490,16 @@ export class SubagentManager {
   }
 
   /**
-   * List active subagents
+   * List active subassistants
    */
-  listActive(): SubagentInfo[] {
-    return Array.from(this.activeSubagents.values());
+  listActive(): SubassistantInfo[] {
+    return Array.from(this.activeSubassistants.values());
   }
 
   /**
    * List async jobs
    */
-  listJobs(): SubagentJob[] {
+  listJobs(): SubassistantJob[] {
     return Array.from(this.asyncJobs.values());
   }
 
@@ -526,7 +526,7 @@ export class SubagentManager {
   // Private Methods
   // ============================================
 
-  private async runAsyncJob(job: SubagentJob): Promise<void> {
+  private async runAsyncJob(job: SubassistantJob): Promise<void> {
     try {
       const result = await this.spawn(job.config);
       // Detect timeout from error message
@@ -552,16 +552,16 @@ export class SubagentManager {
   }
 
   /**
-   * Fire SubagentStop hook and return potentially modified result
+   * Fire SubassistantStop hook and return potentially modified result
    */
-  private async fireSubagentStopHook(
-    subagentId: string,
-    config: SubagentConfig,
-    info: SubagentInfo,
-    result: SubagentResult
-  ): Promise<SubagentResult> {
-    // Always ensure subagentId is included
-    const resultWithId = { ...result, subagentId };
+  private async fireSubassistantStopHook(
+    subassistantId: string,
+    config: SubassistantConfig,
+    info: SubassistantInfo,
+    result: SubassistantResult
+  ): Promise<SubassistantResult> {
+    // Always ensure subassistantId is included
+    const resultWithId = { ...result, subassistantId };
 
     if (!this.context.fireHook) {
       return resultWithId;
@@ -569,9 +569,9 @@ export class SubagentManager {
 
     const hookInput: HookInput = {
       session_id: config.parentSessionId,
-      hook_event_name: 'SubagentStop',
+      hook_event_name: 'SubassistantStop',
       cwd: config.cwd,
-      subagent_id: subagentId,
+      subassistant_id: subassistantId,
       parent_session_id: config.parentSessionId,
       status: info.status,
       result: result.result,
@@ -588,10 +588,10 @@ export class SubagentManager {
     if (hookResult && hookResult.continue === false) {
       return {
         success: false,
-        error: hookResult.stopReason || 'Result blocked by SubagentStop hook',
+        error: hookResult.stopReason || 'Result blocked by SubassistantStop hook',
         turns: result.turns,
         toolCalls: result.toolCalls,
-        subagentId,
+        subassistantId,
       };
     }
 
@@ -606,33 +606,33 @@ export class SubagentManager {
     return resultWithId;
   }
 
-  private createTimeout(ms: number, runner: SubagentRunner, subagentId: string): Promise<SubagentResult> {
+  private createTimeout(ms: number, runner: SubassistantRunner, subassistantId: string): Promise<SubassistantResult> {
     return new Promise((resolve) => {
       const timerId = setTimeout(() => {
         // Clean up the timer reference
-        this.activeTimeouts.delete(subagentId);
+        this.activeTimeouts.delete(subassistantId);
         runner.stop();
         resolve({
           success: false,
-          error: `Subagent timed out after ${Math.round(ms / 1000)} seconds`,
+          error: `Subassistant timed out after ${Math.round(ms / 1000)} seconds`,
           turns: 0,
           toolCalls: 0,
-          subagentId,
+          subassistantId,
         });
       }, ms);
       // Track the timer so we can cancel it if the runner completes first
-      this.activeTimeouts.set(subagentId, timerId);
+      this.activeTimeouts.set(subassistantId, timerId);
     });
   }
 
   /**
-   * Cancel a timeout timer for a subagent
+   * Cancel a timeout timer for a subassistant
    */
-  private cancelTimeout(subagentId: string): void {
-    const timerId = this.activeTimeouts.get(subagentId);
+  private cancelTimeout(subassistantId: string): void {
+    const timerId = this.activeTimeouts.get(subassistantId);
     if (timerId) {
       clearTimeout(timerId);
-      this.activeTimeouts.delete(subagentId);
+      this.activeTimeouts.delete(subassistantId);
     }
   }
 

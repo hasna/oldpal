@@ -47,16 +47,16 @@ export class SecretsStorageClient {
   /**
    * Build the full secret name based on scope
    * Global: {prefix}global/{name}
-   * Agent:  {prefix}agent/{agentId}/{name}
+   * Assistant: {prefix}assistant/{assistantId}/{name}
    */
-  private buildSecretName(name: string, scope: SecretScope, agentId?: string): string {
+  private buildSecretName(name: string, scope: SecretScope, assistantId?: string): string {
     if (scope === 'global') {
       return `${this.prefix}global/${name}`;
     }
-    if (!agentId) {
-      throw new Error('Agent ID required for agent-scoped secrets');
+    if (!assistantId) {
+      throw new Error('Assistant ID required for assistant-scoped secrets');
     }
-    return `${this.prefix}agent/${agentId}/${name}`;
+    return `${this.prefix}assistant/${assistantId}/${name}`;
   }
 
   /**
@@ -76,13 +76,13 @@ export class SecretsStorageClient {
       };
     }
 
-    if (path.startsWith('agent/')) {
-      // agent/{agentId}/{name}
-      const parts = path.slice('agent/'.length).split('/');
+    if (path.startsWith('assistant/')) {
+      // assistant/{assistantId}/{name}
+      const parts = path.slice('assistant/'.length).split('/');
       if (parts.length >= 2) {
         return {
           name: parts.slice(1).join('/'),
-          scope: 'agent',
+          scope: 'assistant',
         };
       }
     }
@@ -92,12 +92,12 @@ export class SecretsStorageClient {
 
   /**
    * List all secrets for a given scope
-   * @param scope - 'global', 'agent', or 'all'
-   * @param agentId - Required for 'agent' and 'all' scopes
+   * @param scope - 'global', 'assistant', or 'all'
+   * @param assistantId - Required for 'assistant' and 'all' scopes
    */
   async listSecrets(
     scope: SecretScope | 'all',
-    agentId?: string
+    assistantId?: string
   ): Promise<SecretListItem[]> {
     const secrets: SecretListItem[] = [];
     const prefixes: string[] = [];
@@ -106,8 +106,8 @@ export class SecretsStorageClient {
       prefixes.push(`${this.prefix}global/`);
     }
 
-    if ((scope === 'agent' || scope === 'all') && agentId) {
-      prefixes.push(`${this.prefix}agent/${agentId}/`);
+    if ((scope === 'assistant' || scope === 'all') && assistantId) {
+      prefixes.push(`${this.prefix}assistant/${assistantId}/`);
     }
 
     for (const secretPrefix of prefixes) {
@@ -157,9 +157,9 @@ export class SecretsStorageClient {
   async getSecret(
     name: string,
     scope: SecretScope,
-    agentId?: string
+    assistantId?: string
   ): Promise<Secret | null> {
-    const secretName = this.buildSecretName(name, scope, agentId);
+    const secretName = this.buildSecretName(name, scope, assistantId);
 
     try {
       const response = await this.client.send(
@@ -203,16 +203,16 @@ export class SecretsStorageClient {
     name: string,
     value: string,
     scope: SecretScope,
-    agentId?: string,
+    assistantId?: string,
     description?: string
   ): Promise<void> {
-    const secretName = this.buildSecretName(name, scope, agentId);
+    const secretName = this.buildSecretName(name, scope, assistantId);
     const now = Date.now();
 
     // Try to get existing secret to preserve createdAt
     let createdAt = now;
     try {
-      const existing = await this.getSecret(name, scope, agentId);
+      const existing = await this.getSecret(name, scope, assistantId);
       if (existing) {
         createdAt = existing.createdAt;
       }
@@ -236,7 +236,7 @@ export class SecretsStorageClient {
           Tags: [
             { Key: 'type', Value: 'assistant-secret' },
             { Key: 'scope', Value: scope },
-            { Key: 'agentId', Value: agentId || 'global' },
+            { Key: 'assistantId', Value: assistantId || 'global' },
           ],
         })
       );
@@ -262,9 +262,9 @@ export class SecretsStorageClient {
   async deleteSecret(
     name: string,
     scope: SecretScope,
-    agentId?: string
+    assistantId?: string
   ): Promise<void> {
-    const secretName = this.buildSecretName(name, scope, agentId);
+    const secretName = this.buildSecretName(name, scope, assistantId);
 
     await this.client.send(
       new DeleteSecretCommand({

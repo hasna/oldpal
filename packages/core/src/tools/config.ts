@@ -91,12 +91,12 @@ const SAFE_READ_PATHS = [
   'memory.scopes.globalEnabled',
   'memory.scopes.sharedEnabled',
   'memory.scopes.privateEnabled',
-  'subagents.maxDepth',
-  'subagents.maxConcurrent',
-  'subagents.maxTurns',
-  'subagents.defaultTimeoutMs',
-  'subagents.defaultTools',
-  'subagents.forbiddenTools',
+  'subassistants.maxDepth',
+  'subassistants.maxConcurrent',
+  'subassistants.maxTurns',
+  'subassistants.defaultTimeoutMs',
+  'subassistants.defaultTools',
+  'subassistants.forbiddenTools',
 ];
 
 // Safe paths that can be written via tools (subset of readable paths)
@@ -129,10 +129,10 @@ const SAFE_WRITE_PATHS = [
   'memory.injection.minImportance',
   'memory.injection.refreshInterval',
   'memory.storage.maxEntries',
-  'subagents.maxDepth',
-  'subagents.maxConcurrent',
-  'subagents.maxTurns',
-  'subagents.defaultTimeoutMs',
+  'subassistants.maxDepth',
+  'subassistants.maxConcurrent',
+  'subassistants.maxTurns',
+  'subassistants.defaultTimeoutMs',
 ];
 
 // ============================================

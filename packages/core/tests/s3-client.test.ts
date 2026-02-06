@@ -61,31 +61,31 @@ describe('S3InboxClient', () => {
 
     expect(lastFromIniInput).toEqual({ profile: 'profile-1' });
     expect(lastS3Config).toEqual({ region: 'us-east-1', credentials: { profile: 'profile-1', mocked: true } });
-    expect(client.getAgentPrefix('agent-1')).toBe('inbox/agent-1/');
-    expect(client.extractEmailId('inbox/agent-1/email-1')).toBe('email-1');
+    expect(client.getAssistantPrefix('assistant-1')).toBe('inbox/assistant-1/');
+    expect(client.extractEmailId('inbox/assistant-1/email-1')).toBe('email-1');
   });
 
   test('lists objects with optional filters', async () => {
     sendImpl = async (command) => {
       expect(command.input).toEqual({
         Bucket: 'bucket',
-        Prefix: 'inbox/agent-1/',
+        Prefix: 'inbox/assistant-1/',
         MaxKeys: 5,
         ContinuationToken: 'next',
       });
       return {
         Contents: [
-          { Key: 'inbox/agent-1/email-1', LastModified: new Date('2020-01-01'), Size: 42 },
+          { Key: 'inbox/assistant-1/email-1', LastModified: new Date('2020-01-01'), Size: 42 },
         ],
         NextContinuationToken: 'token-2',
       };
     };
 
     const client = new S3InboxClient({ bucket: 'bucket', region: 'us-east-1' });
-    const result = await client.listObjects({ prefix: 'agent-1/', maxKeys: 5, continuationToken: 'next' });
+    const result = await client.listObjects({ prefix: 'assistant-1/', maxKeys: 5, continuationToken: 'next' });
 
     expect(result.objects).toEqual([
-      { key: 'inbox/agent-1/email-1', lastModified: new Date('2020-01-01'), size: 42 },
+      { key: 'inbox/assistant-1/email-1', lastModified: new Date('2020-01-01'), size: 42 },
     ]);
     expect(result.nextToken).toBe('token-2');
     expect(sentCommands.length).toBe(1);

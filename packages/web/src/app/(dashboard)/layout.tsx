@@ -34,7 +34,7 @@ interface DashboardLayoutProps {
 const pathToBreadcrumb: Record<string, { parent?: string; parentPath?: string; label: string }> = {
   '/chat': { label: 'Chat' },
   '/sessions': { parent: 'Chat', parentPath: '/chat', label: 'Sessions' },
-  '/agents': { label: 'Agents' },
+  '/assistants': { label: 'Assistants' },
   '/messages': { label: 'Messages' },
   '/tools': { label: 'Tools' },
   '/skills': { label: 'Skills' },

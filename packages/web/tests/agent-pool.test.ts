@@ -4,7 +4,7 @@ import { getMockClients, resetMockClients } from './helpers/mock-assistants-core
 const { getSession, subscribeToSession, sendSessionMessage, stopSession, closeSession } = await import('../src/lib/server/agent-pool');
 let sessionCounter = 0;
 
-describe('agent pool', () => {
+describe('assistant pool', () => {
   beforeEach(() => {
     resetMockClients();
   });

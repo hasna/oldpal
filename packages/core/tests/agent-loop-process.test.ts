@@ -3,14 +3,14 @@ import { mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { StreamChunk } from '@hasna/assistants-shared';
-import { AgentLoop } from '../src/agent/loop';
+import { AssistantLoop } from '../src/agent/loop';
 import { nativeHookRegistry } from '../src/hooks/native';
 import { ContextManager } from '../src/context/manager';
 import type { SummaryStrategy } from '../src/context/summarizer';
 
 let callCount = 0;
 
-describe('AgentLoop process', () => {
+describe('AssistantLoop process', () => {
   beforeEach(() => {
     nativeHookRegistry.clear();
   });
@@ -20,9 +20,9 @@ describe('AgentLoop process', () => {
   });
 
   test('auto compaction summarizes when context grows too large', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-sum-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-sum-'));
     const chunks: StreamChunk[] = [];
-    const agent = new AgentLoop({
+    const assistant = new AssistantLoop({
       cwd,
       onChunk: (chunk) => chunks.push(chunk),
     });
@@ -34,14 +34,14 @@ describe('AgentLoop process', () => {
       }
     }
 
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         yield { type: 'text', content: 'ok' };
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
     const contextConfig = {
       enabled: true,
@@ -55,22 +55,22 @@ describe('AgentLoop process', () => {
       maxMessages: 100,
     };
 
-    (agent as any).contextConfig = contextConfig;
-    (agent as any).contextManager = new ContextManager(contextConfig, new StubSummarizer());
+    (assistant as any).contextConfig = contextConfig;
+    (assistant as any).contextManager = new ContextManager(contextConfig, new StubSummarizer());
 
-    await agent.process('word '.repeat(200));
+    await assistant.process('word '.repeat(200));
 
-    const messages = agent.getContext().getMessages();
+    const messages = assistant.getContext().getMessages();
     expect(messages.some((msg) => msg.role === 'system' && msg.content.includes('Context Summary'))).toBe(true);
     expect(chunks.some((chunk) => chunk.type === 'text' && chunk.content?.includes('Context summarized'))).toBe(true);
   });
 
   test('executes tool calls and continues the loop', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-'));
-    const agent = new AgentLoop({ cwd });
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-loop-'));
+    const assistant = new AssistantLoop({ cwd });
 
     // Inject a fake LLM client and minimal config to avoid network calls
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         callCount += 1;
@@ -86,16 +86,16 @@ describe('AgentLoop process', () => {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
-    (agent as any).toolRegistry.register(
+    (assistant as any).toolRegistry.register(
       { name: 'test_tool', description: 't', parameters: { type: 'object', properties: {} } },
       async (input: Record<string, unknown>) => JSON.stringify(input)
     );
 
-    await agent.process('hi');
+    await assistant.process('hi');
 
-    const messages = agent.getContext().getMessages();
+    const messages = assistant.getContext().getMessages();
     const last = messages[messages.length - 1];
     expect(last?.role).toBe('assistant');
     expect(last?.content).toContain('final');
@@ -106,15 +106,15 @@ describe('AgentLoop process', () => {
   });
 
   test('handles built-in commands without calling the LLM', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-cmd-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-cmd-'));
     const chunks: StreamChunk[] = [];
-    const agent = new AgentLoop({
+    const assistant = new AssistantLoop({
       cwd,
       onChunk: (chunk) => chunks.push(chunk),
     });
 
     let chatCalls = 0;
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         chatCalls += 1;
@@ -122,10 +122,10 @@ describe('AgentLoop process', () => {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
-    (agent as any).builtinCommands.registerAll((agent as any).commandLoader);
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).builtinCommands.registerAll((assistant as any).commandLoader);
 
-    await agent.process('/help');
+    await assistant.process('/help');
 
     expect(chatCalls).toBe(0);
     expect(chunks.some((c) => c.type === 'text' && c.content?.includes('Available Slash Commands'))).toBe(true);
@@ -133,15 +133,15 @@ describe('AgentLoop process', () => {
   });
 
   test('executes explicit bash tool command without LLM', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-bash-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-bash-'));
     const chunks: StreamChunk[] = [];
-    const agent = new AgentLoop({
+    const assistant = new AssistantLoop({
       cwd,
       onChunk: (chunk) => chunks.push(chunk),
     });
 
     let chatCalls = 0;
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         chatCalls += 1;
@@ -149,14 +149,14 @@ describe('AgentLoop process', () => {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
-    (agent as any).toolRegistry.register(
+    (assistant as any).toolRegistry.register(
       { name: 'bash', description: 'Run commands', parameters: { type: 'object', properties: {} } },
       async () => 'ok'
     );
 
-    await agent.process('![bash] echo hi');
+    await assistant.process('![bash] echo hi');
 
     expect(chatCalls).toBe(0);
     expect(chunks.some((c) => c.type === 'tool_use')).toBe(true);
@@ -165,15 +165,15 @@ describe('AgentLoop process', () => {
   });
 
   test('explicit bash tool command returns error when tool fails', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-bash-error-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-bash-error-'));
     const chunks: StreamChunk[] = [];
-    const agent = new AgentLoop({
+    const assistant = new AssistantLoop({
       cwd,
       onChunk: (chunk) => chunks.push(chunk),
     });
 
     let chatCalls = 0;
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         chatCalls += 1;
@@ -181,14 +181,14 @@ describe('AgentLoop process', () => {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
-    (agent as any).toolRegistry.register(
+    (assistant as any).toolRegistry.register(
       { name: 'bash', description: 'Run commands', parameters: { type: 'object', properties: {} } },
       async () => 'Error: blocked'
     );
 
-    const result = await (agent as any).runMessage('![bash] rm -rf /', 'user');
+    const result = await (assistant as any).runMessage('![bash] rm -rf /', 'user');
 
     expect(chatCalls).toBe(0);
     expect(result.ok).toBe(false);
@@ -201,19 +201,19 @@ describe('AgentLoop process', () => {
   });
 
   test('stop halts streaming after first chunk', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-stop-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-stop-'));
     const chunks: StreamChunk[] = [];
-    const agent = new AgentLoop({
+    const assistant = new AssistantLoop({
       cwd,
       onChunk: (chunk) => {
         chunks.push(chunk);
         if (chunk.type === 'text') {
-          agent.stop();
+          assistant.stop();
         }
       },
     });
 
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         yield { type: 'text', content: 'first' };
@@ -221,31 +221,31 @@ describe('AgentLoop process', () => {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
-    await agent.process('hello');
+    await assistant.process('hello');
 
-    const last = agent.getContext().getMessages().slice(-1)[0];
+    const last = assistant.getContext().getMessages().slice(-1)[0];
     expect(last?.content).toContain('first');
     expect(last?.content).not.toContain('second');
     expect(chunks.filter((c) => c.type === 'text').length).toBe(1);
   });
 
   test('stop skips scope verification rerun', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-stop-scope-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-stop-scope-'));
     const chunks: StreamChunk[] = [];
-    const agent = new AgentLoop({
+    const assistant = new AssistantLoop({
       cwd,
       onChunk: (chunk) => {
         chunks.push(chunk);
         if (chunk.type === 'text') {
-          agent.stop();
+          assistant.stop();
         }
       },
     });
 
     let chatCalls = 0;
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         chatCalls += 1;
@@ -253,7 +253,7 @@ describe('AgentLoop process', () => {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
     nativeHookRegistry.register({
       id: 'scope-verification',
@@ -262,19 +262,19 @@ describe('AgentLoop process', () => {
       handler: async () => ({ continue: false, systemMessage: 'retry' }),
     });
 
-    await agent.process('fix this bug in the system');
+    await assistant.process('fix this bug in the system');
 
     expect(chatCalls).toBe(2);
   });
 
   test('stop prevents tool execution after tool_use', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-stop-tools-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-stop-tools-'));
     let toolStartCalled = false;
-    const agent = new AgentLoop({
+    const assistant = new AssistantLoop({
       cwd,
       onChunk: (chunk) => {
         if (chunk.type === 'tool_use') {
-          agent.stop();
+          assistant.stop();
         }
       },
       onToolStart: () => {
@@ -282,54 +282,54 @@ describe('AgentLoop process', () => {
       },
     });
 
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         yield { type: 'tool_use', toolCall: { id: 'tc1', name: 'test_tool', input: { ok: true } } };
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
-    (agent as any).toolRegistry.register(
+    (assistant as any).toolRegistry.register(
       { name: 'test_tool', description: 't', parameters: { type: 'object', properties: {} } },
       async () => 'should-not-run'
     );
 
-    await agent.process('hi');
+    await assistant.process('hi');
 
     expect(toolStartCalled).toBe(false);
-    const hasToolResults = agent.getContext().getMessages().some((m) => m.toolResults?.length);
+    const hasToolResults = assistant.getContext().getMessages().some((m) => m.toolResults?.length);
     expect(hasToolResults).toBe(false);
   });
 
   test('clear command resets context via command handler', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-clear-'));
-    const agent = new AgentLoop({ cwd });
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-clear-'));
+    const assistant = new AssistantLoop({ cwd });
 
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
-    (agent as any).builtinCommands.registerAll((agent as any).commandLoader);
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).builtinCommands.registerAll((assistant as any).commandLoader);
 
-    agent.getContext().addUserMessage('hello');
-    expect(agent.getContext().getMessages().length).toBe(1);
+    assistant.getContext().addUserMessage('hello');
+    expect(assistant.getContext().getMessages().length).toBe(1);
 
-    await agent.process('/clear');
+    await assistant.process('/clear');
 
-    expect(agent.getContext().getMessages().length).toBe(0);
+    expect(assistant.getContext().getMessages().length).toBe(0);
   });
 
   test('applies command allowed tools when executing prompt', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-cmdtools-'));
-    const agent = new AgentLoop({ cwd });
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-cmdtools-'));
+    const assistant = new AssistantLoop({ cwd });
     let receivedTools: Array<{ name: string }> | undefined;
 
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (
         messages: unknown[],
@@ -340,37 +340,37 @@ describe('AgentLoop process', () => {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
-    (agent as any).builtinCommands.registerAll((agent as any).commandLoader);
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).builtinCommands.registerAll((assistant as any).commandLoader);
 
-    (agent as any).toolRegistry.register(
+    (assistant as any).toolRegistry.register(
       { name: 'bash', description: 't', parameters: { type: 'object', properties: {} } },
       async () => 'ok'
     );
-    (agent as any).toolRegistry.register(
+    (assistant as any).toolRegistry.register(
       { name: 'read', description: 't', parameters: { type: 'object', properties: {} } },
       async () => 'ok'
     );
 
-    (agent as any).commandLoader.register({
+    (assistant as any).commandLoader.register({
       name: 'run',
       description: 'Run command',
       content: 'Do $ARGUMENTS',
       allowedTools: ['bash'],
     });
 
-    await agent.process('/run something');
+    await assistant.process('/run something');
 
     expect(receivedTools?.map((t) => t.name).sort()).toEqual(['bash']);
   });
 
   test('handles skill invocation and filters tools', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-skill-'));
-    const agent = new AgentLoop({ cwd });
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-skill-'));
+    const assistant = new AssistantLoop({ cwd });
     let receivedTools: Array<{ name: string }> | undefined;
     let receivedSystemPrompt: string | undefined;
 
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (
         messages: unknown[],
@@ -383,18 +383,18 @@ describe('AgentLoop process', () => {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
-    (agent as any).toolRegistry.register(
+    (assistant as any).toolRegistry.register(
       { name: 'read', description: 't', parameters: { type: 'object', properties: {} } },
       async () => 'ok'
     );
-    (agent as any).toolRegistry.register(
+    (assistant as any).toolRegistry.register(
       { name: 'bash', description: 't', parameters: { type: 'object', properties: {} } },
       async () => 'ok'
     );
 
-    (agent as any).skillLoader.skills.set('demo', {
+    (assistant as any).skillLoader.skills.set('demo', {
       name: 'demo',
       description: 'Demo skill',
       content: 'Skill content',
@@ -403,45 +403,45 @@ describe('AgentLoop process', () => {
       contentLoaded: true,
     });
 
-    await agent.process('/demo arg1 arg2');
+    await assistant.process('/demo arg1 arg2');
 
     expect(receivedTools?.map((t) => t.name).sort()).toEqual(['read']);
     expect(receivedSystemPrompt).toContain('Skill content');
   });
 
   test('handles /skills and /connectors commands with context data', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-ctx-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-ctx-'));
     const chunks: StreamChunk[] = [];
-    const agent = new AgentLoop({
+    const assistant = new AssistantLoop({
       cwd,
       onChunk: (chunk) => chunks.push(chunk),
     });
 
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
-    (agent as any).builtinCommands.registerAll((agent as any).commandLoader);
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).builtinCommands.registerAll((assistant as any).commandLoader);
 
-    (agent as any).skillLoader.skills.set('alpha', {
+    (assistant as any).skillLoader.skills.set('alpha', {
       name: 'alpha',
       description: 'Alpha skill',
       content: 'Skill',
       filePath: join(cwd, 'SKILL.md'),
     });
 
-    (agent as any).connectorBridge.connectors.set('demo', {
+    (assistant as any).connectorBridge.connectors.set('demo', {
       name: 'demo',
       cli: 'connect-demo',
       description: 'Demo connector',
       commands: [{ name: 'list', description: 'List', args: [], options: [] }],
     });
 
-    await agent.process('/skills');
-    await agent.process('/connectors');
+    await assistant.process('/skills');
+    await assistant.process('/connectors');
 
     const textChunks = chunks.filter((c) => c.type === 'text' && c.content);
     expect(textChunks.some((c) => c.content?.includes('alpha'))).toBe(true);
@@ -449,18 +449,18 @@ describe('AgentLoop process', () => {
   });
 
   test('command context can add system messages', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'assistants-agent-sysmsg-'));
-    const agent = new AgentLoop({ cwd });
+    const cwd = mkdtempSync(join(tmpdir(), 'assistants-sysmsg-'));
+    const assistant = new AssistantLoop({ cwd });
 
-    (agent as any).llmClient = {
+    (assistant as any).llmClient = {
       getModel: () => 'mock',
       chat: async function* (): AsyncGenerator<StreamChunk> {
         yield { type: 'done' };
       },
     };
-    (agent as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
+    (assistant as any).config = { llm: { provider: 'anthropic', model: 'mock' } };
 
-    (agent as any).commandLoader.register({
+    (assistant as any).commandLoader.register({
       name: 'sysmsg',
       description: 'Add system message',
       content: '',
@@ -472,9 +472,9 @@ describe('AgentLoop process', () => {
       },
     });
 
-    await agent.process('/sysmsg');
+    await assistant.process('/sysmsg');
 
-    const messages = agent.getContext().getMessages();
+    const messages = assistant.getContext().getMessages();
     expect(messages.some((m) => m.role === 'system' && m.content === 'system-note')).toBe(true);
   });
 });

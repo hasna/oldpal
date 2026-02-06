@@ -1,6 +1,6 @@
 /**
- * Agent-to-Agent Messaging Types
- * Internal messaging system for agent communication
+ * Assistant-to-Assistant Messaging Types
+ * Internal messaging system for assistant communication
  */
 
 // ============================================
@@ -15,23 +15,23 @@ export type MessageStatus = 'unread' | 'read' | 'archived' | 'injected';
 // ============================================
 
 /**
- * Full agent message with all content
+ * Full assistant message with all content
  */
-export interface AgentMessage {
+export interface AssistantMessage {
   /** Unique message ID (msg_xxx) */
   id: string;
   /** Thread ID this message belongs to */
   threadId: string;
   /** Parent message ID if this is a reply */
   parentId: string | null;
-  /** Sender agent ID */
-  fromAgentId: string;
-  /** Sender agent name (for display) */
-  fromAgentName: string;
-  /** Recipient agent ID */
-  toAgentId: string;
-  /** Recipient agent name (for display) */
-  toAgentName: string;
+  /** Sender assistant ID */
+  fromAssistantId: string;
+  /** Sender assistant name (for display) */
+  fromAssistantName: string;
+  /** Recipient assistant ID */
+  toAssistantId: string;
+  /** Recipient assistant name (for display) */
+  toAssistantName: string;
   /** Message subject (optional) */
   subject?: string;
   /** Message body content */
@@ -60,10 +60,10 @@ export interface MessageListItem {
   threadId: string;
   /** Parent message ID if reply */
   parentId: string | null;
-  /** Sender agent ID */
-  fromAgentId: string;
-  /** Sender agent name */
-  fromAgentName: string;
+  /** Sender assistant ID */
+  fromAssistantId: string;
+  /** Sender assistant name */
+  fromAssistantName: string;
   /** Message subject */
   subject?: string;
   /** Preview of message body (first ~100 chars) */
@@ -87,7 +87,7 @@ export interface MessageThread {
   /** Thread subject (from first message) */
   subject?: string;
   /** Participants in the thread */
-  participants: Array<{ agentId: string; agentName: string }>;
+  participants: Array<{ assistantId: string; assistantName: string }>;
   /** Total messages in thread */
   messageCount: number;
   /** Unread messages in thread */
@@ -101,25 +101,25 @@ export interface MessageThread {
 }
 
 // ============================================
-// Agent Registry Types
+// Assistant Registry Types
 // ============================================
 
 /**
- * Agent registry entry
+ * Assistant registry entry
  */
-export interface AgentRegistryEntry {
-  /** Agent display name */
+export interface AssistantRegistryEntry {
+  /** Assistant display name */
   name: string;
-  /** When agent was last seen (ISO 8601) */
+  /** When assistant was last seen (ISO 8601) */
   lastSeen: string;
 }
 
 /**
- * Global agent registry
+ * Global assistant registry
  */
-export interface AgentRegistry {
-  /** Map of agentId -> agent info */
-  agents: Record<string, AgentRegistryEntry>;
+export interface AssistantRegistry {
+  /** Map of assistantId -> assistant info */
+  assistants: Record<string, AssistantRegistryEntry>;
 }
 
 // ============================================
@@ -158,7 +158,7 @@ export interface InboxIndex {
  * Input for sending a message
  */
 export interface SendMessageInput {
-  /** Recipient (agent ID or name) */
+  /** Recipient (assistant ID or name) */
   to: string;
   /** Message subject (optional) */
   subject?: string;

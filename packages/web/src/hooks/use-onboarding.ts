@@ -26,10 +26,10 @@ export const ONBOARDING_STEPS = [
     link: '/chat',
   },
   {
-    id: 'create-agent',
-    label: 'Create a custom agent',
+    id: 'create-assistant',
+    label: 'Create a custom assistant',
     description: 'Build an AI assistant tailored to your needs',
-    link: '/agents',
+    link: '/assistants',
   },
   {
     id: 'create-schedule',

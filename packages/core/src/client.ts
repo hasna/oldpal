@@ -1,15 +1,15 @@
 import type { AssistantClient, StreamChunk, Tool, Skill, Message, TokenUsage, EnergyState, VoiceState, ActiveIdentityInfo, HeartbeatState } from '@hasna/assistants-shared';
 import { generateId } from '@hasna/assistants-shared';
-import { AgentLoop } from './agent/loop';
+import { AssistantLoop } from './agent/loop';
 import type { AskUserHandler } from './tools/ask-user';
 import { Logger, SessionStorage, initAssistantsDir } from './logger';
 import type { Command } from './commands';
 
 /**
- * Embedded client - runs the agent in the same process
+ * Embedded client - runs the assistant in the same process
  */
 export class EmbeddedClient implements AssistantClient {
-  private agent: AgentLoop;
+  private assistantLoop: AssistantLoop;
   private chunkCallbacks: ((chunk: StreamChunk) => void)[] = [];
   private errorCallbacks: ((error: Error) => void)[] = [];
   private initialized = false;
@@ -32,10 +32,10 @@ export class EmbeddedClient implements AssistantClient {
       initialMessages?: Message[];
       systemPrompt?: string;
       allowedTools?: string[];
-      /** Override the model from config (e.g., agent-specific model selection) */
+      /** Override the model from config (e.g., assistant-specific model selection) */
       model?: string;
       startedAt?: string;
-      agentFactory?: (options: ConstructorParameters<typeof AgentLoop>[0]) => AgentLoop;
+      assistantFactory?: (options: ConstructorParameters<typeof AssistantLoop>[0]) => AssistantLoop;
     }
   ) {
     // Initialize .assistants directory structure
@@ -50,8 +50,8 @@ export class EmbeddedClient implements AssistantClient {
 
     this.logger.info('Session started', { cwd: this.cwd });
 
-    const createAgent = options?.agentFactory ?? ((opts: ConstructorParameters<typeof AgentLoop>[0]) => new AgentLoop(opts));
-    this.agent = createAgent({
+    const createAssistant = options?.assistantFactory ?? ((opts: ConstructorParameters<typeof AssistantLoop>[0]) => new AssistantLoop(opts));
+    this.assistantLoop = createAssistant({
       cwd: this.cwd,
       sessionId,
       allowedTools: options?.allowedTools,
@@ -90,28 +90,28 @@ export class EmbeddedClient implements AssistantClient {
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    this.logger.info('Initializing agent');
-    await this.agent.initialize();
-    if (typeof (this.agent as any).getAssistantId === 'function') {
-      this.assistantId = (this.agent as any).getAssistantId();
+    this.logger.info('Initializing assistant');
+    await this.assistantLoop.initialize();
+    if (typeof (this.assistantLoop as any).getAssistantId === 'function') {
+      this.assistantId = (this.assistantLoop as any).getAssistantId();
       if (this.assistantId) {
         this.session = new SessionStorage(this.session.getSessionId(), undefined, this.assistantId);
       }
     }
     if (this.initialMessages && this.initialMessages.length > 0) {
       const contextSeed = this.selectContextSeed(this.initialMessages);
-      if (typeof (this.agent as any).importContext === 'function') {
-        (this.agent as any).importContext(contextSeed);
+      if (typeof (this.assistantLoop as any).importContext === 'function') {
+        (this.assistantLoop as any).importContext(contextSeed);
       } else {
-        this.agent.getContext().import(contextSeed);
+        this.assistantLoop.getContext().import(contextSeed);
       }
       this.messages = [...this.initialMessages];
       this.messageIds = new Set(this.initialMessages.map((msg) => msg.id));
     }
     this.initialized = true;
-    this.logger.info('Agent initialized', {
-      tools: this.agent.getTools().length,
-      skills: this.agent.getSkills().length,
+    this.logger.info('Assistant initialized', {
+      tools: this.assistantLoop.getTools().length,
+      skills: this.assistantLoop.getSkills().length,
     });
   }
 
@@ -128,8 +128,8 @@ export class EmbeddedClient implements AssistantClient {
     }
 
     this.messageQueue.push(message);
-    if (this.agent.isProcessing() || this.processingQueue) {
-      this.logger.info('Queuing message (agent busy)', { message, queueLength: this.messageQueue.length });
+    if (this.assistantLoop.isProcessing() || this.processingQueue) {
+      this.logger.info('Queuing message (assistant busy)', { message, queueLength: this.messageQueue.length });
       return;
     }
 
@@ -144,10 +144,10 @@ export class EmbeddedClient implements AssistantClient {
     this.sawErrorChunk = false;
 
     try {
-      await this.agent.process(message);
+      await this.assistantLoop.process(message);
 
       // Get assistant response from context
-      const context = this.agent.getContext();
+      const context = this.assistantLoop.getContext();
       const contextMessages = context.getMessages();
       if (contextMessages.length > 0) {
         this.mergeMessages(contextMessages);
@@ -182,7 +182,7 @@ export class EmbeddedClient implements AssistantClient {
     this.processingQueue = true;
 
     try {
-      while (this.messageQueue.length > 0 && !this.agent.isProcessing()) {
+      while (this.messageQueue.length > 0 && !this.assistantLoop.isProcessing()) {
         const nextMessage = this.messageQueue.shift();
         if (nextMessage) {
           await this.processMessage(nextMessage);
@@ -203,25 +203,33 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
-   * Register a chunk callback
+   * Register a chunk callback. Returns an unsubscribe function.
    */
-  onChunk(callback: (chunk: StreamChunk) => void): void {
+  onChunk(callback: (chunk: StreamChunk) => void): () => void {
     this.chunkCallbacks.push(callback);
+    return () => {
+      const index = this.chunkCallbacks.indexOf(callback);
+      if (index !== -1) this.chunkCallbacks.splice(index, 1);
+    };
   }
 
   /**
-   * Register an error callback
+   * Register an error callback. Returns an unsubscribe function.
    */
-  onError(callback: (error: Error) => void): void {
+  onError(callback: (error: Error) => void): () => void {
     this.errorCallbacks.push(callback);
+    return () => {
+      const index = this.errorCallbacks.indexOf(callback);
+      if (index !== -1) this.errorCallbacks.splice(index, 1);
+    };
   }
 
   /**
    * Register an ask-user handler for interactive prompts
    */
   setAskUserHandler(handler: AskUserHandler | null): void {
-    if (typeof (this.agent as any).setAskUserHandler === 'function') {
-      (this.agent as any).setAskUserHandler(handler);
+    if (typeof (this.assistantLoop as any).setAskUserHandler === 'function') {
+      (this.assistantLoop as any).setAskUserHandler(handler);
     }
   }
 
@@ -232,7 +240,7 @@ export class EmbeddedClient implements AssistantClient {
     if (!this.initialized) {
       await this.initialize();
     }
-    return this.agent.getTools();
+    return this.assistantLoop.getTools();
   }
 
   /**
@@ -242,7 +250,7 @@ export class EmbeddedClient implements AssistantClient {
     if (!this.initialized) {
       await this.initialize();
     }
-    return this.agent.getSkills();
+    return this.assistantLoop.getSkills();
   }
 
   /**
@@ -250,25 +258,27 @@ export class EmbeddedClient implements AssistantClient {
    */
   stop(): void {
     this.logger.info('Processing stopped by user');
-    this.agent.stop();
+    this.assistantLoop.stop();
   }
 
   /**
-   * Disconnect (no-op for embedded client)
+   * Disconnect and clean up resources
    */
   disconnect(): void {
     this.logger.info('Session ended');
-    if (typeof (this.agent as any).shutdown === 'function') {
-      (this.agent as any).shutdown();
+    if (typeof (this.assistantLoop as any).shutdown === 'function') {
+      (this.assistantLoop as any).shutdown();
     }
     this.saveSession();
+    this.chunkCallbacks.length = 0;
+    this.errorCallbacks.length = 0;
   }
 
   /**
-   * Check if agent is currently processing
+   * Check if assistant is currently processing
    */
   isProcessing(): boolean {
-    return this.agent.isProcessing();
+    return this.assistantLoop.isProcessing();
   }
 
   /**
@@ -285,22 +295,22 @@ export class EmbeddedClient implements AssistantClient {
     if (!this.initialized) {
       await this.initialize();
     }
-    return this.agent.getCommands();
+    return this.assistantLoop.getCommands();
   }
 
   /**
    * Get current token usage
    */
   getTokenUsage(): TokenUsage {
-    return this.agent.getTokenUsage();
+    return this.assistantLoop.getTokenUsage();
   }
 
   /**
    * Get current energy state
    */
   getEnergyState(): EnergyState | null {
-    if (typeof (this.agent as any).getEnergyState === 'function') {
-      return (this.agent as any).getEnergyState();
+    if (typeof (this.assistantLoop as any).getEnergyState === 'function') {
+      return (this.assistantLoop as any).getEnergyState();
     }
     return null;
   }
@@ -309,8 +319,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get current voice state
    */
   getVoiceState(): VoiceState | null {
-    if (typeof (this.agent as any).getVoiceState === 'function') {
-      return (this.agent as any).getVoiceState();
+    if (typeof (this.assistantLoop as any).getVoiceState === 'function') {
+      return (this.assistantLoop as any).getVoiceState();
     }
     return null;
   }
@@ -319,8 +329,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get current heartbeat state
    */
   getHeartbeatState(): HeartbeatState | null {
-    if (typeof (this.agent as any).getHeartbeatState === 'function') {
-      return (this.agent as any).getHeartbeatState();
+    if (typeof (this.assistantLoop as any).getHeartbeatState === 'function') {
+      return (this.assistantLoop as any).getHeartbeatState();
     }
     return null;
   }
@@ -329,8 +339,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get current assistant/identity info
    */
   getIdentityInfo(): ActiveIdentityInfo | null {
-    if (typeof (this.agent as any).getIdentityInfo === 'function') {
-      return (this.agent as any).getIdentityInfo();
+    if (typeof (this.assistantLoop as any).getIdentityInfo === 'function') {
+      return (this.assistantLoop as any).getIdentityInfo();
     }
     return null;
   }
@@ -339,8 +349,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get current model
    */
   getModel(): string | null {
-    if (typeof (this.agent as any).getModel === 'function') {
-      return (this.agent as any).getModel();
+    if (typeof (this.assistantLoop as any).getModel === 'function') {
+      return (this.assistantLoop as any).getModel();
     }
     return null;
   }
@@ -349,8 +359,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get the assistant manager
    */
   getAssistantManager(): any {
-    if (typeof (this.agent as any).getAssistantManager === 'function') {
-      return (this.agent as any).getAssistantManager();
+    if (typeof (this.assistantLoop as any).getAssistantManager === 'function') {
+      return (this.assistantLoop as any).getAssistantManager();
     }
     return null;
   }
@@ -359,8 +369,8 @@ export class EmbeddedClient implements AssistantClient {
    * Refresh identity context after assistant/identity changes
    */
   async refreshIdentityContext(): Promise<void> {
-    if (typeof (this.agent as any).refreshIdentityContext === 'function') {
-      await (this.agent as any).refreshIdentityContext();
+    if (typeof (this.assistantLoop as any).refreshIdentityContext === 'function') {
+      await (this.assistantLoop as any).refreshIdentityContext();
     }
   }
 
@@ -368,8 +378,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get the messages manager
    */
   getMessagesManager(): any {
-    if (typeof (this.agent as any).getMessagesManager === 'function') {
-      return (this.agent as any).getMessagesManager();
+    if (typeof (this.assistantLoop as any).getMessagesManager === 'function') {
+      return (this.assistantLoop as any).getMessagesManager();
     }
     return null;
   }
@@ -378,8 +388,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get the wallet manager
    */
   getWalletManager(): any {
-    if (typeof (this.agent as any).getWalletManager === 'function') {
-      return (this.agent as any).getWalletManager();
+    if (typeof (this.assistantLoop as any).getWalletManager === 'function') {
+      return (this.assistantLoop as any).getWalletManager();
     }
     return null;
   }
@@ -388,8 +398,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get the secrets manager
    */
   getSecretsManager(): any {
-    if (typeof (this.agent as any).getSecretsManager === 'function') {
-      return (this.agent as any).getSecretsManager();
+    if (typeof (this.assistantLoop as any).getSecretsManager === 'function') {
+      return (this.assistantLoop as any).getSecretsManager();
     }
     return null;
   }
@@ -398,8 +408,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get the inbox manager
    */
   getInboxManager(): any {
-    if (typeof (this.agent as any).getInboxManager === 'function') {
-      return (this.agent as any).getInboxManager();
+    if (typeof (this.assistantLoop as any).getInboxManager === 'function') {
+      return (this.assistantLoop as any).getInboxManager();
     }
     return null;
   }
@@ -408,8 +418,8 @@ export class EmbeddedClient implements AssistantClient {
    * Get the active project ID
    */
   getActiveProjectId(): string | null {
-    if (typeof (this.agent as any).getActiveProjectId === 'function') {
-      return (this.agent as any).getActiveProjectId();
+    if (typeof (this.assistantLoop as any).getActiveProjectId === 'function') {
+      return (this.assistantLoop as any).getActiveProjectId();
     }
     return null;
   }
@@ -418,8 +428,8 @@ export class EmbeddedClient implements AssistantClient {
    * Set the active project ID
    */
   setActiveProjectId(projectId: string | null): void {
-    if (typeof (this.agent as any).setActiveProjectId === 'function') {
-      (this.agent as any).setActiveProjectId(projectId);
+    if (typeof (this.assistantLoop as any).setActiveProjectId === 'function') {
+      (this.assistantLoop as any).setActiveProjectId(projectId);
     }
   }
 
@@ -427,11 +437,11 @@ export class EmbeddedClient implements AssistantClient {
    * Add a system message to the conversation context
    */
   addSystemMessage(content: string): void {
-    if (typeof (this.agent as any).addSystemMessage === 'function') {
-      (this.agent as any).addSystemMessage(content);
+    if (typeof (this.assistantLoop as any).addSystemMessage === 'function') {
+      (this.assistantLoop as any).addSystemMessage(content);
     } else {
       // Fallback: add to context directly
-      const context = this.agent.getContext();
+      const context = this.assistantLoop.getContext();
       if (typeof (context as any).addSystemMessage === 'function') {
         (context as any).addSystemMessage(content);
       }
@@ -442,7 +452,7 @@ export class EmbeddedClient implements AssistantClient {
    * Clear the conversation
    */
   clearConversation(): void {
-    this.agent.clearConversation();
+    this.assistantLoop.clearConversation();
     this.messages = [];
     this.messageIds.clear();
     this.logger.info('Conversation cleared');
@@ -501,8 +511,8 @@ export class EmbeddedClient implements AssistantClient {
 
   private selectContextSeed(messages: Message[]): Message[] {
     if (messages.length === 0) return [];
-    const contextInfo = typeof (this.agent as any).getContextInfo === 'function'
-      ? (this.agent as any).getContextInfo()
+    const contextInfo = typeof (this.assistantLoop as any).getContextInfo === 'function'
+      ? (this.assistantLoop as any).getContextInfo()
       : null;
     const maxMessages = contextInfo?.config?.maxMessages ?? 100;
     if (messages.length <= maxMessages) return messages;

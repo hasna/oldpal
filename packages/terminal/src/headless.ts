@@ -117,18 +117,14 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
     if (chunk.type === 'tool_result' && chunk.toolResult?.isError) {
       hadError = true;
       errorMessage = chunk.toolResult.content || 'Tool error';
-      if (outputFormat === 'text') {
-        process.stderr.write(`Error: ${errorMessage}\n`);
-      }
+      process.stderr.write(`Error: ${errorMessage}\n`);
     }
 
     // Handle errors
     if (chunk.type === 'error' && chunk.error) {
       hadError = true;
       errorMessage = chunk.error;
-      if (outputFormat === 'text') {
-        process.stderr.write(`Error: ${chunk.error}\n`);
-      }
+      process.stderr.write(`Error: ${chunk.error}\n`);
     }
   });
 

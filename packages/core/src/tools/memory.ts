@@ -1,8 +1,8 @@
 /**
  * Memory Tools
  *
- * Tools that allow agents to save, recall, and manage memories.
- * These tools provide the agent with persistent storage across sessions.
+ * Tools that allow assistants to save, recall, and manage memories.
+ * These tools provide the assistant with persistent storage across sessions.
  *
  * NOTE: This is for the terminal/core package only (SQLite-based).
  * The web version uses PostgreSQL with AWS vector storage.
@@ -47,11 +47,11 @@ export const memorySaveTool: Tool = {
       scope: {
         type: 'string',
         enum: ['global', 'shared', 'private'],
-        description: 'Memory scope: global (all agents), shared (this agent + delegates), private (this agent only). Default: private.',
+        description: 'Memory scope: global (all assistants), shared (this assistant + delegates), private (this assistant only). Default: private.',
       },
       scopeId: {
         type: 'string',
-        description: 'Optional scope identifier for shared/private memories. If not provided, uses the agent default.',
+        description: 'Optional scope identifier for shared/private memories. If not provided, uses the assistant default.',
       },
       importance: {
         type: 'number',
@@ -469,7 +469,7 @@ export function createMemoryToolExecutors(
           importance,
           summary: summary || undefined,
           tags,
-          source: 'agent',
+          source: 'assistant',
           scope: scope || undefined,
           scopeId: scopeId || undefined,
         });
@@ -794,7 +794,7 @@ export function createMemoryToolExecutors(
           importance?: number;
           summary?: string;
           tags?: string[];
-          source?: 'user' | 'agent' | 'system';
+          source?: 'user' | 'assistant' | 'system';
         }> = [];
 
         const errors: string[] = [];
@@ -834,7 +834,7 @@ export function createMemoryToolExecutors(
               importance: mem.importance !== undefined ? validateImportance(mem.importance, 5) : undefined,
               summary: validateString(mem.summary, 'summary', MAX_SUMMARY_LENGTH) || undefined,
               tags: mem.tags ? validateTags(mem.tags) : undefined,
-              source: mem.source as 'user' | 'agent' | 'system' | undefined,
+              source: mem.source as 'user' | 'assistant' | 'system' | undefined,
             });
           } catch (error) {
             errors.push(`Entry ${i}: ${error instanceof Error ? error.message : String(error)}`);
@@ -860,7 +860,7 @@ export function createMemoryToolExecutors(
             importance: m.importance || 5,
             summary: m.summary,
             tags: m.tags || [],
-            source: m.source || 'agent',
+            source: m.source || 'assistant',
           })) as Parameters<typeof manager.import>[0],
           { overwrite }
         );

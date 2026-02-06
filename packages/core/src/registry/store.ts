@@ -1,7 +1,7 @@
 /**
- * Agent Registry Store
+ * Assistant Registry Store
  *
- * Provides storage layer for registered agents with support for
+ * Provides storage layer for registered assistants with support for
  * in-memory and file-based persistence.
  */
 
@@ -9,31 +9,31 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import type {
-  RegisteredAgent,
-  AgentRegistration,
-  AgentUpdate,
-  AgentQuery,
-  AgentQueryResult,
+  RegisteredAssistant,
+  AssistantRegistration,
+  AssistantUpdate,
+  AssistantQuery,
+  AssistantQueryResult,
   RegistryConfig,
   RegistryStats,
-  AgentType,
-  RegistryAgentState,
+  AssistantType,
+  RegistryAssistantState,
 } from './types';
 import { DEFAULT_REGISTRY_CONFIG } from './types';
 
 /**
- * Generate a unique agent ID
+ * Generate a unique assistant ID
  */
-function generateAgentId(): string {
-  return `agent_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+function generateAssistantId(): string {
+  return `assistant_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
 /**
- * Create a new agent record from registration
+ * Create a new assistant record from registration
  */
-function createAgentRecord(registration: AgentRegistration): RegisteredAgent {
+function createAssistantRecord(registration: AssistantRegistration): RegisteredAssistant {
   const now = new Date().toISOString();
-  const id = registration.id || generateAgentId();
+  const id = registration.id || generateAssistantId();
 
   return {
     id,
@@ -80,31 +80,31 @@ function createAgentRecord(registration: AgentRegistration): RegisteredAgent {
 }
 
 /**
- * Check if agent has required capabilities
+ * Check if assistant has required capabilities
  */
 function hasRequiredCapabilities(
-  agent: RegisteredAgent,
+  assistant: RegisteredAssistant,
   required?: { tools?: string[]; skills?: string[]; tags?: string[] }
 ): boolean {
   if (!required) return true;
 
   if (required.tools?.length) {
     const hasAllTools = required.tools.every((tool) =>
-      agent.capabilities.tools.some((t) => t === tool || t.startsWith(tool.replace('*', '')))
+      assistant.capabilities.tools.some((t) => t === tool || t.startsWith(tool.replace('*', '')))
     );
     if (!hasAllTools) return false;
   }
 
   if (required.skills?.length) {
     const hasAllSkills = required.skills.every((skill) =>
-      agent.capabilities.skills.includes(skill)
+      assistant.capabilities.skills.includes(skill)
     );
     if (!hasAllSkills) return false;
   }
 
   if (required.tags?.length) {
     const hasAllTags = required.tags.every((tag) =>
-      agent.capabilities.tags.includes(tag)
+      assistant.capabilities.tags.includes(tag)
     );
     if (!hasAllTags) return false;
   }
@@ -116,7 +116,7 @@ function hasRequiredCapabilities(
  * Calculate capability match score
  */
 function calculateMatchScore(
-  agent: RegisteredAgent,
+  assistant: RegisteredAssistant,
   preferred?: { tools?: string[]; skills?: string[]; tags?: string[] }
 ): number {
   if (!preferred) return 1;
@@ -127,21 +127,21 @@ function calculateMatchScore(
   if (preferred.tools?.length) {
     total += preferred.tools.length;
     score += preferred.tools.filter((tool) =>
-      agent.capabilities.tools.some((t) => t === tool || t.startsWith(tool.replace('*', '')))
+      assistant.capabilities.tools.some((t) => t === tool || t.startsWith(tool.replace('*', '')))
     ).length;
   }
 
   if (preferred.skills?.length) {
     total += preferred.skills.length;
     score += preferred.skills.filter((skill) =>
-      agent.capabilities.skills.includes(skill)
+      assistant.capabilities.skills.includes(skill)
     ).length;
   }
 
   if (preferred.tags?.length) {
     total += preferred.tags.length;
     score += preferred.tags.filter((tag) =>
-      agent.capabilities.tags.includes(tag)
+      assistant.capabilities.tags.includes(tag)
     ).length;
   }
 
@@ -149,31 +149,31 @@ function calculateMatchScore(
 }
 
 /**
- * Check if agent has excluded capabilities
+ * Check if assistant has excluded capabilities
  */
 function hasExcludedCapabilities(
-  agent: RegisteredAgent,
+  assistant: RegisteredAssistant,
   excluded?: { tools?: string[]; skills?: string[]; tags?: string[] }
 ): boolean {
   if (!excluded) return false;
 
   if (excluded.tools?.length) {
     const hasExcludedTool = excluded.tools.some((tool) =>
-      agent.capabilities.tools.some((t) => t === tool || t.startsWith(tool.replace('*', '')))
+      assistant.capabilities.tools.some((t) => t === tool || t.startsWith(tool.replace('*', '')))
     );
     if (hasExcludedTool) return true;
   }
 
   if (excluded.skills?.length) {
     const hasExcludedSkill = excluded.skills.some((skill) =>
-      agent.capabilities.skills.includes(skill)
+      assistant.capabilities.skills.includes(skill)
     );
     if (hasExcludedSkill) return true;
   }
 
   if (excluded.tags?.length) {
     const hasExcludedTag = excluded.tags.some((tag) =>
-      agent.capabilities.tags.includes(tag)
+      assistant.capabilities.tags.includes(tag)
     );
     if (hasExcludedTag) return true;
   }
@@ -184,8 +184,8 @@ function hasExcludedCapabilities(
 /**
  * Calculate load factor (0-1)
  */
-function calculateLoadFactor(agent: RegisteredAgent): number {
-  const { load, capabilities } = agent;
+function calculateLoadFactor(assistant: RegisteredAssistant): number {
+  const { load, capabilities } = assistant;
   const maxConcurrent = capabilities.maxConcurrent || 5;
 
   // Weight active tasks heavily, queued tasks less
@@ -201,10 +201,10 @@ function calculateLoadFactor(agent: RegisteredAgent): number {
 }
 
 /**
- * Agent Registry Store
+ * Assistant Registry Store
  */
 export class RegistryStore {
-  private agents: Map<string, RegisteredAgent> = new Map();
+  private assistants: Map<string, RegisteredAssistant> = new Map();
   private config: RegistryConfig;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private startedAt: number;
@@ -232,11 +232,11 @@ export class RegistryStore {
       return this.config.storagePath;
     }
     const home = process.env.HOME || process.env.USERPROFILE || homedir();
-    return join(home, '.assistants', 'registry', 'agents.json');
+    return join(home, '.assistants', 'registry', 'assistants.json');
   }
 
   /**
-   * Load agents from file
+   * Load assistants from file
    */
   private loadFromFile(): void {
     try {
@@ -244,9 +244,9 @@ export class RegistryStore {
       if (!existsSync(path)) return;
 
       const data = JSON.parse(readFileSync(path, 'utf-8'));
-      if (Array.isArray(data.agents)) {
-        for (const agent of data.agents) {
-          this.agents.set(agent.id, agent);
+      if (Array.isArray(data.assistants)) {
+        for (const assistant of data.assistants) {
+          this.assistants.set(assistant.id, assistant);
         }
       }
     } catch {
@@ -255,7 +255,7 @@ export class RegistryStore {
   }
 
   /**
-   * Save agents to file
+   * Save assistants to file
    */
   private saveToFile(): void {
     if (this.config.storage !== 'file') return;
@@ -270,7 +270,7 @@ export class RegistryStore {
       const data = {
         version: 1,
         savedAt: new Date().toISOString(),
-        agents: Array.from(this.agents.values()),
+        assistants: Array.from(this.assistants.values()),
       };
 
       writeFileSync(path, JSON.stringify(data, null, 2));
@@ -286,7 +286,7 @@ export class RegistryStore {
     if (this.cleanupTimer) return;
 
     this.cleanupTimer = setInterval(() => {
-      this.cleanupStaleAgents();
+      this.cleanupStaleAssistants();
     }, this.config.cleanupInterval);
   }
 
@@ -301,27 +301,27 @@ export class RegistryStore {
   }
 
   /**
-   * Clean up stale agents
+   * Clean up stale assistants
    * This is called automatically on an interval, but can be called manually
    * to trigger cleanup (e.g., on startup to clean up crashed sessions)
    */
-  cleanupStaleAgents(): void {
+  cleanupStaleAssistants(): void {
     const now = Date.now();
     const staleThreshold = this.config.staleTTL;
 
-    for (const [id, agent] of this.agents) {
-      const lastHeartbeat = new Date(agent.heartbeat.lastHeartbeat).getTime();
+    for (const [id, assistant] of this.assistants) {
+      const lastHeartbeat = new Date(assistant.heartbeat.lastHeartbeat).getTime();
       const age = now - lastHeartbeat;
 
       if (age > staleThreshold) {
-        // Auto-deregister stale agents
-        this.agents.delete(id);
+        // Auto-deregister stale assistants
+        this.assistants.delete(id);
       } else if (age > this.config.heartbeatStaleThreshold) {
         // Mark as stale but keep
-        agent.heartbeat.isStale = true;
-        agent.heartbeat.missedCount = Math.floor(age / this.config.heartbeatStaleThreshold);
-        agent.status.state = 'offline';
-        agent.updatedAt = new Date().toISOString();
+        assistant.heartbeat.isStale = true;
+        assistant.heartbeat.missedCount = Math.floor(age / this.config.heartbeatStaleThreshold);
+        assistant.status.state = 'offline';
+        assistant.updatedAt = new Date().toISOString();
       }
     }
 
@@ -329,121 +329,121 @@ export class RegistryStore {
   }
 
   /**
-   * Register a new agent
+   * Register a new assistant
    */
-  register(registration: AgentRegistration): RegisteredAgent {
-    // Check max agents limit
-    if (this.agents.size >= this.config.maxAgents) {
-      // Try to clean up stale agents first
-      this.cleanupStaleAgents();
+  register(registration: AssistantRegistration): RegisteredAssistant {
+    // Check max assistants limit
+    if (this.assistants.size >= this.config.maxAssistants) {
+      // Try to clean up stale assistants first
+      this.cleanupStaleAssistants();
 
-      if (this.agents.size >= this.config.maxAgents) {
-        throw new Error(`Registry full: maximum ${this.config.maxAgents} agents reached`);
+      if (this.assistants.size >= this.config.maxAssistants) {
+        throw new Error(`Registry full: maximum ${this.config.maxAssistants} assistants reached`);
       }
     }
 
-    const agent = createAgentRecord(registration);
+    const assistant = createAssistantRecord(registration);
 
     // Update parent's childIds if parent exists
-    if (agent.parentId) {
-      const parent = this.agents.get(agent.parentId);
+    if (assistant.parentId) {
+      const parent = this.assistants.get(assistant.parentId);
       if (parent) {
-        parent.childIds.push(agent.id);
+        parent.childIds.push(assistant.id);
         parent.updatedAt = new Date().toISOString();
       }
     }
 
-    this.agents.set(agent.id, agent);
+    this.assistants.set(assistant.id, assistant);
     this.saveToFile();
 
-    return agent;
+    return assistant;
   }
 
   /**
-   * Get an agent by ID
+   * Get an assistant by ID
    */
-  get(id: string): RegisteredAgent | null {
-    return this.agents.get(id) || null;
+  get(id: string): RegisteredAssistant | null {
+    return this.assistants.get(id) || null;
   }
 
   /**
-   * Update an agent
+   * Update an assistant
    */
-  update(id: string, update: AgentUpdate): RegisteredAgent | null {
-    const agent = this.agents.get(id);
-    if (!agent) return null;
+  update(id: string, update: AssistantUpdate): RegisteredAssistant | null {
+    const assistant = this.assistants.get(id);
+    if (!assistant) return null;
 
     const now = new Date().toISOString();
 
-    if (update.name !== undefined) agent.name = update.name;
-    if (update.description !== undefined) agent.description = update.description;
+    if (update.name !== undefined) assistant.name = update.name;
+    if (update.description !== undefined) assistant.description = update.description;
 
     if (update.capabilities) {
-      agent.capabilities = {
-        ...agent.capabilities,
+      assistant.capabilities = {
+        ...assistant.capabilities,
         ...update.capabilities,
       };
     }
 
     if (update.status) {
-      agent.status = {
-        ...agent.status,
+      assistant.status = {
+        ...assistant.status,
         ...update.status,
       };
     }
 
     if (update.load) {
-      agent.load = {
-        ...agent.load,
+      assistant.load = {
+        ...assistant.load,
         ...update.load,
       };
     }
 
     if (update.metadata) {
-      agent.metadata = {
-        ...agent.metadata,
+      assistant.metadata = {
+        ...assistant.metadata,
         ...update.metadata,
       };
     }
 
-    agent.updatedAt = now;
+    assistant.updatedAt = now;
     this.saveToFile();
 
-    return agent;
+    return assistant;
   }
 
   /**
    * Record a heartbeat
    */
-  heartbeat(id: string): RegisteredAgent | null {
-    const agent = this.agents.get(id);
-    if (!agent) return null;
+  heartbeat(id: string): RegisteredAssistant | null {
+    const assistant = this.assistants.get(id);
+    if (!assistant) return null;
 
     const now = new Date().toISOString();
-    agent.heartbeat.lastHeartbeat = now;
-    agent.heartbeat.isStale = false;
-    agent.heartbeat.missedCount = 0;
+    assistant.heartbeat.lastHeartbeat = now;
+    assistant.heartbeat.isStale = false;
+    assistant.heartbeat.missedCount = 0;
 
     // Recover from offline state
-    if (agent.status.state === 'offline') {
-      agent.status.state = 'idle';
+    if (assistant.status.state === 'offline') {
+      assistant.status.state = 'idle';
     }
 
-    agent.updatedAt = now;
+    assistant.updatedAt = now;
 
-    return agent;
+    return assistant;
   }
 
   /**
-   * Deregister an agent
+   * Deregister an assistant
    */
   deregister(id: string): boolean {
-    const agent = this.agents.get(id);
-    if (!agent) return false;
+    const assistant = this.assistants.get(id);
+    if (!assistant) return false;
 
     // Update parent's childIds
-    if (agent.parentId) {
-      const parent = this.agents.get(agent.parentId);
+    if (assistant.parentId) {
+      const parent = this.assistants.get(assistant.parentId);
       if (parent) {
         parent.childIds = parent.childIds.filter((cid) => cid !== id);
         parent.updatedAt = new Date().toISOString();
@@ -451,21 +451,21 @@ export class RegistryStore {
     }
 
     // Deregister children
-    for (const childId of agent.childIds) {
+    for (const childId of assistant.childIds) {
       this.deregister(childId);
     }
 
-    this.agents.delete(id);
+    this.assistants.delete(id);
     this.saveToFile();
 
     return true;
   }
 
   /**
-   * Query agents
+   * Query assistants
    */
-  query(query: AgentQuery): AgentQueryResult {
-    let results = Array.from(this.agents.values());
+  query(query: AssistantQuery): AssistantQueryResult {
+    let results = Array.from(this.assistants.values());
     const scores = new Map<string, number>();
 
     // Filter by type
@@ -500,7 +500,7 @@ export class RegistryStore {
       results = results.filter((a) => !hasExcludedCapabilities(a, query.excludedCapabilities));
     }
 
-    // Exclude offline agents if not requested
+    // Exclude offline assistants if not requested
     if (!query.includeOffline) {
       results = results.filter((a) => a.status.state !== 'offline' && !a.heartbeat.isStale);
     }
@@ -511,8 +511,8 @@ export class RegistryStore {
     }
 
     // Calculate scores
-    for (const agent of results) {
-      scores.set(agent.id, calculateMatchScore(agent, query.preferredCapabilities));
+    for (const assistant of results) {
+      scores.set(assistant.id, calculateMatchScore(assistant, query.preferredCapabilities));
     }
 
     // Sort results
@@ -543,30 +543,30 @@ export class RegistryStore {
       results = results.slice(0, query.limit);
     }
 
-    return { agents: results, total, scores };
+    return { assistants: results, total, scores };
   }
 
   /**
-   * List all agents
+   * List all assistants
    */
-  list(): RegisteredAgent[] {
-    return Array.from(this.agents.values());
+  list(): RegisteredAssistant[] {
+    return Array.from(this.assistants.values());
   }
 
   /**
    * Get registry statistics
    */
   getStats(): RegistryStats {
-    const agents = Array.from(this.agents.values());
+    const assistants = Array.from(this.assistants.values());
 
-    const byType: Record<AgentType, number> = {
+    const byType: Record<AssistantType, number> = {
       assistant: 0,
-      subagent: 0,
+      subassistant: 0,
       coordinator: 0,
       worker: 0,
     };
 
-    const byState: Record<RegistryAgentState, number> = {
+    const byState: Record<RegistryAssistantState, number> = {
       idle: 0,
       processing: 0,
       waiting_input: 0,
@@ -578,31 +578,31 @@ export class RegistryStore {
     let totalLoad = 0;
     let staleCount = 0;
 
-    for (const agent of agents) {
-      byType[agent.type]++;
-      byState[agent.status.state]++;
-      totalLoad += calculateLoadFactor(agent);
+    for (const assistant of assistants) {
+      byType[assistant.type]++;
+      byState[assistant.status.state]++;
+      totalLoad += calculateLoadFactor(assistant);
 
-      if (agent.heartbeat.isStale) {
+      if (assistant.heartbeat.isStale) {
         staleCount++;
       }
     }
 
     return {
-      totalAgents: agents.length,
+      totalAssistants: assistants.length,
       byType,
       byState,
       staleCount,
-      averageLoad: agents.length > 0 ? totalLoad / agents.length : 0,
+      averageLoad: assistants.length > 0 ? totalLoad / assistants.length : 0,
       uptime: (Date.now() - this.startedAt) / 1000,
     };
   }
 
   /**
-   * Clear all agents
+   * Clear all assistants
    */
   clear(): void {
-    this.agents.clear();
+    this.assistants.clear();
     this.saveToFile();
   }
 }

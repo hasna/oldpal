@@ -18,7 +18,7 @@ interface SkillDetailResponse {
   userInvocable: boolean;
   model?: string;
   context?: string;
-  agent?: string;
+  assistant?: string;
   category: string;
   /** Safe source identifier (e.g., "shared/skill-name") */
   sourceId: string;
@@ -105,7 +105,7 @@ export const GET = withApiKeyAuth(async (
       userInvocable: skill.userInvocable !== false,
       model: skill.model,
       context: skill.context,
-      agent: skill.agent,
+      assistant: skill.assistant,
       category,
       sourceId: generateSourceId(skill.filePath, category),
       content: skill.content,

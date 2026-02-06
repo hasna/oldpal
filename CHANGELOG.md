@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hook system for customization
 - Voice support (TTS/STT)
 - Session management
-- Agent management
+- Assistant management
 - Message threading
 - Tool registry
 - Connector bridge for CLI tools

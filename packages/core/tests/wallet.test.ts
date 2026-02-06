@@ -19,15 +19,15 @@ mock.module('../src/wallet/storage/secrets-client', () => ({
       return Array.from(storedCards.values()).map(toCardListItem);
     }
 
-    async getCard(_agentId: string, cardId: string): Promise<Card | null> {
+    async getCard(_assistantId: string, cardId: string): Promise<Card | null> {
       return storedCards.get(cardId) || null;
     }
 
-    async createCard(_agentId: string, card: Card): Promise<void> {
+    async createCard(_assistantId: string, card: Card): Promise<void> {
       storedCards.set(card.id, card);
     }
 
-    async deleteCard(_agentId: string, cardId: string): Promise<void> {
+    async deleteCard(_assistantId: string, cardId: string): Promise<void> {
       storedCards.delete(cardId);
     }
 
@@ -66,7 +66,7 @@ describe('WalletManager', () => {
 
   test('isConfigured returns false when secrets not configured', () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: { enabled: true },
     });
 
@@ -75,7 +75,7 @@ describe('WalletManager', () => {
 
   test('add returns error when not configured', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: { enabled: true },
     });
 
@@ -86,7 +86,7 @@ describe('WalletManager', () => {
 
   test('validates card number', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: configuredWallet(),
     });
 
@@ -101,7 +101,7 @@ describe('WalletManager', () => {
 
   test('adds a card and normalizes fields', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: configuredWallet(),
     });
 
@@ -118,7 +118,7 @@ describe('WalletManager', () => {
 
   test('getForPayment maps fields', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: configuredWallet(),
     });
 
@@ -141,7 +141,7 @@ describe('WalletManager', () => {
 
   test('rate limits card reads', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: configuredWallet({ security: { maxReadsPerHour: 1 } }),
     });
 
@@ -153,7 +153,7 @@ describe('WalletManager', () => {
 
   test('remove returns not found when missing', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: configuredWallet(),
     });
 
@@ -176,7 +176,7 @@ describe('Wallet tools', () => {
 
   test('wallet_add validates required fields', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: configuredWallet(),
     });
     const executors = createWalletToolExecutors(() => manager);
@@ -186,7 +186,7 @@ describe('Wallet tools', () => {
 
   test('wallet_get returns payment payload', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: configuredWallet(),
     });
     const executors = createWalletToolExecutors(() => manager);
@@ -200,7 +200,7 @@ describe('Wallet tools', () => {
 
   test('wallet_remove handles missing card id', async () => {
     const manager = new WalletManager({
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       config: configuredWallet(),
     });
     const executors = createWalletToolExecutors(() => manager);

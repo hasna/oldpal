@@ -610,7 +610,7 @@ export default function handler(_req: any, res: any) {
       });
 
       ws.on('close', async () => {
-        // Stop the session first so the agent stops processing
+        // Stop the session first so the assistant stops processing
         if (sessionId) {
           await stopSession(sessionId);
         }

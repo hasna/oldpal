@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Mock state
 let mockMessage: any = null;
-let mockUserAgents: any[] = [];
-let mockRecipientAgent: any = null;
+let mockUserAssistants: any[] = [];
+let mockRecipientAssistant: any = null;
 let mockUpdatedMessage: any = null;
 let updateSetData: any = null;
 
@@ -12,12 +12,12 @@ let updateSetData: any = null;
 mock.module('@/db', () => ({
   db: {
     query: {
-      agentMessages: {
+      assistantMessages: {
         findFirst: async () => mockMessage,
       },
-      agents: {
-        findMany: async () => mockUserAgents,
-        findFirst: async () => mockRecipientAgent,
+      assistants: {
+        findMany: async () => mockUserAssistants,
+        findFirst: async () => mockRecipientAssistant,
       },
     },
     update: (table: any) => ({
@@ -35,8 +35,8 @@ mock.module('@/db', () => ({
 
 // Mock db schema
 mock.module('@/db/schema', () => ({
-  agentMessages: 'agentMessages',
-  agents: 'agents',
+  assistantMessages: 'assistantMessages',
+  assistants: 'assistants',
 }));
 
 // Mock auth middleware
@@ -118,14 +118,14 @@ describe('GET /api/v1/messages/:id', () => {
   beforeEach(() => {
     mockMessage = {
       id: 'msg-123',
-      fromAgentId: 'agent-1',
-      toAgentId: 'agent-2',
+      fromAssistantId: 'assistant-1',
+      toAssistantId: 'assistant-2',
       subject: 'Test message',
       content: 'Hello',
       status: 'unread',
     };
-    mockUserAgents = [{ id: 'agent-1' }, { id: 'agent-2' }];
-    mockRecipientAgent = null;
+    mockUserAssistants = [{ id: 'assistant-1' }, { id: 'assistant-2' }];
+    mockRecipientAssistant = null;
     mockUpdatedMessage = null;
     updateSetData = null;
   });
@@ -151,14 +151,14 @@ describe('GET /api/v1/messages/:id', () => {
   });
 
   describe('message retrieval', () => {
-    test('returns message when user owns sender agent', async () => {
+    test('returns message when user owns sender assistant', async () => {
       mockMessage = {
         id: 'msg-123',
-        fromAgentId: 'agent-1',
-        toAgentId: 'agent-other',
+        fromAssistantId: 'assistant-1',
+        toAssistantId: 'assistant-other',
         content: 'Hello',
       };
-      mockUserAgents = [{ id: 'agent-1' }];
+      mockUserAssistants = [{ id: 'assistant-1' }];
 
       const [request, context] = createGetRequest('msg-123');
 
@@ -170,14 +170,14 @@ describe('GET /api/v1/messages/:id', () => {
       expect(data.data.id).toBe('msg-123');
     });
 
-    test('returns message when user owns recipient agent', async () => {
+    test('returns message when user owns recipient assistant', async () => {
       mockMessage = {
         id: 'msg-123',
-        fromAgentId: 'agent-other',
-        toAgentId: 'agent-2',
+        fromAssistantId: 'assistant-other',
+        toAssistantId: 'assistant-2',
         content: 'Hello',
       };
-      mockUserAgents = [{ id: 'agent-2' }];
+      mockUserAssistants = [{ id: 'assistant-2' }];
 
       const [request, context] = createGetRequest('msg-123');
 
@@ -202,11 +202,11 @@ describe('GET /api/v1/messages/:id', () => {
     test('returns 403 when user has no access to message', async () => {
       mockMessage = {
         id: 'msg-123',
-        fromAgentId: 'agent-other-1',
-        toAgentId: 'agent-other-2',
+        fromAssistantId: 'assistant-other-1',
+        toAssistantId: 'assistant-other-2',
         content: 'Hello',
       };
-      mockUserAgents = [{ id: 'agent-mine' }]; // User has different agents
+      mockUserAssistants = [{ id: 'assistant-mine' }]; // User has different assistants
 
       const [request, context] = createGetRequest('msg-123');
 
@@ -223,16 +223,16 @@ describe('PATCH /api/v1/messages/:id', () => {
   beforeEach(() => {
     mockMessage = {
       id: 'msg-123',
-      fromAgentId: 'agent-1',
-      toAgentId: 'agent-2',
+      fromAssistantId: 'assistant-1',
+      toAssistantId: 'assistant-2',
       subject: 'Test message',
       content: 'Hello',
       status: 'unread',
       readAt: null,
       injectedAt: null,
     };
-    mockUserAgents = [{ id: 'agent-1' }, { id: 'agent-2' }];
-    mockRecipientAgent = { id: 'agent-2', userId: 'user-123' };
+    mockUserAssistants = [{ id: 'assistant-1' }, { id: 'assistant-2' }];
+    mockRecipientAssistant = { id: 'assistant-2', userId: 'user-123' };
     mockUpdatedMessage = null;
     updateSetData = null;
   });
@@ -323,8 +323,8 @@ describe('PATCH /api/v1/messages/:id', () => {
       expect(data.error.code).toBe('NOT_FOUND');
     });
 
-    test('returns 403 when user does not own recipient agent', async () => {
-      mockRecipientAgent = { id: 'agent-2', userId: 'different-user' };
+    test('returns 403 when user does not own recipient assistant', async () => {
+      mockRecipientAssistant = { id: 'assistant-2', userId: 'different-user' };
       const [request, context] = createPatchRequest('msg-123', { status: 'read' });
 
       const response = await PATCH(request, context);
@@ -334,8 +334,8 @@ describe('PATCH /api/v1/messages/:id', () => {
       expect(data.error.code).toBe('FORBIDDEN');
     });
 
-    test('returns 403 when recipient agent not found', async () => {
-      mockRecipientAgent = null;
+    test('returns 403 when recipient assistant not found', async () => {
+      mockRecipientAssistant = null;
       const [request, context] = createPatchRequest('msg-123', { status: 'read' });
 
       const response = await PATCH(request, context);

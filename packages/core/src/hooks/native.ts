@@ -104,7 +104,7 @@ export class NativeHookRegistry {
         }
       } catch (error) {
         console.error(`Native hook ${hook.id} error:`, error);
-        // Native hooks failing should not block the agent
+        // Native hooks failing should not block the assistant
         continue;
       }
     }

@@ -399,17 +399,17 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
     },
   },
 
-  // Agent tools (aligned with core/src/tools/agents.ts)
+  // Assistant tools (aligned with core/src/tools/assistants.ts)
   {
-    name: 'agent_spawn',
-    description: 'Spawn a subagent to handle a specific task with limited context and tools',
-    category: 'agents',
+    name: 'assistant_spawn',
+    description: 'Spawn a sub-assistant to handle a specific task with limited context and tools',
+    category: 'assistants',
     parameters: {
       type: 'object',
       properties: {
-        task: { type: 'string', description: 'Task/instruction for the subagent' },
-        tools: { type: 'array', description: 'List of tool names the subagent can use' },
-        context: { type: 'string', description: 'Additional context to pass to the subagent' },
+        task: { type: 'string', description: 'Task/instruction for the sub-assistant' },
+        tools: { type: 'array', description: 'List of tool names the sub-assistant can use' },
+        context: { type: 'string', description: 'Additional context to pass to the sub-assistant' },
         maxTurns: { type: 'number', description: 'Maximum turns (default: 10, max: 25)' },
         async: { type: 'boolean', description: 'Run asynchronously and return job ID', default: false },
       },
@@ -417,21 +417,21 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
     },
   },
   {
-    name: 'agent_list',
-    description: 'List available assistants and currently running subagents',
-    category: 'agents',
+    name: 'assistant_list_running',
+    description: 'List available assistants and currently running sub-assistants',
+    category: 'assistants',
     parameters: {
       type: 'object',
       properties: {
-        includeActive: { type: 'boolean', description: 'Include running subagents', default: true },
-        includeJobs: { type: 'boolean', description: 'Include async subagent jobs', default: true },
+        includeActive: { type: 'boolean', description: 'Include running sub-assistants', default: true },
+        includeJobs: { type: 'boolean', description: 'Include async sub-assistant jobs', default: true },
       },
     },
   },
   {
-    name: 'agent_delegate',
+    name: 'assistant_delegate',
     description: 'Delegate a task to a specific named assistant',
-    category: 'agents',
+    category: 'assistants',
     parameters: {
       type: 'object',
       properties: {
@@ -444,13 +444,13 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
     },
   },
   {
-    name: 'agent_job_status',
-    description: 'Check status of an async agent job or wait for completion',
-    category: 'agents',
+    name: 'assistant_job_status',
+    description: 'Check status of an async assistant job or wait for completion',
+    category: 'assistants',
     parameters: {
       type: 'object',
       properties: {
-        jobId: { type: 'string', description: 'Job ID from agent_spawn or agent_delegate with async=true' },
+        jobId: { type: 'string', description: 'Job ID from assistant_spawn or assistant_delegate with async=true' },
         wait: { type: 'boolean', description: 'Wait for job to complete', default: false },
         timeout: { type: 'number', description: 'Max wait time in milliseconds', default: 30000 },
       },
@@ -525,19 +525,19 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
     parameters: {
       type: 'object',
       properties: {
-        scope: { type: 'string', description: 'Filter by scope: "global" for shared secrets, "agent" for agent-specific secrets, or "all" for both. Default: all', enum: ['global', 'agent', 'all'] },
+        scope: { type: 'string', description: 'Filter by scope: "global" for shared secrets, "assistant" for assistant-specific secrets, or "all" for both. Default: all', enum: ['global', 'assistant', 'all'] },
       },
     },
   },
   {
     name: 'secrets_get',
-    description: 'Get a secret value. Rate limited for security. If scope is not specified, checks agent scope first, then falls back to global.',
+    description: 'Get a secret value. Rate limited for security. If scope is not specified, checks assistant scope first, then falls back to global.',
     category: 'secrets',
     parameters: {
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Secret name (e.g., "GITHUB_TOKEN", "STRIPE_API_KEY")' },
-        scope: { type: 'string', description: 'Secret scope: "global" or "agent". Default: tries agent first, then global', enum: ['global', 'agent'] },
+        scope: { type: 'string', description: 'Secret scope: "global" or "assistant". Default: tries assistant first, then global', enum: ['global', 'assistant'] },
         format: { type: 'string', description: 'Output format: "plain" returns just the value, "metadata" returns full secret info, "env" returns NAME=value format. Default: plain', enum: ['plain', 'metadata', 'env'] },
       },
       required: ['name'],
@@ -553,7 +553,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
         name: { type: 'string', description: 'Secret name (alphanumeric, underscores, hyphens). Must start with letter or underscore. E.g., "GITHUB_TOKEN", "my_api_key"' },
         value: { type: 'string', description: 'Secret value (API key, password, token, etc.)' },
         description: { type: 'string', description: 'Optional description of what this secret is for' },
-        scope: { type: 'string', description: 'Secret scope: "global" for shared across all agents, "agent" for this agent only. Default: agent', enum: ['global', 'agent'] },
+        scope: { type: 'string', description: 'Secret scope: "global" for shared across all assistants, "assistant" for this assistant only. Default: assistant', enum: ['global', 'assistant'] },
       },
       required: ['name', 'value'],
     },
@@ -566,7 +566,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Secret name to delete' },
-        scope: { type: 'string', description: 'Secret scope: "global" or "agent". Default: agent', enum: ['global', 'agent'] },
+        scope: { type: 'string', description: 'Secret scope: "global" or "assistant". Default: assistant', enum: ['global', 'assistant'] },
       },
       required: ['name'],
     },
@@ -575,12 +575,12 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
   // Messages tools (aligned with core/src/messages/tools.ts)
   {
     name: 'messages_send',
-    description: "Send a message to another agent. Use agent name or ID as recipient. Messages are delivered instantly to the recipient's inbox.",
+    description: "Send a message to another assistant. Use assistant name or ID as recipient. Messages are delivered instantly to the recipient's inbox.",
     category: 'messages',
     parameters: {
       type: 'object',
       properties: {
-        to: { type: 'string', description: 'Recipient agent name or ID' },
+        to: { type: 'string', description: 'Recipient assistant name or ID' },
         body: { type: 'string', description: 'Message body content' },
         subject: { type: 'string', description: 'Message subject (optional)' },
         priority: { type: 'string', description: 'Message priority: low, normal, high, or urgent (default: normal)', enum: ['low', 'normal', 'high', 'urgent'] },
@@ -599,7 +599,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
         limit: { type: 'number', description: 'Maximum number of messages to return (default: 20)' },
         unreadOnly: { type: 'boolean', description: 'Only return unread messages (default: false)' },
         threadId: { type: 'string', description: 'Filter by thread ID (optional)' },
-        from: { type: 'string', description: 'Filter by sender agent name or ID (optional)' },
+        from: { type: 'string', description: 'Filter by sender assistant name or ID (optional)' },
       },
     },
   },
@@ -640,8 +640,8 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
     },
   },
   {
-    name: 'messages_list_agents',
-    description: 'List all known agents that you can send messages to. Shows agent names and when they were last active.',
+    name: 'messages_list_assistants',
+    description: 'List all known assistants that you can send messages to. Shows assistant names and when they were last active.',
     category: 'messages',
     parameters: {
       type: 'object',
@@ -700,7 +700,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
   },
   {
     name: 'inbox_send',
-    description: 'Send an email from the agent inbox.',
+    description: 'Send an email from the assistant inbox.',
     category: 'inbox',
     parameters: {
       type: 'object',
@@ -934,7 +934,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
   // Session tools (aligned with core/src/sessions/tools.ts)
   {
     name: 'session_info',
-    description: 'Get information about the current session including ID, label, agent, and metadata.',
+    description: 'Get information about the current session including ID, label, assistant, and metadata.',
     category: 'sessions',
     parameters: {
       type: 'object',
@@ -943,26 +943,26 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
   },
   {
     name: 'session_list',
-    description: 'List sessions owned by the current user. Can filter by search term or agent ID.',
+    description: 'List sessions owned by the current user. Can filter by search term or assistant ID.',
     category: 'sessions',
     parameters: {
       type: 'object',
       properties: {
         limit: { type: 'number', description: 'Maximum number of results to return (default: 20, max: 50)' },
         search: { type: 'string', description: 'Search term to filter by session label' },
-        agentId: { type: 'string', description: 'Filter sessions by agent UUID' },
+        assistantId: { type: 'string', description: 'Filter sessions by assistant UUID' },
       },
     },
   },
   {
     name: 'session_create',
-    description: 'Create a new session with optional label, agent assignment, and metadata.',
+    description: 'Create a new session with optional label, assistant assignment, and metadata.',
     category: 'sessions',
     parameters: {
       type: 'object',
       properties: {
         label: { type: 'string', description: 'Session label/name (auto-generated if not provided)' },
-        agentId: { type: 'string', description: 'Agent UUID to assign to this session' },
+        assistantId: { type: 'string', description: 'Assistant UUID to assign to this session' },
         metadata: { type: 'object', description: 'Custom metadata to attach to the session' },
       },
     },
@@ -1480,7 +1480,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
   },
   {
     name: 'whoami',
-    description: 'Get current agent identity - assistant name, model, session ID, and active identity. Quick way to identify yourself.',
+    description: 'Get current assistant identity - name, model, session ID, and active identity. Quick way to identify yourself.',
     category: 'self-awareness',
     parameters: {
       type: 'object',
@@ -1631,7 +1631,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search query to match against tool names and descriptions' },
-        category: { type: 'string', description: 'Filter by category (e.g., "memory", "filesystem", "web", "agents")' },
+        category: { type: 'string', description: 'Filter by category (e.g., "memory", "filesystem", "web", "assistants")' },
         tags: { type: 'array', description: 'Filter by tags (e.g., ["search", "create"])' },
         source: { type: 'string', description: 'Filter by source', enum: ['builtin', 'connector', 'skill', 'custom'] },
         limit: { type: 'number', description: 'Maximum number of results to return (default: 10, max: 50)' },

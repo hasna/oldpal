@@ -25,7 +25,7 @@ This document describes the features available in the Assistants terminal packag
 | **Email Inbox** | Optional | AWS S3, SES | `AWS_*` credentials | Receive/send emails |
 | **Secrets Storage** | Optional | AWS Secrets Manager | `AWS_*` credentials | Secure credential storage |
 | **Wallet** | Optional | AWS Secrets Manager | `AWS_*` credentials | Crypto wallet management |
-| **Identity** | Optional | None | None | Agent identity management |
+| **Identity** | Optional | None | None | Assistant identity management |
 
 ## Configuration Levels
 

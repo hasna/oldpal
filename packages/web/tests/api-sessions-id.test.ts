@@ -138,11 +138,11 @@ describe('GET /api/v1/sessions/:id', () => {
     mockSession = {
       id: 'session-123',
       userId: 'user-123',
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       label: 'Test Session',
       metadata: { key: 'value' },
       createdAt: new Date(),
-      agent: { id: 'agent-1', name: 'Test Agent' },
+      assistant: { id: 'assistant-1', name: 'Test Assistant' },
     };
     mockUpdatedSession = null;
     updateSetData = null;
@@ -170,7 +170,7 @@ describe('GET /api/v1/sessions/:id', () => {
   });
 
   describe('session retrieval', () => {
-    test('returns session with agent relation', async () => {
+    test('returns session with assistant relation', async () => {
       const [request, context] = createGetRequest('session-123');
 
       const response = await GET(request, context);
@@ -179,8 +179,8 @@ describe('GET /api/v1/sessions/:id', () => {
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.data.id).toBe('session-123');
-      expect(data.data.agent).toBeDefined();
-      expect(data.data.agent.name).toBe('Test Agent');
+      expect(data.data.assistant).toBeDefined();
+      expect(data.data.assistant.name).toBe('Test Agent');
     });
 
     test('returns 404 when session not found', async () => {
@@ -212,7 +212,7 @@ describe('PATCH /api/v1/sessions/:id', () => {
     mockSession = {
       id: 'session-123',
       userId: 'user-123',
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
       label: 'Old Label',
       metadata: { old: 'data' },
       createdAt: new Date(),
@@ -339,7 +339,7 @@ describe('DELETE /api/v1/sessions/:id', () => {
     mockSession = {
       id: 'session-123',
       userId: 'user-123',
-      agentId: 'agent-1',
+      assistantId: 'assistant-1',
     };
     mockUpdatedSession = null;
     updateSetData = null;

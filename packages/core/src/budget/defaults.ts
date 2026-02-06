@@ -13,12 +13,12 @@ export const DEFAULT_SESSION_LIMITS: BudgetLimits = {
 };
 
 /**
- * Default budget limits for an agent
+ * Default budget limits for an assistant
  */
-export const DEFAULT_AGENT_LIMITS: BudgetLimits = {
-  maxTotalTokens: 500_000, // 500K tokens per agent
-  maxLlmCalls: 100,        // 100 LLM calls per agent task
-  maxToolCalls: 200,       // 200 tool calls per agent task
+export const DEFAULT_ASSISTANT_LIMITS: BudgetLimits = {
+  maxTotalTokens: 500_000, // 500K tokens per assistant
+  maxLlmCalls: 100,        // 100 LLM calls per assistant task
+  maxToolCalls: 200,       // 200 tool calls per assistant task
   maxDurationMs: 30 * 60 * 1000, // 30 minutes
   period: 'session',
 };
@@ -40,7 +40,7 @@ export const DEFAULT_SWARM_LIMITS: BudgetLimits = {
 export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
   enabled: false, // Disabled by default
   session: DEFAULT_SESSION_LIMITS,
-  agent: DEFAULT_AGENT_LIMITS,
+  assistant: DEFAULT_ASSISTANT_LIMITS,
   swarm: DEFAULT_SWARM_LIMITS,
   onExceeded: 'warn',
   persist: false,

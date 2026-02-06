@@ -1,4 +1,4 @@
-export type AgentState = 'idle' | 'processing' | 'waiting_input' | 'error' | 'stopped';
+export type AssistantState = 'idle' | 'processing' | 'waiting_input' | 'error' | 'stopped';
 
 export interface HeartbeatStats {
   messagesProcessed: number;
@@ -10,7 +10,7 @@ export interface HeartbeatStats {
 export interface Heartbeat {
   sessionId: string;
   timestamp: string;
-  state: AgentState;
+  state: AssistantState;
   lastActivity: string;
   stats: HeartbeatStats;
 }

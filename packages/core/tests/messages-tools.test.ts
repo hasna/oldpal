@@ -9,10 +9,10 @@ const buildMessage = (overrides?: Partial<any>) => ({
   id: 'msg-1',
   threadId: 'thread-1',
   parentId: null,
-  fromAgentId: 'agent-a',
-  fromAgentName: 'Agent A',
-  toAgentId: 'agent-b',
-  toAgentName: 'Agent B',
+  fromAssistantId: 'assistant-a',
+  fromAssistantName: 'Assistant A',
+  toAssistantId: 'assistant-b',
+  toAssistantName: 'Assistant B',
   subject: 'Hello',
   body: 'Body text',
   priority: 'normal',
@@ -34,7 +34,7 @@ describe('Messages tools', () => {
       read: mock(async () => buildMessage({ readAt: new Date('2026-02-01T01:00:00Z').toISOString() })),
       readThread: mock(async () => [buildMessage()]),
       delete: mock(async () => ({ message: 'Deleted' })),
-      listAgents: mock(async () => [{ id: 'agent-a', name: 'Agent A', lastSeen: Date.now() }]),
+      listAssistants: mock(async () => [{ id: 'assistant-a', name: 'Assistant A', lastSeen: Date.now() }]),
     };
   });
 
@@ -42,15 +42,15 @@ describe('Messages tools', () => {
     const executors = createMessagesToolExecutors(() => manager);
 
     expect(await executors.messages_send({ to: '', body: 'x' })).toBe('Error: Recipient (to) is required.');
-    expect(await executors.messages_send({ to: 'agent', body: '' })).toBe('Error: Message body is required.');
+    expect(await executors.messages_send({ to: 'recipient', body: '' })).toBe('Error: Message body is required.');
 
-    const response = await executors.messages_send({ to: 'agent', body: 'hi' });
+    const response = await executors.messages_send({ to: 'recipient', body: 'hi' });
     expect(response).toBe('Sent (Message ID: msg-1)');
   });
 
   test('messages_send returns error when manager missing', async () => {
     const executors = createMessagesToolExecutors(() => null);
-    const response = await executors.messages_send({ to: 'agent', body: 'hi' });
+    const response = await executors.messages_send({ to: 'recipient', body: 'hi' });
     expect(response).toBe('Error: Messages are not enabled or configured.');
   });
 
@@ -59,7 +59,7 @@ describe('Messages tools', () => {
 
     const output = await executors.messages_list({});
     expect(output).toContain('## Inbox');
-    expect(output).toContain('Agent A');
+    expect(output).toContain('Assistant A');
 
     manager.list = mock(async () => []);
     const empty = await executors.messages_list({});
@@ -127,17 +127,17 @@ describe('Messages tools', () => {
     const executors = createMessagesToolExecutors(() => manager);
 
     const output = await executors.messages_list_agents({});
-    expect(output).toContain('Known Agents');
+    expect(output).toContain('Known Assistants');
 
-    manager.listAgents = mock(async () => []);
+    manager.listAssistants = mock(async () => []);
     const empty = await executors.messages_list_agents({});
-    expect(empty).toBe('No other agents found. Agents appear here after sending or receiving messages.');
+    expect(empty).toBe('No other assistants found. Assistants appear here after sending or receiving messages.');
 
-    manager.listAgents = mock(async () => {
+    manager.listAssistants = mock(async () => {
       throw new Error('boom');
     });
     const error = await executors.messages_list_agents({});
-    expect(error).toBe('Error listing agents: boom');
+    expect(error).toBe('Error listing assistants: boom');
   });
 
   test('registerMessagesTools registers executors', () => {

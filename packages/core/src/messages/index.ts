@@ -1,6 +1,6 @@
 /**
  * Messages module exports
- * Provides agent-to-agent messaging functionality
+ * Provides assistant-to-assistant messaging functionality
  */
 
 // Core manager
@@ -19,7 +19,7 @@ export {
   messagesReadTool,
   messagesReadThreadTool,
   messagesDeleteTool,
-  messagesListAgentsTool,
+  messagesListAssistantsTool,
   createMessagesToolExecutors,
   registerMessagesTools,
 } from './tools';
@@ -29,12 +29,12 @@ export type {
   // Message types
   MessagePriority,
   MessageStatus,
-  AgentMessage,
+  AssistantMessage,
   MessageListItem,
   MessageThread,
   // Registry types
-  AgentRegistry,
-  AgentRegistryEntry,
+  AssistantRegistry,
+  AssistantRegistryEntry,
   // Index types
   InboxIndex,
   MessagesInboxStats,

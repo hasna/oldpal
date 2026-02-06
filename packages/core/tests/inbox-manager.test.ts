@@ -65,7 +65,7 @@ const buildEmail = (overrides?: Partial<Email>): Email => ({
   id: 'email-1',
   messageId: 'message-1',
   from: { address: 'from@example.com', name: 'From' },
-  to: [{ address: 'agent@example.com' }],
+  to: [{ address: 'assistant@example.com' }],
   subject: 'Hello',
   date: new Date().toISOString(),
   body: { text: 'Body' },
@@ -84,32 +84,32 @@ describe('InboxManager', () => {
   test('formats email address with domain and template', async () => {
     await withTempDir(async (dir) => {
       const manager = new InboxManager({
-        agentId: 'agent-1',
-        agentName: 'Agent Name',
-        config: { domain: 'example.com', addressFormat: '{agent-id}@{domain}' },
+        assistantId: 'assistant-1',
+        assistantName: 'Assistant Name',
+        config: { domain: 'example.com', addressFormat: '{assistant-id}@{domain}' },
         basePath: dir,
       });
 
-      expect(manager.getEmailAddress()).toBe('agent-1@example.com');
+      expect(manager.getEmailAddress()).toBe('assistant-1@example.com');
     });
   });
 
-  test('fetch stores only emails addressed to agent', async () => {
+  test('fetch stores only emails addressed to assistant', async () => {
     await withTempDir(async (dir) => {
-      const agentEmail = 'agent@example.com';
+      const assistantEmail = 'assistant@example.com';
       const manager = new InboxManager({
-        agentId: 'agent-1',
-        agentName: 'Agent',
+        assistantId: 'assistant-1',
+        assistantName: 'Assistant',
         config: { domain: 'example.com', storage: { bucket: 'bucket', region: 'us-east-1' } },
         basePath: dir,
       });
 
       storedObjects.push(
-        { key: 'inbox/agent-1/email-1', body: Buffer.from('raw1') },
-        { key: 'inbox/agent-1/email-2', body: Buffer.from('raw2') }
+        { key: 'inbox/assistant-1/email-1', body: Buffer.from('raw1') },
+        { key: 'inbox/assistant-1/email-2', body: Buffer.from('raw2') }
       );
 
-      emailsById.set('email-1', buildEmail({ to: [{ address: agentEmail }] }));
+      emailsById.set('email-1', buildEmail({ to: [{ address: assistantEmail }] }));
       emailsById.set('email-2', buildEmail({
         id: 'email-2',
         messageId: 'message-2',
@@ -128,13 +128,13 @@ describe('InboxManager', () => {
   test('downloads attachments and caches file', async () => {
     await withTempDir(async (dir) => {
       const manager = new InboxManager({
-        agentId: 'agent-1',
-        agentName: 'Agent',
+        assistantId: 'assistant-1',
+        assistantName: 'Assistant',
         config: { domain: 'example.com', storage: { bucket: 'bucket', region: 'us-east-1' } },
         basePath: dir,
       });
 
-      storedObjects.push({ key: 'inbox/agent-1/email-1', body: Buffer.from('raw1') });
+      storedObjects.push({ key: 'inbox/assistant-1/email-1', body: Buffer.from('raw1') });
       emailsById.set('email-1', buildEmail());
 
       await manager.fetch({ limit: 5 });
@@ -149,8 +149,8 @@ describe('InboxManager', () => {
   test('sends and replies using provider', async () => {
     await withTempDir(async (dir) => {
       const manager = new InboxManager({
-        agentId: 'agent-1',
-        agentName: 'Agent',
+        assistantId: 'assistant-1',
+        assistantName: 'Assistant',
         config: { domain: 'example.com', storage: { bucket: 'bucket', region: 'us-east-1' } },
         basePath: dir,
       });
@@ -158,7 +158,7 @@ describe('InboxManager', () => {
       await manager.send({ to: 'someone@example.com', subject: 'Hi', text: 'Body' });
       expect(lastSendOptions?.from).toContain('@example.com');
 
-      storedObjects.push({ key: 'inbox/agent-1/email-1', body: Buffer.from('raw1') });
+      storedObjects.push({ key: 'inbox/assistant-1/email-1', body: Buffer.from('raw1') });
       emailsById.set('email-1', buildEmail({
         headers: { 'reply-to': 'reply@example.com' },
       }));

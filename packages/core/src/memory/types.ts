@@ -21,7 +21,7 @@ export type MemoryCategory = 'preference' | 'fact' | 'history' | 'knowledge';
 /**
  * Memory source - who created the memory
  */
-export type MemorySource = 'user' | 'agent' | 'system';
+export type MemorySource = 'user' | 'assistant' | 'system';
 
 /**
  * Memory entry stored in the database
@@ -140,7 +140,7 @@ export interface MemoryAccessLog {
   id: number;
   memoryId: string;
   sessionId?: string;
-  agentId?: string;
+  assistantId?: string;
   action: MemoryAccessAction;
   timestamp: string;
 }

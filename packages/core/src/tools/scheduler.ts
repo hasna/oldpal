@@ -67,7 +67,7 @@ const schedulerTool: Tool = {
       },
       actionType: {
         type: 'string',
-        description: 'Type of action: "command" runs the command, "message" injects custom message into agent session. Default: "command"',
+        description: 'Type of action: "command" runs the command, "message" injects custom message into assistant session. Default: "command"',
         enum: ['command', 'message'],
       },
       message: {
@@ -202,7 +202,7 @@ function createSchedulerExecutor(getContext: () => SchedulerContext): ToolExecut
         id: generateId(),
         createdAt: now,
         updatedAt: now,
-        createdBy: 'agent',
+        createdBy: 'assistant',
         sessionId,
         actionType: actionType || 'command',
         command,

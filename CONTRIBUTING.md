@@ -42,8 +42,8 @@ By participating in this project, you agree to maintain a respectful and inclusi
 
 ```
 packages/
-├── core/           # Platform-agnostic agent runtime
-│   ├── agent/      # Agent loop and context
+├── core/           # Platform-agnostic assistant runtime
+│   ├── assistant/  # Assistant loop and context
 │   ├── tools/      # Built-in tools (Bash, Read, Write, etc.)
 │   ├── skills/     # Skill loading and execution
 │   ├── hooks/      # Hook system

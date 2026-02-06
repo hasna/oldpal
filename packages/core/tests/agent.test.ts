@@ -1,13 +1,13 @@
 import { describe, expect, test, beforeEach } from 'bun:test';
-import { AgentContext } from '../src/agent/context';
-import { AgentLoop } from '../src/agent/loop';
+import { AssistantContext } from '../src/agent/context';
+import { AssistantLoop } from '../src/agent/loop';
 import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
 
-describe('AgentContext', () => {
-  let context: AgentContext;
+describe('AssistantContext', () => {
+  let context: AssistantContext;
 
   beforeEach(() => {
-    context = new AgentContext();
+    context = new AssistantContext();
   });
 
   describe('addUserMessage', () => {
@@ -86,7 +86,7 @@ describe('AgentContext', () => {
 
     test('should not be pruned like other messages', () => {
       // Create context with small limit
-      const smallContext = new AgentContext(5);
+      const smallContext = new AssistantContext(5);
 
       // Add system message
       smallContext.addSystemMessage('System prompt');
@@ -154,7 +154,7 @@ describe('AgentContext', () => {
 
   describe('pruning', () => {
     test('should prune old messages when over limit', () => {
-      const smallContext = new AgentContext(5);
+      const smallContext = new AssistantContext(5);
 
       for (let i = 0; i < 10; i++) {
         smallContext.addUserMessage(`Message ${i}`);
@@ -165,7 +165,7 @@ describe('AgentContext', () => {
     });
 
     test('should preserve system messages during pruning', () => {
-      const smallContext = new AgentContext(5);
+      const smallContext = new AssistantContext(5);
 
       smallContext.addSystemMessage('Important system prompt');
       smallContext.addSystemMessage('Another system message');
@@ -215,40 +215,40 @@ describe('AgentContext', () => {
   });
 });
 
-describe('AgentLoop', () => {
+describe('AssistantLoop', () => {
   describe('constructor', () => {
-    test('should create agent with default options', () => {
-      const agent = new AgentLoop();
-      expect(agent).toBeDefined();
+    test('should create assistant with default options', () => {
+      const assistant = new AssistantLoop();
+      expect(assistant).toBeDefined();
     });
 
     test('should accept custom cwd', () => {
-      const agent = new AgentLoop({ cwd: '/tmp' });
-      expect(agent).toBeDefined();
+      const assistant = new AssistantLoop({ cwd: '/tmp' });
+      expect(assistant).toBeDefined();
     });
   });
 
   describe('isProcessing', () => {
     test('should return false initially', () => {
-      const agent = new AgentLoop();
-      expect(agent.isProcessing()).toBe(false);
+      const assistant = new AssistantLoop();
+      expect(assistant.isProcessing()).toBe(false);
     });
   });
 
   describe('getContext', () => {
     test('should return context instance', () => {
-      const agent = new AgentLoop();
-      const context = agent.getContext();
+      const assistant = new AssistantLoop();
+      const context = assistant.getContext();
 
       expect(context).toBeDefined();
-      expect(context).toBeInstanceOf(AgentContext);
+      expect(context).toBeInstanceOf(AssistantContext);
     });
   });
 
   describe('getTools', () => {
     test('should return empty array before initialization', () => {
-      const agent = new AgentLoop();
-      const tools = agent.getTools();
+      const assistant = new AssistantLoop();
+      const tools = assistant.getTools();
 
       expect(Array.isArray(tools)).toBe(true);
     });
@@ -256,23 +256,23 @@ describe('AgentLoop', () => {
 
   describe('getSkills and getCommands', () => {
     test('should return arrays for skills and commands', () => {
-      const agent = new AgentLoop();
-      expect(Array.isArray(agent.getSkills())).toBe(true);
-      expect(Array.isArray(agent.getCommands())).toBe(true);
+      const assistant = new AssistantLoop();
+      expect(Array.isArray(assistant.getSkills())).toBe(true);
+      expect(Array.isArray(assistant.getCommands())).toBe(true);
     });
   });
 
   describe('token usage', () => {
     test('should update token usage and invoke callback', () => {
       let lastUsage: any = null;
-      const agent = new AgentLoop({
+      const assistant = new AssistantLoop({
         onTokenUsage: (usage) => {
           lastUsage = usage;
         },
       });
 
-      agent.updateTokenUsage({ outputTokens: 5, inputTokens: 2 });
-      const usage = agent.getTokenUsage();
+      assistant.updateTokenUsage({ outputTokens: 5, inputTokens: 2 });
+      const usage = assistant.getTokenUsage();
 
       expect(usage.outputTokens).toBeGreaterThan(0);
       expect(lastUsage).not.toBeNull();
@@ -281,20 +281,20 @@ describe('AgentLoop', () => {
 
   describe('session id', () => {
     test('should return provided session id', () => {
-      const agent = new AgentLoop({ sessionId: 'session-123' });
-      expect(agent.getSessionId()).toBe('session-123');
+      const assistant = new AssistantLoop({ sessionId: 'session-123' });
+      expect(assistant.getSessionId()).toBe('session-123');
     });
   });
 
   describe('clearConversation', () => {
     test('should reapply system prompts on clear', () => {
-      const agent = new AgentLoop();
-      (agent as any).systemPrompt = 'System prompt';
-      (agent as any).extraSystemPrompt = 'Extra prompt';
+      const assistant = new AssistantLoop();
+      (assistant as any).systemPrompt = 'System prompt';
+      (assistant as any).extraSystemPrompt = 'Extra prompt';
 
-      agent.clearConversation();
+      assistant.clearConversation();
 
-      const systemMessages = agent.getContext().getMessages().filter((m) => m.role === 'system');
+      const systemMessages = assistant.getContext().getMessages().filter((m) => m.role === 'system');
       const combined = systemMessages.map((m) => m.content).join('\n');
       expect(combined).toContain('System prompt');
       expect(combined).toContain('Extra prompt');
@@ -303,16 +303,16 @@ describe('AgentLoop', () => {
 
   describe('stop', () => {
     test('should not throw when called', () => {
-      const agent = new AgentLoop();
-      expect(() => agent.stop()).not.toThrow();
+      const assistant = new AssistantLoop();
+      expect(() => assistant.stop()).not.toThrow();
     });
   });
 
   describe('process', () => {
     test('should throw when not initialized', async () => {
-      const agent = new AgentLoop();
+      const assistant = new AssistantLoop();
 
-      await expect(agent.process('Hello')).rejects.toThrow('Agent not initialized');
+      await expect(assistant.process('Hello')).rejects.toThrow('Agent not initialized');
     });
   });
 

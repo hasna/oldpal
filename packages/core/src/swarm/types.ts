@@ -2,14 +2,14 @@
  * Swarm Types
  *
  * Defines the data model for swarm coordination.
- * Swarm is a multi-agent orchestration pattern that distributes work
- * across specialized subagents (planner, worker, critic).
+ * Swarm is a multi-assistant orchestration pattern that distributes work
+ * across specialized subassistants (planner, worker, critic).
  */
 
-import type { SubagentResult } from '../agent/subagent-manager';
+import type { SubassistantResult } from '../agent/subagent-manager';
 
 /**
- * Role type for specialized swarm agents
+ * Role type for specialized swarm assistants
  */
 export type SwarmRole = 'planner' | 'worker' | 'critic' | 'aggregator';
 
@@ -18,7 +18,7 @@ export type SwarmRole = 'planner' | 'worker' | 'critic' | 'aggregator';
  */
 export type SwarmTaskStatus =
   | 'pending'       // Not yet started
-  | 'assigned'      // Assigned to an agent
+  | 'assigned'      // Assigned to an assistant
   | 'running'       // Currently executing
   | 'completed'     // Successfully completed
   | 'failed'        // Failed with error
@@ -41,16 +41,16 @@ export interface SwarmTask {
   priority: number;
   /** IDs of tasks this depends on */
   dependsOn: string[];
-  /** ID of agent assigned to this task */
-  assignedAgentId?: string;
+  /** ID of assistant assigned to this task */
+  assignedAssistantId?: string;
   /** Time when task was created */
   createdAt: number;
   /** Time when task was started */
   startedAt?: number;
   /** Time when task was completed */
   completedAt?: number;
-  /** Result from subagent */
-  result?: SubagentResult;
+  /** Result from subassistant */
+  result?: SubassistantResult;
   /** Input data for the task */
   input?: unknown;
   /** Output data from the task */
@@ -107,9 +107,9 @@ export interface SwarmState {
   /** Parent session ID */
   sessionId: string;
   /** Results from completed tasks */
-  taskResults: Map<string, SubagentResult>;
-  /** Active agent IDs */
-  activeAgents: Set<string>;
+  taskResults: Map<string, SubassistantResult>;
+  /** Active assistant IDs */
+  activeAssistants: Set<string>;
   /** Error messages */
   errors: string[];
   /** Start timestamp */
@@ -136,7 +136,7 @@ export interface SwarmMetrics {
   failedTasks: number;
   /** Tasks currently running */
   runningTasks: number;
-  /** Total tokens used across all agents */
+  /** Total tokens used across all assistants */
   tokensUsed: number;
   /** Total LLM calls */
   llmCalls: number;
@@ -152,11 +152,11 @@ export interface SwarmMetrics {
 export interface SwarmConfig {
   /** Enable swarm mode (default: true) */
   enabled: boolean;
-  /** Maximum concurrent worker agents (default: 3) */
+  /** Maximum concurrent worker assistants (default: 3) */
   maxConcurrent: number;
   /** Maximum tasks per swarm (default: 20) */
   maxTasks: number;
-  /** Maximum depth for subagents (default: 2) */
+  /** Maximum depth for subassistants (default: 2) */
   maxDepth: number;
   /** Timeout per task in ms (default: 120000) */
   taskTimeoutMs: number;
@@ -174,11 +174,11 @@ export interface SwarmConfig {
   workerTools: string[];
   /** Default tools for critic */
   criticTools: string[];
-  /** Tools forbidden from all swarm agents */
+  /** Tools forbidden from all swarm assistants */
   forbiddenTools: string[];
   /** Token budget for entire swarm (0 = no limit) */
   tokenBudget: number;
-  /** Enable shared memory between agents */
+  /** Enable shared memory between assistants */
   enableSharedMemory: boolean;
 }
 
@@ -198,7 +198,7 @@ export const DEFAULT_SWARM_CONFIG: SwarmConfig = {
   plannerTools: ['read', 'glob', 'grep', 'web_search', 'web_fetch'],
   workerTools: ['read', 'glob', 'grep', 'bash', 'write'],
   criticTools: ['read', 'glob', 'grep'],
-  forbiddenTools: ['agent_spawn', 'wallet_get', 'secrets_get', 'schedule_create'],
+  forbiddenTools: ['assistant_spawn', 'wallet_get', 'secrets_get', 'schedule_create'],
   tokenBudget: 0,
   enableSharedMemory: false,
 };
@@ -248,9 +248,9 @@ export interface SerializableSwarmState {
   /** Parent session ID */
   sessionId: string;
   /** Results from completed tasks (as object instead of Map) */
-  taskResults: Record<string, SubagentResult>;
-  /** Active agent IDs (as array instead of Set) */
-  activeAgents: string[];
+  taskResults: Record<string, SubassistantResult>;
+  /** Active assistant IDs (as array instead of Set) */
+  activeAssistants: string[];
   /** Error messages */
   errors: string[];
   /** Start timestamp */
@@ -275,7 +275,7 @@ export function serializeSwarmState(state: SwarmState): SerializableSwarmState {
     plan: state.plan,
     sessionId: state.sessionId,
     taskResults: Object.fromEntries(state.taskResults),
-    activeAgents: Array.from(state.activeAgents),
+    activeAssistants: Array.from(state.activeAssistants),
     errors: state.errors,
     startedAt: state.startedAt,
     endedAt: state.endedAt,
@@ -296,7 +296,7 @@ export interface SwarmResult {
   /** Error message if failed */
   error?: string;
   /** All task results */
-  taskResults: Record<string, SubagentResult>;
+  taskResults: Record<string, SubassistantResult>;
   /** Execution metrics */
   metrics: SwarmMetrics;
   /** Execution time in ms */
@@ -327,7 +327,7 @@ export interface SwarmInput {
  * Role-specific system prompts
  */
 export const ROLE_SYSTEM_PROMPTS: Record<SwarmRole, string> = {
-  planner: `You are a planning agent responsible for breaking down complex goals into smaller tasks.
+  planner: `You are a planning assistant responsible for breaking down complex goals into smaller tasks.
 When given a goal, create a detailed task list with:
 1. Clear, actionable task descriptions
 2. Appropriate dependencies between tasks
@@ -337,7 +337,7 @@ When given a goal, create a detailed task list with:
 Output your plan as a JSON array of tasks:
 [{"description": "...", "dependsOn": [], "priority": 1, "requiredTools": ["read", "grep"]}]`,
 
-  worker: `You are a worker agent responsible for completing assigned tasks.
+  worker: `You are a worker assistant responsible for completing assigned tasks.
 Focus on:
 1. Completing the specific task assigned to you
 2. Using only the tools provided
@@ -346,7 +346,7 @@ Focus on:
 
 Be thorough but efficient. Return your result in a clear format.`,
 
-  critic: `You are a critic agent responsible for reviewing work quality.
+  critic: `You are a critic assistant responsible for reviewing work quality.
 Evaluate:
 1. Completeness: Did the work fully address the requirement?
 2. Quality: Is the work well-structured and correct?
@@ -355,7 +355,7 @@ Evaluate:
 Output your review as JSON:
 {"approved": true/false, "issues": ["issue1", "issue2"], "suggestions": ["suggestion1"]}`,
 
-  aggregator: `You are an aggregator agent responsible for combining results.
+  aggregator: `You are an aggregator assistant responsible for combining results.
 Your task:
 1. Review all completed task results
 2. Synthesize them into a coherent final output

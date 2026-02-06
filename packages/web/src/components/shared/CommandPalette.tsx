@@ -46,7 +46,7 @@ const commands: Command[] = [
   // Navigation commands
   { id: 'nav-chat', label: 'Go to Chat', category: 'navigation', action: 'nav:/chat', icon: MessageSquare, keywords: ['conversation', 'talk'] },
   { id: 'nav-sessions', label: 'Go to Sessions', category: 'navigation', action: 'nav:/sessions', icon: MessageSquare, keywords: ['history', 'conversations'] },
-  { id: 'nav-agents', label: 'Go to Agents', category: 'navigation', action: 'nav:/agents', icon: Bot, keywords: ['assistant', 'ai'] },
+  { id: 'nav-assistants', label: 'Go to Assistants', category: 'navigation', action: 'nav:/assistants', icon: Bot, keywords: ['assistant', 'ai'] },
   { id: 'nav-schedules', label: 'Go to Schedules', category: 'navigation', action: 'nav:/schedules', icon: Clock, keywords: ['cron', 'automation', 'timer'] },
   { id: 'nav-messages', label: 'Go to Messages', category: 'navigation', action: 'nav:/messages', icon: Inbox, keywords: ['inbox', 'notifications'] },
   { id: 'nav-settings', label: 'Go to Settings', category: 'navigation', action: 'nav:/settings', icon: Settings, keywords: ['preferences', 'profile'] },

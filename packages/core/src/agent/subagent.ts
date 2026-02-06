@@ -1,11 +1,11 @@
 import type { HookHandler, HookInput, StreamChunk } from '@hasna/assistants-shared';
 import { generateId, sleep } from '@hasna/assistants-shared';
 import type { LLMClient } from '../llm/client';
-import { AgentLoop } from './loop';
+import { AssistantLoop } from './loop';
 
 const DEFAULT_HOOK_TOOLS = ['read', 'glob', 'grep'];
 
-export interface HookAgentOptions {
+export interface HookAssistantOptions {
   hook: HookHandler;
   input: HookInput;
   timeout: number;
@@ -14,16 +14,16 @@ export interface HookAgentOptions {
   llmClient?: LLMClient;
 }
 
-export async function runHookAgent(options: HookAgentOptions): Promise<string> {
+export async function runHookAssistant(options: HookAssistantOptions): Promise<string> {
   const { hook, input, timeout, cwd, allowedTools, llmClient } = options;
   let response = '';
 
-  const agent = new AgentLoop({
+  const assistant = new AssistantLoop({
     cwd,
     sessionId: `hook-${generateId()}`,
     allowedTools: allowedTools ?? DEFAULT_HOOK_TOOLS,
     llmClient,
-    extraSystemPrompt: `You are a hook agent evaluating whether to allow an action.
+    extraSystemPrompt: `You are a hook assistant evaluating whether to allow an action.
 Task: ${hook.prompt}
 
 Respond with ALLOW or DENY on the first line, followed by a short reason.`,
@@ -34,16 +34,16 @@ Respond with ALLOW or DENY on the first line, followed by a short reason.`,
     },
   });
 
-  await agent.initialize();
+  await assistant.initialize();
 
-  const runPromise = agent.process(JSON.stringify(input)).catch(() => {});
+  const runPromise = assistant.process(JSON.stringify(input)).catch(() => {});
   const timedOut = await Promise.race([
     runPromise.then(() => false),
     sleep(timeout).then(() => true),
   ]);
 
   if (timedOut) {
-    agent.stop();
+    assistant.stop();
     return '';
   }
 

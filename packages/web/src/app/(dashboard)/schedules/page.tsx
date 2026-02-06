@@ -70,7 +70,7 @@ interface Schedule {
   lastRunAt: string | null;
   lastResult: { ok: boolean; summary?: string; error?: string } | null;
   createdAt: string;
-  agent?: { id: string; name: string } | null;
+  assistant?: { id: string; name: string } | null;
 }
 
 const SCHEDULE_PRESETS = [

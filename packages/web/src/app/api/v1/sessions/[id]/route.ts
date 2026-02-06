@@ -34,7 +34,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest, context?: { pa
     const session = await db.query.sessions.findFirst({
       where: eq(sessions.id, id),
       with: {
-        agent: true,
+        assistant: true,
       },
     });
 

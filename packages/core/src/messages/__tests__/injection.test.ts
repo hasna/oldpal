@@ -1,11 +1,11 @@
 /**
  * Tests for message context injection
- * Verifies messages are properly injected into agent context at turn start
+ * Verifies messages are properly injected into assistant context at turn start
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { createMessagesManager } from '../index';
-import { AgentContext } from '../../agent/context';
+import { AssistantContext } from '../../agent/context';
 import { generateId } from '@hasna/assistants-shared';
 import { join } from 'path';
 import { rm, mkdir, mkdtemp } from 'fs/promises';
@@ -71,15 +71,15 @@ describe('Context Injection Integration', () => {
       priority: 'high',
     });
 
-    // Simulate what happens in AgentLoop.injectPendingMessages
+    // Simulate what happens in AssistantLoop.injectPendingMessages
     const pending = await receiver.getUnreadForInjection();
     expect(pending.length).toBe(1);
 
-    const context = new AgentContext();
+    const context = new AssistantContext();
     const injectionContext = receiver.buildInjectionContext(pending);
 
     // Verify context contains expected content
-    expect(injectionContext).toContain('## Pending Agent Messages');
+    expect(injectionContext).toContain('## Pending Assistant Messages');
     expect(injectionContext).toContain('1 unread message');
     expect(injectionContext).toContain('InjectionSender');
     expect(injectionContext).toContain('Injection Test');
@@ -92,7 +92,7 @@ describe('Context Injection Integration', () => {
     const messages = context.getMessages();
     expect(messages.length).toBe(1);
     expect(messages[0].role).toBe('system');
-    expect(messages[0].content).toContain('Pending Agent Messages');
+    expect(messages[0].content).toContain('Pending Assistant Messages');
 
     // Mark as injected
     await receiver.markInjected(pending.map(m => m.id));
@@ -178,8 +178,8 @@ describe('Context Injection Integration', () => {
   });
 
   test('buildInjectionContext handles empty array', async () => {
-    const agentId = `empty-${generateId().slice(0, 8)}`;
-    const manager = createMessagesManager(agentId, 'EmptyAgent', testConfig);
+    const assistantId = `empty-${generateId().slice(0, 8)}`;
+    const manager = createMessagesManager(assistantId, 'EmptyAssistant', testConfig);
     await manager.initialize();
 
     const context = manager.buildInjectionContext([]);

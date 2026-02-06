@@ -100,8 +100,8 @@ describe('app layout and pages', () => {
     expect(typeof mod.default).toBe('function');
   });
 
-  test('Agents page exports component', async () => {
-    const mod = await import('../src/app/(dashboard)/agents/page');
+  test('Assistants page exports component', async () => {
+    const mod = await import('../src/app/(dashboard)/assistants/page');
     expect(mod.default).toBeDefined();
     expect(typeof mod.default).toBe('function');
   });

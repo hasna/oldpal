@@ -10,7 +10,7 @@ import { eq, desc, asc, count, and, ilike } from 'drizzle-orm';
 const createScheduleSchema = z.object({
   command: z.string().min(1).max(1000),
   description: z.string().max(500).optional(),
-  agentId: z.string().uuid().optional(),
+  assistantId: z.string().uuid().optional(),
   scheduleKind: z.enum(['once', 'cron', 'random', 'interval']),
   scheduleAt: z.string().datetime().optional(),
   scheduleCron: z.string().max(100).optional(),
@@ -132,7 +132,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
         limit,
         offset,
         with: {
-          agent: {
+          assistant: {
             columns: {
               id: true,
               name: true,
@@ -173,18 +173,18 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       return errorResponse(new Error('scheduleMinInterval cannot be greater than scheduleMaxInterval'));
     }
 
-    // Verify agent ownership if agentId is provided
-    if (data.agentId) {
-      const agent = await db.query.assistants.findFirst({
-        where: eq(assistants.id, data.agentId),
+    // Verify assistant ownership if assistantId is provided
+    if (data.assistantId) {
+      const assistant = await db.query.assistants.findFirst({
+        where: eq(assistants.id, data.assistantId),
       });
 
-      if (!agent) {
-        return errorResponse(new NotFoundError('Agent not found'));
+      if (!assistant) {
+        return errorResponse(new NotFoundError('Assistant not found'));
       }
 
-      if (agent.userId !== request.user.userId) {
-        return errorResponse(new ForbiddenError('You do not own this agent'));
+      if (assistant.userId !== request.user.userId) {
+        return errorResponse(new ForbiddenError('You do not own this assistant'));
       }
     }
 
@@ -194,7 +194,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       .insert(schedules)
       .values({
         userId: request.user.userId,
-        agentId: data.agentId,
+        assistantId: data.assistantId,
         command: data.command,
         description: data.description,
         status: 'active',

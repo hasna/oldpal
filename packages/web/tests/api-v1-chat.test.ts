@@ -62,7 +62,7 @@ mock.module('@/db/schema', () => ({
   messages: 'messages',
 }));
 
-// Mock agent-pool
+// Mock assistant-pool
 mock.module('@/lib/server/agent-pool', () => ({
   subscribeToSession: async (
     sessionId: string,

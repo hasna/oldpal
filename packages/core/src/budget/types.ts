@@ -3,7 +3,7 @@ import type { BudgetLimits, BudgetUsage } from '@hasna/assistants-shared';
 /**
  * Budget scope for tracking
  */
-export type BudgetScope = 'session' | 'agent' | 'swarm';
+export type BudgetScope = 'session' | 'assistant' | 'swarm';
 
 /**
  * Budget check result

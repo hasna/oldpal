@@ -1,5 +1,5 @@
 /**
- * InboxManager - Core class for managing agent inbox operations
+ * InboxManager - Core class for managing assistant inbox operations
  * Orchestrates S3 storage, local cache, email parsing, and sending
  */
 
@@ -11,10 +11,10 @@ import { EmailParser } from './parser/email-parser';
 import { createEmailProvider, type EmailProvider, type SendEmailOptions } from './providers';
 
 export interface InboxManagerOptions {
-  /** Agent ID for scoping */
-  agentId: string;
-  /** Agent name (used for email address) */
-  agentName: string;
+  /** Assistant ID for scoping */
+  assistantId: string;
+  /** Assistant name (used for email address) */
+  assistantName: string;
   /** Inbox configuration */
   config: InboxConfig;
   /** Base path for local cache (default: ~/.assistants/inbox) */
@@ -22,11 +22,11 @@ export interface InboxManagerOptions {
 }
 
 /**
- * InboxManager handles all inbox operations for an agent
+ * InboxManager handles all inbox operations for an assistant
  */
 export class InboxManager {
-  private agentId: string;
-  private agentName: string;
+  private assistantId: string;
+  private assistantName: string;
   private config: InboxConfig;
   private s3Client: S3InboxClient | null = null;
   private localCache: LocalInboxCache;
@@ -34,13 +34,13 @@ export class InboxManager {
   private emailProvider: EmailProvider | null = null;
 
   constructor(options: InboxManagerOptions) {
-    this.agentId = options.agentId;
-    this.agentName = options.agentName;
+    this.assistantId = options.assistantId;
+    this.assistantName = options.assistantName;
     this.config = options.config;
 
     // Initialize local cache
     this.localCache = new LocalInboxCache({
-      agentId: options.agentId,
+      assistantId: options.assistantId,
       basePath: options.basePath,
     });
 
@@ -59,17 +59,17 @@ export class InboxManager {
   }
 
   /**
-   * Get the agent's email address
+   * Get the assistant's email address
    */
   getEmailAddress(): string {
     if (!this.config.domain) {
-      return `${this.agentName}@inbox.local`;
+      return `${this.assistantName}@inbox.local`;
     }
 
-    const format = this.config.addressFormat || '{agent-name}@{domain}';
+    const format = this.config.addressFormat || '{assistant-name}@{domain}';
     return format
-      .replace('{agent-name}', this.agentName.toLowerCase().replace(/\s+/g, '-'))
-      .replace('{agent-id}', this.agentId)
+      .replace('{assistant-name}', this.assistantName.toLowerCase().replace(/\s+/g, '-'))
+      .replace('{assistant-id}', this.assistantId)
       .replace('{domain}', this.config.domain);
   }
 
@@ -83,7 +83,7 @@ export class InboxManager {
     }
 
     const limit = options?.limit || 20;
-    const agentEmail = this.getEmailAddress().toLowerCase();
+    const assistantEmail = this.getEmailAddress().toLowerCase();
 
     // Get already cached email IDs
     const cachedIds = await this.localCache.getCachedIds();
@@ -115,9 +115,9 @@ export class InboxManager {
           s3Key: obj.key,
         });
 
-        // Check if this email is addressed to this agent
-        const isForAgent = this.isEmailForAgent(email, agentEmail);
-        if (!isForAgent) {
+        // Check if this email is addressed to this assistant
+        const isForAssistant = this.isEmailForAssistant(email, assistantEmail);
+        if (!isForAssistant) {
           continue;
         }
 
@@ -137,12 +137,12 @@ export class InboxManager {
   }
 
   /**
-   * Check if an email is addressed to this agent
+   * Check if an email is addressed to this assistant
    */
-  private isEmailForAgent(email: Email, agentEmail: string): boolean {
+  private isEmailForAssistant(email: Email, assistantEmail: string): boolean {
     // Check To: addresses
     for (const addr of email.to) {
-      if (addr.address.toLowerCase() === agentEmail) {
+      if (addr.address.toLowerCase() === assistantEmail) {
         return true;
       }
     }
@@ -150,7 +150,7 @@ export class InboxManager {
     // Check CC: addresses
     if (email.cc) {
       for (const addr of email.cc) {
-        if (addr.address.toLowerCase() === agentEmail) {
+        if (addr.address.toLowerCase() === assistantEmail) {
           return true;
         }
       }
@@ -329,16 +329,16 @@ export class InboxManager {
  * Create an InboxManager from config
  */
 export function createInboxManager(
-  agentId: string,
-  agentName: string,
+  assistantId: string,
+  assistantName: string,
   config: InboxConfig,
   configDir: string
 ): InboxManager {
   const basePath = join(configDir, 'inbox');
 
   return new InboxManager({
-    agentId,
-    agentName,
+    assistantId,
+    assistantName,
     config,
     basePath,
   });

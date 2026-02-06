@@ -5,12 +5,12 @@ import { assistants } from './assistants';
 export const messagePriorityEnum = pgEnum('message_priority', ['low', 'normal', 'high', 'urgent']);
 export const messageStatusEnum = pgEnum('message_status', ['unread', 'read', 'archived', 'injected']);
 
-export const agentMessages = pgTable('agent_messages', {
+export const assistantMessages = pgTable('agent_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   threadId: uuid('thread_id').notNull(),
   parentId: uuid('parent_id'),
-  fromAgentId: uuid('from_agent_id').references(() => assistants.id, { onDelete: 'set null' }),
-  toAgentId: uuid('to_agent_id').references(() => assistants.id, { onDelete: 'set null' }),
+  fromAssistantId: uuid('from_agent_id').references(() => assistants.id, { onDelete: 'set null' }),
+  toAssistantId: uuid('to_agent_id').references(() => assistants.id, { onDelete: 'set null' }),
   subject: varchar('subject', { length: 500 }),
   body: text('body').notNull(),
   priority: messagePriorityEnum('priority').default('normal').notNull(),
@@ -20,18 +20,18 @@ export const agentMessages = pgTable('agent_messages', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-export const agentMessagesRelations = relations(agentMessages, ({ one }) => ({
-  fromAgent: one(assistants, {
-    fields: [agentMessages.fromAgentId],
+export const assistantMessagesRelations = relations(assistantMessages, ({ one }) => ({
+  fromAssistant: one(assistants, {
+    fields: [assistantMessages.fromAssistantId],
     references: [assistants.id],
-    relationName: 'fromAgent',
+    relationName: 'fromAssistant',
   }),
-  toAgent: one(assistants, {
-    fields: [agentMessages.toAgentId],
+  toAssistant: one(assistants, {
+    fields: [assistantMessages.toAssistantId],
     references: [assistants.id],
-    relationName: 'toAgent',
+    relationName: 'toAssistant',
   }),
 }));
 
-export type AgentMessage = typeof agentMessages.$inferSelect;
-export type NewAgentMessage = typeof agentMessages.$inferInsert;
+export type AssistantMessage = typeof assistantMessages.$inferSelect;
+export type NewAssistantMessage = typeof assistantMessages.$inferInsert;

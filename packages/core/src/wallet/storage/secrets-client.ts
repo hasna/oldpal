@@ -47,16 +47,16 @@ export class SecretsClient {
   /**
    * Build the full secret name for a card
    */
-  private buildSecretName(agentId: string, cardId: string): string {
-    return `${this.prefix}${agentId}/${cardId}`;
+  private buildSecretName(assistantId: string, cardId: string): string {
+    return `${this.prefix}${assistantId}/${cardId}`;
   }
 
   /**
-   * List all cards for an agent
+   * List all cards for an assistant
    * Returns safe card summaries (no sensitive data)
    */
-  async listCards(agentId: string): Promise<CardListItem[]> {
-    const secretPrefix = `${this.prefix}${agentId}/`;
+  async listCards(assistantId: string): Promise<CardListItem[]> {
+    const secretPrefix = `${this.prefix}${assistantId}/`;
     const cards: CardListItem[] = [];
 
     let nextToken: string | undefined;
@@ -84,7 +84,7 @@ export class SecretsClient {
 
           // Load the secret to get card details
           try {
-            const card = await this.getCard(agentId, cardId);
+            const card = await this.getCard(assistantId, cardId);
             if (card) {
               cards.push(this.toCardListItem(card));
             }
@@ -103,8 +103,8 @@ export class SecretsClient {
   /**
    * Get full card data by ID
    */
-  async getCard(agentId: string, cardId: string): Promise<Card | null> {
-    const secretName = this.buildSecretName(agentId, cardId);
+  async getCard(assistantId: string, cardId: string): Promise<Card | null> {
+    const secretName = this.buildSecretName(assistantId, cardId);
 
     try {
       const response = await this.client.send(
@@ -129,8 +129,8 @@ export class SecretsClient {
   /**
    * Store a new card
    */
-  async createCard(agentId: string, card: Card): Promise<void> {
-    const secretName = this.buildSecretName(agentId, card.id);
+  async createCard(assistantId: string, card: Card): Promise<void> {
+    const secretName = this.buildSecretName(assistantId, card.id);
 
     try {
       await this.client.send(
@@ -140,14 +140,14 @@ export class SecretsClient {
           Description: `Payment card: ${card.name} (**** ${card.cardNumber.slice(-4)})`,
           Tags: [
             { Key: 'type', Value: 'wallet-card' },
-            { Key: 'agentId', Value: agentId },
+            { Key: 'assistantId', Value: assistantId },
           ],
         })
       );
     } catch (error: unknown) {
       // If secret already exists, update it
       if ((error as { name?: string }).name === 'ResourceExistsException') {
-        await this.updateCard(agentId, card);
+        await this.updateCard(assistantId, card);
         return;
       }
       throw error;
@@ -157,8 +157,8 @@ export class SecretsClient {
   /**
    * Update an existing card
    */
-  async updateCard(agentId: string, card: Card): Promise<void> {
-    const secretName = this.buildSecretName(agentId, card.id);
+  async updateCard(assistantId: string, card: Card): Promise<void> {
+    const secretName = this.buildSecretName(assistantId, card.id);
 
     await this.client.send(
       new UpdateSecretCommand({
@@ -172,8 +172,8 @@ export class SecretsClient {
   /**
    * Delete a card (soft delete with 30-day recovery window)
    */
-  async deleteCard(agentId: string, cardId: string): Promise<void> {
-    const secretName = this.buildSecretName(agentId, cardId);
+  async deleteCard(assistantId: string, cardId: string): Promise<void> {
+    const secretName = this.buildSecretName(assistantId, cardId);
 
     await this.client.send(
       new DeleteSecretCommand({

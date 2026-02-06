@@ -4,7 +4,7 @@ import type { JobManager } from './job-manager';
 import { readJob, listJobsForSession, cleanupSessionJobs } from './job-store';
 
 /**
- * Create job tools for the agent
+ * Create job tools for the assistant
  */
 export function createJobTools(getJobManager: () => JobManager | null): Array<{ tool: Tool; executor: ToolExecutor }> {
   return [

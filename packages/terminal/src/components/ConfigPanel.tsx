@@ -9,7 +9,7 @@ import {
 } from '@hasna/assistants-shared';
 
 type ConfigLocation = 'user' | 'project' | 'local';
-type ConfigSection = 'overview' | 'model' | 'context' | 'memory' | 'subagents' | 'voice' | 'energy';
+type ConfigSection = 'overview' | 'model' | 'context' | 'memory' | 'subassistants' | 'voice' | 'energy';
 
 interface ConfigPanelProps {
   config: AssistantsConfig;
@@ -25,7 +25,7 @@ const SECTIONS: { id: ConfigSection; name: string; icon: string }[] = [
   { id: 'model', name: 'Model', icon: '🤖' },
   { id: 'context', name: 'Context', icon: '📝' },
   { id: 'memory', name: 'Memory', icon: '🧠' },
-  { id: 'subagents', name: 'Subagents', icon: '👥' },
+  { id: 'subassistants', name: 'Subassistants', icon: '👥' },
   { id: 'voice', name: 'Voice', icon: '🎤' },
   { id: 'energy', name: 'Energy', icon: '⚡' },
 ];
@@ -163,16 +163,16 @@ export function ConfigPanel({
       return;
     }
 
-    if (section.id === 'subagents' && !editingField) {
+    if (section.id === 'subassistants' && !editingField) {
       if (input === '1') {
-        setEditingField('subagents.maxDepth');
-        setEditValue(String(config.subagents?.maxDepth ?? 3));
+        setEditingField('subassistants.maxDepth');
+        setEditValue(String(config.subassistants?.maxDepth ?? 3));
       } else if (input === '2') {
-        setEditingField('subagents.maxConcurrent');
-        setEditValue(String(config.subagents?.maxConcurrent ?? 5));
+        setEditingField('subassistants.maxConcurrent');
+        setEditValue(String(config.subassistants?.maxConcurrent ?? 5));
       } else if (input === '3') {
-        setEditingField('subagents.maxTurns');
-        setEditValue(String(config.subagents?.maxTurns ?? 10));
+        setEditingField('subassistants.maxTurns');
+        setEditValue(String(config.subassistants?.maxTurns ?? 10));
       }
       return;
     }
@@ -449,12 +449,12 @@ export function ConfigPanel({
           </Box>
         );
 
-      case 'subagents':
+      case 'subassistants':
         return (
           <Box flexDirection="column">
-            <Text bold>Subagents Settings</Text>
+            <Text bold>Subassistants Settings</Text>
             <Box marginTop={1} flexDirection="column">
-              {editingField === 'subagents.maxDepth' ? (
+              {editingField === 'subassistants.maxDepth' ? (
                 <Box>
                   <Text>1. Max Depth: </Text>
                   <TextInput
@@ -465,11 +465,11 @@ export function ConfigPanel({
                 </Box>
               ) : (
                 <Text>
-                  1. Max Depth: <Text color="cyan">{config.subagents?.maxDepth ?? 3}</Text>
-                  <Text dimColor> {getSource('subagents.maxDepth')}</Text>
+                  1. Max Depth: <Text color="cyan">{config.subassistants?.maxDepth ?? 3}</Text>
+                  <Text dimColor> {getSource('subassistants.maxDepth')}</Text>
                 </Text>
               )}
-              {editingField === 'subagents.maxConcurrent' ? (
+              {editingField === 'subassistants.maxConcurrent' ? (
                 <Box>
                   <Text>2. Max Concurrent: </Text>
                   <TextInput
@@ -480,11 +480,11 @@ export function ConfigPanel({
                 </Box>
               ) : (
                 <Text>
-                  2. Max Concurrent: <Text color="cyan">{config.subagents?.maxConcurrent ?? 5}</Text>
-                  <Text dimColor> {getSource('subagents.maxConcurrent')}</Text>
+                  2. Max Concurrent: <Text color="cyan">{config.subassistants?.maxConcurrent ?? 5}</Text>
+                  <Text dimColor> {getSource('subassistants.maxConcurrent')}</Text>
                 </Text>
               )}
-              {editingField === 'subagents.maxTurns' ? (
+              {editingField === 'subassistants.maxTurns' ? (
                 <Box>
                   <Text>3. Max Turns: </Text>
                   <TextInput
@@ -495,16 +495,16 @@ export function ConfigPanel({
                 </Box>
               ) : (
                 <Text>
-                  3. Max Turns: <Text color="cyan">{config.subagents?.maxTurns ?? 10}</Text>
-                  <Text dimColor> {getSource('subagents.maxTurns')}</Text>
+                  3. Max Turns: <Text color="cyan">{config.subassistants?.maxTurns ?? 10}</Text>
+                  <Text dimColor> {getSource('subassistants.maxTurns')}</Text>
                 </Text>
               )}
               <Text>
-                Default Timeout: <Text color="cyan">{Math.round((config.subagents?.defaultTimeoutMs ?? 120000) / 1000)}s</Text>
+                Default Timeout: <Text color="cyan">{Math.round((config.subassistants?.defaultTimeoutMs ?? 120000) / 1000)}s</Text>
               </Text>
             </Box>
             <Box marginTop={1}>
-              <Text dimColor>Default Tools: {(config.subagents?.defaultTools ?? []).slice(0, 5).join(', ')}...</Text>
+              <Text dimColor>Default Tools: {(config.subassistants?.defaultTools ?? []).slice(0, 5).join(', ')}...</Text>
             </Box>
             <Box marginTop={1}>
               <Text dimColor>Press 1-3 to edit | Esc to go back</Text>

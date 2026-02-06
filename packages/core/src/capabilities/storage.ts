@@ -1,7 +1,7 @@
 /**
  * Capability Storage
  *
- * Provides persistence and loading for agent capabilities.
+ * Provides persistence and loading for assistant capabilities.
  * Supports both file-based storage and in-memory caching.
  */
 
@@ -10,7 +10,7 @@ import { join, dirname } from 'path';
 import { homedir } from 'os';
 import type { CapabilitiesConfigShared } from '@hasna/assistants-shared';
 import type {
-  AgentCapabilitySet,
+  AssistantCapabilitySet,
   CapabilityChain,
   CapabilityScope,
   OrchestrationLevel,
@@ -50,7 +50,7 @@ interface StoredCapabilities {
   version: number;
   savedAt: string;
   chains: Record<string, CapabilityChain>;
-  overrides: Record<string, Partial<AgentCapabilitySet>>;
+  overrides: Record<string, Partial<AssistantCapabilitySet>>;
 }
 
 /**
@@ -59,7 +59,7 @@ interface StoredCapabilities {
 export class CapabilityStorage {
   private config: CapabilityStorageConfig;
   private chains: Map<string, CapabilityChain> = new Map();
-  private overrides: Map<string, Partial<AgentCapabilitySet>> = new Map();
+  private overrides: Map<string, Partial<AssistantCapabilitySet>> = new Map();
   private dirty = false;
 
   constructor(config?: Partial<CapabilityStorageConfig>) {
@@ -161,14 +161,14 @@ export class CapabilityStorage {
   /**
    * Get override for an entity
    */
-  getOverride(entityId: string): Partial<AgentCapabilitySet> | null {
+  getOverride(entityId: string): Partial<AssistantCapabilitySet> | null {
     return this.overrides.get(entityId) || null;
   }
 
   /**
    * Set override for an entity
    */
-  setOverride(entityId: string, override: Partial<AgentCapabilitySet>): void {
+  setOverride(entityId: string, override: Partial<AssistantCapabilitySet>): void {
     this.overrides.set(entityId, override);
     this.dirty = true;
     this.autoSave();
@@ -226,19 +226,19 @@ export class CapabilityStorage {
 /**
  * Convert shared config to capability set partial
  */
-export function configToCapabilities(config: CapabilitiesConfigShared): Partial<AgentCapabilitySet> {
-  const result: Partial<AgentCapabilitySet> = {
+export function configToCapabilities(config: CapabilitiesConfigShared): Partial<AssistantCapabilitySet> {
+  const result: Partial<AssistantCapabilitySet> = {
     enabled: config.enabled ?? true,
   };
 
   // Orchestration from preset or individual settings
   if (config.orchestrationLevel) {
     result.orchestration = { ...ORCHESTRATION_DEFAULTS[config.orchestrationLevel] };
-  } else if (config.maxConcurrentSubagents !== undefined || config.maxSubagentDepth !== undefined) {
+  } else if (config.maxConcurrentSubassistants !== undefined || config.maxSubassistantDepth !== undefined) {
     result.orchestration = {
       ...ORCHESTRATION_DEFAULTS.standard,
-      maxConcurrentSubagents: config.maxConcurrentSubagents ?? ORCHESTRATION_DEFAULTS.standard.maxConcurrentSubagents,
-      maxSubagentDepth: config.maxSubagentDepth ?? ORCHESTRATION_DEFAULTS.standard.maxSubagentDepth,
+      maxConcurrentSubassistants: config.maxConcurrentSubassistants ?? ORCHESTRATION_DEFAULTS.standard.maxConcurrentSubassistants,
+      maxSubassistantDepth: config.maxSubassistantDepth ?? ORCHESTRATION_DEFAULTS.standard.maxSubassistantDepth,
     };
   }
 
@@ -271,7 +271,7 @@ export function configToCapabilities(config: CapabilitiesConfigShared): Partial<
 /**
  * Get default capabilities for a scope
  */
-export function getDefaultCapabilities(scope: CapabilityScope): Partial<AgentCapabilitySet> {
+export function getDefaultCapabilities(scope: CapabilityScope): Partial<AssistantCapabilitySet> {
   switch (scope) {
     case 'system':
       return {}; // System defaults are the base
@@ -283,8 +283,8 @@ export function getDefaultCapabilities(scope: CapabilityScope): Partial<AgentCap
       return DEFAULT_CAPABILITY_SET;
     case 'session':
       return {}; // Sessions inherit from assistant
-    case 'agent':
-      return {}; // Agents inherit from session
+    case 'instance':
+      return {}; // Instances inherit from session
     default:
       return {};
   }
@@ -293,7 +293,7 @@ export function getDefaultCapabilities(scope: CapabilityScope): Partial<AgentCap
 /**
  * Get capability preset by name
  */
-export function getCapabilityPreset(preset: 'default' | 'restricted' | 'coordinator'): Partial<AgentCapabilitySet> {
+export function getCapabilityPreset(preset: 'default' | 'restricted' | 'coordinator'): Partial<AssistantCapabilitySet> {
   switch (preset) {
     case 'restricted':
       return RESTRICTED_CAPABILITY_SET;

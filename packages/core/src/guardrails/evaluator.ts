@@ -17,7 +17,7 @@ export interface EvaluationContext {
   toolName: string;
   /** Tool input parameters */
   toolInput?: Record<string, unknown>;
-  /** Current agent depth */
+  /** Current assistant depth */
   depth?: number;
   /** Session duration in ms */
   sessionDuration?: number;
@@ -318,7 +318,7 @@ export class PolicyEvaluator {
             result.requiresApproval = true;
             result.action = 'require_approval';
           } else if (policy.depth.onExceeded === 'warn') {
-            result.warnings.push(`Agent depth ${context.depth} exceeds limit ${policy.depth.maxDepth}`);
+            result.warnings.push(`Assistant depth ${context.depth} exceeds limit ${policy.depth.maxDepth}`);
           }
         }
       }

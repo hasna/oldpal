@@ -1,7 +1,7 @@
 /**
  * Swarm Module
  *
- * Multi-agent orchestration using specialized subagents.
+ * Multi-assistant orchestration using specialized subassistants.
  */
 
 export * from './types';
@@ -42,16 +42,16 @@ export type {
 } from './policy-enforcer';
 export { TaskGraphBuilder, DEFAULT_BUILDER_OPTIONS } from './graph-builder';
 export {
-  SwarmAgentSelector,
-  createSwarmAgentSelector,
+  SwarmAssistantSelector,
+  createSwarmAssistantSelector,
   DEFAULT_SELECTOR_CONFIG,
 } from './agent-selector';
 export type {
-  TaskAgentAssignment,
-  AgentRequirements,
+  TaskAssistantAssignment,
+  AssistantRequirements,
   AssignmentPlan,
   AssignmentStats,
-  AgentSelectorConfig,
+  AssistantSelectorConfig,
 } from './agent-selector';
 export {
   SwarmDispatcher,
@@ -116,7 +116,7 @@ export {
   DEFAULT_STATUS_CONFIG,
 } from './status';
 export type {
-  SwarmAgentStatus,
+  SwarmAssistantStatus,
   SwarmTaskDisplayStatus,
   ProgressBarStyle,
   SwarmStatusSummary,

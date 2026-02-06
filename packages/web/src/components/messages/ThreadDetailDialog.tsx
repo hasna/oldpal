@@ -42,8 +42,8 @@ interface ThreadMessage {
   id: string;
   threadId: string;
   parentId: string | null;
-  fromAgentId: string | null;
-  toAgentId: string | null;
+  fromAssistantId: string | null;
+  toAssistantId: string | null;
   subject: string | null;
   body: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
@@ -52,7 +52,7 @@ interface ThreadMessage {
   readAt: string | null;
 }
 
-interface Agent {
+interface Assistant {
   id: string;
   name: string;
 }
@@ -73,7 +73,7 @@ export function ThreadDetailDialog({
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [assistants, setAssistants] = useState<Assistant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -81,8 +81,8 @@ export function ThreadDetailDialog({
 
   // Reply form state
   const [replyBody, setReplyBody] = useState('');
-  const [replyToAgentId, setReplyToAgentId] = useState('');
-  const [replyFromAgentId, setReplyFromAgentId] = useState('');
+  const [replyToAssistantId, setReplyToAssistantId] = useState('');
+  const [replyFromAssistantId, setReplyFromAssistantId] = useState('');
 
   const loadThread = useCallback(async () => {
     if (!threadId) return;
@@ -118,27 +118,27 @@ export function ThreadDetailDialog({
     }
   }, [threadId, fetchWithAuth, onMessageUpdate]);
 
-  const loadAgents = useCallback(async () => {
+  const loadAssistants = useCallback(async () => {
     try {
-      const response = await fetchWithAuth('/api/v1/agents');
+      const response = await fetchWithAuth('/api/v1/assistants');
       const data = await response.json();
       if (data.success) {
-        setAgents(data.data.items || []);
+        setAssistants(data.data.items || []);
       }
     } catch {
-      // Silently fail - agents list is optional
+      // Silently fail - assistants list is optional
     }
   }, [fetchWithAuth]);
 
   useEffect(() => {
     if (threadId) {
       loadThread();
-      loadAgents();
+      loadAssistants();
     }
-  }, [threadId, loadThread, loadAgents]);
+  }, [threadId, loadThread, loadAssistants]);
 
   const handleSendReply = async () => {
-    if (!replyBody.trim() || !replyToAgentId) return;
+    if (!replyBody.trim() || !replyToAssistantId) return;
 
     setIsSending(true);
     try {
@@ -149,8 +149,8 @@ export function ThreadDetailDialog({
         body: JSON.stringify({
           threadId,
           parentId: lastMessage?.id,
-          toAgentId: replyToAgentId,
-          fromAgentId: replyFromAgentId || undefined,
+          toAssistantId: replyToAssistantId,
+          fromAssistantId: replyFromAssistantId || undefined,
           body: replyBody.trim(),
           subject: initialSubject ? `Re: ${initialSubject}` : undefined,
         }),
@@ -221,10 +221,10 @@ export function ThreadDetailDialog({
     }
   };
 
-  const getAgentName = (agentId: string | null) => {
-    if (!agentId) return 'User';
-    const agent = agents.find((a) => a.id === agentId);
-    return agent?.name || 'Unknown Agent';
+  const getAssistantName = (assistantId: string | null) => {
+    if (!assistantId) return 'User';
+    const assistant = assistants.find((a) => a.id === assistantId);
+    return assistant?.name || 'Unknown Assistant';
   };
 
   if (!threadId) return null;
@@ -266,9 +266,9 @@ export function ThreadDetailDialog({
                     <div className="flex-1 min-w-0">
                       {/* Header */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        {message.fromAgentId ? (
+                        {message.fromAssistantId ? (
                           <Badge variant="outline" className="text-xs">
-                            From: {getAgentName(message.fromAgentId)}
+                            From: {getAssistantName(message.fromAssistantId)}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="text-xs">
@@ -277,7 +277,7 @@ export function ThreadDetailDialog({
                         )}
                         <span className="text-gray-400">→</span>
                         <Badge variant="outline" className="text-xs">
-                          To: {getAgentName(message.toAgentId)}
+                          To: {getAssistantName(message.toAssistantId)}
                         </Badge>
                         {getPriorityIcon(message.priority)}
                         {message.status === 'unread' && (
@@ -318,14 +318,14 @@ export function ThreadDetailDialog({
                     <label className="text-sm font-medium text-gray-700 mb-1 block">
                       Send to
                     </label>
-                    <Select value={replyToAgentId} onValueChange={setReplyToAgentId}>
+                    <Select value={replyToAssistantId} onValueChange={setReplyToAssistantId}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select recipient agent" />
+                        <SelectValue placeholder="Select recipient assistant" />
                       </SelectTrigger>
                       <SelectContent>
-                        {agents.map((agent) => (
-                          <SelectItem key={agent.id} value={agent.id}>
-                            {agent.name}
+                        {assistants.map((assistant) => (
+                          <SelectItem key={assistant.id} value={assistant.id}>
+                            {assistant.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -335,15 +335,15 @@ export function ThreadDetailDialog({
                     <label className="text-sm font-medium text-gray-700 mb-1 block">
                       Send as (optional)
                     </label>
-                    <Select value={replyFromAgentId} onValueChange={setReplyFromAgentId}>
+                    <Select value={replyFromAssistantId} onValueChange={setReplyFromAssistantId}>
                       <SelectTrigger>
                         <SelectValue placeholder="Send as user" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">Send as user</SelectItem>
-                        {agents.map((agent) => (
-                          <SelectItem key={agent.id} value={agent.id}>
-                            {agent.name}
+                        {assistants.map((assistant) => (
+                          <SelectItem key={assistant.id} value={assistant.id}>
+                            {assistant.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -362,7 +362,7 @@ export function ThreadDetailDialog({
                   </Button>
                   <Button
                     onClick={handleSendReply}
-                    disabled={!replyBody.trim() || !replyToAgentId || isSending}
+                    disabled={!replyBody.trim() || !replyToAssistantId || isSending}
                   >
                     {isSending ? (
                       <>

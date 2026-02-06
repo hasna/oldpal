@@ -2,9 +2,9 @@ import type { Message, ToolCall, ToolResult, ScopeContext, DocumentAttachment } 
 import { generateId, now } from '@hasna/assistants-shared';
 
 /**
- * Agent context - manages conversation state
+ * Assistant context - manages conversation state
  */
-export class AgentContext {
+export class AssistantContext {
   private messages: Message[] = [];
   private maxMessages: number;
   private scopeContext: ScopeContext | null = null;

@@ -1,6 +1,6 @@
 /**
- * Wallet tools for agent use
- * Native tools that allow agents to manage and use payment cards
+ * Wallet tools for assistant use
+ * Native tools that allow assistants to manage and use payment cards
  */
 
 import type { Tool } from '@hasna/assistants-shared';

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './use-auth';
 
 export interface UsageStatus {
-  type: 'agents' | 'messages' | 'sessions' | 'schedules';
+  type: 'assistants' | 'messages' | 'sessions' | 'schedules';
   current: number;
   limit: number;
   percentage: number;
@@ -13,13 +13,13 @@ export interface UsageStatus {
 
 export interface UsageOverview {
   limits: {
-    maxAgents: number;
+    maxAssistants: number;
     maxMessagesPerDay: number;
     maxSessions: number;
     maxSchedules: number;
   };
   current: {
-    agents: number;
+    assistants: number;
     messagesThisPeriod: number;
     sessions: number;
     schedules: number;
@@ -35,7 +35,7 @@ interface UseUsageResult {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  canCreateAgent: boolean;
+  canCreateAssistant: boolean;
   canCreateSession: boolean;
   canCreateSchedule: boolean;
   canSendMessage: boolean;
@@ -73,8 +73,8 @@ export function useUsage(): UseUsageResult {
   }, [fetchUsage]);
 
   // Calculate can* flags based on usage
-  const canCreateAgent = usage
-    ? usage.limits.maxAgents === -1 || usage.current.agents < usage.limits.maxAgents
+  const canCreateAssistant = usage
+    ? usage.limits.maxAssistants === -1 || usage.current.assistants < usage.limits.maxAssistants
     : true;
 
   const canCreateSession = usage
@@ -94,7 +94,7 @@ export function useUsage(): UseUsageResult {
     isLoading,
     error,
     refetch: fetchUsage,
-    canCreateAgent,
+    canCreateAssistant,
     canCreateSession,
     canCreateSchedule,
     canSendMessage,

@@ -26,54 +26,54 @@ const sessions = new Map<string, SessionRecord>();
 const pendingSessions = new Map<string, Promise<SessionRecord>>();
 
 /**
- * Get agent settings for a session (allowedTools, systemPrompt, etc.)
+ * Get assistant settings for a session (allowedTools, systemPrompt, etc.)
  */
-async function getAgentSettingsForSession(sessionId: string): Promise<{
+async function getAssistantSettingsForSession(sessionId: string): Promise<{
   allowedTools?: string[];
   systemPrompt?: string;
   model?: string;
 } | null> {
   try {
-    // Look up session to get agentId
+    // Look up session to get assistantId
     const session = await db.query.sessions.findFirst({
       where: eq(sessionsTable.id, sessionId),
-      columns: { agentId: true },
+      columns: { assistantId: true },
     });
 
-    if (!session?.agentId) {
+    if (!session?.assistantId) {
       return null;
     }
 
-    // Look up agent to get settings
-    const agent = await db.query.assistants.findFirst({
-      where: eq(assistants.id, session.agentId),
+    // Look up assistant to get settings
+    const assistant = await db.query.assistants.findFirst({
+      where: eq(assistants.id, session.assistantId),
       columns: { settings: true, systemPrompt: true, model: true, isActive: true },
     });
 
-    if (!agent || !agent.isActive) {
+    if (!assistant || !assistant.isActive) {
       return null;
     }
 
     return {
-      allowedTools: agent.settings?.tools,
-      systemPrompt: agent.systemPrompt || undefined,
-      model: agent.model,
+      allowedTools: assistant.settings?.tools,
+      systemPrompt: assistant.systemPrompt || undefined,
+      model: assistant.model,
     };
   } catch (error) {
-    console.error('[AgentPool] Failed to get agent settings:', error);
+    console.error('[AssistantPool] Failed to get assistant settings:', error);
     return null;
   }
 }
 
 async function createSession(sessionId: string): Promise<SessionRecord> {
-  // Get agent-specific settings if the session has an associated agent
-  const agentSettings = await getAgentSettingsForSession(sessionId);
+  // Get assistant-specific settings if the session has an associated assistant
+  const assistantSettings = await getAssistantSettingsForSession(sessionId);
 
   const client = new EmbeddedClient(process.cwd(), {
     sessionId,
-    allowedTools: agentSettings?.allowedTools,
-    systemPrompt: agentSettings?.systemPrompt,
-    model: agentSettings?.model,
+    allowedTools: assistantSettings?.allowedTools,
+    systemPrompt: assistantSettings?.systemPrompt,
+    model: assistantSettings?.model,
   });
   await client.initialize();
   const record: SessionRecord = {
