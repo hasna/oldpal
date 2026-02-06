@@ -1,0 +1,13 @@
+{
+  "id": "889",
+  "subject": "Use registry-matched agents in SwarmCoordinator",
+  "description": "Implement TODO in SwarmCoordinator.spawnAgent to delegate tasks to matched registered agents instead of always spawning new. Fall back to spawn when no match. Ensure load tracking updates.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "agents"
+  ],
+  "created": "2026-02-05T15:43:20.414Z",
+  "updated": "2026-02-05T15:43:20.414Z"
+}

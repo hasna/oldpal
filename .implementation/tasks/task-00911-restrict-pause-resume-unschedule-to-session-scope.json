@@ -1,0 +1,13 @@
+{
+  "id": "911",
+  "subject": "Restrict /pause /resume /unschedule to session scope",
+  "description": "Enforce schedule ownership for CLI commands: only allow pause/resume/delete on schedules owned by current session or global. Add --global/--all flags for admins if needed. Align behavior with scheduler tool.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "schedules",
+    "logic"
+  ],
+  "created": "2026-02-05T16:24:34.460Z",
+  "updated": "2026-02-05T16:24:34.460Z"
+}

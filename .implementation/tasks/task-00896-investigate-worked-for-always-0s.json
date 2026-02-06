@@ -1,0 +1,13 @@
+{
+  "id": "896",
+  "subject": "Investigate 'worked for' always 0s",
+  "description": "Debug lastWorkedFor formatting and processingStartTime lifecycle. Ensure worked-for duration reflects actual elapsed time, not 0s. Add test for non-zero durations and <1s display.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "bug",
+    "terminal"
+  ],
+  "created": "2026-02-05T16:01:46.084Z",
+  "updated": "2026-02-05T16:01:46.084Z"
+}

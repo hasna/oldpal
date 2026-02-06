@@ -1,0 +1,13 @@
+{
+  "id": "891",
+  "subject": "Enforce swarm tokenBudget + swarmTimeout",
+  "description": "Implement tokenBudget and swarmTimeoutMs enforcement in SwarmCoordinator. Stop swarm when limits exceeded; mark status failed/cancelled and emit events. Add user-visible warnings before stop.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:01:12.470Z",
+  "updated": "2026-02-05T16:01:12.470Z"
+}

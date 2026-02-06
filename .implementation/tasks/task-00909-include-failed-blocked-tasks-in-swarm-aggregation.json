@@ -1,0 +1,13 @@
+{
+  "id": "909",
+  "subject": "Include failed/blocked tasks in swarm aggregation",
+  "description": "Update aggregator prompt/result to include summaries of failed/blocked tasks and error reasons so final output reflects incomplete work.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:14:00.184Z",
+  "updated": "2026-02-05T16:14:00.184Z"
+}

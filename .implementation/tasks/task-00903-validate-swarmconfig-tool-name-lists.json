@@ -1,0 +1,13 @@
+{
+  "id": "903",
+  "subject": "Validate SwarmConfig tool name lists",
+  "description": "Validate planner/worker/critic/forbidden tool names at startup; warn or filter unknown tool names (e.g., schedule_create). Ensure config uses real tool names from registry.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:06:50.257Z",
+  "updated": "2026-02-05T16:06:50.257Z"
+}

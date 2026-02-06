@@ -1,0 +1,13 @@
+{
+  "id": "895",
+  "subject": "Implement maxCriticIterations",
+  "description": "Use SwarmConfig.maxCriticIterations to run critic review loop until approved or limit reached. Report unresolved issues in final result.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:01:40.926Z",
+  "updated": "2026-02-05T16:01:40.926Z"
+}

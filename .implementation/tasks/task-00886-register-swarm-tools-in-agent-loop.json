@@ -1,0 +1,13 @@
+{
+  "id": "886",
+  "subject": "Register swarm tools in agent loop",
+  "description": "Wire registerSwarmTools into AgentLoop so swarm_execute/status/stop are available with full context. Instantiate SwarmCoordinator using SubagentManager + registry + session context.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "bug"
+  ],
+  "created": "2026-02-05T15:43:05.593Z",
+  "updated": "2026-02-05T15:43:05.593Z"
+}

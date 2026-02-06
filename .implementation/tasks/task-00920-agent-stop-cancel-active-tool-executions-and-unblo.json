@@ -1,0 +1,15 @@
+{
+  "id": "920",
+  "subject": "Agent stop: cancel active tool executions and unblock queue",
+  "description": "Stopping during a tool call leaves AgentLoop running until the tool completes; queued/in‑stream messages remain blocked. Add tool execution cancellation (AbortSignal or cooperative cancel) and ensure stop emits a terminal chunk or otherwise flips processing so EmbeddedClient can drain queued messages.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "core",
+    "bug",
+    "tools",
+    "queue"
+  ],
+  "created": "2026-02-05T16:38:42.322Z",
+  "updated": "2026-02-05T16:38:42.322Z"
+}

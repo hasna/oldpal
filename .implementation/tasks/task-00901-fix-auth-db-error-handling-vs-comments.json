@@ -1,0 +1,13 @@
+{
+  "id": "901",
+  "subject": "Fix auth DB-error handling vs comments",
+  "description": "getUserStatus() comment says fail-open but returns null on DB error (causing auth to fail). Decide intended behavior (fail-open or fail-closed), update implementation + comments, and add tests for DB error path.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "security",
+    "auth"
+  ],
+  "created": "2026-02-05T16:06:36.174Z",
+  "updated": "2026-02-05T16:06:36.174Z"
+}

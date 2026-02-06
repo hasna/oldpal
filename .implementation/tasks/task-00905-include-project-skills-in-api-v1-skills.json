@@ -1,0 +1,13 @@
+{
+  "id": "905",
+  "subject": "Include project skills in /api/v1/skills",
+  "description": "Update skills list and detail endpoints to load both global (~/.assistants/shared/skills) and project (.assistants/skills) directories. Handle name collisions and include category/sourceId for project skills. Add tests.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "api",
+    "skills"
+  ],
+  "created": "2026-02-05T16:08:57.946Z",
+  "updated": "2026-02-05T16:08:57.946Z"
+}

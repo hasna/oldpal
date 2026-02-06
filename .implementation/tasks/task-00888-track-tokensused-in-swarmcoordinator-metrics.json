@@ -1,0 +1,13 @@
+{
+  "id": "888",
+  "subject": "Track tokensUsed in SwarmCoordinator metrics",
+  "description": "Populate SwarmMetrics.tokensUsed from subagent results (token usage) instead of placeholder 0. Ensure subagent results expose token usage and aggregate totals.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "metrics"
+  ],
+  "created": "2026-02-05T15:43:15.602Z",
+  "updated": "2026-02-05T15:43:15.602Z"
+}

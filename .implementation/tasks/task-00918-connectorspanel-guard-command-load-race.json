@@ -1,0 +1,15 @@
+{
+  "id": "918",
+  "subject": "ConnectorsPanel: guard command-load race",
+  "description": "onLoadCommands uses a single isLoadingCommands flag and no request-id guard. If user switches connectors mid-load, spinner and results can apply to the wrong connector. Add per-connector loading state or request token to ignore stale responses and keep UI consistent.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "bug",
+    "connectors",
+    "ux"
+  ],
+  "created": "2026-02-05T16:33:17.081Z",
+  "updated": "2026-02-05T16:33:17.081Z"
+}

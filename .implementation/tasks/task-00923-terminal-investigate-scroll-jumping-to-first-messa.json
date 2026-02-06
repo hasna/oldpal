@@ -1,0 +1,14 @@
+{
+  "id": "923",
+  "subject": "Terminal: investigate scroll jumping to first message",
+  "description": "User reports view jumps to top/first message. Investigate interaction between Ink <Static>, streaming Messages render, and message trimming. Add repro + fix to keep viewport anchored at bottom or preserve user scroll position.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "bug",
+    "ux"
+  ],
+  "created": "2026-02-05T16:39:33.893Z",
+  "updated": "2026-02-05T16:39:33.893Z"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "908",
+  "subject": "Swarm status should fail when tasks fail",
+  "description": "If any swarm task fails/blocks, mark swarm status as failed (not completed). Skip or annotate aggregation accordingly and surface failed task errors in final result.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:13:52.493Z",
+  "updated": "2026-02-05T16:13:52.493Z"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "910",
+  "subject": "Track active agents in SwarmState",
+  "description": "Update SwarmCoordinator to populate state.activeAgents and task.assignedAgentId when spawning/dispatching, and remove when finished. Use for status UI and metrics.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:14:07.132Z",
+  "updated": "2026-02-05T16:14:07.132Z"
+}

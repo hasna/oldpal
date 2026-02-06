@@ -4,6 +4,44 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 923 | Terminal: investigate scroll jumping to  | pending | - | - |
+| 922 | Queue UI: clear stale inlinePending entr | pending | - | - |
+| 921 | EmbeddedClient: drain queue when process | pending | - | - |
+| 920 | Agent stop: cancel active tool execution | pending | - | - |
+| 919 | Input: expose in-stream (inline) send | pending | - | - |
+| 918 | ConnectorsPanel: guard command-load race | pending | - | - |
+| 917 | Swarm: make activeAgents state serializa | pending | - | - |
+| 916 | Swarm: tie activeAgents to real subagent | pending | - | - |
+| 915 | Swarm: keep task agent id after completi | pending | - | - |
+| 914 | Run-now should respect schedule actionTy | pending | - | - |
+| 913 | Allow message-only schedules | pending | - | - |
+| 912 | Align /schedules list with session scope | pending | - | - |
+| 911 | Restrict /pause /resume /unschedule to s | pending | - | - |
+| 910 | Track active agents in SwarmState | pending | - | - |
+| 909 | Include failed/blocked tasks in swarm ag | pending | - | - |
+| 908 | Swarm status should fail when tasks fail | pending | - | - |
+| 907 | Schedules panel should show action type  | pending | - | - |
+| 906 | Populate connector commands in Connector | pending | - | - |
+| 905 | Include project skills in /api/v1/skills | pending | - | - |
+| 904 | Set swarm endedAt on completion/cancel | pending | - | - |
+| 903 | Validate SwarmConfig tool name lists | pending | - | - |
+| 902 | Cancel subagent timeout timers | pending | - | - |
+| 901 | Fix auth DB-error handling vs comments | pending | - | - |
+| 900 | Fix current turn token counting | pending | - | - |
+| 899 | API tools list should reflect actual reg | pending | - | - |
+| 898 | Swarm task timeout should respect SwarmC | pending | - | - |
+| 897 | Swarm stop should cancel active subagent | pending | - | - |
+| 896 | Investigate 'worked for' always 0s | pending | - | - |
+| 895 | Implement maxCriticIterations | pending | - | - |
+| 894 | Align swarm default tool list with actua | pending | - | - |
+| 893 | Fix createPlanFromTasks dependency mappi | pending | - | - |
+| 892 | Handle swarm deadlock/incomplete tasks | pending | - | - |
+| 891 | Enforce swarm tokenBudget + swarmTimeout | pending | - | - |
+| 890 | Swarm plan approval gate | pending | - | - |
+| 889 | Use registry-matched agents in SwarmCoor | pending | - | - |
+| 888 | Track tokensUsed in SwarmCoordinator met | pending | - | - |
+| 887 | Make /swarm command execute real swarm | pending | - | - |
+| 886 | Register swarm tools in agent loop | pending | - | - |
 | 885 | Interactive command UX guidelines | pending | - | 880 |
 | 884 | Interactive /checks panel (if command ex | pending | - | 880 |
 | 883 | Interactive /tasks panel enhancements | pending | - | 880 |

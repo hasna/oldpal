@@ -1,0 +1,13 @@
+{
+  "id": "894",
+  "subject": "Align swarm default tool list with actual registry",
+  "description": "SwarmConfig.workerTools includes 'edit' which doesn't exist; either add edit tool or remove from defaults. Validate swarm tool lists at startup and warn on unknown tools.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:01:32.338Z",
+  "updated": "2026-02-05T16:01:32.338Z"
+}

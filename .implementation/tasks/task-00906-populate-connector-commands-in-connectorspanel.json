@@ -1,0 +1,13 @@
+{
+  "id": "906",
+  "subject": "Populate connector commands in ConnectorsPanel",
+  "description": "ConnectorsPanel initializes with fastDiscover only; command lists may be empty. Run full connectorBridge.discover() in background or on selection to populate commands and descriptions. Add loading state and retry.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "connectors",
+    "bug"
+  ],
+  "created": "2026-02-05T16:09:04.498Z",
+  "updated": "2026-02-05T16:09:04.498Z"
+}

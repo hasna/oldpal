@@ -1,0 +1,14 @@
+{
+  "id": "922",
+  "subject": "Queue UI: clear stale inlinePending entries",
+  "description": "Queue processing is blocked while activeInline.length > 0. If inline pending never clears (e.g., send fails before first chunk), queued messages are stuck. Add cleanup on error/timeout/stop and guard against stale inline entries.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "bug",
+    "queue"
+  ],
+  "created": "2026-02-05T16:38:53.438Z",
+  "updated": "2026-02-05T16:38:53.438Z"
+}

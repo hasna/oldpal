@@ -1,0 +1,13 @@
+{
+  "id": "890",
+  "subject": "Swarm plan approval gate",
+  "description": "Implement real plan approval when autoApprove=false: prompt user (ask_user) to approve/edit/abort before execution. Block execution until approved; record approvedAt and emit events. Update /swarm UI to show pending approval.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:01:03.934Z",
+  "updated": "2026-02-05T16:01:03.934Z"
+}

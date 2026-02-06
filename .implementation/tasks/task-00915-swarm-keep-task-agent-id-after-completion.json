@@ -1,0 +1,14 @@
+{
+  "id": "915",
+  "subject": "Swarm: keep task agent id after completion",
+  "description": "SwarmCoordinator clears task.assignedAgentId in finally, so SwarmStatusProvider loses which agent executed a task. Decide intended UX: keep assignedAgentId for completed tasks or add separate activeAgentId/lastAgentId. Update status display & summaries accordingly.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "bug",
+    "ux"
+  ],
+  "created": "2026-02-05T16:33:03.603Z",
+  "updated": "2026-02-05T16:33:03.603Z"
+}

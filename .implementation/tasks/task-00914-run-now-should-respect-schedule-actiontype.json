@@ -1,0 +1,13 @@
+{
+  "id": "914",
+  "subject": "Run-now should respect schedule actionType",
+  "description": "In SchedulesPanel run-now action, if schedule.actionType==='message' send schedule.message (fallback to command); otherwise send command. Avoid executing wrong content.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "schedules",
+    "logic"
+  ],
+  "created": "2026-02-05T16:24:51.657Z",
+  "updated": "2026-02-05T16:24:51.657Z"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "887",
+  "subject": "Make /swarm command execute real swarm",
+  "description": "Replace stubbed /swarm command behavior to call swarm_execute (or coordinator directly) when full context exists. Provide status/stop subcommands mapped to swarm_status/swarm_stop.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "bug"
+  ],
+  "created": "2026-02-05T15:43:09.828Z",
+  "updated": "2026-02-05T15:43:09.828Z"
+}

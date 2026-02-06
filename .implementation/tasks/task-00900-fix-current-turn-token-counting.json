@@ -1,0 +1,13 @@
+{
+  "id": "900",
+  "subject": "Fix current turn token counting",
+  "description": "currentTurnTokens increments only output tokens; include input tokens so processing indicator and stats are accurate. Add tests for token aggregation.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "bug",
+    "telemetry"
+  ],
+  "created": "2026-02-05T16:05:04.745Z",
+  "updated": "2026-02-05T16:05:04.745Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "916",
+  "subject": "Swarm: tie activeAgents to real subagent IDs",
+  "description": "SwarmCoordinator generates synthetic agentIds that don't match SubagentManager spawn IDs. This breaks cancellation/status cross-referencing. Extend SubagentManager.spawn to return subagentId alongside result (or add spawnWithId), plumb through SwarmCoordinator, and use real subagentId for assignedAgentId/activeAgents tracking.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "bug",
+    "architecture"
+  ],
+  "created": "2026-02-05T16:33:08.322Z",
+  "updated": "2026-02-05T16:33:08.322Z"
+}

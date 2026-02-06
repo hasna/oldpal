@@ -1,0 +1,13 @@
+{
+  "id": "893",
+  "subject": "Fix createPlanFromTasks dependency mapping",
+  "description": "When SwarmInput.tasks.dependsOn contains IDs vs indices, avoid parseInt confusion. Only map numeric indices; preserve string IDs. Also enforce maxTasks for pre-defined tasks.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:01:27.178Z",
+  "updated": "2026-02-05T16:01:27.178Z"
+}

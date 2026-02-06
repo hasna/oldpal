@@ -1,0 +1,13 @@
+{
+  "id": "904",
+  "subject": "Set swarm endedAt on completion/cancel",
+  "description": "Ensure SwarmCoordinator sets endedAt timestamp when completed/failed/cancelled for accurate metrics and UI display.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "metrics"
+  ],
+  "created": "2026-02-05T16:06:56.565Z",
+  "updated": "2026-02-05T16:06:56.565Z"
+}

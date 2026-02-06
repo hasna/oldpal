@@ -1,0 +1,13 @@
+{
+  "id": "907",
+  "subject": "Schedules panel should show action type + message",
+  "description": "When schedule.actionType==='message', list/detail views should display the message instead of command, and show action type column. Avoid blank command entries; update list formatting accordingly.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "schedules",
+    "ux"
+  ],
+  "created": "2026-02-05T16:09:11.963Z",
+  "updated": "2026-02-05T16:09:11.963Z"
+}

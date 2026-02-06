@@ -1,0 +1,13 @@
+{
+  "id": "897",
+  "subject": "Swarm stop should cancel active subagents",
+  "description": "Implement cancellation path so SwarmCoordinator.stop() stops running subagents. Add SubagentManager cancel/stopAll API or track runners to terminate. Ensure status updates and events emitted.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:04:44.936Z",
+  "updated": "2026-02-05T16:04:44.936Z"
+}

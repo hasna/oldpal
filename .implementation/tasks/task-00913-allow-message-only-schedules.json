@@ -1,0 +1,13 @@
+{
+  "id": "913",
+  "subject": "Allow message-only schedules",
+  "description": "For scheduler tool create: if actionType=message, allow empty command and require message. Ensure scheduled execution uses message text; validate inputs and update help/errors.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "schedules",
+    "logic"
+  ],
+  "created": "2026-02-05T16:24:44.107Z",
+  "updated": "2026-02-05T16:24:44.107Z"
+}

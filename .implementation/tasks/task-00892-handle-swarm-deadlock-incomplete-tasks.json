@@ -1,0 +1,13 @@
+{
+  "id": "892",
+  "subject": "Handle swarm deadlock/incomplete tasks",
+  "description": "Detect deadlock or blocked tasks after executeTaskGraph (pending/blocked remain). Mark swarm as failed with clear error and include blocked tasks in result.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:01:20.972Z",
+  "updated": "2026-02-05T16:01:20.972Z"
+}

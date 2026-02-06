@@ -1,0 +1,14 @@
+{
+  "id": "917",
+  "subject": "Swarm: make activeAgents state serializable",
+  "description": "SwarmState.activeAgents is a Set. Ensure SwarmCoordinator.getState / status APIs return a JSON‑friendly array (or add a derived activeAgentIds field) so API/UI consumers don't receive a Set. Update any status provider usage accordingly.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "swarm",
+    "bug",
+    "api"
+  ],
+  "created": "2026-02-05T16:33:12.006Z",
+  "updated": "2026-02-05T16:33:12.006Z"
+}

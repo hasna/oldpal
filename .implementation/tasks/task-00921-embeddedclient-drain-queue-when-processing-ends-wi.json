@@ -1,0 +1,14 @@
+{
+  "id": "921",
+  "subject": "EmbeddedClient: drain queue when processing ends without done/error",
+  "description": "Queued messages rely on done/error chunks to trigger drainQueue. If processing ends without emitting a terminal chunk (e.g., stop during tool execution), queued messages stall. Add a fallback: drain queue when AgentLoop finishes or when isProcessing transitions false, or emit done on stop.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "core",
+    "bug",
+    "queue"
+  ],
+  "created": "2026-02-05T16:38:48.205Z",
+  "updated": "2026-02-05T16:38:48.205Z"
+}

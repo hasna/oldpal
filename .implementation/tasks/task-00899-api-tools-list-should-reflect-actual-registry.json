@@ -1,0 +1,13 @@
+{
+  "id": "899",
+  "subject": "API tools list should reflect actual registry",
+  "description": "Replace static /api/v1/tools list with dynamic registry-backed list (built-ins + connectors + skills). Ensure pagination/search and avoid leaking full connector commands by default.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "api",
+    "tools"
+  ],
+  "created": "2026-02-05T16:04:56.830Z",
+  "updated": "2026-02-05T16:04:56.830Z"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "902",
+  "subject": "Cancel subagent timeout timers",
+  "description": "SubagentManager.createTimeout uses setTimeout without cleanup when runner completes. Clear timers on completion to avoid late stop calls and timer leaks.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "bug",
+    "agents"
+  ],
+  "created": "2026-02-05T16:06:42.403Z",
+  "updated": "2026-02-05T16:06:42.403Z"
+}

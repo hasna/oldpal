@@ -1,0 +1,13 @@
+{
+  "id": "898",
+  "subject": "Swarm task timeout should respect SwarmConfig",
+  "description": "Ensure SwarmConfig.taskTimeoutMs is enforced per task (propagate to SubagentManager or add per-task timeout in SwarmCoordinator). Avoid using only global defaultTimeoutMs.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "swarm",
+    "logic"
+  ],
+  "created": "2026-02-05T16:04:51.457Z",
+  "updated": "2026-02-05T16:04:51.457Z"
+}

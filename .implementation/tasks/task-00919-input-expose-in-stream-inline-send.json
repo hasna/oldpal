@@ -1,0 +1,14 @@
+{
+  "id": "919",
+  "subject": "Input: expose in-stream (inline) send",
+  "description": "Inline/in-stream mode exists in App.handleSubmit but Input never triggers it. Add a keybinding (e.g., Alt+Enter or Ctrl+Shift+Enter) to submit with mode='inline', update placeholder/help text and QueueIndicator copy so users can use in‑stream messages.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "ux",
+    "queue"
+  ],
+  "created": "2026-02-05T16:38:38.121Z",
+  "updated": "2026-02-05T16:38:38.121Z"
+}
