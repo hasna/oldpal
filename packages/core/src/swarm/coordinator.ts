@@ -29,6 +29,8 @@ import type {
   SerializableSwarmState,
 } from './types';
 import { DEFAULT_SWARM_CONFIG, ROLE_SYSTEM_PROMPTS, serializeSwarmState } from './types';
+import { SwarmMemory } from './memory';
+import type { BudgetTracker } from '../budget';
 
 /**
  * Approval decision from user
@@ -55,6 +57,8 @@ export interface SwarmCoordinatorContext {
   onPlanApproval?: (plan: SwarmPlan) => Promise<{ decision: ApprovalDecision; editedPlan?: SwarmPlan }>;
   /** Get available tool names (for config validation) */
   getAvailableTools?: () => string[];
+  /** Parent's budget tracker for persistent budget tracking */
+  budgetTracker?: BudgetTracker;
 }
 
 /**
@@ -69,6 +73,7 @@ export class SwarmCoordinator {
   private swarmTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
   private budgetExceeded = false;
   private timeoutExceeded = false;
+  private memory: SwarmMemory | null = null;
 
   constructor(
     config: Partial<SwarmConfig>,
@@ -250,6 +255,13 @@ export class SwarmCoordinator {
     this.stopped = false;
     this.budgetExceeded = false;
     this.timeoutExceeded = false;
+
+    // Initialize shared memory if enabled
+    if (config.enableSharedMemory) {
+      this.memory = new SwarmMemory(swarmId);
+    } else {
+      this.memory = null;
+    }
 
     // Start timeout timer
     this.startTimeoutTimer();
@@ -636,6 +648,12 @@ Maximum ${this.config.maxTasks} tasks.`;
             completed.add(task.id);
             this.state!.metrics.completedTasks++;
             this.state!.metrics.runningTasks--;
+
+            // Extract findings into shared memory
+            if (this.memory && task.result?.result) {
+              this.extractToMemory(task);
+            }
+
             this.emit('swarm:task_completed', task.id);
           })
           .catch((error) => {
@@ -676,9 +694,12 @@ Maximum ${this.config.maxTasks} tasks.`;
       throw new Error('Swarm execution stopped');
     }
 
-    // Build task prompt with context from dependencies
+    // Build task prompt with context from dependencies and shared memory
     const dependencyContext = this.buildDependencyContext(task);
-    const taskPrompt = `${task.description}\n\n${dependencyContext}`;
+    const memoryContext = this.memory
+      ? this.memory.buildContextInjection({ maxEntries: 10 })
+      : '';
+    const taskPrompt = `${task.description}\n\n${dependencyContext}${memoryContext ? `\n\nShared Knowledge:\n${memoryContext}` : ''}`;
 
     // Select tools
     const tools = task.requiredTools || this.config.workerTools;
@@ -714,8 +735,19 @@ Maximum ${this.config.maxTasks} tasks.`;
         this.state.metrics.toolCalls += result.toolCalls;
         this.state.metrics.llmCalls++;
 
-        // Check token budget after each task
+        // Record to parent's budget tracker if available
+        if (this.context.budgetTracker && result.tokensUsed) {
+          this.context.budgetTracker.recordUsage({
+            totalTokens: result.tokensUsed,
+            llmCalls: 1,
+            toolCalls: result.toolCalls,
+          }, 'swarm');
+        }
+
+        // Check token budget after each task (use both internal and external budget)
         if (this.checkTokenBudget()) {
+          this.handleBudgetExceeded();
+        } else if (this.context.budgetTracker?.isExceeded('swarm')) {
           this.handleBudgetExceeded();
         }
       }
@@ -747,6 +779,45 @@ Maximum ${this.config.maxTasks} tasks.`;
     }
 
     return parts.length > 1 ? parts.join('\n') : '';
+  }
+
+  /**
+   * Extract findings from a completed task into shared memory
+   */
+  private extractToMemory(task: SwarmTask): void {
+    if (!this.memory || !task.result?.result) return;
+
+    // Store the task result as a finding
+    const resultText = task.result.result;
+    const truncated = resultText.length > 500 ? resultText.slice(0, 500) + '...' : resultText;
+
+    this.memory.add({
+      category: 'finding',
+      content: truncated,
+      sourceAssistantId: task.assignedAssistantId || undefined,
+      sourceTaskId: task.id,
+      tags: ['task-result', task.role],
+      relevance: 0.7,
+    });
+
+    // If the result mentions errors, store those separately
+    if (resultText.toLowerCase().includes('error') || resultText.toLowerCase().includes('failed')) {
+      this.memory.add({
+        category: 'error',
+        content: `Task "${task.description}" encountered issues: ${truncated}`,
+        sourceAssistantId: task.assignedAssistantId || undefined,
+        sourceTaskId: task.id,
+        tags: ['error', 'task-issue'],
+        relevance: 0.9,
+      });
+    }
+  }
+
+  /**
+   * Get the shared memory instance (if enabled)
+   */
+  getMemory(): SwarmMemory | null {
+    return this.memory;
   }
 
   // ============================================

@@ -444,6 +444,23 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the swarm coordinator (for swarm panel UI)
+   */
+  getSwarmCoordinator(): any {
+    if (typeof (this.assistantLoop as any).getOrCreateSwarmCoordinator === 'function') {
+      return (this.assistantLoop as any).getOrCreateSwarmCoordinator();
+    }
+    return null;
+  }
+
+  /**
+   * Get the assistant loop (for pause/resume, budget checks)
+   */
+  getAssistantLoop(): any {
+    return this.assistantLoop;
+  }
+
+  /**
    * Add a system message to the conversation context
    */
   addSystemMessage(content: string): void {
