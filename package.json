@@ -1,6 +1,6 @@
 {
   "name": "@hasna/assistants",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Multi-assistant orchestration platform - terminal first, voice enabled, connector powered",
   "type": "module",
   "bin": {
