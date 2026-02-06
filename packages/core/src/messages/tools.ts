@@ -330,6 +330,54 @@ export function createMessagesToolExecutors(
       }
     },
 
+    messages_broadcast: async (input) => {
+      const manager = getMessagesManager();
+      if (!manager) {
+        return 'Error: Messages are not enabled or configured.';
+      }
+
+      const body = String(input.body || '').trim();
+      const subject = input.subject ? String(input.subject).trim() : undefined;
+      const priority = input.priority as 'low' | 'normal' | 'high' | 'urgent' | undefined;
+
+      if (!body) {
+        return 'Error: Message body is required.';
+      }
+
+      try {
+        const assistants = await manager.listAssistants();
+        if (assistants.length === 0) {
+          return 'No other assistants found to broadcast to.';
+        }
+
+        const results: string[] = [];
+        let sent = 0;
+        let failed = 0;
+
+        for (const assistant of assistants) {
+          const result = await manager.send({
+            to: assistant.id,
+            body,
+            subject: subject || '[Broadcast]',
+            priority,
+          });
+          if (result.success) {
+            sent++;
+          } else {
+            failed++;
+            results.push(`Failed to send to ${assistant.name}: ${result.message}`);
+          }
+        }
+
+        if (failed === 0) {
+          return `Broadcast sent to ${sent} assistant(s).`;
+        }
+        return `Broadcast: ${sent} sent, ${failed} failed.\n${results.join('\n')}`;
+      } catch (error) {
+        return `Error broadcasting: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    },
+
     messages_list_assistants: async () => {
       const manager = getMessagesManager();
       if (!manager) {
@@ -406,6 +454,34 @@ function formatMessageAsMarkdown(message: {
 }
 
 /**
+ * messages_broadcast - Send a message to all workspace participants
+ */
+export const messagesBroadcastTool: Tool = {
+  name: 'messages_broadcast',
+  description:
+    'Send a message to all known assistants. Useful for announcements or coordination. The message is delivered to every assistant in the registry.',
+  parameters: {
+    type: 'object',
+    properties: {
+      body: {
+        type: 'string',
+        description: 'Message body content to broadcast',
+      },
+      subject: {
+        type: 'string',
+        description: 'Message subject (optional)',
+      },
+      priority: {
+        type: 'string',
+        description: 'Message priority: low, normal, high, or urgent (default: normal)',
+        enum: ['low', 'normal', 'high', 'urgent'],
+      },
+    },
+    required: ['body'],
+  },
+};
+
+/**
  * All messages tools
  */
 export const messagesTools: Tool[] = [
@@ -415,6 +491,7 @@ export const messagesTools: Tool[] = [
   messagesReadThreadTool,
   messagesDeleteTool,
   messagesListAssistantsTool,
+  messagesBroadcastTool,
 ];
 
 /**

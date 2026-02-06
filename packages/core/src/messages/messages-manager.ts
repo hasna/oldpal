@@ -5,6 +5,7 @@
 
 import { generateId } from '@hasna/assistants-shared';
 import { LocalMessagesStorage, getMessagesBasePath } from './storage/local-storage';
+import { InboxWatcher, type NewMessageCallback } from './watcher';
 import type {
   AssistantMessage,
   MessageListItem,
@@ -56,6 +57,8 @@ export class MessagesManager {
   private assistantName: string;
   private config: MessagesConfig;
   private storage: LocalMessagesStorage;
+  private watcher: InboxWatcher | null = null;
+  private messageCallbacks: Set<(message: AssistantMessage) => void> = new Set();
 
   constructor(options: MessagesManagerOptions) {
     this.assistantId = options.assistantId;
@@ -380,6 +383,70 @@ export class MessagesManager {
     lines.push('Use messages_read to mark as read, or messages_send to reply.');
 
     return lines.join('\n');
+  }
+
+  // ============================================
+  // Real-time Watching
+  // ============================================
+
+  /**
+   * Start watching inbox for new messages (push-based notifications)
+   */
+  startWatching(): void {
+    if (this.watcher) return;
+    this.watcher = new InboxWatcher(
+      this.assistantId,
+      this.config.storage?.basePath
+    );
+
+    this.watcher.onNewMessage(async (messageId) => {
+      // Load the new message and notify callbacks
+      try {
+        const message = await this.storage.loadMessage(this.assistantId, messageId);
+        if (message) {
+          for (const cb of this.messageCallbacks) {
+            try {
+              cb(message);
+            } catch {
+              // Don't let callback errors crash watching
+            }
+          }
+        }
+      } catch {
+        // Non-critical
+      }
+    });
+
+    this.watcher.start();
+  }
+
+  /**
+   * Stop watching inbox
+   */
+  stopWatching(): void {
+    if (this.watcher) {
+      this.watcher.stop();
+      this.watcher = null;
+    }
+    this.messageCallbacks.clear();
+  }
+
+  /**
+   * Register a callback for incoming messages
+   * Returns unsubscribe function
+   */
+  onMessage(callback: (message: AssistantMessage) => void): () => void {
+    this.messageCallbacks.add(callback);
+    return () => {
+      this.messageCallbacks.delete(callback);
+    };
+  }
+
+  /**
+   * Check if watching is active
+   */
+  isWatching(): boolean {
+    return this.watcher?.isRunning() ?? false;
   }
 
   // ============================================

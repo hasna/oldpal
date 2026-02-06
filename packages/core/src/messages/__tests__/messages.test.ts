@@ -290,7 +290,7 @@ describe('Message Injection', () => {
     const unread = await receiver.getUnreadForInjection();
     const context = receiver.buildInjectionContext(unread);
 
-    expect(context).toContain('## Pending Agent Messages');
+    expect(context).toContain('## Pending Assistant Messages');
     expect(context).toContain('CtxSender');
     expect(context).toContain('Context Test');
     expect(context).toContain('Test message content');

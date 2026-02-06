@@ -11,6 +11,9 @@ export type { MessagesManagerOptions } from './messages-manager';
 export { LocalMessagesStorage, getMessagesBasePath } from './storage/local-storage';
 export type { LocalStorageOptions } from './storage/local-storage';
 
+// Watcher
+export { InboxWatcher, type NewMessageCallback } from './watcher';
+
 // Tools
 export {
   messagesTools,
@@ -20,6 +23,7 @@ export {
   messagesReadThreadTool,
   messagesDeleteTool,
   messagesListAssistantsTool,
+  messagesBroadcastTool,
   createMessagesToolExecutors,
   registerMessagesTools,
 } from './tools';
