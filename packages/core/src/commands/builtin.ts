@@ -4488,12 +4488,12 @@ Format the summary as a brief bullet-point list. This summary will replace the c
   }
 
   /**
-   * /assistants - View and manage registered assistants
+   * /registry - View and manage registered assistants (runtime instances)
    */
   private assistantsCommand(): Command {
     return {
-      name: 'assistants',
-      description: 'View and manage registered assistants',
+      name: 'registry',
+      description: 'View and manage registered assistants (runtime instances)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4504,14 +4504,14 @@ Format the summary as a brief bullet-point list. This summary will replace the c
         const action = args.trim().toLowerCase();
         const registry = getGlobalRegistry();
 
-        // /assistants help
+        // /registry help
         if (action === 'help') {
-          let message = '\n## Assistants Commands\n\n';
-          message += '/assistants                       Open interactive panel\n';
-          message += '/assistants list                  List all registered assistants\n';
-          message += '/assistants status                Show registry statistics\n';
-          message += '/assistants cleanup               Remove stale/offline assistants\n';
-          message += '/assistants help                  Show this help\n';
+          let message = '\n## Registry Commands\n\n';
+          message += '/registry                         List all registered assistants\n';
+          message += '/registry list                    List all registered assistants\n';
+          message += '/registry status                  Show registry statistics\n';
+          message += '/registry cleanup                 Remove stale/offline assistants\n';
+          message += '/registry help                    Show this help\n';
           context.emit('text', message);
           context.emit('done');
           return { handled: true };
@@ -4594,15 +4594,38 @@ Format the summary as a brief bullet-point list. This summary will replace the c
           return { handled: true };
         }
 
-        // /assistants - Show interactive panel
-        if (!action || action === 'ui') {
+        // /registry with no args - show list
+        if (!action) {
+          // Fall through to list
+          const assistantsList = registry.list();
+          if (assistantsList.length === 0) {
+            context.emit('text', '\nNo assistants currently registered.\n');
+          } else {
+            let message = '\n**Registered Assistants**\n\n';
+            for (const entry of assistantsList) {
+              const state = entry.status.state;
+              const stateIcon = state === 'idle' ? '●' :
+                state === 'processing' ? '◐' :
+                state === 'error' ? '✗' :
+                state === 'offline' ? '○' : '◌';
+              message += `${stateIcon} **${entry.name}** (${entry.type})\n`;
+              message += `   ID: ${entry.id.slice(0, 16)}...\n`;
+              message += `   State: ${state}\n`;
+              if (entry.status.currentTask) {
+                message += `   Task: ${entry.status.currentTask}\n`;
+              }
+              message += `   Tools: ${entry.capabilities.tools.length} | Skills: ${entry.capabilities.skills.length}\n`;
+              message += `   Load: ${entry.load.activeTasks} active, ${entry.load.queuedTasks} queued\n\n`;
+            }
+            context.emit('text', message);
+          }
           context.emit('done');
-          return { handled: true, showPanel: 'assistants' };
+          return { handled: true };
         }
 
         // Unknown subcommand
-        context.emit('text', `\n⚠ Unknown command: /assistants ${action}\n`);
-        context.emit('text', 'Use /assistants help for available commands.\n');
+        context.emit('text', `\n⚠ Unknown command: /registry ${action}\n`);
+        context.emit('text', 'Use /registry help for available commands.\n');
         context.emit('done');
         return { handled: true };
       },
