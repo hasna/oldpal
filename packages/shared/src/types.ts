@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'agents' | 'swarm' | 'workspace';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -442,6 +442,8 @@ export interface BudgetConfig {
   assistant?: BudgetLimits;
   /** Swarm-level limits (aggregate across all assistants) */
   swarm?: BudgetLimits;
+  /** Per-project limits (aggregate across sessions for a project) */
+  project?: BudgetLimits;
   /** Action to take when budget is exceeded */
   onExceeded?: 'warn' | 'pause' | 'stop';
   /** Whether to persist budget state across restarts */

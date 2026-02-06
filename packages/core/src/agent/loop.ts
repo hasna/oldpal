@@ -201,6 +201,8 @@ export class AssistantLoop {
   private registryService: AssistantRegistryService | null = null;
   private registeredAssistantId: string | null = null;
   private swarmCoordinator: SwarmCoordinator | null = null;
+  private paused = false;
+  private pauseResolve: (() => void) | null = null;
 
   // Event callbacks
   private onChunk?: (chunk: StreamChunk) => void;
@@ -443,6 +445,18 @@ export class AssistantLoop {
       this.messagesManager = createMessagesManager(assistantId, assistantName, this.config.messages);
       await this.messagesManager.initialize();
       registerMessagesTools(this.toolRegistry, () => this.messagesManager);
+
+      // Start watching for real-time message notifications
+      this.messagesManager.startWatching();
+      this.messagesManager.onMessage((message) => {
+        // When a new message arrives, prepare it for injection at the next turn
+        if (message.priority === 'urgent' || message.priority === 'high') {
+          const context = this.messagesManager!.buildInjectionContext([message]);
+          if (context) {
+            this.pendingMessagesContext = context;
+          }
+        }
+      });
     }
 
     // Initialize memory system if enabled
@@ -795,6 +809,20 @@ export class AssistantLoop {
                 panelValue: commandResult.panelInitialValue,
               });
             }
+            // Session actions: encode in show_panel with session-action prefix
+            if (commandResult.sessionAction) {
+              const payload = JSON.stringify({
+                action: commandResult.sessionAction,
+                number: commandResult.sessionNumber,
+                label: commandResult.sessionLabel,
+                agent: commandResult.sessionAgent,
+              });
+              this.emit({
+                type: 'show_panel',
+                panel: 'agents',
+                panelValue: `session:${payload}`,
+              });
+            }
             return { ok: true, summary: `Handled ${userMessage}` };
           }
           if (commandResult.prompt) {
@@ -921,10 +949,24 @@ export class AssistantLoop {
       while (turn < maxTurns && !this.shouldStop) {
         turn++;
 
+        // Wait if paused (budget pause enforcement)
+        if (this.paused) {
+          this.onBudgetWarning?.('Budget exceeded - agent paused. Use /budget resume to continue.');
+          this.emit({ type: 'text', content: '\n[Agent paused - budget exceeded. Use /budget resume to continue.]\n' });
+          await new Promise<void>((resolve) => {
+            this.pauseResolve = resolve;
+          });
+          this.pauseResolve = null;
+          if (this.shouldStop) break;
+        }
+
         // Check budget before starting a new turn
-        if (this.isBudgetExceeded() && this.budgetConfig?.onExceeded === 'stop') {
-          this.onBudgetWarning?.('Budget exceeded - stopping before turn ' + turn);
-          break;
+        if (this.isBudgetExceeded()) {
+          const onExceeded = this.budgetConfig?.onExceeded || 'warn';
+          if (onExceeded === 'stop') {
+            this.onBudgetWarning?.('Budget exceeded - stopping before turn ' + turn);
+            break;
+          }
         }
 
         await this.maybeSummarizeContext();
@@ -1866,6 +1908,8 @@ export class AssistantLoop {
     this.energyManager?.stop();
     this.voiceManager?.stopSpeaking();
     this.voiceManager?.stopListening();
+    // Stop message watching
+    this.messagesManager?.stopWatching();
     // Close memory database connection
     this.memoryManager?.close();
     this.memoryManager = null;
@@ -2179,13 +2223,27 @@ export class AssistantLoop {
   private checkBudgetWarnings(): void {
     if (!this.budgetTracker || !this.budgetTracker.isEnabled()) return;
 
-    const status = this.budgetTracker.checkBudget('session');
+    let sessionStatus = this.budgetTracker.checkBudget('session');
+    let exceeded = sessionStatus.overallExceeded;
 
     // Collect all warnings
     const warnings: string[] = [];
-    for (const [metric, check] of Object.entries(status.checks)) {
+    for (const [_metric, check] of Object.entries(sessionStatus.checks)) {
       if (check?.warning) {
         warnings.push(check.warning);
+      }
+    }
+
+    // Also check project budget if active
+    if (this.budgetTracker.getActiveProject()) {
+      const projectStatus = this.budgetTracker.checkBudget('project');
+      for (const [_metric, check] of Object.entries(projectStatus.checks)) {
+        if (check?.warning) {
+          warnings.push(`[project] ${check.warning}`);
+        }
+      }
+      if (projectStatus.overallExceeded) {
+        exceeded = true;
       }
     }
 
@@ -2195,15 +2253,14 @@ export class AssistantLoop {
     }
 
     // Check if exceeded and handle based on onExceeded config
-    if (status.overallExceeded) {
+    if (exceeded) {
       const onExceeded = this.budgetConfig?.onExceeded || 'warn';
       if (onExceeded === 'stop') {
         this.onBudgetWarning?.('Budget exceeded - stopping assistant');
         this.stop();
       } else if (onExceeded === 'pause') {
-        this.onBudgetWarning?.('Budget exceeded - pausing (requires user approval to continue)');
-        // Pause could be implemented with a flag that requires user input to continue
-        // For now, we just warn
+        this.onBudgetWarning?.('Budget exceeded - pausing (requires /budget resume to continue)');
+        this.paused = true;
       }
     }
   }
@@ -2213,7 +2270,26 @@ export class AssistantLoop {
    */
   isBudgetExceeded(): boolean {
     if (!this.budgetTracker || !this.budgetTracker.isEnabled()) return false;
-    return this.budgetTracker.isExceeded('session');
+    return this.budgetTracker.isAnyExceeded();
+  }
+
+  /**
+   * Check if the assistant is currently paused
+   */
+  isPaused(): boolean {
+    return this.paused;
+  }
+
+  /**
+   * Resume from budget pause
+   */
+  resume(): void {
+    if (this.paused) {
+      this.paused = false;
+      if (this.pauseResolve) {
+        this.pauseResolve();
+      }
+    }
   }
 
   /**
@@ -2244,6 +2320,9 @@ export class AssistantLoop {
 
   setActiveProjectId(projectId: string | null): void {
     this.activeProjectId = projectId;
+    if (this.budgetTracker) {
+      this.budgetTracker.setActiveProject(projectId);
+    }
   }
 
   setProjectContext(content: string | null): void {

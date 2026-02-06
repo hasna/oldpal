@@ -30,9 +30,10 @@ interface PersistedBudgetState {
   session: BudgetUsage;
   assistants: Record<string, BudgetUsage>;
   swarm: BudgetUsage;
+  projects?: Record<string, BudgetUsage>;
 }
 
-const PERSISTENCE_VERSION = 1;
+const PERSISTENCE_VERSION = 2;
 
 /**
  * Budget tracker for monitoring resource usage against limits
@@ -42,7 +43,9 @@ export class BudgetTracker {
   private sessionUsage: BudgetUsage;
   private assistantUsages: Map<string, BudgetUsage> = new Map();
   private swarmUsage: BudgetUsage;
+  private projectUsages: Map<string, BudgetUsage> = new Map();
   private sessionId: string;
+  private activeProjectId: string | null = null;
 
   constructor(sessionId: string, config?: Partial<BudgetConfig>) {
     this.sessionId = sessionId;
@@ -61,13 +64,18 @@ export class BudgetTracker {
     return join(envHome, '.assistants', 'budget', `${this.sessionId}.json`);
   }
 
+  private getProjectStatePath(projectId: string): string {
+    const envHome = process.env.HOME || process.env.USERPROFILE || homedir();
+    return join(envHome, '.assistants', 'budget', `project-${projectId}.json`);
+  }
+
   private loadState(): void {
     try {
       const statePath = this.getStatePath();
       if (!existsSync(statePath)) return;
 
       const data = JSON.parse(readFileSync(statePath, 'utf-8')) as PersistedBudgetState;
-      if (data.version !== PERSISTENCE_VERSION) return;
+      if (data.version !== PERSISTENCE_VERSION && data.version !== 1) return;
 
       this.sessionUsage = data.session;
       this.swarmUsage = data.swarm;
@@ -76,8 +84,39 @@ export class BudgetTracker {
       for (const [assistantId, usage] of Object.entries(assistantData)) {
         this.assistantUsages.set(assistantId, usage);
       }
+      // Load project data if present
+      if (data.projects) {
+        for (const [projectId, usage] of Object.entries(data.projects)) {
+          this.projectUsages.set(projectId, usage);
+        }
+      }
     } catch {
       // Failed to load state, start fresh
+    }
+  }
+
+  private loadProjectState(projectId: string): BudgetUsage {
+    try {
+      const statePath = this.getProjectStatePath(projectId);
+      if (!existsSync(statePath)) return createEmptyUsage();
+      const data = JSON.parse(readFileSync(statePath, 'utf-8')) as BudgetUsage;
+      return data;
+    } catch {
+      return createEmptyUsage();
+    }
+  }
+
+  private saveProjectState(projectId: string, usage: BudgetUsage): void {
+    if (!this.config.persist) return;
+    try {
+      const statePath = this.getProjectStatePath(projectId);
+      const stateDir = dirname(statePath);
+      if (!existsSync(stateDir)) {
+        mkdirSync(stateDir, { recursive: true });
+      }
+      writeFileSync(statePath, JSON.stringify(usage, null, 2));
+    } catch {
+      // Non-critical
     }
   }
 
@@ -96,6 +135,7 @@ export class BudgetTracker {
         session: this.sessionUsage,
         assistants: Object.fromEntries(this.assistantUsages),
         swarm: this.swarmUsage,
+        projects: Object.fromEntries(this.projectUsages),
       };
 
       writeFileSync(statePath, JSON.stringify(state, null, 2));
@@ -116,6 +156,25 @@ export class BudgetTracker {
    */
   setEnabled(enabled: boolean): void {
     this.config.enabled = enabled;
+  }
+
+  /**
+   * Set the active project for automatic project budget tracking
+   */
+  setActiveProject(projectId: string | null): void {
+    this.activeProjectId = projectId;
+    if (projectId && !this.projectUsages.has(projectId)) {
+      // Load from persistent storage or create new
+      const usage = this.config.persist ? this.loadProjectState(projectId) : createEmptyUsage();
+      this.projectUsages.set(projectId, usage);
+    }
+  }
+
+  /**
+   * Get the active project ID
+   */
+  getActiveProject(): string | null {
+    return this.activeProjectId;
   }
 
   /**
@@ -165,7 +224,7 @@ export class BudgetTracker {
   /**
    * Check budget for a scope
    */
-  checkBudget(scope: BudgetScope, assistantId?: string): BudgetStatus {
+  checkBudget(scope: BudgetScope, idOrAssistant?: string): BudgetStatus {
     let limits: BudgetLimits;
     let usage: BudgetUsage;
 
@@ -176,13 +235,21 @@ export class BudgetTracker {
         break;
       case 'assistant':
         limits = this.config.assistant || {};
-        usage = assistantId
-          ? (this.assistantUsages.get(assistantId) || createEmptyUsage())
+        usage = idOrAssistant
+          ? (this.assistantUsages.get(idOrAssistant) || createEmptyUsage())
           : createEmptyUsage();
         break;
       case 'swarm':
         limits = this.config.swarm || {};
         usage = this.swarmUsage;
+        break;
+      case 'project':
+        limits = this.config.project || {};
+        usage = idOrAssistant
+          ? (this.projectUsages.get(idOrAssistant) || createEmptyUsage())
+          : (this.activeProjectId
+            ? (this.projectUsages.get(this.activeProjectId) || createEmptyUsage())
+            : createEmptyUsage());
         break;
     }
 
@@ -211,18 +278,28 @@ export class BudgetTracker {
   /**
    * Quick check if any budget is exceeded
    */
-  isExceeded(scope: BudgetScope = 'session', assistantId?: string): boolean {
+  isExceeded(scope: BudgetScope = 'session', idOrAssistant?: string): boolean {
     if (!this.config.enabled) return false;
-    return this.checkBudget(scope, assistantId).overallExceeded;
+    return this.checkBudget(scope, idOrAssistant).overallExceeded;
+  }
+
+  /**
+   * Check if any active scope budget is exceeded (session + project)
+   */
+  isAnyExceeded(): boolean {
+    if (!this.config.enabled) return false;
+    if (this.isExceeded('session')) return true;
+    if (this.activeProjectId && this.isExceeded('project', this.activeProjectId)) return true;
+    return false;
   }
 
   /**
    * Record usage
    */
-  recordUsage(update: BudgetUpdate, scope: BudgetScope = 'session', assistantId?: string): void {
+  recordUsage(update: BudgetUpdate, scope: BudgetScope = 'session', idOrAssistant?: string): void {
     const now = new Date().toISOString();
 
-    // Update session usage
+    // Update session usage (always)
     this.sessionUsage = {
       ...this.sessionUsage,
       inputTokens: this.sessionUsage.inputTokens + (update.inputTokens || 0),
@@ -235,9 +312,9 @@ export class BudgetTracker {
     };
 
     // Update assistant usage if specified
-    if (scope === 'assistant' && assistantId) {
-      const assistantUsage = this.assistantUsages.get(assistantId) || createEmptyUsage();
-      this.assistantUsages.set(assistantId, {
+    if (scope === 'assistant' && idOrAssistant) {
+      const assistantUsage = this.assistantUsages.get(idOrAssistant) || createEmptyUsage();
+      this.assistantUsages.set(idOrAssistant, {
         ...assistantUsage,
         inputTokens: assistantUsage.inputTokens + (update.inputTokens || 0),
         outputTokens: assistantUsage.outputTokens + (update.outputTokens || 0),
@@ -261,6 +338,24 @@ export class BudgetTracker {
         durationMs: this.swarmUsage.durationMs + (update.durationMs || 0),
         lastUpdatedAt: now,
       };
+    }
+
+    // Update project usage if active
+    if (this.activeProjectId) {
+      const projectId = (scope === 'project' && idOrAssistant) ? idOrAssistant : this.activeProjectId;
+      const projectUsage = this.projectUsages.get(projectId) || createEmptyUsage();
+      const updatedProject = {
+        ...projectUsage,
+        inputTokens: projectUsage.inputTokens + (update.inputTokens || 0),
+        outputTokens: projectUsage.outputTokens + (update.outputTokens || 0),
+        totalTokens: projectUsage.totalTokens + (update.totalTokens || 0),
+        llmCalls: projectUsage.llmCalls + (update.llmCalls || 0),
+        toolCalls: projectUsage.toolCalls + (update.toolCalls || 0),
+        durationMs: projectUsage.durationMs + (update.durationMs || 0),
+        lastUpdatedAt: now,
+      };
+      this.projectUsages.set(projectId, updatedProject);
+      this.saveProjectState(projectId, updatedProject);
     }
 
     // Persist if enabled
@@ -301,16 +396,21 @@ export class BudgetTracker {
   /**
    * Get usage for a scope
    */
-  getUsage(scope: BudgetScope = 'session', assistantId?: string): BudgetUsage {
+  getUsage(scope: BudgetScope = 'session', idOrAssistant?: string): BudgetUsage {
     switch (scope) {
       case 'session':
         return { ...this.sessionUsage };
       case 'assistant':
-        return assistantId
-          ? { ...(this.assistantUsages.get(assistantId) || createEmptyUsage()) }
+        return idOrAssistant
+          ? { ...(this.assistantUsages.get(idOrAssistant) || createEmptyUsage()) }
           : createEmptyUsage();
       case 'swarm':
         return { ...this.swarmUsage };
+      case 'project':
+        const projectId = idOrAssistant || this.activeProjectId;
+        return projectId
+          ? { ...(this.projectUsages.get(projectId) || createEmptyUsage()) }
+          : createEmptyUsage();
     }
   }
 
@@ -322,9 +422,16 @@ export class BudgetTracker {
   }
 
   /**
+   * Get all project usages
+   */
+  getProjectUsages(): Map<string, BudgetUsage> {
+    return new Map(this.projectUsages);
+  }
+
+  /**
    * Reset usage for a scope
    */
-  resetUsage(scope: BudgetScope = 'session', assistantId?: string): void {
+  resetUsage(scope: BudgetScope = 'session', idOrAssistant?: string): void {
     const newUsage = createEmptyUsage();
 
     switch (scope) {
@@ -332,12 +439,19 @@ export class BudgetTracker {
         this.sessionUsage = newUsage;
         break;
       case 'assistant':
-        if (assistantId) {
-          this.assistantUsages.set(assistantId, newUsage);
+        if (idOrAssistant) {
+          this.assistantUsages.set(idOrAssistant, newUsage);
         }
         break;
       case 'swarm':
         this.swarmUsage = newUsage;
+        break;
+      case 'project':
+        const projectId = idOrAssistant || this.activeProjectId;
+        if (projectId) {
+          this.projectUsages.set(projectId, newUsage);
+          this.saveProjectState(projectId, newUsage);
+        }
         break;
     }
 
@@ -351,7 +465,24 @@ export class BudgetTracker {
     this.sessionUsage = createEmptyUsage();
     this.assistantUsages.clear();
     this.swarmUsage = createEmptyUsage();
+    this.projectUsages.clear();
     this.saveState();
+  }
+
+  /**
+   * Extend budget limits for a scope (increase without resetting)
+   */
+  extendLimits(scope: BudgetScope, additionalTokens: number): void {
+    let limits: BudgetLimits | undefined;
+    switch (scope) {
+      case 'session': limits = this.config.session; break;
+      case 'assistant': limits = this.config.assistant; break;
+      case 'swarm': limits = this.config.swarm; break;
+      case 'project': limits = this.config.project; break;
+    }
+    if (limits && limits.maxTotalTokens) {
+      limits.maxTotalTokens += additionalTokens;
+    }
   }
 
   /**
@@ -361,15 +492,24 @@ export class BudgetTracker {
     enabled: boolean;
     session: BudgetStatus;
     swarm: BudgetStatus;
+    project: BudgetStatus | null;
     assistantCount: number;
     anyExceeded: boolean;
     totalWarnings: number;
   } {
     const session = this.checkBudget('session');
     const swarm = this.checkBudget('swarm');
+    const project = this.activeProjectId
+      ? this.checkBudget('project', this.activeProjectId)
+      : null;
 
     let totalWarnings = session.warningsCount + swarm.warningsCount;
     let anyExceeded = session.overallExceeded || swarm.overallExceeded;
+
+    if (project) {
+      totalWarnings += project.warningsCount;
+      if (project.overallExceeded) anyExceeded = true;
+    }
 
     for (const assistantId of this.assistantUsages.keys()) {
       const assistantStatus = this.checkBudget('assistant', assistantId);
@@ -383,6 +523,7 @@ export class BudgetTracker {
       enabled: this.config.enabled ?? false,
       session,
       swarm,
+      project,
       assistantCount: this.assistantUsages.size,
       anyExceeded,
       totalWarnings,
@@ -392,11 +533,11 @@ export class BudgetTracker {
   /**
    * Format usage for display
    */
-  formatUsage(scope: BudgetScope = 'session', assistantId?: string): string {
-    const status = this.checkBudget(scope, assistantId);
+  formatUsage(scope: BudgetScope = 'session', idOrAssistant?: string): string {
+    const status = this.checkBudget(scope, idOrAssistant);
     const lines: string[] = [];
 
-    lines.push(`Budget Status (${scope}${assistantId ? `: ${assistantId}` : ''}):`);
+    lines.push(`Budget Status (${scope}${idOrAssistant ? `: ${idOrAssistant}` : ''}):`);
     lines.push(`  Enabled: ${this.config.enabled ? 'Yes' : 'No'}`);
     lines.push('');
 

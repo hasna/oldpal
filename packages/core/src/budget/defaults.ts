@@ -35,6 +35,17 @@ export const DEFAULT_SWARM_LIMITS: BudgetLimits = {
 };
 
 /**
+ * Default budget limits for a project
+ */
+export const DEFAULT_PROJECT_LIMITS: BudgetLimits = {
+  maxTotalTokens: 5_000_000, // 5M tokens per project
+  maxLlmCalls: 2000,         // 2000 LLM calls per project
+  maxToolCalls: 5000,        // 5000 tool calls per project
+  maxDurationMs: 24 * 60 * 60 * 1000, // 24 hours
+  period: 'day',
+};
+
+/**
  * Default budget configuration
  */
 export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
@@ -42,6 +53,7 @@ export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
   session: DEFAULT_SESSION_LIMITS,
   assistant: DEFAULT_ASSISTANT_LIMITS,
   swarm: DEFAULT_SWARM_LIMITS,
+  project: DEFAULT_PROJECT_LIMITS,
   onExceeded: 'warn',
   persist: false,
 };
