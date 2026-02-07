@@ -941,6 +941,7 @@ export interface ValidationConfig {
     mode?: 'strict' | 'lenient';
     maxOutputLength?: number;
     allowEnv?: boolean;
+    allowAll?: boolean;
   }>;
 }
 
