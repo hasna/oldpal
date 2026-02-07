@@ -10,10 +10,20 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages }: MessageListProps) {
-  const { isStreaming, currentToolCalls, currentStreamMessageId } = useChatStore();
+  const {
+    isStreaming,
+    currentToolCalls,
+    currentStreamMessageId,
+    listeningDraft,
+    isListening,
+  } = useChatStore();
   const currentToolCallResults = (currentToolCalls as Array<ToolCall & { result?: ToolResult }>)
     .map((call) => call.result)
     .filter((result): result is ToolResult => Boolean(result));
+  const trimmedDraft = listeningDraft.trim();
+  const hasDraft = listeningDraft.length > 0;
+  const showDraft = hasDraft || isListening;
+  const draftContent = trimmedDraft || (isListening ? 'Listening...' : '');
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,6 +51,18 @@ export function MessageList({ messages }: MessageListProps) {
           />
         );
       })}
+      {showDraft && (
+        <MessageBubble
+          key="listening-draft"
+          message={{
+            id: 'listening-draft',
+            role: 'user',
+            content: draftContent,
+            timestamp: Date.now(),
+          }}
+          isDraft
+        />
+      )}
     </div>
   );
 }

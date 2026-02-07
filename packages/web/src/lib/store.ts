@@ -15,6 +15,10 @@ interface ChatState {
   sessionSnapshots: Record<string, { messages: Message[]; toolCalls: ToolCallWithMeta[]; streamMessageId: string | null; isStreaming: boolean }>;
   /** Buffer for tool results that arrive before their corresponding tool_call */
   pendingToolResults: Map<string, ToolResult>;
+  /** Live dictation draft text while /listen is active */
+  listeningDraft: string;
+  /** Whether live dictation mode is active */
+  isListening: boolean;
 
   setSessionId: (sessionId: string) => void;
   createSession: (label?: string) => string;
@@ -22,6 +26,8 @@ interface ChatState {
   addMessage: (message: Message) => void;
   appendMessageContent: (id: string | undefined, content: string) => void;
   setStreaming: (streaming: boolean) => void;
+  setListening: (listening: boolean) => void;
+  setListeningDraft: (draft: string) => void;
   addToolCall: (call: ToolCall, messageId?: string) => void;
   updateToolResult: (id: string, result: ToolResult) => void;
   finalizeToolCalls: (messageId?: string) => void;
@@ -39,6 +45,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sessions: [],
   sessionSnapshots: {},
   pendingToolResults: new Map(),
+  listeningDraft: '',
+  isListening: false,
 
   setSessionId: (sessionId) => set({ sessionId }),
 
@@ -181,6 +189,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isStreaming: streaming,
       // Don't persist isStreaming to snapshots - it's ephemeral connection state
       // Persisting it can cause sessions to get stuck in streaming mode after disconnects
+    })),
+
+  setListening: (listening) =>
+    set(() => ({
+      isListening: listening,
+      ...(listening ? {} : { listeningDraft: '' }),
+    })),
+
+  setListeningDraft: (draft) =>
+    set(() => ({
+      listeningDraft: draft,
     })),
 
   addToolCall: (call, messageId) =>
@@ -412,5 +431,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sessions: [],
       sessionSnapshots: {},
       pendingToolResults: new Map(),
+      listeningDraft: '',
+      isListening: false,
     }),
 }));

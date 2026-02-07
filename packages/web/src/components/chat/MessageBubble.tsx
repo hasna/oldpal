@@ -7,9 +7,10 @@ interface MessageBubbleProps {
   message: Message;
   isStreaming?: boolean;
   toolResults?: ToolResult[];
+  isDraft?: boolean;
 }
 
-export function MessageBubble({ message, isStreaming, toolResults }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming, toolResults, isDraft }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const toolCalls = message.toolCalls ?? [];
 
@@ -25,10 +26,16 @@ export function MessageBubble({ message, isStreaming, toolResults }: MessageBubb
           'max-w-[80%] rounded-2xl border px-5 py-4 text-sm shadow-sm',
           isUser
             ? 'border-sky-400/30 bg-sky-500 text-white'
-            : 'border-gray-200 bg-gray-100 text-gray-900'
+            : 'border-gray-200 bg-gray-100 text-gray-900',
+          isDraft && 'border-dashed opacity-80'
         )}
       >
-        <MarkdownRenderer content={message.content} />
+        {isDraft && (
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-white/80">
+            Live dictation
+          </div>
+        )}
+        <MarkdownRenderer content={message.content} variant={isUser ? 'user' : 'assistant'} />
         {!isUser && toolCalls.length > 0 && (
           <div className="mt-4 space-y-3">
             {toolCalls.map((call) => {

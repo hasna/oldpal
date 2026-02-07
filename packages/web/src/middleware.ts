@@ -130,7 +130,7 @@ export async function middleware(request: NextRequest) {
 
   // Skip rate limiting and body size checks for certain paths
   const skipPaths = [
-    '/api/health',
+    '/api/v1/health',
     '/api/v1/billing/webhooks', // Stripe webhooks have their own verification
   ];
 
