@@ -10,6 +10,8 @@ interface ToolPropertySchema {
   description: string;
   enum?: string[];
   default?: unknown;
+  properties?: Record<string, ToolPropertySchema>;
+  required?: string[];
   items?: {
     type: string | string[];
     properties?: Record<string, ToolPropertySchema>;
@@ -44,7 +46,7 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
   // System tools
   {
     name: 'bash',
-    description: 'Execute shell commands (restricted to safe, read-only operations)',
+    description: 'Execute shell commands (restricted to safe, read-only operations by default; set validation.perTool.bash.allowAll to allow broader commands)',
     category: 'system',
     parameters: {
       type: 'object',
@@ -1361,12 +1363,12 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
           type: 'object',
           description: 'Primary physical address',
           properties: {
-            street: { type: 'string' },
-            city: { type: 'string' },
-            state: { type: 'string' },
-            postalCode: { type: 'string' },
-            country: { type: 'string' },
-            label: { type: 'string' },
+            street: { type: 'string', description: 'Street address line' },
+            city: { type: 'string', description: 'City or locality' },
+            state: { type: 'string', description: 'State, province, or region' },
+            postalCode: { type: 'string', description: 'ZIP or postal code' },
+            country: { type: 'string', description: 'Country name or code' },
+            label: { type: 'string', description: 'Address label (e.g., Primary, Office)' },
           },
         },
       },
@@ -1394,12 +1396,12 @@ const BUILT_IN_TOOLS: ToolMetadata[] = [
           type: 'object',
           description: 'Primary physical address',
           properties: {
-            street: { type: 'string' },
-            city: { type: 'string' },
-            state: { type: 'string' },
-            postalCode: { type: 'string' },
-            country: { type: 'string' },
-            label: { type: 'string' },
+            street: { type: 'string', description: 'Street address line' },
+            city: { type: 'string', description: 'City or locality' },
+            state: { type: 'string', description: 'State, province, or region' },
+            postalCode: { type: 'string', description: 'ZIP or postal code' },
+            country: { type: 'string', description: 'Country name or code' },
+            label: { type: 'string', description: 'Address label (e.g., Primary, Office)' },
           },
         },
       },

@@ -74,6 +74,10 @@ const data = {
           url: "/tools",
         },
         {
+          title: "Connectors",
+          url: "/connectors",
+        },
+        {
           title: "Skills",
           url: "/skills",
         },

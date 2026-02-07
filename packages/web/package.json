@@ -9,7 +9,7 @@
     "start": "next start -p 7010",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --max-concurrency=1",
     "clean": "rm -rf .next dist",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

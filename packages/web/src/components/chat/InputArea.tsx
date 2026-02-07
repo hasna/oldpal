@@ -128,7 +128,8 @@ export function InputArea({ pasteConfig }: InputAreaProps = {}) {
   });
   const listenTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isListening, setIsListening] = useState(false);
-  const isStreamingRef = useRef(isStreaming);
+  const pendingQueueRef = useRef<Array<{ payload: string; assistantId: string; sessionId: string }>>([]);
+  const [queuedCount, setQueuedCount] = useState(0);
   const {
     addMessage,
     setStreaming,
@@ -140,6 +141,7 @@ export function InputArea({ pasteConfig }: InputAreaProps = {}) {
     setListening,
     setListeningDraft,
   } = useChatStore();
+  const isStreamingRef = useRef(isStreaming);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -151,7 +153,7 @@ export function InputArea({ pasteConfig }: InputAreaProps = {}) {
   const pasteThresholds = pasteConfig?.thresholds ?? DEFAULT_PASTE_THRESHOLDS;
   const pasteMode = pasteConfig?.mode ?? 'placeholder';
 
-  const sendPayload = useCallback((payload: string) => {
+  const sendPayload = useCallback((payload: string, options?: { queueIfBusy?: boolean }) => {
     const effectiveSessionId = sessionId ?? createSession();
 
     const userMessage = {
@@ -171,7 +173,15 @@ export function InputArea({ pasteConfig }: InputAreaProps = {}) {
     };
     addMessage(assistantMessage);
 
+    const shouldQueue = (options?.queueIfBusy ?? true) && isStreamingRef.current;
+    if (shouldQueue) {
+      pendingQueueRef.current.push({ payload, assistantId, sessionId: effectiveSessionId });
+      setQueuedCount(pendingQueueRef.current.length);
+      return;
+    }
+
     setStreaming(true);
+    isStreamingRef.current = true;
     chatWs.send({ type: 'message', content: payload, sessionId: effectiveSessionId, messageId: assistantId });
   }, [addMessage, setStreaming, sessionId, createSession]);
 
@@ -373,7 +383,6 @@ export function InputArea({ pasteConfig }: InputAreaProps = {}) {
     }
     listenTimerRef.current = setInterval(() => {
       if (!listenStateRef.current.active) return;
-      if (isStreamingRef.current) return;
       const nowTime = Date.now();
       const lastAt = listenStateRef.current.lastTranscriptAt;
       const silenceMs = nowTime - lastAt;
@@ -388,16 +397,32 @@ export function InputArea({ pasteConfig }: InputAreaProps = {}) {
       updateDraftFromListening();
       sendPayload(payload);
     }, 500);
-  }, [appendTranscript, isStreaming, largePaste, sendPayload, stopListening, toast, updateDraftFromListening, value, setListening, setListeningDraft]);
+  }, [appendTranscript, largePaste, sendPayload, stopListening, toast, updateDraftFromListening, value, setListening, setListeningDraft]);
 
   useEffect(() => () => {
     stopListening();
   }, [stopListening]);
 
-  const sendMessage = useCallback(async () => {
-    // Prevent concurrent sends while streaming to avoid corrupting tool-call state
-    if (isStreaming) return;
+  const flushQueued = useCallback(() => {
+    if (isStreamingRef.current) return;
+    const next = pendingQueueRef.current.shift();
+    if (!next) {
+      setQueuedCount(0);
+      return;
+    }
+    setQueuedCount(pendingQueueRef.current.length);
+    setStreaming(true);
+    isStreamingRef.current = true;
+    chatWs.send({ type: 'message', content: next.payload, sessionId: next.sessionId, messageId: next.assistantId });
+  }, []);
 
+  useEffect(() => {
+    if (!isStreaming && pendingQueueRef.current.length > 0) {
+      flushQueued();
+    }
+  }, [isStreaming, flushQueued]);
+
+  const sendMessage = useCallback(async () => {
     // Use large paste content if available, otherwise use regular value
     const actualContent = largePaste ? largePaste.content : value;
     const trimmed = actualContent.trim();
@@ -476,7 +501,8 @@ export function InputArea({ pasteConfig }: InputAreaProps = {}) {
   const listenHints = isListening
     ? ['listening...', 'pause 3s to send', '[Esc] stop']
     : [];
-  const quickHints = [...quickCommands, ...listenHints];
+  const queueHint = queuedCount > 0 ? `queued ${queuedCount}` : '';
+  const quickHints = [...quickCommands, ...listenHints, ...(queueHint ? [queueHint] : [])];
 
   return (
     <div className="border-t border-border bg-background px-6 py-4" data-tour="chat-input">
@@ -531,8 +557,8 @@ export function InputArea({ pasteConfig }: InputAreaProps = {}) {
             Stop
           </Button>
         )}
-        <Button onClick={sendMessage} disabled={isStreaming || !hasContent}>
-          {isStreaming ? 'Streaming...' : 'Send'}
+        <Button onClick={sendMessage} disabled={!hasContent}>
+          {isStreaming ? 'Queue' : 'Send'}
         </Button>
       </div>
       {quickHints.length > 0 && (

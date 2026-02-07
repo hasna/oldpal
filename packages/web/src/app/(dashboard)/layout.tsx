@@ -37,6 +37,7 @@ const pathToBreadcrumb: Record<string, { parent?: string; parentPath?: string; l
   '/assistants': { label: 'Assistants' },
   '/messages': { label: 'Messages' },
   '/tools': { label: 'Tools' },
+  '/connectors': { label: 'Connectors' },
   '/skills': { label: 'Skills' },
   '/schedules': { label: 'Schedules' },
   '/identities': { label: 'Identities' },
