@@ -1,5 +1,5 @@
-import { join } from 'path';
-import { mkdir, stat, writeFile } from 'fs/promises';
+import { join, dirname } from 'path';
+import { mkdir, stat, writeFile, rm } from 'fs/promises';
 import { getConfigDir } from '../config';
 
 export type SkillScope = 'project' | 'global';
@@ -99,6 +99,11 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function deleteSkill(filePath: string): Promise<void> {
+  const skillDir = dirname(filePath);
+  await rm(skillDir, { recursive: true });
 }
 
 export async function createSkill(options: CreateSkillOptions): Promise<CreateSkillResult> {

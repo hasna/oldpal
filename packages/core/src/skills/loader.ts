@@ -160,6 +160,13 @@ export class SkillLoader {
   }
 
   /**
+   * Remove a skill from the loaded map
+   */
+  removeSkill(name: string): void {
+    this.skills.delete(name);
+  }
+
+  /**
    * Get a skill by name
    */
   getSkill(name: string): Skill | undefined {
