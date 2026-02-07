@@ -105,7 +105,14 @@ mock.module('drizzle-orm', () => createDrizzleOrmMock({
   isNull: (field: any) => ({ isNull: field }),
 }));
 
-const { GET, POST } = await import('../src/app/api/v1/messages/route');
+let GET: typeof import('../src/app/api/v1/messages/route').GET;
+let POST: typeof import('../src/app/api/v1/messages/route').POST;
+
+beforeEach(async () => {
+  const mod = await import(`../src/app/api/v1/messages/route?test=${Date.now()}-${Math.random()}`);
+  GET = mod.GET;
+  POST = mod.POST;
+});
 
 function createGetRequest(
   params: { page?: number; limit?: number; status?: string; assistantId?: string } = {},

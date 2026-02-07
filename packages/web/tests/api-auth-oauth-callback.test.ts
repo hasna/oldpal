@@ -104,7 +104,7 @@ mock.module('drizzle-orm', () => createDrizzleOrmMock({
 
 // Mock crypto
 mock.module('crypto', () => createCryptoMock({
-  randomUUID: () => 'test-uuid',
+  randomUUID: () => '123e4567-e89b-12d3-a456-426614174000',
 }));
 
 const { GET } = await import('../src/app/api/v1/auth/oauth/google/callback/route');
@@ -284,7 +284,7 @@ describe('OAuth Google callback route', () => {
       expect(mockInsertedToken.userId).toBe('existing-user');
       expect(typeof mockInsertedToken.tokenHash).toBe('string');
       expect(mockInsertedToken.tokenHash.startsWith('$argon2')).toBe(true);
-      expect(mockInsertedToken.family).toBe('test-uuid');
+      expect(mockInsertedToken.family).toBe('123e4567-e89b-12d3-a456-426614174000');
     });
   });
 

@@ -10,6 +10,7 @@ import { createPasswordMock } from './helpers/mock-auth-password';
 let mockFoundUser: any = null;
 let mockInsertedRefreshToken: any = null;
 let setRefreshTokenValue: string | null = null;
+let requestCounter = 0;
 
 // Mock database
 mock.module('@/db', () => ({
@@ -56,12 +57,6 @@ mock.module('@/lib/auth/cookies', () => ({
   },
 }));
 
-// Mock rate limiting
-mock.module('@/lib/rate-limit', () => ({
-  checkRateLimit: () => null,
-  RateLimitPresets: { login: 'login' },
-}));
-
 // Mock login audit logging
 mock.module('@/lib/auth/login-logger', () => ({
   logLoginAttempt: async () => {},
@@ -79,7 +74,7 @@ mock.module('drizzle-orm', () => createDrizzleOrmMock({
 
 // Mock crypto
 mock.module('crypto', () => createCryptoMock({
-  randomUUID: () => 'test-uuid-1234',
+  randomUUID: () => '123e4567-e89b-12d3-a456-426614174000',
 }));
 
 const { POST } = await import('../src/app/api/v1/auth/login/route');
@@ -87,7 +82,10 @@ const { POST } = await import('../src/app/api/v1/auth/login/route');
 function createRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest('http://localhost/api/v1/auth/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-forwarded-for': `192.168.100.${(requestCounter += 1)}`,
+    },
     body: JSON.stringify(body),
   });
 }
@@ -144,7 +142,7 @@ describe('login API route', () => {
 
     expect(mockInsertedRefreshToken).toBeDefined();
     expect(mockInsertedRefreshToken.userId).toBe('user-id');
-    expect(mockInsertedRefreshToken.family).toBe('test-uuid-1234');
+    expect(mockInsertedRefreshToken.family).toBe('123e4567-e89b-12d3-a456-426614174000');
   });
 
   test('returns 401 if user not found', async () => {

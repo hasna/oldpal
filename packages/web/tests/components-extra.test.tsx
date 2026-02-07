@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, expect, test, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterEach, afterAll, mock } from 'bun:test';
 import { act, create } from 'react-test-renderer';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { useChatStore } from '../src/lib/store';
@@ -33,6 +33,7 @@ mock.module('@/hooks/use-theme', () => ({
 const sent: any[] = [];
 const connected: string[] = [];
 let disconnects = 0;
+const initialWindow = (globalThis as any).window;
 
 const { Header } = await import('../src/components/shared/Header');
 const { Sidebar } = await import('../src/components/shared/Sidebar');
@@ -133,14 +134,14 @@ describe('web extra components', () => {
   });
 
   afterEach(() => {
-    if (originalWindow) {
-      (globalThis as any).window = originalWindow;
-    } else {
+    if (originalWindow === undefined) {
       (globalThis as any).window = {
         addEventListener: () => {},
         removeEventListener: () => {},
         location: { protocol: 'http:', host: 'example.com' },
       };
+    } else {
+      (globalThis as any).window = originalWindow;
     }
     (globalThis as any).navigator = originalNavigator;
     (globalThis as any).crypto = originalCrypto;
@@ -271,6 +272,46 @@ describe('web extra components', () => {
 
     expect(sent.some((msg) => msg.type === 'cancel' && msg.sessionId === 'session-5')).toBe(true);
     expect(useChatStore.getState().isStreaming).toBe(false);
+
+    renderer!.unmount();
+  });
+
+  test('InputArea runs ! shell commands and sends output', async () => {
+    createWindowStub();
+    (globalThis as any).crypto = { randomUUID: () => 'session-7' };
+
+    const fetchMock = mock(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          ok: true,
+          stdout: 'hi',
+          stderr: '',
+          exitCode: 0,
+          truncated: false,
+        },
+      }),
+    }));
+    (globalThis as any).fetch = fetchMock;
+
+    const renderer = await renderWithAct(<InputArea />);
+    const input = renderer!.root.findByType(Textarea);
+
+    await act(async () => {
+      input.props.onChange({ target: { value: '!echo hi' } });
+    });
+    await act(async () => {
+      await input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.command).toBe('echo hi');
+    expect(sent.some((msg) => msg.type === 'message' && msg.content.includes('Local shell command executed'))).toBe(true);
 
     renderer!.unmount();
   });
@@ -612,4 +653,13 @@ describe('web extra components', () => {
     expect(register).toHaveBeenCalledWith('/sw.js');
     renderer!.unmount();
   });
+});
+
+afterAll(() => {
+  if (initialWindow === undefined) {
+    delete (globalThis as any).window;
+  } else {
+    (globalThis as any).window = initialWindow;
+  }
+  mock.restore();
 });

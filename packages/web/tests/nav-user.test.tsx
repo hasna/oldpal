@@ -19,6 +19,7 @@ mock.module('next/navigation', () => ({
     replace: () => {},
     back: () => {},
   }),
+  useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/',
 }));
 

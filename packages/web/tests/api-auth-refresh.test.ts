@@ -15,6 +15,7 @@ let mockRevokedTokenId: string | null = null;
 let mockInsertedToken: any = null;
 let mockRefreshToken: string | null = null;
 let setRefreshTokenValue: string | null = null;
+let requestCounter = 0;
 
 // Track all update calls
 let updateCalls: Array<{ value: any }> = [];
@@ -75,12 +76,6 @@ mock.module('@/lib/auth/cookies', () => ({
   },
 }));
 
-// Mock rate limiting
-mock.module('@/lib/rate-limit', () => ({
-  checkRateLimit: () => null,
-  RateLimitPresets: { api: 'api' },
-}));
-
 // Mock JWT utilities
 mock.module('@/lib/auth/jwt', () => createJwtMock({
   verifyRefreshToken: async () => mockTokenPayload,
@@ -103,7 +98,7 @@ mock.module('drizzle-orm', () => createDrizzleOrmMock({
 
 // Mock crypto
 mock.module('crypto', () => createCryptoMock({
-  randomUUID: () => 'test-uuid',
+  randomUUID: () => '123e4567-e89b-12d3-a456-426614174000',
 }));
 
 const { POST } = await import('../src/app/api/v1/auth/refresh/route');
@@ -111,7 +106,10 @@ const { POST } = await import('../src/app/api/v1/auth/refresh/route');
 function createRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest('http://localhost/api/v1/auth/refresh', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-forwarded-for': `192.168.120.${(requestCounter += 1)}`,
+    },
     body: JSON.stringify(body),
   });
 }

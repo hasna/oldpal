@@ -1,25 +1,19 @@
-import { describe, expect, test, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import { describe, expect, test, beforeEach, afterEach, spyOn } from 'bun:test';
 
 let clearAllCalls = 0;
 
-// Mock chat store used during logout
-mock.module('@/lib/store', () => ({
-  useChatStore: {
-    getState: () => ({
-      clearAll: () => {
-        clearAllCalls += 1;
-      },
-    }),
-  },
-}));
-
-const authModule = await import('../src/hooks/use-auth');
+const authModule = await import(`../src/hooks/use-auth?test=${Date.now()}-${Math.random()}`);
 const { useAuthStore } = authModule;
-const { useChatStore } = await import('@/lib/store');
+const { useChatStore } = await import('../src/lib/store');
 
 describe('useAuthStore', () => {
   beforeEach(() => {
     clearAllCalls = 0;
+    useChatStore.setState({
+      clearAll: () => {
+        clearAllCalls += 1;
+      },
+    } as any);
     useAuthStore.setState({
       user: null,
       accessToken: null,
@@ -126,6 +120,11 @@ describe('useAuth hook functions', () => {
 
   beforeEach(() => {
     clearAllCalls = 0;
+    useChatStore.setState({
+      clearAll: () => {
+        clearAllCalls += 1;
+      },
+    } as any);
     useAuthStore.setState({
       user: null,
       accessToken: null,

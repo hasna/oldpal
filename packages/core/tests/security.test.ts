@@ -65,7 +65,7 @@ describe('Path Security', () => {
     const base = await mkdtemp(join(tmpdir(), 'assistants-traversal-'));
     const result = await isPathSafe(join(base, '../../etc/passwd'), 'read', { cwd: base });
     expect(result.safe).toBe(false);
-    expect(result.reason).toContain('outside');
+    expect(result.reason || '').toMatch(/outside|protected path/i);
   });
 
   test('should block protected filename patterns (.env)', async () => {

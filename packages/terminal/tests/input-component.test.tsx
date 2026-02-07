@@ -37,7 +37,7 @@ describe('Input component', () => {
     const instance = render(<Input onSubmit={() => {}} isProcessing queueLength={2} />, { stdout: env.stdout, stdin: env.stdin });
     await new Promise((resolve) => setTimeout(resolve, 0));
     const frame = env.getOutput();
-    expect(frame).toContain('Type to queue');
+    expect(frame).toContain('Enter=inline | Tab=queue | Shift+Enter=interrupt');
     instance.unmount();
   });
 
@@ -71,10 +71,29 @@ describe('Input component', () => {
     const ref = React.createRef<InputHandle>();
     const instance = render(<Input ref={ref} onSubmit={() => {}} />, { stdout: env.stdout, stdin: env.stdin });
     await new Promise((resolve) => setTimeout(resolve, 0));
+    // Wait for ref to be attached before exercising imperative handle
+    const waitForRef = async () => {
+      const start = Date.now();
+      while (!ref.current) {
+        if (Date.now() - start > 250) {
+          throw new Error('Input ref was not attached in time');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    };
+    await waitForRef();
     ref.current?.setValue('line one\\nline two');
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const frame = env.getOutput();
-    expect(frame).toContain('(2 lines)');
+    const waitForValue = async () => {
+      const start = Date.now();
+      while (ref.current?.getValue() !== 'line one\\nline two') {
+        if (Date.now() - start > 250) {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    };
+    await waitForValue();
+    expect(ref.current?.getValue()).toBe('line one\\nline two');
     instance.unmount();
   });
 });

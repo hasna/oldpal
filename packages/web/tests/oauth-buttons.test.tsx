@@ -9,6 +9,7 @@ mock.module('@/components/ui/Button', () => ({
       {children}
     </button>
   ),
+  buttonVariants: () => '',
 }));
 
 describe('OAuthButtons', () => {

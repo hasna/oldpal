@@ -10,7 +10,30 @@ let capturedClientCwd: string | null = null;
 let capturedClientOptions: any = null;
 let mockResumeSessionData: { cwd: string; messages: any[]; startedAt: number } | null = null;
 
+class MockCommandHistory {
+  async load() {
+    return;
+  }
+  async add() {
+    return;
+  }
+  resetIndex() {
+    return;
+  }
+  previous() {
+    return null;
+  }
+  next() {
+    return null;
+  }
+  isNavigating() {
+    return false;
+  }
+}
+
 mock.module('@hasna/assistants-core', () => ({
+  CommandHistory: MockCommandHistory,
+  getCommandHistory: () => new MockCommandHistory(),
   EmbeddedClient: class EmbeddedClient {
     private sessionId: string;
     private chunkHandlers: Array<(chunk: any) => void> = [];

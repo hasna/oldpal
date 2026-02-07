@@ -1,6 +1,7 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
-import { chatWs } from '../src/lib/ws';
-import { useChatStore } from '../src/lib/store';
+
+let chatWs: typeof import('../src/lib/ws').chatWs;
+let useChatStore: typeof import('../src/lib/store').useChatStore;
 
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
@@ -31,7 +32,12 @@ class MockWebSocket {
 
 const originalWebSocket = globalThis.WebSocket;
 
-beforeEach(() => {
+beforeEach(async () => {
+  const wsModule = await import(`../src/lib/ws?test=${Date.now()}-${Math.random()}`);
+  const storeModule = await import('../src/lib/store');
+  chatWs = wsModule.chatWs;
+  useChatStore = storeModule.useChatStore;
+
   useChatStore.setState({
     messages: [],
     isStreaming: false,

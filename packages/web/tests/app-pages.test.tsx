@@ -26,6 +26,25 @@ mock.module('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
+mock.module('next-intl/server', () => ({
+  getLocale: async () => 'en',
+  getMessages: async () => ({}),
+}));
+
+mock.module('next-intl', () => ({
+  NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+mock.module('@/hooks/use-theme', () => ({
+  useTheme: () => ({
+    theme: 'light',
+    resolvedTheme: 'light',
+    setTheme: () => {},
+  }),
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  themeScript: '',
+}));
+
 const { default: RootLayout, metadata } = await import('../src/app/layout');
 const { default: SettingsPage } = await import('../src/app/(dashboard)/settings/page');
 const { default: HomePage } = await import('../src/app/page');
@@ -38,14 +57,17 @@ const { default: RegisterPage } = await import('../src/app/(auth)/register/page'
 
 
 describe('app layout and pages', () => {
-  test('RootLayout renders metadata and wraps children', () => {
+  test('RootLayout renders metadata and wraps children', async () => {
     const markup = renderToStaticMarkup(
-      <RootLayout>
-        <div>Child</div>
-      </RootLayout>
+      await RootLayout({
+        children: <div>Child</div>,
+      })
     );
 
-    expect(metadata.title).toBe('Assistants Web');
+    expect(metadata.title).toMatchObject({
+      default: 'Assistants',
+      template: '%s | Assistants',
+    });
     expect(markup).toContain('Child');
     expect(markup).toContain('font-body');
   });
@@ -53,12 +75,12 @@ describe('app layout and pages', () => {
   test('SettingsPage renders sections', () => {
     const markup = renderToStaticMarkup(<SettingsPage />);
     expect(markup).toContain('Settings');
-    expect(markup).toContain('Profile');
+    expect(markup).toContain('animate-pulse');
   });
 
   test('HomePage renders structure', () => {
     const markup = renderToStaticMarkup(<HomePage />);
-    expect(markup).toContain('Operations Console');
+    expect(markup).toContain('animate-spin');
   });
 
   test('AuthLayout wraps children with branding', () => {

@@ -47,13 +47,6 @@ mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   },
 }));
 
-// Mock API key utilities
-let mockGeneratedKey = { fullKey: 'sk_live_mock12345678', keyPrefix: 'sk_live_mock' };
-mock.module('@/lib/auth/api-key', () => ({
-  generateApiKey: () => mockGeneratedKey,
-  hashApiKey: async (key: string) => `hashed_${key}`,
-}));
-
 // Mock database
 mock.module('@/db', () => ({
   db: {
@@ -372,7 +365,8 @@ describe('POST /api/v1/users/me/api-keys', () => {
       const data = await response.json();
 
       // fullKey should be present on creation
-      expect(data.data.key.fullKey).toBe('sk_live_mock12345678');
+      expect(typeof data.data.key.fullKey).toBe('string');
+      expect(data.data.key.fullKey.startsWith('sk_live_')).toBe(true);
     });
 
     test('returns 422 when name is missing', async () => {

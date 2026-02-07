@@ -9,6 +9,7 @@ let mockSessions: any[] = [];
 let mockSessionCount = 0;
 let mockInsertedSession: any = null;
 let insertValuesData: any = null;
+let mockAssistant: any = null;
 
 // Mock database
 mock.module('@/db', () => ({
@@ -20,6 +21,9 @@ mock.module('@/db', () => ({
           const end = start + (limit || mockSessions.length);
           return mockSessions.slice(start, end);
         },
+      },
+      assistants: {
+        findFirst: async () => mockAssistant,
       },
     },
     select: () => ({
@@ -80,7 +84,14 @@ mock.module('drizzle-orm', () => createDrizzleOrmMock({
   count: () => 'count',
 }));
 
-const { GET, POST } = await import('../src/app/api/v1/sessions/route');
+let GET: typeof import('../src/app/api/v1/sessions/route').GET;
+let POST: typeof import('../src/app/api/v1/sessions/route').POST;
+
+beforeEach(async () => {
+  const mod = await import(`../src/app/api/v1/sessions/route?test=${Date.now()}-${Math.random()}`);
+  GET = mod.GET;
+  POST = mod.POST;
+});
 
 function createGetRequest(
   params: { page?: number; limit?: number } = {},
@@ -265,6 +276,10 @@ describe('POST /api/v1/sessions', () => {
     mockSessionCount = 0;
     mockInsertedSession = null;
     insertValuesData = null;
+    mockAssistant = {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      userId: 'user-123',
+    };
   });
 
   describe('authentication', () => {

@@ -68,7 +68,7 @@ describe('OAuth utilities', () => {
   describe('isGoogleOAuthConfigured', () => {
     test('returns true when both credentials are set', async () => {
       // Re-import to get fresh module with current env
-      const { isGoogleOAuthConfigured } = await import('../src/lib/auth/oauth');
+      const { isGoogleOAuthConfigured } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
       expect(isGoogleOAuthConfigured()).toBe(true);
     });
 
@@ -97,7 +97,7 @@ describe('OAuth utilities', () => {
 
   describe('generateGoogleAuthUrl', () => {
     test('generates auth URL with correct parameters', async () => {
-      const { generateGoogleAuthUrl } = await import('../src/lib/auth/oauth');
+      const { generateGoogleAuthUrl } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       const url = generateGoogleAuthUrl();
 
@@ -115,7 +115,7 @@ describe('OAuth utilities', () => {
     });
 
     test('includes state parameter when provided', async () => {
-      const { generateGoogleAuthUrl } = await import('../src/lib/auth/oauth');
+      const { generateGoogleAuthUrl } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       generateGoogleAuthUrl('csrf-state-token');
 
@@ -124,7 +124,7 @@ describe('OAuth utilities', () => {
     });
 
     test('returns the generated URL', async () => {
-      const { generateGoogleAuthUrl } = await import('../src/lib/auth/oauth');
+      const { generateGoogleAuthUrl } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       const url = generateGoogleAuthUrl();
 
@@ -134,7 +134,7 @@ describe('OAuth utilities', () => {
 
   describe('getGoogleUserInfo', () => {
     test('exchanges code for tokens and returns user info', async () => {
-      const { getGoogleUserInfo } = await import('../src/lib/auth/oauth');
+      const { getGoogleUserInfo } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       const userInfo = await getGoogleUserInfo('authorization-code');
 
@@ -162,7 +162,7 @@ describe('OAuth utilities', () => {
         }),
       }));
 
-      const { getGoogleUserInfo } = await import('../src/lib/auth/oauth');
+      const { getGoogleUserInfo } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       const userInfo = await getGoogleUserInfo('auth-code');
 
@@ -180,7 +180,7 @@ describe('OAuth utilities', () => {
         }),
       }));
 
-      const { getGoogleUserInfo } = await import('../src/lib/auth/oauth');
+      const { getGoogleUserInfo } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       const userInfo = await getGoogleUserInfo('auth-code');
 
@@ -192,7 +192,7 @@ describe('OAuth utilities', () => {
         getPayload: () => null,
       }));
 
-      const { getGoogleUserInfo } = await import('../src/lib/auth/oauth');
+      const { getGoogleUserInfo } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       await expect(getGoogleUserInfo('auth-code')).rejects.toThrow(
         'Failed to get user info from Google'
@@ -204,7 +204,7 @@ describe('OAuth utilities', () => {
         throw new Error('Invalid authorization code');
       });
 
-      const { getGoogleUserInfo } = await import('../src/lib/auth/oauth');
+      const { getGoogleUserInfo } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       await expect(getGoogleUserInfo('invalid-code')).rejects.toThrow(
         'Invalid authorization code'
@@ -216,7 +216,7 @@ describe('OAuth utilities', () => {
         throw new Error('Token verification failed');
       });
 
-      const { getGoogleUserInfo } = await import('../src/lib/auth/oauth');
+      const { getGoogleUserInfo } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       await expect(getGoogleUserInfo('auth-code')).rejects.toThrow(
         'Token verification failed'
@@ -229,7 +229,7 @@ describe('OAuth utilities', () => {
       // Clear cached client by reimporting module in a way that triggers fresh import
       oauthClientConstructorCalls = [];
 
-      const { generateGoogleAuthUrl } = await import('../src/lib/auth/oauth');
+      const { generateGoogleAuthUrl } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
       // This should trigger client creation
       generateGoogleAuthUrl();
@@ -242,7 +242,11 @@ describe('OAuth utilities', () => {
 
 describe('OAuth type exports', () => {
   test('GoogleUserInfo interface is properly typed', async () => {
-    const { getGoogleUserInfo } = await import('../src/lib/auth/oauth');
+    process.env.GOOGLE_CLIENT_ID = 'test-client-id';
+    process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
+    process.env.NEXT_PUBLIC_URL = 'http://localhost:3001';
+
+    const { getGoogleUserInfo } = await import(`../src/lib/auth/oauth?test=${Date.now()}-${Math.random()}`);
 
     // Type check - the function should return GoogleUserInfo
     const userInfo = await getGoogleUserInfo('test-code');
@@ -254,6 +258,10 @@ describe('OAuth type exports', () => {
     expect(typeof userInfo.name).toBe('string');
     // picture is optional
     expect(userInfo.picture === undefined || typeof userInfo.picture === 'string').toBe(true);
+
+    process.env.GOOGLE_CLIENT_ID = originalEnv.GOOGLE_CLIENT_ID;
+    process.env.GOOGLE_CLIENT_SECRET = originalEnv.GOOGLE_CLIENT_SECRET;
+    process.env.NEXT_PUBLIC_URL = originalEnv.NEXT_PUBLIC_URL;
   });
 });
 

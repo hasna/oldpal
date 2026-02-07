@@ -114,8 +114,7 @@ describe('UI components', () => {
       intervalCb?.();
     });
     const tree = renderer!.toJSON();
-    expect(JSON.stringify(tree)).toContain('"2"');
-    expect(JSON.stringify(tree)).toContain('"s"');
+    expect(JSON.stringify(tree)).toContain('"2s"');
     renderer!.unmount();
 
     Date.now = originalNow;

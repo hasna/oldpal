@@ -59,12 +59,12 @@ describe('Messages component', () => {
       { stdout: env.stdout, stdin: env.stdin }
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
     const frame = env.getOutput();
     expect(frame).toContain('Run command');
     expect(frame).toContain('Tool Calls');
     expect(frame).toContain('Tool Results');
-    expect(frame).toContain('elapsed');
+    expect(frame).toContain('Active Tools');
     expect(frame).toContain('Streaming response');
     instance.unmount();
   });
@@ -86,9 +86,33 @@ describe('Messages component', () => {
       { stdout: env.stdout, stdin: env.stdin }
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
     const frame = env.getOutput();
     expect(frame).toContain('partial');
+    instance.unmount();
+  });
+
+  test('renders listening draft label for draft messages', async () => {
+    const draft: DisplayMessage = {
+      id: 'listening-draft',
+      role: 'user',
+      content: 'dictating now',
+      timestamp: 0,
+    };
+
+    const env = createInkTestEnv();
+    const instance = render(
+      <Messages
+        messages={[]}
+        streamingMessages={[draft]}
+      />,
+      { stdout: env.stdout, stdin: env.stdin }
+    );
+
+    await Promise.resolve();
+    const frame = env.getOutput();
+    expect(frame).toContain('Live dictation');
+    expect(frame).toContain('dictating now');
     instance.unmount();
   });
 });

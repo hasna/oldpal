@@ -10,6 +10,7 @@ import { createPasswordMock } from './helpers/mock-auth-password';
 let mockExistingUser: any = null;
 let mockInsertedUser: any = null;
 let mockInsertedRefreshToken: any = null;
+let requestCounter = 0;
 
 // Mock database
 mock.module('@/db', () => ({
@@ -61,11 +62,6 @@ mock.module('@/lib/auth/jwt', () => createJwtMock({
   getRefreshTokenExpiry: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
 }));
 
-mock.module('@/lib/rate-limit', () => ({
-  checkRateLimit: () => null,
-  RateLimitPresets: { auth: {} },
-}));
-
 // Mock drizzle-orm
 mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
@@ -73,7 +69,7 @@ mock.module('drizzle-orm', () => createDrizzleOrmMock({
 
 // Mock crypto
 mock.module('crypto', () => createCryptoMock({
-  randomUUID: () => 'test-uuid-1234',
+  randomUUID: () => '123e4567-e89b-12d3-a456-426614174000',
 }));
 
 const { POST } = await import('../src/app/api/v1/auth/register/route');
@@ -81,7 +77,10 @@ const { POST } = await import('../src/app/api/v1/auth/register/route');
 function createRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest('http://localhost/api/v1/auth/register', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-forwarded-for': `192.168.110.${(requestCounter += 1)}`,
+    },
     body: JSON.stringify(body),
   });
 }
@@ -161,7 +160,7 @@ describe('register API route', () => {
 
     expect(mockInsertedRefreshToken).toBeDefined();
     expect(mockInsertedRefreshToken.userId).toBe('new-user-id');
-    expect(mockInsertedRefreshToken.family).toBe('test-uuid-1234');
+    expect(mockInsertedRefreshToken.family).toBe('123e4567-e89b-12d3-a456-426614174000');
     expect(mockInsertedRefreshToken.expiresAt).toBeInstanceOf(Date);
   });
 

@@ -22,6 +22,7 @@ const baseSchemaMock = {
   adminAuditLogs: 'adminAuditLogs',
   loginHistory: 'loginHistory',
   notifications: 'notifications',
+  notificationPreferences: 'notificationPreferences',
   identities: 'identities',
   apiKeys: 'apiKeys',
   userRoleEnum: { enumValues: ['user', 'admin'] },

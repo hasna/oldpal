@@ -443,8 +443,9 @@ describe('AssistantLoop process', () => {
     await assistant.process('/skills');
     await assistant.process('/connectors --list');
 
+    const showPanelChunks = chunks.filter((c) => c.type === 'show_panel');
+    expect(showPanelChunks.some((c) => c.panel === 'skills')).toBe(true);
     const textChunks = chunks.filter((c) => c.type === 'text' && c.content);
-    expect(textChunks.some((c) => c.content?.includes('alpha'))).toBe(true);
     expect(textChunks.some((c) => c.content?.includes('demo'))).toBe(true);
   });
 

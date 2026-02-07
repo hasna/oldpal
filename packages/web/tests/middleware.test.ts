@@ -1,32 +1,11 @@
-import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
-import { NextRequest, NextResponse } from 'next/server';
-
-// Track rate limit calls for verification
-let rateLimitCalls: Array<{ endpoint: string; config: any }> = [];
-let shouldRateLimit = false;
-
-// Mock the rate-limit module
-mock.module('@/lib/rate-limit', () => ({
-  checkRateLimit: (request: NextRequest, endpoint: string, config: any) => {
-    rateLimitCalls.push({ endpoint, config });
-    if (shouldRateLimit) {
-      return NextResponse.json(
-        { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests' } },
-        { status: 429 }
-      );
-    }
-    return null;
-  },
-  RateLimitPresets: {
-    auth: { limit: 5, windowSec: 60 },
-    login: { limit: 10, windowSec: 900 },
-    api: { limit: 60, windowSec: 60 },
-    chat: { limit: 30, windowSec: 60 },
-    relaxed: { limit: 120, windowSec: 60 },
-  },
-}));
+import { describe, expect, test } from 'bun:test';
+import { NextRequest } from 'next/server';
+import { RateLimitPresets } from '../src/lib/rate-limit';
 
 const { middleware } = await import('../src/middleware');
+
+let ipCounter = 0;
+const nextIp = () => `10.0.0.${(ipCounter += 1)}`;
 
 function createRequest(
   path: string,
@@ -44,9 +23,7 @@ function createRequest(
     headers['Content-Length'] = String(options.contentLength);
   }
 
-  if (options.ip) {
-    headers['x-forwarded-for'] = options.ip;
-  }
+  headers['x-forwarded-for'] = options.ip || nextIp();
 
   return new NextRequest(`http://localhost${path}`, {
     method: options.method || 'GET',
@@ -55,10 +32,6 @@ function createRequest(
 }
 
 describe('middleware', () => {
-  beforeEach(() => {
-    rateLimitCalls = [];
-    shouldRateLimit = false;
-  });
 
   describe('body size limits', () => {
     test('allows requests within auth route size limit (10KB)', async () => {
@@ -127,72 +100,85 @@ describe('middleware', () => {
 
   describe('rate limiting', () => {
     test('applies login rate limit to login endpoint', async () => {
-      const request = createRequest('/api/v1/auth/login', { method: 'POST' });
-      await middleware(request);
-
-      expect(rateLimitCalls.length).toBe(1);
-      expect(rateLimitCalls[0].endpoint).toBe('auth/login');
-      expect(rateLimitCalls[0].config.limit).toBe(10); // login preset
+      const ip = nextIp();
+      const limit = RateLimitPresets.login.limit;
+      for (let i = 0; i < limit; i += 1) {
+        const response = await middleware(createRequest('/api/v1/auth/login', { method: 'POST', ip }));
+        expect(response.status).not.toBe(429);
+      }
+      const blocked = await middleware(createRequest('/api/v1/auth/login', { method: 'POST', ip }));
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get('X-RateLimit-Limit')).toBe(String(limit));
     });
 
     test('applies auth rate limit to register endpoint', async () => {
-      const request = createRequest('/api/v1/auth/register', { method: 'POST' });
-      await middleware(request);
-
-      expect(rateLimitCalls.length).toBe(1);
-      expect(rateLimitCalls[0].endpoint).toBe('auth/register');
-      expect(rateLimitCalls[0].config.limit).toBe(5); // auth preset
+      const ip = nextIp();
+      const limit = RateLimitPresets.auth.limit;
+      for (let i = 0; i < limit; i += 1) {
+        const response = await middleware(createRequest('/api/v1/auth/register', { method: 'POST', ip }));
+        expect(response.status).not.toBe(429);
+      }
+      const blocked = await middleware(createRequest('/api/v1/auth/register', { method: 'POST', ip }));
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get('X-RateLimit-Limit')).toBe(String(limit));
     });
 
     test('applies chat rate limit to chat endpoint', async () => {
-      const request = createRequest('/api/v1/chat', { method: 'POST' });
-      await middleware(request);
-
-      expect(rateLimitCalls.length).toBe(1);
-      expect(rateLimitCalls[0].endpoint).toBe('chat');
-      expect(rateLimitCalls[0].config.limit).toBe(30); // chat preset
+      const ip = nextIp();
+      const limit = RateLimitPresets.chat.limit;
+      for (let i = 0; i < limit; i += 1) {
+        const response = await middleware(createRequest('/api/v1/chat', { method: 'POST', ip }));
+        expect(response.status).not.toBe(429);
+      }
+      const blocked = await middleware(createRequest('/api/v1/chat', { method: 'POST', ip }));
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get('X-RateLimit-Limit')).toBe(String(limit));
     });
 
     test('applies api rate limit to general API endpoints', async () => {
-      const request = createRequest('/api/v1/assistants', { method: 'GET' });
-      await middleware(request);
-
-      expect(rateLimitCalls.length).toBe(1);
-      expect(rateLimitCalls[0].endpoint).toBe('api');
-      expect(rateLimitCalls[0].config.limit).toBe(60); // api preset
+      const ip = nextIp();
+      const limit = RateLimitPresets.api.limit;
+      for (let i = 0; i < limit; i += 1) {
+        const response = await middleware(createRequest('/api/v1/assistants', { method: 'GET', ip }));
+        expect(response.status).not.toBe(429);
+      }
+      const blocked = await middleware(createRequest('/api/v1/assistants', { method: 'GET', ip }));
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get('X-RateLimit-Limit')).toBe(String(limit));
     });
 
     test('applies relaxed rate limit to admin endpoints', async () => {
-      const request = createRequest('/api/v1/admin/users', { method: 'GET' });
-      await middleware(request);
-
-      expect(rateLimitCalls.length).toBe(1);
-      expect(rateLimitCalls[0].endpoint).toBe('admin');
-      expect(rateLimitCalls[0].config.limit).toBe(120); // relaxed preset
-    });
-
-    test('returns 429 when rate limited', async () => {
-      shouldRateLimit = true;
-      const request = createRequest('/api/v1/chat', { method: 'POST' });
-
-      const response = await middleware(request);
-      expect(response.status).toBe(429);
+      const ip = nextIp();
+      const limit = RateLimitPresets.relaxed.limit;
+      for (let i = 0; i < limit; i += 1) {
+        const response = await middleware(createRequest('/api/v1/admin/users', { method: 'GET', ip }));
+        expect(response.status).not.toBe(429);
+      }
+      const blocked = await middleware(createRequest('/api/v1/admin/users', { method: 'GET', ip }));
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get('X-RateLimit-Limit')).toBe(String(limit));
     });
   });
 
   describe('skip paths', () => {
     test('skips rate limiting for health endpoint', async () => {
-      const request = createRequest('/api/health', { method: 'GET' });
-      await middleware(request);
-
-      expect(rateLimitCalls.length).toBe(0);
+      const ip = nextIp();
+      const responses = await Promise.all(
+        Array.from({ length: 10 }, () => middleware(createRequest('/api/health', { method: 'GET', ip })))
+      );
+      for (const response of responses) {
+        expect(response.status).not.toBe(429);
+      }
     });
 
     test('skips rate limiting for billing webhooks', async () => {
-      const request = createRequest('/api/v1/billing/webhooks/stripe', { method: 'POST' });
-      await middleware(request);
-
-      expect(rateLimitCalls.length).toBe(0);
+      const ip = nextIp();
+      const responses = await Promise.all(
+        Array.from({ length: 10 }, () => middleware(createRequest('/api/v1/billing/webhooks/stripe', { method: 'POST', ip })))
+      );
+      for (const response of responses) {
+        expect(response.status).not.toBe(429);
+      }
     });
   });
 
@@ -201,7 +187,6 @@ describe('middleware', () => {
       const request = createRequest('/dashboard', { method: 'GET' });
       const response = await middleware(request);
 
-      expect(rateLimitCalls.length).toBe(0);
       expect(response.status).not.toBe(429);
       expect(response.status).not.toBe(413);
     });
@@ -231,8 +216,4 @@ describe('middleware', () => {
       expect(data.error.message).toContain('10KB'); // Should mention the limit
     });
   });
-});
-
-afterAll(() => {
-  mock.restore();
 });

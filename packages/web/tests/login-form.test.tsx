@@ -14,6 +14,8 @@ mock.module('next/navigation', () => ({
     replace: () => {},
     back: () => {},
   }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/',
 }));
 
 // Mock next/link
@@ -37,6 +39,7 @@ mock.module('@/components/ui/Button', () => ({
   Button: ({ children, type, disabled, className }: any) => (
     <button type={type} disabled={disabled} className={className}>{children}</button>
   ),
+  buttonVariants: () => '',
 }));
 
 mock.module('@/components/ui/Input', () => ({

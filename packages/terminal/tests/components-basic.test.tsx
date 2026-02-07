@@ -154,7 +154,7 @@ describe('terminal basic components', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
     const frame = env.getOutput();
-    expect(frame).toContain('Metamorphosing');
+    expect(frame).toContain('esc');
     expect(frame).toContain('1.2k');
     expect(frame).toContain('tokens');
     instance.unmount();
@@ -196,8 +196,8 @@ describe('terminal basic components', () => {
     const frame = env.getOutput();
     expect(frame).toContain('50%');
     expect(frame).toContain('verbose');
-    expect(frame).toContain('queued');
-    expect(frame).toContain('id s1');
+    expect(frame).toContain('2 queued');
+    expect(frame).toContain('1/2');
     expect(frame).toContain('esc');
     instance.unmount();
 

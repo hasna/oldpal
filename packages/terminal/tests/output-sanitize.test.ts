@@ -5,7 +5,7 @@ describe('sanitizeTerminalOutput', () => {
   test('removes clear scrollback sequences', () => {
     const input = `line1\x1b[2J\x1b[3J\x1b[Hline2`;
     const output = sanitizeTerminalOutput(input);
-    expect(output).toBe(`line1\x1b[Hline2`);
+    expect(output).toBe(`line1line2`);
   });
 
   test('leaves output unchanged when no clear scrollback present', () => {

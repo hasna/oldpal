@@ -15,7 +15,7 @@ mock.module('@/lib/auth/oauth', () => createOAuthMock({
 
 // Mock crypto
 mock.module('crypto', () => createCryptoMock({
-  randomUUID: () => 'test-csrf-state',
+  randomUUID: () => '123e4567-e89b-12d3-a456-426614174000',
 }));
 
 const { GET } = await import('../src/app/api/v1/auth/oauth/google/route');
@@ -47,7 +47,7 @@ describe('OAuth Google initiate route', () => {
       const response = await GET(request);
 
       const location = response.headers.get('location');
-      expect(location).toContain('state=test-csrf-state');
+      expect(location).toContain('state=123e4567-e89b-12d3-a456-426614174000');
     });
 
     test('sets oauth_state cookie', async () => {
@@ -56,7 +56,7 @@ describe('OAuth Google initiate route', () => {
       const response = await GET(request);
 
       const setCookieHeader = response.headers.get('set-cookie');
-      expect(setCookieHeader).toContain('oauth_state=test-csrf-state');
+      expect(setCookieHeader).toContain('oauth_state=123e4567-e89b-12d3-a456-426614174000');
     });
 
     test('cookie is httpOnly', async () => {

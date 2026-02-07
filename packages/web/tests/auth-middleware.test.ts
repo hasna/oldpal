@@ -29,22 +29,24 @@ mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
-mock.module('@/lib/auth/jwt', () => createJwtMock({
+const jwtMock = createJwtMock({
   createAccessToken: async (payload: any) => {
     const token = `token-${++tokenCounter}`;
     tokenPayloads.set(token, payload);
     return token;
   },
   verifyAccessToken: async (token: string) => tokenPayloads.get(token) ?? null,
-}));
+});
+
+mock.module('@/lib/auth/jwt', () => jwtMock);
 
 const {
   withAuth,
   withAdminAuth,
   getAuthUser,
   clearUserStatusCache,
-} = await import('../src/lib/auth/middleware');
-const { createAccessToken } = await import('../src/lib/auth/jwt');
+} = await import(`../src/lib/auth/middleware?test=${Date.now()}-${Math.random()}`);
+const { createAccessToken } = jwtMock;
 
 beforeEach(() => {
   tokenPayloads.clear();

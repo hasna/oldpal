@@ -702,8 +702,7 @@ describe('BuiltinCommands', () => {
       if (cmd?.handler) {
         const result = await cmd.handler('', mockContext);
         expect(result.handled).toBe(true);
-        expect(emittedContent.some(c => c.includes('Available Skills'))).toBe(true);
-        expect(emittedContent.some(c => c.includes('$alpha'))).toBe(true);
+        expect(result.showPanel).toBe('skills');
       }
     });
 
@@ -715,7 +714,7 @@ describe('BuiltinCommands', () => {
       if (cmd?.handler) {
         const result = await cmd.handler('', contextNoSkills);
         expect(result.handled).toBe(true);
-        expect(emittedContent.some(c => c.includes('No skills loaded'))).toBe(true);
+        expect(result.showPanel).toBe('skills');
       }
     });
   });

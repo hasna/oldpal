@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { getMockClients, resetMockClients } from './helpers/mock-assistants-core';
 import { createSchemaMock } from './helpers/mock-schema';
 import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
@@ -26,12 +26,22 @@ mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
-const { getSession, subscribeToSession, sendSessionMessage, stopSession, closeSession } = await import('../src/lib/server/agent-pool');
+let getSession: typeof import('../src/lib/server/agent-pool').getSession;
+let subscribeToSession: typeof import('../src/lib/server/agent-pool').subscribeToSession;
+let sendSessionMessage: typeof import('../src/lib/server/agent-pool').sendSessionMessage;
+let stopSession: typeof import('../src/lib/server/agent-pool').stopSession;
+let closeSession: typeof import('../src/lib/server/agent-pool').closeSession;
 let sessionCounter = 0;
 
 describe('assistant pool', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetMockClients();
+    const mod = await import(`../src/lib/server/agent-pool?test=${Date.now()}-${Math.random()}`);
+    getSession = mod.getSession;
+    subscribeToSession = mod.subscribeToSession;
+    sendSessionMessage = mod.sendSessionMessage;
+    stopSession = mod.stopSession;
+    closeSession = mod.closeSession;
   });
 
   test('getSession caches sessions and emits chunks', async () => {
@@ -73,4 +83,8 @@ describe('assistant pool', () => {
     await getSession(sessionId);
     expect(getMockClients().length).toBe(2);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });
