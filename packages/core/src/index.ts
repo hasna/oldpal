@@ -24,6 +24,8 @@ export type { ToolStats, SessionStats } from './agent/stats';
 
 // Tools
 export { ToolRegistry } from './tools/registry';
+export { ConnectorAutoRefreshManager } from './connectors/auto-refresh';
+export type { ConnectorAutoRefreshEntry, ConnectorAutoRefreshSchedule } from './connectors/auto-refresh';
 export {
   ConnectorBridge,
   connectorExecuteTool,

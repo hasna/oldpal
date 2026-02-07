@@ -14,6 +14,7 @@ import {
 } from '../context';
 import { ToolRegistry } from '../tools/registry';
 import { ConnectorBridge, registerConnectorsListTool } from '../tools/connector';
+import { registerConnectorAutoRefreshTool } from '../tools/connector-refresh';
 import { registerConfigTools } from '../tools/config';
 import { registerAssistantTools } from '../tools/assistant';
 import { registerIdentityTools } from '../tools/identity';
@@ -67,6 +68,7 @@ import {
   releaseScheduleLock,
   updateSchedule,
 } from '../scheduler/store';
+import { ConnectorAutoRefreshManager } from '../connectors/auto-refresh';
 import { VoiceManager } from '../voice/manager';
 import { AssistantManager, IdentityManager } from '../identity';
 import { createInboxManager, registerInboxTools, type InboxManager } from '../inbox';
@@ -314,6 +316,7 @@ export class AssistantLoop {
       this.contextInjector = new ContextInjector(this.cwd, injectionConfig as Partial<ContextInjectionConfig>);
     }
     await this.initializeIdentitySystem();
+    await ConnectorAutoRefreshManager.getInstance().start();
 
     // Normalize connectors config to extract enabled list
     const connectorsConfig = this.config.connectors;
@@ -538,6 +541,7 @@ export class AssistantLoop {
     registerConnectorsListTool(this.toolRegistry, {
       getConnectorBridge: () => this.connectorBridge,
     });
+    registerConnectorAutoRefreshTool(this.toolRegistry);
 
     // Register config tools
     registerConfigTools(this.toolRegistry, {
@@ -2819,6 +2823,12 @@ export class AssistantLoop {
 
     if (this.identityContext) {
       parts.push(`## Your Identity\n${this.identityContext}`);
+    }
+
+    const autoRefreshContext = ConnectorAutoRefreshManager.getInstance()
+      .buildPromptSection(this.connectorBridge.getConnectors());
+    if (autoRefreshContext) {
+      parts.push(autoRefreshContext);
     }
 
     // Add context injection if available (datetime, cwd, project, etc.)

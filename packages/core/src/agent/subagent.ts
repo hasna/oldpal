@@ -1,9 +1,14 @@
 import type { HookHandler, HookInput, StreamChunk } from '@hasna/assistants-shared';
-import { generateId, sleep } from '@hasna/assistants-shared';
+import { generateId } from '@hasna/assistants-shared';
 import type { LLMClient } from '../llm/client';
 import { AssistantLoop } from './loop';
 
 const DEFAULT_HOOK_TOOLS = ['read', 'glob', 'grep'];
+const safeSetTimeout = setTimeout;
+
+function sleepSafe(ms: number): Promise<void> {
+  return new Promise((resolve) => safeSetTimeout(resolve, ms));
+}
 
 export interface HookAssistantOptions {
   hook: HookHandler;
@@ -39,7 +44,7 @@ Respond with ALLOW or DENY on the first line, followed by a short reason.`,
   const runPromise = assistant.process(JSON.stringify(input)).catch(() => {});
   const timedOut = await Promise.race([
     runPromise.then(() => false),
-    sleep(timeout).then(() => true),
+    sleepSafe(timeout).then(() => true),
   ]);
 
   if (timedOut) {
@@ -48,5 +53,13 @@ Respond with ALLOW or DENY on the first line, followed by a short reason.`,
   }
 
   await runPromise;
-  return response.trim();
+  let trimmed = response.trim();
+  if (!trimmed) {
+    const messages = assistant.getContext().getMessages();
+    const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant' && msg.content);
+    if (lastAssistant?.content) {
+      trimmed = String(lastAssistant.content).trim();
+    }
+  }
+  return trimmed;
 }
