@@ -89,7 +89,7 @@ function normalizeNewlinesOutsideQuotes(input: string): string {
 export class BashTool {
   static readonly tool: Tool = {
     name: 'bash',
-    description: 'Execute a shell command. RESTRICTED to read-only operations: ls, cat, grep, find, git status/log/diff, pwd, which, echo. Cannot modify files, install packages, or run destructive commands.',
+    description: 'Execute a shell command. RESTRICTED to read-only operations by default (ls, cat, grep, find, git status/log/diff, pwd, which, echo). Set validation.perTool.bash.allowAll=true to allow broader commands.',
     parameters: {
       type: 'object',
       properties: {
@@ -338,11 +338,15 @@ export class BashTool {
     const timeout = Number.isFinite(timeoutInput) && timeoutInput > 0 ? timeoutInput : 30000; // Reduced default timeout
 
     let allowEnv = true;
+    let allowAll = false;
     try {
       const config = await loadConfig(cwd);
-      allowEnv = config.validation?.perTool?.bash?.allowEnv ?? true;
+      const bashConfig = config.validation?.perTool?.bash;
+      allowEnv = bashConfig?.allowEnv ?? true;
+      allowAll = bashConfig?.allowAll ?? false;
     } catch {
       allowEnv = true;
+      allowAll = false;
     }
 
     const baseCommand = command.replace(/\s*2>&1\s*/g, ' ').trim();
@@ -376,30 +380,32 @@ export class BashTool {
       });
     }
 
-    // Check against blocked patterns
-    for (const pattern of this.BLOCKED_PATTERNS) {
-      if (pattern.test(commandSansQuotes)) {
-        getSecurityLogger().log({
-          eventType: 'blocked_command',
-          severity: 'high',
-          details: {
-            tool: 'bash',
-            command,
-            reason: 'Blocked command pattern detected',
-          },
-          sessionId: (input.sessionId as string) || 'unknown',
-        });
-        throw new ToolExecutionError(
-          'This command is not allowed. Only read-only commands are permitted (ls, cat, grep, find, git status/log/diff, etc.)',
-          {
-            toolName: 'bash',
-            toolInput: input,
-            code: ErrorCodes.TOOL_PERMISSION_DENIED,
-            recoverable: false,
-            retryable: false,
-            suggestion: 'Use a read-only command from the allowed list.',
-          }
-        );
+    if (!allowAll) {
+      // Check against blocked patterns
+      for (const pattern of this.BLOCKED_PATTERNS) {
+        if (pattern.test(commandSansQuotes)) {
+          getSecurityLogger().log({
+            eventType: 'blocked_command',
+            severity: 'high',
+            details: {
+              tool: 'bash',
+              command,
+              reason: 'Blocked command pattern detected',
+            },
+            sessionId: (input.sessionId as string) || 'unknown',
+          });
+          throw new ToolExecutionError(
+            'This command is not allowed. Only read-only commands are permitted (ls, cat, grep, find, git status/log/diff, etc.)',
+            {
+              toolName: 'bash',
+              toolInput: input,
+              code: ErrorCodes.TOOL_PERMISSION_DENIED,
+              recoverable: false,
+              retryable: false,
+              suggestion: 'Use a read-only command from the allowed list.',
+            }
+          );
+        }
       }
     }
 
@@ -429,60 +435,62 @@ export class BashTool {
       );
     }
 
-    // Check if command (or all parts of a chained command) are in the allowlist
-    const allowlist = allowEnv
-      ? this.ALLOWED_COMMANDS
-      : this.ALLOWED_COMMANDS.filter((allowed) => allowed !== 'env' && allowed !== 'printenv');
-    const isAllowed = this.areAllCommandPartsAllowed(commandForChecks, allowlist);
+    if (!allowAll) {
+      // Check if command (or all parts of a chained command) are in the allowlist
+      const allowlist = allowEnv
+        ? this.ALLOWED_COMMANDS
+        : this.ALLOWED_COMMANDS.filter((allowed) => allowed !== 'env' && allowed !== 'printenv');
+      const isAllowed = this.areAllCommandPartsAllowed(commandForChecks, allowlist);
 
-    if (!isAllowed) {
-      getSecurityLogger().log({
-        eventType: 'blocked_command',
-        severity: 'medium',
-        details: {
-          tool: 'bash',
-          command,
-          reason: 'Command not in allowlist',
-        },
-        sessionId: (input.sessionId as string) || 'unknown',
-      });
-      throw new ToolExecutionError(
-        'Command not in allowed list. Permitted commands: cat, head, tail, ls, find, grep, wc, file, stat, pwd, which, echo, curl, git status/log/diff/branch/show, connect-*',
-        {
-          toolName: 'bash',
-          toolInput: input,
-          code: ErrorCodes.TOOL_PERMISSION_DENIED,
-          recoverable: false,
-          retryable: false,
-          suggestion: 'Use a permitted read-only command.',
-        }
-      );
-    }
+      if (!isAllowed) {
+        getSecurityLogger().log({
+          eventType: 'blocked_command',
+          severity: 'medium',
+          details: {
+            tool: 'bash',
+            command,
+            reason: 'Command not in allowlist',
+          },
+          sessionId: (input.sessionId as string) || 'unknown',
+        });
+        throw new ToolExecutionError(
+          'Command not in allowed list. Permitted commands: cat, head, tail, ls, find, grep, wc, file, stat, pwd, which, echo, curl, git status/log/diff/branch/show, connect-*',
+          {
+            toolName: 'bash',
+            toolInput: input,
+            code: ErrorCodes.TOOL_PERMISSION_DENIED,
+            recoverable: false,
+            retryable: false,
+            suggestion: 'Use a permitted read-only command.',
+          }
+        );
+      }
 
-    // SSRF protection for curl commands
-    const ssrfCheck = await this.validateCurlSsrf(commandForChecks);
-    if (!ssrfCheck.valid) {
-      getSecurityLogger().log({
-        eventType: 'blocked_command',
-        severity: 'high',
-        details: {
-          tool: 'bash',
-          command,
-          reason: `SSRF protection: curl to private/internal network blocked (${ssrfCheck.blockedUrl})`,
-        },
-        sessionId: (input.sessionId as string) || 'unknown',
-      });
-      throw new ToolExecutionError(
-        `Cannot fetch from local/private network addresses for security reasons: ${ssrfCheck.blockedUrl}`,
-        {
-          toolName: 'bash',
-          toolInput: input,
-          code: ErrorCodes.TOOL_PERMISSION_DENIED,
-          recoverable: false,
-          retryable: false,
-          suggestion: 'Use a public URL instead of localhost or internal network addresses.',
-        }
-      );
+      // SSRF protection for curl commands
+      const ssrfCheck = await this.validateCurlSsrf(commandForChecks);
+      if (!ssrfCheck.valid) {
+        getSecurityLogger().log({
+          eventType: 'blocked_command',
+          severity: 'high',
+          details: {
+            tool: 'bash',
+            command,
+            reason: `SSRF protection: curl to private/internal network blocked (${ssrfCheck.blockedUrl})`,
+          },
+          sessionId: (input.sessionId as string) || 'unknown',
+        });
+        throw new ToolExecutionError(
+          `Cannot fetch from local/private network addresses for security reasons: ${ssrfCheck.blockedUrl}`,
+          {
+            toolName: 'bash',
+            toolInput: input,
+            code: ErrorCodes.TOOL_PERMISSION_DENIED,
+            recoverable: false,
+            retryable: false,
+            suggestion: 'Use a public URL instead of localhost or internal network addresses.',
+          }
+        );
+      }
     }
 
     try {
