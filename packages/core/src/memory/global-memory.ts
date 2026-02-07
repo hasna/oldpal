@@ -159,6 +159,16 @@ export class GlobalMemoryManager {
       CREATE INDEX IF NOT EXISTS idx_memory_access_log_timestamp ON memory_access_log(timestamp)
     `);
 
+    // Migrate: add assistant_id column if missing (older databases lack it)
+    try {
+      const cols = this.db.prepare(`PRAGMA table_info(memory_access_log)`).all() as Array<{ name: string }>;
+      if (!cols.some(c => c.name === 'assistant_id')) {
+        this.db.exec(`ALTER TABLE memory_access_log ADD COLUMN assistant_id TEXT`);
+      }
+    } catch {
+      // Ignore migration errors — column may already exist
+    }
+
     // Run cleanup on startup to enforce retention policies
     this.cleanupAccessLog();
   }
