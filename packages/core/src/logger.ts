@@ -82,6 +82,81 @@ export class Logger {
   error(message: string, data?: unknown) {
     this.write('error', message, data);
   }
+
+  /**
+   * Read log entries from daily JSONL log files.
+   */
+  static readEntries(options?: {
+    basePath?: string;
+    sessionId?: string;
+    level?: LogLevel;
+    since?: string;
+    limit?: number;
+    offset?: number;
+  }): (LogEntry & { sessionId?: string })[] {
+    const logDir = join(options?.basePath || getConfigDir(), 'logs');
+    if (!existsSync(logDir)) return [];
+
+    const levelOrder: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+    const minLevel = options?.level ? levelOrder[options.level] : 0;
+
+    // Get all log files sorted by date descending
+    const files = readdirSync(logDir)
+      .filter(f => /^\d{4}-\d{2}-\d{2}\.log$/.test(f))
+      .sort((a, b) => b.localeCompare(a));
+
+    const entries: (LogEntry & { sessionId?: string })[] = [];
+
+    for (const file of files) {
+      // Skip files older than since date (optimization)
+      if (options?.since) {
+        const fileDate = file.replace('.log', '');
+        const sinceDate = options.since.split('T')[0];
+        if (fileDate < sinceDate) break;
+      }
+
+      try {
+        const content = readFileSync(join(logDir, file), 'utf-8');
+        const lines = content.trim().split('\n').filter(Boolean);
+
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as LogEntry & { sessionId?: string };
+
+            if (options?.level && levelOrder[entry.level] < minLevel) continue;
+            if (options?.sessionId && entry.sessionId !== options.sessionId) continue;
+            if (options?.since && entry.timestamp < options.since) continue;
+
+            entries.push(entry);
+          } catch {
+            // Skip malformed entries
+          }
+        }
+      } catch {
+        // Skip unreadable files
+      }
+    }
+
+    // Sort by timestamp descending
+    entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+    const offset = options?.offset ?? 0;
+    const limit = options?.limit ?? entries.length;
+    return entries.slice(offset, offset + limit);
+  }
+
+  /**
+   * List available log file dates.
+   */
+  static listLogDates(basePath?: string): string[] {
+    const logDir = join(basePath || getConfigDir(), 'logs');
+    if (!existsSync(logDir)) return [];
+
+    return readdirSync(logDir)
+      .filter(f => /^\d{4}-\d{2}-\d{2}\.log$/.test(f))
+      .map(f => f.replace('.log', ''))
+      .sort((a, b) => b.localeCompare(a));
+  }
 }
 
 /**

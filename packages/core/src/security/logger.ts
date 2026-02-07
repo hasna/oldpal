@@ -1,4 +1,5 @@
 import { appendFile, mkdir } from 'fs/promises';
+import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { getConfigDir } from '../config';
 import type { SecurityEvent, Severity } from './types';
@@ -49,6 +50,53 @@ export class SecurityLogger {
       await appendFile(this.logFile, `${JSON.stringify(event)}\n`);
     } catch {
       // Ignore persistence errors.
+    }
+  }
+
+  /**
+   * Read persisted security events from the JSONL log file.
+   * Provides cross-session access beyond the in-memory buffer.
+   */
+  static readPersistedEvents(options?: {
+    logFile?: string;
+    severity?: Severity;
+    eventType?: string;
+    sessionId?: string;
+    since?: string;
+    limit?: number;
+    offset?: number;
+  }): SecurityEvent[] {
+    const logFile = options?.logFile ?? join(getConfigDir(), 'security.log');
+    if (!existsSync(logFile)) return [];
+
+    try {
+      const content = readFileSync(logFile, 'utf-8');
+      const lines = content.trim().split('\n').filter(Boolean);
+      const entries: SecurityEvent[] = [];
+
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line) as SecurityEvent;
+
+          if (options?.severity && event.severity !== options.severity) continue;
+          if (options?.eventType && event.eventType !== options.eventType) continue;
+          if (options?.sessionId && event.sessionId !== options.sessionId) continue;
+          if (options?.since && event.timestamp < options.since) continue;
+
+          entries.push(event);
+        } catch {
+          // Skip malformed entries
+        }
+      }
+
+      // Sort by timestamp descending (most recent first)
+      entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+      const offset = options?.offset ?? 0;
+      const limit = options?.limit ?? entries.length;
+      return entries.slice(offset, offset + limit);
+    } catch {
+      return [];
     }
   }
 }
