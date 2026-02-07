@@ -12,3 +12,11 @@ export {
 } from './defaults';
 export { PolicyEvaluator, type EvaluationContext } from './evaluator';
 export { GuardrailsStore, type GuardrailsLocation, type PolicyInfo } from './store';
+export {
+  guardrailsTools,
+  guardrailsListTool,
+  guardrailsGetTool,
+  guardrailsStatusTool,
+  createGuardrailsToolExecutors,
+  registerGuardrailsTools,
+} from './tools';

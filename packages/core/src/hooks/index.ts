@@ -7,3 +7,12 @@ export { HookStore, type HookLocation, type HookInfo } from './store';
 export { HookLogger, type HookLogEntry } from './logger';
 export { BackgroundProcessManager, backgroundProcessManager } from './background';
 export { HookTester, type HookTestResult } from './tester';
+export {
+  hooksTools,
+  hooksListTool,
+  hooksGetTool,
+  hooksEnableTool,
+  hooksDisableTool,
+  createHooksToolExecutors,
+  registerHooksTools,
+} from './tools';
