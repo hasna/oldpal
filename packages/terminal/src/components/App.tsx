@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { spawn } from 'child_process';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
-import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, type SessionInfo, type RecoverableSession, type CreateIdentityOptions } from '@hasna/assistants-core';
+import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, type SessionInfo, type RecoverableSession, type CreateIdentityOptions } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
-import { Input } from './Input';
+import { Input, type InputHandle } from './Input';
 import { Messages } from './Messages';
 import { buildDisplayMessages } from './messageRender';
 import { estimateDisplayMessagesLines, trimActivityLogByLines, trimDisplayMessagesByLines } from './messageLines';
@@ -32,7 +33,7 @@ import { PlansPanel } from './PlansPanel';
 import { WalletPanel } from './WalletPanel';
 import { SecretsPanel } from './SecretsPanel';
 import { InboxPanel } from './InboxPanel';
-import { AgentDashboard } from './AgentDashboard';
+import { AssistantsDashboard } from './AssistantsDashboard';
 import { SwarmPanel } from './SwarmPanel';
 import type { QueuedMessage } from './appTypes';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
@@ -66,6 +67,7 @@ import {
   type RegisteredAssistant,
   type RegistryStats,
   listSchedules,
+  saveSchedule,
   deleteSchedule,
   updateSchedule,
   computeNextRun,
@@ -84,6 +86,81 @@ import type { BudgetConfig, BudgetLimits } from '@hasna/assistants-shared';
 import type { AssistantsConfig } from '@hasna/assistants-shared';
 
 const SHOW_ERROR_CODES = process.env.ASSISTANTS_DEBUG === '1';
+const MAX_SHELL_OUTPUT_BYTES = 64 * 1024;
+
+type ShellResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  truncated: boolean;
+};
+
+async function runShellCommand(command: string, cwd: string): Promise<ShellResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, { cwd, shell: true, env: process.env });
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let totalBytes = 0;
+    let truncated = false;
+
+    const collect = (chunk: Buffer, target: Buffer[]) => {
+      if (totalBytes >= MAX_SHELL_OUTPUT_BYTES) {
+        truncated = true;
+        return;
+      }
+      const remaining = MAX_SHELL_OUTPUT_BYTES - totalBytes;
+      if (chunk.length > remaining) {
+        target.push(chunk.slice(0, remaining));
+        totalBytes = MAX_SHELL_OUTPUT_BYTES;
+        truncated = true;
+        return;
+      }
+      target.push(chunk);
+      totalBytes += chunk.length;
+    };
+
+    if (child.stdout) {
+      child.stdout.on('data', (chunk: Buffer) => collect(chunk, stdoutChunks));
+    }
+    if (child.stderr) {
+      child.stderr.on('data', (chunk: Buffer) => collect(chunk, stderrChunks));
+    }
+
+    child.on('error', (error) => reject(error));
+    child.on('close', (code) => {
+      resolve({
+        stdout: Buffer.concat(stdoutChunks).toString('utf8').trimEnd(),
+        stderr: Buffer.concat(stderrChunks).toString('utf8').trimEnd(),
+        exitCode: code,
+        truncated,
+      });
+    });
+  });
+}
+
+function formatShellResult(command: string, result: ShellResult): string {
+  const sections: string[] = [
+    'Local shell command executed:',
+    '```bash\n$ ' + command + '\n```',
+    `Exit code: ${result.exitCode ?? 'unknown'}`,
+  ];
+
+  if (result.stdout) {
+    sections.push('STDOUT:\n```\n' + result.stdout + '\n```');
+  } else {
+    sections.push('STDOUT: (empty)');
+  }
+
+  if (result.stderr) {
+    sections.push('STDERR:\n```\n' + result.stderr + '\n```');
+  }
+
+  if (result.truncated) {
+    sections.push('_Output truncated after 64KB._');
+  }
+
+  return sections.join('\n\n');
+}
 
 function formatElapsedDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -284,8 +361,8 @@ export function App({ cwd, version }: AppProps) {
   const [inboxEmails, setInboxEmails] = useState<EmailListItem[]>([]);
   const [inboxError, setInboxError] = useState<string | null>(null);
 
-  // Agent dashboard panel state
-  const [showAgentDashboard, setShowAgentDashboard] = useState(false);
+  // Assistants dashboard panel state
+  const [showAssistantsDashboard, setShowAssistantsDashboard] = useState(false);
 
   // Swarm panel state
   const [showSwarmPanel, setShowSwarmPanel] = useState(false);
@@ -312,6 +389,7 @@ export function App({ cwd, version }: AppProps) {
   const [processingStartTime, setProcessingStartTime] = useState<number | undefined>();
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
   const [lastWorkedFor, setLastWorkedFor] = useState<string | undefined>();
+  const [isListening, setIsListening] = useState(false);
 
   // Available skills for autocomplete
   const [skills, setSkills] = useState<{ name: string; description: string; argumentHint?: string }[]>([]);
@@ -328,6 +406,20 @@ export function App({ cwd, version }: AppProps) {
   const activityLogRef = useRef<ActivityEntry[]>([]);
   const skipNextDoneRef = useRef(false);
   const isProcessingRef = useRef(isProcessing);
+  const inputRef = useRef<InputHandle>(null);
+  const isListeningRef = useRef(isListening);
+  const listenLoopRef = useRef<{
+    active: boolean;
+    buffer: string;
+    silenceMs: number;
+    manager: VoiceManager | null;
+  }>({
+    active: false,
+    buffer: '',
+    silenceMs: 0,
+    manager: null,
+  });
+  const sendListenMessageRef = useRef<(text: string) => void>(() => {});
   const processingStartTimeRef = useRef<number | undefined>(processingStartTime);
   const pendingSendsRef = useRef<Array<{ id: string; sessionId: string; mode: 'inline' | 'queued' }>>([]);
   const askUserStateRef = useRef<Map<string, AskUserState>>(new Map());
@@ -405,6 +497,10 @@ export function App({ cwd, version }: AppProps) {
   useEffect(() => {
     isProcessingRef.current = isProcessing;
   }, [isProcessing]);
+
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
 
   useEffect(() => {
     processingStartTimeRef.current = processingStartTime;
@@ -526,6 +622,113 @@ export function App({ cwd, version }: AppProps) {
     processingStartTimeRef.current = undefined; // Sync ref immediately to avoid stale values
     setCurrentTurnTokens(0);
   }, []);
+
+  const appendTranscript = useCallback((base: string, chunk: string) => {
+    const trimmed = chunk.trim();
+    if (!trimmed) return base;
+    if (!base) return trimmed;
+    const lastChar = base[base.length - 1] || '';
+    const needsSpace = lastChar !== ' ' && !/[.,!?;:]/.test(trimmed[0] || '');
+    return `${base}${needsSpace ? ' ' : ''}${trimmed}`;
+  }, []);
+
+  const updateListenDraft = useCallback((next: string) => {
+    inputRef.current?.setValue(next);
+  }, []);
+
+  const stopListening = useCallback(() => {
+    if (!listenLoopRef.current.active) return;
+    listenLoopRef.current.active = false;
+    listenLoopRef.current.silenceMs = 0;
+    listenLoopRef.current.buffer = '';
+    listenLoopRef.current.manager?.stopListening();
+    listenLoopRef.current.manager = null;
+    setIsListening(false);
+    isListeningRef.current = false;
+  }, []);
+
+  const startListening = useCallback(async () => {
+    if (listenLoopRef.current.active) return;
+    listenLoopRef.current.active = true;
+    setIsListening(true);
+    isListeningRef.current = true;
+
+    let config: AssistantsConfig;
+    try {
+      config = currentConfig ?? await loadConfig(cwd);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load config for voice');
+      stopListening();
+      return;
+    }
+
+    if (!listenLoopRef.current.active) return;
+
+    const voiceConfig = config.voice;
+    if (!voiceConfig) {
+      setError('Voice configuration is missing. Add voice settings to config.json.');
+      stopListening();
+      return;
+    }
+
+    if (voiceConfig.stt.provider === 'system') {
+      setError('System speech-to-text is not available yet. Set voice.stt.provider to "whisper".');
+      stopListening();
+      return;
+    }
+
+    const manager = new VoiceManager({
+      ...voiceConfig,
+      enabled: true,
+      stt: { ...voiceConfig.stt },
+      tts: { ...voiceConfig.tts },
+    });
+    manager.enable();
+    listenLoopRef.current.manager = manager;
+    listenLoopRef.current.buffer = inputRef.current?.getValue() ?? '';
+    listenLoopRef.current.silenceMs = 0;
+
+    const chunkSeconds = 1;
+    const silenceThresholdMs = 3500;
+
+    while (listenLoopRef.current.active) {
+      let transcript = '';
+      try {
+        transcript = await manager.listen({ durationSeconds: chunkSeconds });
+      } catch (err) {
+        if (!listenLoopRef.current.active) break;
+        setError(err instanceof Error ? err.message : String(err));
+        stopListening();
+        break;
+      }
+
+      if (!listenLoopRef.current.active) break;
+
+      const trimmed = transcript.trim();
+      if (trimmed) {
+        listenLoopRef.current.silenceMs = 0;
+        const next = appendTranscript(listenLoopRef.current.buffer, trimmed);
+        listenLoopRef.current.buffer = next;
+        updateListenDraft(next);
+        continue;
+      }
+
+      listenLoopRef.current.silenceMs += chunkSeconds * 1000;
+      if (listenLoopRef.current.silenceMs >= silenceThresholdMs) {
+        const payload = listenLoopRef.current.buffer.trim();
+        listenLoopRef.current.buffer = '';
+        listenLoopRef.current.silenceMs = 0;
+        updateListenDraft('');
+        if (payload) {
+          sendListenMessageRef.current(payload);
+        }
+      }
+    }
+  }, [appendTranscript, cwd, currentConfig, stopListening, updateListenDraft]);
+
+  useEffect(() => () => {
+    stopListening();
+  }, [stopListening]);
 
   // Save current session UI state
   const saveCurrentSessionState = useCallback(() => {
@@ -786,8 +989,46 @@ export function App({ cwd, version }: AppProps) {
           setShowSchedulesPanel(true);
         });
       } else if (chunk.panel === 'assistants') {
-        // Show personal assistants panel (it loads its own data from AssistantManager)
-        setShowAssistantsPanel(true);
+        // Handle session actions or show assistants panel/dashboard
+        if (chunk.panelValue?.startsWith('session:')) {
+          try {
+            const payload = JSON.parse(chunk.panelValue.slice('session:'.length));
+            if (payload.action === 'list') {
+              setShowSessionSelector(true);
+            } else if (payload.action === 'new') {
+              registry.createSession({
+                cwd,
+                label: payload.label,
+                assistantId: payload.agent,
+              }).then((newSession) => {
+                registry.switchSession(newSession.id).then(() => {
+                  setActiveSessionId(newSession.id);
+                });
+              });
+            } else if (payload.action === 'assign' && payload.agent) {
+              const active = registry.getActiveSession();
+              if (active) {
+                registry.assignAssistant(active.id, payload.agent);
+              }
+            } else if (payload.action === 'switch' && payload.number) {
+              const allSessions = registry.listSessions();
+              const target = allSessions[payload.number - 1];
+              if (target) {
+                registry.switchSession(target.id).then(() => {
+                  setActiveSessionId(target.id);
+                });
+              }
+            }
+          } catch {
+            // Invalid payload, show dashboard instead
+            setShowAssistantsDashboard(true);
+          }
+        } else if (chunk.panelValue === 'dashboard') {
+          setShowAssistantsDashboard(true);
+        } else {
+          // Default: show personal assistants panel
+          setShowAssistantsPanel(true);
+        }
       } else if (chunk.panel === 'identity') {
         // Show identity management panel
         setShowIdentityPanel(true);
@@ -938,44 +1179,6 @@ export function App({ cwd, version }: AppProps) {
         } else {
           setInboxError('Inbox not enabled. Configure inbox in config.json.');
           setShowInboxPanel(true);
-        }
-      } else if (chunk.panel === 'agents') {
-        // Handle session actions or show agent dashboard
-        if (chunk.panelValue?.startsWith('session:')) {
-          try {
-            const payload = JSON.parse(chunk.panelValue.slice('session:'.length));
-            if (payload.action === 'list') {
-              setShowSessionSelector(true);
-            } else if (payload.action === 'new') {
-              registry.createSession({
-                cwd,
-                label: payload.label,
-                assistantId: payload.agent,
-              }).then((newSession) => {
-                registry.switchSession(newSession.id).then(() => {
-                  setActiveSessionId(newSession.id);
-                });
-              });
-            } else if (payload.action === 'assign' && payload.agent) {
-              const active = registry.getActiveSession();
-              if (active) {
-                registry.assignAssistant(active.id, payload.agent);
-              }
-            } else if (payload.action === 'switch' && payload.number) {
-              const allSessions = registry.listSessions();
-              const target = allSessions[payload.number - 1];
-              if (target) {
-                registry.switchSession(target.id).then(() => {
-                  setActiveSessionId(target.id);
-                });
-              }
-            }
-          } catch {
-            // Invalid payload, show dashboard instead
-            setShowAgentDashboard(true);
-          }
-        } else {
-          setShowAgentDashboard(true);
         }
       } else if (chunk.panel === 'swarm') {
         setShowSwarmPanel(true);
@@ -1295,6 +1498,10 @@ export function App({ cwd, version }: AppProps) {
     return false;
   }, [activityLog]);
   const isBusy = isProcessing || hasPendingTools;
+  const listenHints = useMemo(() => {
+    if (!isListening) return [];
+    return ['listening...', 'pause 3s to send', '[ctrl+l] stop'];
+  }, [isListening]);
 
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
@@ -1434,6 +1641,10 @@ export function App({ cwd, version }: AppProps) {
 
   // Handle keyboard shortcuts (inactive when session selector is shown)
   useInput((input, key) => {
+    if (isListeningRef.current && key.ctrl && input === 'l') {
+      stopListening();
+      return;
+    }
     // Ctrl+]: show session selector (avoiding Ctrl+S which conflicts with terminal XOFF)
     if (key.ctrl && input === ']') {
       if (sessions.length > 0) {
@@ -1511,9 +1722,9 @@ export function App({ cwd, version }: AppProps) {
       }
     }
 
-    // Ctrl+A: show agent dashboard
+    // Ctrl+A: show assistants dashboard
     if (key.ctrl && input === 'a') {
-      setShowAgentDashboard(true);
+      setShowAssistantsDashboard(true);
       return;
     }
     // Ctrl+B: show budget panel
@@ -1581,15 +1792,40 @@ export function App({ cwd, version }: AppProps) {
         return handleSubmit(skillInput, mode);
       }
 
-      // Check for ![command] bash execution syntax
-      // Converts to an instruction for the assistant to run the bash command
-      if (trimmedInput.startsWith('![') && trimmedInput.endsWith(']')) {
-        const bashCommand = trimmedInput.slice(2, -1).trim();
-        if (bashCommand) {
-          // Convert to an explicit bash execution instruction
-          const bashInstruction = `Run this bash command: \`${bashCommand}\``;
-          return handleSubmit(bashInstruction, mode);
+      // Shell passthrough: !<command> runs locally and reports output to the assistant
+      if (trimmedInput.startsWith('!')) {
+        const raw = trimmedInput.slice(1).trim();
+        const shellCommand = raw.startsWith('[') && raw.endsWith(']')
+          ? raw.slice(1, -1).trim()
+          : raw;
+        if (!shellCommand) {
+          setError('Usage: !<command>');
+          return;
         }
+        try {
+          const shellCwd = activeSession?.cwd || cwd;
+          const result = await runShellCommand(shellCommand, shellCwd);
+          const payload = formatShellResult(shellCommand, result);
+          return handleSubmit(payload, mode);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err));
+          return;
+        }
+      }
+
+      // Check for /listen command (persistent dictation mode)
+      if (trimmedInput.startsWith('/listen')) {
+        const arg = trimmedInput.slice(7).trim().toLowerCase();
+        if (arg === 'stop' || arg === 'off') {
+          stopListening();
+          return;
+        }
+        if (listenLoopRef.current.active) {
+          stopListening();
+          return;
+        }
+        startListening();
+        return;
       }
 
       // Check for /session command
@@ -1825,8 +2061,17 @@ export function App({ cwd, version }: AppProps) {
       activeSessionId,
       submitAskAnswer,
       clearPendingSend,
+      startListening,
+      stopListening,
     ]
   );
+
+  useEffect(() => {
+    sendListenMessageRef.current = (text: string) => {
+      const mode = isProcessingRef.current ? 'inline' : 'normal';
+      void handleSubmit(text, mode);
+    };
+  }, [handleSubmit]);
 
   if (isInitializing && !showRecoveryPanel) {
     return (
@@ -2029,14 +2274,35 @@ export function App({ cwd, version }: AppProps) {
       setSchedulesList(await listSchedules(cwd, scheduleListOpts));
     };
 
+    const handleScheduleCreate = async (schedule: Omit<ScheduledCommand, 'id' | 'createdAt' | 'updatedAt' | 'nextRunAt'>) => {
+      const now = Date.now();
+      const fullSchedule: ScheduledCommand = {
+        ...schedule,
+        id: generateId(),
+        createdAt: now,
+        updatedAt: now,
+      };
+      fullSchedule.nextRunAt = computeNextRun(fullSchedule, now);
+      if (!fullSchedule.nextRunAt) {
+        throw new Error('Unable to compute next run time. Check your schedule configuration.');
+      }
+      if (fullSchedule.schedule.kind === 'once' && fullSchedule.nextRunAt <= now) {
+        throw new Error('Scheduled time must be in the future.');
+      }
+      await saveSchedule(cwd, fullSchedule);
+      setSchedulesList(await listSchedules(cwd, scheduleListOpts));
+    };
+
     return (
       <Box flexDirection="column" padding={1}>
         <SchedulesPanel
           schedules={schedulesList}
+          sessionId={activeSessionId || 'default'}
           onPause={handleSchedulePause}
           onResume={handleScheduleResume}
           onDelete={handleScheduleDelete}
           onRun={handleScheduleRun}
+          onCreate={handleScheduleCreate}
           onRefresh={handleScheduleRefresh}
           onClose={() => setShowSchedulesPanel(false)}
         />
@@ -2417,6 +2683,12 @@ export function App({ cwd, version }: AppProps) {
           onToggleEnabled={handleBudgetToggleEnabled}
           onReset={handleBudgetReset}
           onSetLimits={handleBudgetSetLimits}
+          onSetOnExceeded={(action) => {
+            if (budgetTrackerRef.current) {
+              budgetTrackerRef.current.updateConfig({ onExceeded: action });
+              setBudgetConfig(budgetTrackerRef.current.getConfig());
+            }
+          }}
           onCancel={() => setShowBudgetPanel(false)}
         />
       </Box>
@@ -2574,10 +2846,6 @@ export function App({ cwd, version }: AppProps) {
 
     const handleBack = () => {
       setShowPlansPanel(false);
-      listProjects(cwd).then((projects) => {
-        setProjectsList(projects);
-        setShowProjectsPanel(true);
-      });
     };
 
     return (
@@ -2725,14 +2993,14 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
-  // Show agent dashboard panel
-  if (showAgentDashboard) {
+  // Show assistants dashboard panel
+  if (showAssistantsDashboard) {
     const sessions = registry.listSessions();
     const sessionEntries = sessions.map((s, i) => ({
       id: s.id,
       label: s.label,
       assistantId: s.assistantId,
-      assistantName: s.assistantId ? (s.label || `Agent ${i + 1}`) : null,
+      assistantName: s.assistantId ? (s.label || `Assistant ${i + 1}`) : null,
       isActive: s.id === activeSessionId,
       isProcessing: s.isProcessing,
       isPaused: false, // Would need to check from loop
@@ -2750,7 +3018,7 @@ export function App({ cwd, version }: AppProps) {
 
     return (
       <Box flexDirection="column" padding={1}>
-        <AgentDashboard
+        <AssistantsDashboard
           sessions={sessionEntries}
           projectBudget={projectBudgetStatus || undefined}
           projectName={budgetTrackerRef.current?.getActiveProject() || undefined}
@@ -2759,10 +3027,10 @@ export function App({ cwd, version }: AppProps) {
           onSwitchSession={async (sessionId) => {
             await registry.switchSession(sessionId);
             setActiveSessionId(sessionId);
-            setShowAgentDashboard(false);
+            setShowAssistantsDashboard(false);
           }}
           onMessageAgent={(assistantId) => {
-            setShowAgentDashboard(false);
+            setShowAssistantsDashboard(false);
             activeSession?.client.send(`/messages send ${assistantId}`);
           }}
           onPauseResume={(sessionId) => {
@@ -2774,7 +3042,7 @@ export function App({ cwd, version }: AppProps) {
               }
             }
           }}
-          onCancel={() => setShowAgentDashboard(false)}
+          onCancel={() => setShowAssistantsDashboard(false)}
         />
       </Box>
     );
@@ -3095,6 +3363,7 @@ export function App({ cwd, version }: AppProps) {
 
       {/* Input - always enabled, supports queue/interrupt */}
       <Input
+        ref={inputRef}
         onSubmit={handleSubmit}
         isProcessing={isBusy}
         queueLength={activeQueue.length + inlineCount}
@@ -3103,6 +3372,8 @@ export function App({ cwd, version }: AppProps) {
         isAskingUser={Boolean(activeAskQuestion)}
         askPlaceholder={askPlaceholder}
         allowBlankAnswer={activeAskQuestion?.required === false}
+        footerHints={listenHints}
+        assistantName={identityInfo?.assistant?.name || undefined}
       />
 
       {/* Status bar */}

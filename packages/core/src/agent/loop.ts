@@ -819,7 +819,7 @@ export class AssistantLoop {
               });
               this.emit({
                 type: 'show_panel',
-                panel: 'agents',
+                panel: 'assistants',
                 panelValue: `session:${payload}`,
               });
             }

@@ -298,8 +298,8 @@ export function TasksPanel({
       return;
     }
 
-    // Escape: close panel
-    if (key.escape) {
+    // Escape or q: close panel
+    if (key.escape || input === 'q' || input === 'Q') {
       onClose();
       return;
     }
@@ -391,7 +391,7 @@ export function TasksPanel({
               <TextInput
                 value={newDescription}
                 onChange={setNewDescription}
-                onSubmit={handleCreateSubmit}
+                onSubmit={() => setCreateField('priority')}
                 placeholder="What needs to be done..."
               />
             ) : (
@@ -490,10 +490,15 @@ export function TasksPanel({
               <Text dimColor={!newAssignee}>{newAssignee || '(unassigned)'}</Text>
             )}
           </Box>
-        </Box>
 
-        <Box marginTop={1}>
-          <Text dimColor>Tab/Shift+Tab: switch field | Enter: add task | Esc: cancel</Text>
+          {/* Submit button hint */}
+          <Box marginTop={1}>
+            <Text dimColor>
+              {createField === 'assignee'
+                ? 'Enter: save task | Tab: cycle fields | Esc: cancel'
+                : 'Enter: next field | Tab: cycle fields | Esc: cancel'}
+            </Text>
+          </Box>
         </Box>
 
         {isSubmitting && (

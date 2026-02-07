@@ -42,7 +42,8 @@ function truncatePath(path: string, maxLen: number): string {
 
 export function RecoveryPanel({ sessions, onRecover, onStartFresh }: RecoveryPanelProps) {
   // Selected index: 0 to sessions.length-1 are sessions, sessions.length is "Start fresh"
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  // Default to "Start fresh" option
+  const [selectedIndex, setSelectedIndex] = useState(sessions.length);
   const totalItems = sessions.length + 1; // sessions + "Start fresh" option
 
   useInput((input, key) => {

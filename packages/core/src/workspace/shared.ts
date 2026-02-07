@@ -4,9 +4,9 @@
  * Each workspace is a directory that multiple agents can read/write to.
  * Structure:
  *   ~/.assistants/workspaces/{id}/
- *     workspace.json   - Workspace metadata
- *     shared/           - Files shared between all participants
- *     agents/{agentId}/ - Per-agent output directories
+ *     workspace.json           - Workspace metadata
+ *     shared/                  - Files shared between all participants
+ *     assistants/{assistantId}/ - Per-assistant output directories
  */
 
 import { join } from 'path';
@@ -19,6 +19,7 @@ import {
   readdirSync,
   unlinkSync,
   rmSync,
+  renameSync,
 } from 'fs';
 import { generateId } from '@hasna/assistants-shared';
 
@@ -46,11 +47,35 @@ export class SharedWorkspaceManager {
     const envHome = process.env.HOME || process.env.USERPROFILE || homedir();
     this.basePath = basePath || join(envHome, '.assistants', 'workspaces');
     this.ensureDir();
+    this.migrateAgentsToAssistants();
   }
 
   private ensureDir(): void {
     if (!existsSync(this.basePath)) {
       mkdirSync(this.basePath, { recursive: true });
+    }
+  }
+
+  /**
+   * Migrate existing workspaces from agents/ to assistants/ directory structure
+   */
+  private migrateAgentsToAssistants(): void {
+    try {
+      const dirs = readdirSync(this.basePath, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
+
+      for (const dir of dirs) {
+        const wsPath = join(this.basePath, dir);
+        const oldAgentsDir = join(wsPath, 'agents');
+        const newAssistantsDir = join(wsPath, 'assistants');
+
+        if (existsSync(oldAgentsDir) && !existsSync(newAssistantsDir)) {
+          renameSync(oldAgentsDir, newAssistantsDir);
+        }
+      }
+    } catch {
+      // Migration is best-effort; don't fail startup
     }
   }
 
@@ -87,9 +112,9 @@ export class SharedWorkspaceManager {
     const wsPath = this.getWorkspacePath(id);
     mkdirSync(join(wsPath, 'shared'), { recursive: true });
 
-    // Create per-agent directories
-    for (const agentId of workspace.participants) {
-      mkdirSync(join(wsPath, 'agents', agentId), { recursive: true });
+    // Create per-assistant directories
+    for (const assistantId of workspace.participants) {
+      mkdirSync(join(wsPath, 'assistants', assistantId), { recursive: true });
     }
 
     // Save metadata
@@ -113,10 +138,10 @@ export class SharedWorkspaceManager {
       writeFileSync(this.getMetadataPath(workspaceId), JSON.stringify(workspace, null, 2));
     }
 
-    // Ensure agent directory exists
-    const agentDir = join(this.getWorkspacePath(workspaceId), 'agents', assistantId);
-    if (!existsSync(agentDir)) {
-      mkdirSync(agentDir, { recursive: true });
+    // Ensure assistant directory exists
+    const assistantDir = join(this.getWorkspacePath(workspaceId), 'assistants', assistantId);
+    if (!existsSync(assistantDir)) {
+      mkdirSync(assistantDir, { recursive: true });
     }
   }
 
@@ -148,10 +173,10 @@ export class SharedWorkspaceManager {
   }
 
   /**
-   * Get an agent's directory in a workspace
+   * Get an assistant's directory in a workspace
    */
-  getAgentPath(workspaceId: string, agentId: string): string {
-    return join(this.getWorkspacePath(workspaceId), 'agents', agentId);
+  getAssistantPath(workspaceId: string, assistantId: string): string {
+    return join(this.getWorkspacePath(workspaceId), 'assistants', assistantId);
   }
 
   /**

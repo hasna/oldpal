@@ -4,8 +4,7 @@
   "description": "Multi-assistant orchestration platform - terminal first, voice enabled, connector powered",
   "type": "module",
   "bin": {
-    "assistants": "dist/index.js",
-    "ast": "dist/index.js"
+    "assistants": "dist/index.js"
   },
   "files": [
     "dist",

@@ -151,7 +151,7 @@ export function PlansPanel({
         return;
       }
 
-      if (key.escape) {
+      if (key.escape || input === 'q' || input === 'Q') {
         onBack();
         return;
       }

@@ -16,7 +16,7 @@ interface SessionEntry {
   unreadMessages: number;
 }
 
-interface AgentDashboardProps {
+interface AssistantsDashboardProps {
   sessions: SessionEntry[];
   projectBudget?: BudgetStatus | null;
   projectName?: string | null;
@@ -41,7 +41,7 @@ function StateIndicator({ isProcessing, isPaused }: { isProcessing: boolean; isP
   return <Text dimColor>idle</Text>;
 }
 
-export function AgentDashboard({
+export function AssistantsDashboard({
   sessions,
   projectBudget,
   projectName,
@@ -51,10 +51,16 @@ export function AgentDashboard({
   onMessageAgent,
   onPauseResume,
   onCancel,
-}: AgentDashboardProps) {
+}: AssistantsDashboardProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useInput((input, key) => {
+    if (sessions.length === 0) {
+      if (key.escape || input === 'q' || input === 'Q') {
+        onCancel();
+      }
+      return;
+    }
     if (key.upArrow) {
       setSelectedIndex((prev) => Math.max(0, prev - 1));
       return;
@@ -102,12 +108,15 @@ export function AgentDashboard({
   return (
     <Box flexDirection="column" paddingY={1}>
       <Box marginBottom={1}>
-        <Text bold>Agent Dashboard</Text>
+        <Text bold>Assistants Dashboard</Text>
       </Box>
 
       <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} paddingY={1}>
         {/* Sessions */}
         <Text bold dimColor>Sessions ({sessions.length}):</Text>
+        {sessions.length === 0 ? (
+          <Box marginTop={1}><Text dimColor>No active sessions.</Text></Box>
+        ) : (
         <Box flexDirection="column" marginTop={1}>
           {sessions.map((session, i) => {
             const isSelected = i === selectedIndex;
@@ -133,6 +142,7 @@ export function AgentDashboard({
             );
           })}
         </Box>
+        )}
 
         {/* Project Budget */}
         {projectBudget && (

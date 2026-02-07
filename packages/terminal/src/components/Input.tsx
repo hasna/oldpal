@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback, useImperativeHandle } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { buildLayout, moveCursorVertical, type InputLayout } from './inputLayout';
 import { CommandHistory, getCommandHistory } from '@hasna/assistants-core';
@@ -11,7 +11,7 @@ const COMMANDS = [
   { name: '/new', description: 'start a new conversation' },
   { name: '/exit', description: 'exit assistants' },
   // Session management
-  { name: '/session', description: 'list/switch sessions (Ctrl+])' },
+  { name: '/sessions', description: 'list/switch sessions (Ctrl+])' },
   { name: '/status', description: 'show session status' },
   { name: '/tokens', description: 'show token usage' },
   { name: '/cost', description: 'show estimated API cost' },
@@ -31,11 +31,7 @@ const COMMANDS = [
   { name: '/projects', description: 'manage projects in this folder' },
   { name: '/plans', description: 'manage project plans' },
   // Scheduling
-  { name: '/schedule', description: 'schedule a command' },
-  { name: '/schedules', description: 'list scheduled commands' },
-  { name: '/unschedule', description: 'delete a scheduled command' },
-  { name: '/pause', description: 'pause a scheduled command' },
-  { name: '/resume', description: 'resume a scheduled command' },
+  { name: '/schedules', description: 'manage scheduled commands' },
   // Identity and assistant
   { name: '/assistants', description: 'switch or list assistants' },
   { name: '/identity', description: 'manage assistant identity' },
@@ -43,7 +39,7 @@ const COMMANDS = [
   // Voice features
   { name: '/voice', description: 'toggle voice mode' },
   { name: '/say', description: 'speak text aloud' },
-  { name: '/listen', description: 'transcribe voice input' },
+  { name: '/listen', description: 'start dictation (pause 3s to send)' },
   // Assistant communication
   { name: '/inbox', description: 'view assistant messages' },
   { name: '/messages', description: 'manage assistant-to-assistant messages' },
@@ -121,13 +117,23 @@ interface InputProps {
   isAskingUser?: boolean;
   askPlaceholder?: string;
   allowBlankAnswer?: boolean;
+  footerHints?: string[];
+  /** Active assistant name shown on the top-right of the input border */
+  assistantName?: string;
   /** Optional command history instance (uses global singleton if not provided) */
   history?: CommandHistory;
   /** Optional paste handling configuration */
   pasteConfig?: PasteConfig;
 }
 
-export function Input({
+export interface InputHandle {
+  setValue: (value: string, cursor?: number, resetHistory?: boolean) => void;
+  appendValue: (text: string) => void;
+  clearValue: () => void;
+  getValue: () => string;
+}
+
+export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
   onSubmit,
   isProcessing,
   queueLength = 0,
@@ -136,9 +142,11 @@ export function Input({
   isAskingUser = false,
   askPlaceholder,
   allowBlankAnswer = false,
+  footerHints = [],
+  assistantName,
   history: historyProp,
   pasteConfig,
-}: InputProps) {
+}: InputProps, ref) {
   // Paste handling configuration with defaults
   const pasteEnabled = pasteConfig?.enabled !== false;
   const pasteThresholds = pasteConfig?.thresholds ?? DEFAULT_PASTE_THRESHOLDS;
@@ -253,6 +261,37 @@ export function Input({
       historyRef.current.resetIndex(nextValue);
     }
   }, []);
+
+  const clearLargePaste = useCallback(() => {
+    setLargePaste(null);
+    setShowPastePreview(false);
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    setValue: (nextValue: string, nextCursor = nextValue.length, resetHistory = true) => {
+      clearLargePaste();
+      setValueAndCursor(nextValue, nextCursor, resetHistory);
+    },
+    appendValue: (text: string) => {
+      if (!text) return;
+      clearLargePaste();
+      setInputState(prev => {
+        const newValue = prev.value + text;
+        historyRef.current.resetIndex(newValue);
+        return {
+          value: newValue,
+          cursor: newValue.length,
+        };
+      });
+      setPreferredColumn(null);
+      setSelectedIndex(0);
+    },
+    clearValue: () => {
+      clearLargePaste();
+      setValueAndCursor('');
+    },
+    getValue: () => inputState.value,
+  }), [clearLargePaste, setValueAndCursor, inputState.value]);
 
 
   const handleSubmit = (submittedValue: string) => {
@@ -643,12 +682,27 @@ export function Input({
   const layout = buildLayout(value, cursor, textWidth);
   const lines = layout.displayLines;
   const lineCount = value.split('\n').length;
+  const quickHints: string[] = [];
+  if (isProcessing && !isAskingUser) {
+    quickHints.push('[esc] stop');
+  }
+  if (footerHints.length > 0) {
+    quickHints.push(...footerHints);
+  }
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      {/* Top border - solid line */}
+      {/* Top border - solid line with optional assistant name */}
       <Box>
-        <Text color="#666666">{'─'.repeat(terminalWidth)}</Text>
+        {assistantName ? (
+          <>
+            <Text color="#666666">{'─'.repeat(Math.max(0, terminalWidth - assistantName.length - 3))}</Text>
+            <Text> </Text>
+            <Text backgroundColor="#4a8ba4" color="white" bold> {assistantName} </Text>
+          </>
+        ) : (
+          <Text color="#666666">{'─'.repeat(terminalWidth)}</Text>
+        )}
       </Box>
 
       {/* Input area */}
@@ -713,9 +767,9 @@ export function Input({
         <Text color="#666666">{'─'.repeat(terminalWidth)}</Text>
       </Box>
 
-      {isProcessing && !isAskingUser && (
+      {quickHints.length > 0 && (
         <Box marginLeft={2}>
-          <Text dimColor>[esc] stop</Text>
+          <Text dimColor>{quickHints.join(' · ')}</Text>
         </Box>
       )}
 
@@ -776,4 +830,6 @@ export function Input({
       )}
     </Box>
   );
-}
+});
+
+Input.displayName = 'Input';

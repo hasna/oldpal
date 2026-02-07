@@ -9,7 +9,7 @@ import {
 } from '@hasna/assistants-shared';
 
 type ConfigLocation = 'user' | 'project' | 'local';
-type ConfigSection = 'overview' | 'model' | 'context' | 'memory' | 'subassistants' | 'voice' | 'energy';
+type ConfigSection = 'overview' | 'model' | 'context' | 'memory' | 'subassistants' | 'voice' | 'energy' | 'statusLine';
 
 interface ConfigPanelProps {
   config: AssistantsConfig;
@@ -28,6 +28,7 @@ const SECTIONS: { id: ConfigSection; name: string; icon: string }[] = [
   { id: 'subassistants', name: 'Subassistants', icon: '👥' },
   { id: 'voice', name: 'Voice', icon: '🎤' },
   { id: 'energy', name: 'Energy', icon: '⚡' },
+  { id: 'statusLine', name: 'Status Line', icon: '📊' },
 ];
 
 type Mode = 'sections' | 'editing' | 'location-select';
@@ -55,6 +56,11 @@ export function ConfigPanel({
     ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL)
   );
   const [maxTokens, setMaxTokens] = useState(config.llm?.maxTokens ?? 8192);
+
+  // Energy editing state
+  const [selectedEnergyField, setSelectedEnergyField] = useState(0);
+  const [energyMaxEnergy, setEnergyMaxEnergy] = useState(config.energy?.maxEnergy ?? 10000);
+  const [energyRegenRate, setEnergyRegenRate] = useState(config.energy?.regenRate ?? 500);
 
   // Clear message after 3 seconds
   useEffect(() => {
@@ -94,8 +100,8 @@ export function ConfigPanel({
       return;
     }
 
-    // Escape to close
-    if (key.escape) {
+    // Escape or q to close
+    if (key.escape || input === 'q' || input === 'Q') {
       onCancel();
       return;
     }
@@ -178,13 +184,49 @@ export function ConfigPanel({
     }
 
     if (section.id === 'energy' && !editingField && input !== 't' && input !== 'T') {
-      if (input === '1') {
-        setEditingField('energy.maxEnergy');
-        setEditValue(String(config.energy?.maxEnergy ?? 10000));
-      } else if (input === '2') {
-        setEditingField('energy.regenRate');
-        setEditValue(String(config.energy?.regenRate ?? 500));
+      if (key.upArrow) {
+        setSelectedEnergyField((prev) => (prev === 0 ? 1 : 0));
+        return;
       }
+      if (key.downArrow) {
+        setSelectedEnergyField((prev) => (prev === 1 ? 0 : 1));
+        return;
+      }
+      if (key.leftArrow) {
+        if (selectedEnergyField === 0) {
+          setEnergyMaxEnergy((prev: number) => Math.max(1000, prev - 1000));
+        } else {
+          setEnergyRegenRate((prev: number) => Math.max(100, prev - 100));
+        }
+        return;
+      }
+      if (key.rightArrow) {
+        if (selectedEnergyField === 0) {
+          setEnergyMaxEnergy((prev: number) => Math.min(100000, prev + 1000));
+        } else {
+          setEnergyRegenRate((prev: number) => Math.min(5000, prev + 100));
+        }
+        return;
+      }
+      if (key.return || input === 's' || input === 'S') {
+        setMode('location-select');
+        return;
+      }
+      return;
+    }
+
+    if (section.id === 'statusLine' && !editingField) {
+      const sl = config.statusLine || {};
+      const toggleField = (field: string, current?: boolean) => {
+        handleSaveField(`statusLine.${field}`, !(current ?? true));
+      };
+      if (input === '1') { toggleField('showContext', sl.showContext); return; }
+      if (input === '2') { toggleField('showSession', sl.showSession); return; }
+      if (input === '3') { toggleField('showElapsed', sl.showElapsed); return; }
+      if (input === '4') { toggleField('showHeartbeat', sl.showHeartbeat); return; }
+      if (input === '5') { toggleField('showVoice', sl.showVoice); return; }
+      if (input === '6') { toggleField('showQueue', sl.showQueue); return; }
+      if (input === '7') { toggleField('showRecentTools', sl.showRecentTools); return; }
       return;
     }
   }, { isActive: mode === 'editing' && !editingField });
@@ -270,6 +312,16 @@ export function ConfigPanel({
             provider: config.llm?.provider ?? 'anthropic',
             model: ANTHROPIC_MODELS[selectedModelIndex].id,
             maxTokens,
+          },
+        };
+      }
+
+      if (!saveUpdates && section.id === 'energy') {
+        saveUpdates = {
+          energy: {
+            ...config.energy,
+            maxEnergy: energyMaxEnergy,
+            regenRate: energyRegenRate,
           },
         };
       }
@@ -546,36 +598,22 @@ export function ConfigPanel({
                 Enabled: <Text color={config.energy?.enabled ? 'green' : 'red'}>{config.energy?.enabled ? 'Yes' : 'No'}</Text>
                 <Text dimColor> (t to toggle) {getSource('energy.enabled')}</Text>
               </Text>
-              {editingField === 'energy.maxEnergy' ? (
-                <Box>
-                  <Text>1. Max Energy: </Text>
-                  <TextInput
-                    value={editValue}
-                    onChange={setEditValue}
-                    onSubmit={handleFieldSubmit}
-                  />
-                </Box>
-              ) : (
-                <Text>
-                  1. Max Energy: <Text color="cyan">{config.energy?.maxEnergy ?? 10000}</Text>
-                  <Text dimColor> {getSource('energy.maxEnergy')}</Text>
+              <Box>
+                <Text inverse={selectedEnergyField === 0}>
+                  {selectedEnergyField === 0 ? '>' : ' '} Max Energy: <Text color="cyan">{energyMaxEnergy}</Text>
                 </Text>
-              )}
-              {editingField === 'energy.regenRate' ? (
-                <Box>
-                  <Text>2. Regen Rate: </Text>
-                  <TextInput
-                    value={editValue}
-                    onChange={setEditValue}
-                    onSubmit={handleFieldSubmit}
-                  />
-                </Box>
-              ) : (
-                <Text>
-                  2. Regen Rate: <Text color="cyan">{config.energy?.regenRate ?? 500}</Text>/min
-                  <Text dimColor> {getSource('energy.regenRate')}</Text>
+                {selectedEnergyField === 0 && (
+                  <Text dimColor> (←→ adjust)</Text>
+                )}
+              </Box>
+              <Box>
+                <Text inverse={selectedEnergyField === 1}>
+                  {selectedEnergyField === 1 ? '>' : ' '} Regen Rate: <Text color="cyan">{energyRegenRate}</Text>/min
                 </Text>
-              )}
+                {selectedEnergyField === 1 && (
+                  <Text dimColor> (←→ adjust)</Text>
+                )}
+              </Box>
               <Text>
                 Low Threshold: <Text color="cyan">{config.energy?.lowEnergyThreshold ?? 3000}</Text>
               </Text>
@@ -590,10 +628,33 @@ export function ConfigPanel({
               <Text dimColor>  LLM Call: {config.energy?.costs?.llmCall ?? 300}</Text>
             </Box>
             <Box marginTop={1}>
-              <Text dimColor>Press t to toggle | 1-2 to edit | Esc to go back</Text>
+              <Text dimColor>↑↓ select | ←→ adjust | t toggle | Enter/s save | Esc back</Text>
             </Box>
           </Box>
         );
+
+      case 'statusLine': {
+        const sl = config.statusLine || {};
+        const showIcon = (v?: boolean) => (v ?? true) ? 'Yes' : 'No';
+        const showColor = (v?: boolean) => (v ?? true) ? 'green' : 'red';
+        return (
+          <Box flexDirection="column">
+            <Text bold>Status Line Settings</Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text>1. Context %:     <Text color={showColor(sl.showContext)}>{showIcon(sl.showContext)}</Text></Text>
+              <Text>2. Session:       <Text color={showColor(sl.showSession)}>{showIcon(sl.showSession)}</Text></Text>
+              <Text>3. Elapsed Time:  <Text color={showColor(sl.showElapsed)}>{showIcon(sl.showElapsed)}</Text></Text>
+              <Text>4. Heartbeat:     <Text color={showColor(sl.showHeartbeat)}>{showIcon(sl.showHeartbeat)}</Text></Text>
+              <Text>5. Voice:         <Text color={showColor(sl.showVoice)}>{showIcon(sl.showVoice)}</Text></Text>
+              <Text>6. Queue:         <Text color={showColor(sl.showQueue)}>{showIcon(sl.showQueue)}</Text></Text>
+              <Text>7. Recent Tools:  <Text color={showColor(sl.showRecentTools)}>{showIcon(sl.showRecentTools)}</Text></Text>
+            </Box>
+            <Box marginTop={1}>
+              <Text dimColor>1-7 toggle metric | Esc back</Text>
+            </Box>
+          </Box>
+        );
+      }
 
       default:
         return null;

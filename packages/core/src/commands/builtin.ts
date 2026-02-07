@@ -176,7 +176,7 @@ export class BuiltinCommands {
     loader.register(this.assistantsCommand());
     loader.register(this.swarmCommand());
     loader.register(this.workspaceCommand());
-    loader.register(this.agentsCommand());
+
     loader.register(this.initCommand());
     loader.register(this.costCommand());
     loader.register(this.modelCommand());
@@ -185,11 +185,7 @@ export class BuiltinCommands {
     loader.register(this.memoryCommand());
     loader.register(this.hooksCommand());
     loader.register(this.feedbackCommand());
-    loader.register(this.scheduleCommand());
     loader.register(this.schedulesCommand());
-    loader.register(this.unscheduleCommand());
-    loader.register(this.pauseScheduleCommand());
-    loader.register(this.resumeScheduleCommand());
     loader.register(this.connectorsCommand());
     loader.register(this.securityLogCommand());
     loader.register(this.guardrailsCommand());
@@ -209,7 +205,7 @@ export class BuiltinCommands {
   private voiceCommand(): Command {
     return {
       name: 'voice',
-      description: 'Control voice mode (on/off/status/stop)',
+      description: 'Toggle voice mode, check status, or stop audio (on/off/status/stop)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -247,6 +243,8 @@ export class BuiltinCommands {
           context.emit('done');
           return { handled: true };
         }
+        context.emit('text', '\n## Voice Mode\n\nSpeak and listen using text-to-speech and speech-to-text.\n\n');
+        context.emit('text', '**Subcommands:** `/voice on` · `/voice off` · `/voice stop` · `/voice` (status)\n\n');
         const status = state.enabled ? 'on' : 'off';
         const activity = state.isSpeaking ? 'speaking' : state.isListening ? 'listening' : 'idle';
         context.emit('text', `Voice mode: ${status} (${activity})\n`);
@@ -265,14 +263,14 @@ export class BuiltinCommands {
   private sayCommand(): Command {
     return {
       name: 'say',
-      description: 'Speak text aloud with TTS',
+      description: 'Speak text aloud using text-to-speech (e.g. /say Hello world)',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
         const text = args.trim();
         if (!text) {
-          context.emit('text', 'Usage: /say <text>\n');
+          context.emit('text', '\n## Say\n\nSpeak text aloud using text-to-speech.\n\nUsage: `/say <text>`\n');
           context.emit('done');
           return { handled: true };
         }
@@ -299,7 +297,7 @@ export class BuiltinCommands {
   private listenCommand(): Command {
     return {
       name: 'listen',
-      description: 'Record audio and send transcription',
+      description: 'Record audio via microphone and transcribe to text (e.g. /listen 5)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -310,6 +308,7 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
+        context.emit('text', '\n## Listen\n\nRecording audio via microphone...\n\n');
         let durationSeconds: number | undefined;
         const trimmed = args.trim();
         if (trimmed) {
@@ -341,7 +340,6 @@ export class BuiltinCommands {
   private assistantCommand(): Command {
     return {
       name: 'assistants',
-      aliases: ['assistant'], // Deprecated alias for backwards compatibility
       description: 'Manage assistants (list, create, switch, delete)',
       builtin: true,
       selfHandled: true,
@@ -398,7 +396,7 @@ export class BuiltinCommands {
 
         if (action === 'create') {
           if (!target) {
-            context.emit('text', 'Usage: /assistant create <name>\n');
+            context.emit('text', 'Usage: /assistants create <name>\n');
             context.emit('done');
             return { handled: true };
           }
@@ -410,7 +408,7 @@ export class BuiltinCommands {
 
         if (action === 'switch') {
           if (!target) {
-            context.emit('text', 'Usage: /assistant switch <name|id>\n');
+            context.emit('text', 'Usage: /assistants switch <name|id>\n');
             context.emit('done');
             return { handled: true };
           }
@@ -431,7 +429,7 @@ export class BuiltinCommands {
 
         if (action === 'delete') {
           if (!target) {
-            context.emit('text', 'Usage: /assistant delete <name|id>\n');
+            context.emit('text', 'Usage: /assistants delete <name|id>\n');
             context.emit('done');
             return { handled: true };
           }
@@ -463,7 +461,7 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
-        // /assistant prompt <text> - Set the assistant's system prompt addition
+        // /assistants prompt <text> - Set the assistant's system prompt addition
         if (action === 'prompt') {
           const active = manager.getActive();
           if (!active) {
@@ -479,7 +477,7 @@ export class BuiltinCommands {
               context.emit('text', active.settings.systemPromptAddition + '\n');
             } else {
               context.emit('text', `No system prompt set for ${active.name}.\n`);
-              context.emit('text', 'Usage: /assistant prompt <text>\n');
+              context.emit('text', 'Usage: /assistants prompt <text>\n');
             }
             context.emit('done');
             return { handled: true };
@@ -498,7 +496,7 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
-        // /assistant prompt-clear - Clear the assistant's system prompt addition
+        // /assistants prompt-clear - Clear the assistant's system prompt addition
         if (action === 'prompt-clear') {
           const active = manager.getActive();
           if (!active) {
@@ -517,24 +515,24 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
-        // /assistant help
+        // /assistants help
         if (action === 'help') {
           context.emit('text', '\n## Assistant Commands\n\n');
-          context.emit('text', '/assistant                    Open interactive assistant panel\n');
-          context.emit('text', '/assistant show               Show current assistant info\n');
-          context.emit('text', '/assistant list               List all assistants\n');
-          context.emit('text', '/assistant create <name>      Create new assistant\n');
-          context.emit('text', '/assistant switch <name|id>   Switch to assistant\n');
-          context.emit('text', '/assistant delete <name|id>   Delete assistant\n');
-          context.emit('text', '/assistant settings           Show assistant settings\n');
-          context.emit('text', '/assistant prompt [text]      Get/set assistant system prompt\n');
-          context.emit('text', '/assistant prompt-clear       Clear assistant system prompt\n');
-          context.emit('text', '/assistant help               Show this help\n');
+          context.emit('text', '/assistants                   Open interactive assistant panel\n');
+          context.emit('text', '/assistants show               Show current assistant info\n');
+          context.emit('text', '/assistants list               List all assistants\n');
+          context.emit('text', '/assistants create <name>      Create new assistant\n');
+          context.emit('text', '/assistants switch <name|id>   Switch to assistant\n');
+          context.emit('text', '/assistants delete <name|id>   Delete assistant\n');
+          context.emit('text', '/assistants settings           Show assistant settings\n');
+          context.emit('text', '/assistants prompt [text]      Get/set assistant system prompt\n');
+          context.emit('text', '/assistants prompt-clear       Clear assistant system prompt\n');
+          context.emit('text', '/assistants help               Show this help\n');
           context.emit('done');
           return { handled: true };
         }
 
-        context.emit('text', 'Unknown /assistant command. Use /assistant help for options.\n');
+        context.emit('text', 'Unknown /assistants command. Use /assistants help for options.\n');
         context.emit('done');
         return { handled: true };
       },
@@ -547,7 +545,7 @@ export class BuiltinCommands {
   private hooksCommand(): Command {
     return {
       name: 'hooks',
-      description: 'Manage hooks (view, enable, disable)',
+      description: 'View, enable, disable, and manage event hooks (pre/post tool use, etc.)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -961,7 +959,7 @@ export class BuiltinCommands {
   private whoamiCommand(): Command {
     return {
       name: 'whoami',
-      description: 'Show active assistant and identity',
+      description: 'Show active assistant, identity profile, and current configuration',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -1002,7 +1000,7 @@ export class BuiltinCommands {
   private helpCommand(loader: CommandLoader): Command {
     return {
       name: 'help',
-      description: 'Show available slash commands',
+      description: 'Show all available slash commands and their descriptions',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -1065,7 +1063,7 @@ export class BuiltinCommands {
   private clearCommand(): Command {
     return {
       name: 'clear',
-      description: 'Clear conversation history and start fresh',
+      description: 'Clear current conversation history and reset context',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -1089,7 +1087,7 @@ export class BuiltinCommands {
   private newCommand(): Command {
     return {
       name: 'new',
-      description: 'Start a new conversation',
+      description: 'Start a new conversation session (preserves previous session)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -2926,11 +2924,11 @@ Created: ${new Date(job.createdAt).toISOString()}
           return { handled: true };
         }
 
-        // Run next task
+        // Run next task (manual run works even when auto-run is paused)
         if (sub === 'run') {
           const paused = await isPaused(context.cwd);
           if (paused) {
-            context.emit('text', 'Task queue is paused. Use /tasks resume to enable auto-run.\n');
+            context.emit('text', 'Note: Auto-run is paused. Running task manually.\n');
           }
 
           const nextTask = await getNextTask(context.cwd);
@@ -3073,27 +3071,12 @@ Created: ${new Date(job.createdAt).toISOString()}
     };
   }
 
-  /**
-   * /agents - Agent dashboard
-   */
-  private agentsCommand(): Command {
-    return {
-      name: 'agents',
-      description: 'Open agent dashboard showing all sessions, budgets, and messages',
-      builtin: true,
-      selfHandled: true,
-      content: '',
-      handler: async (_args, context) => {
-        context.emit('done');
-        return { handled: true, showPanel: 'agents' };
-      },
-    };
-  }
+
 
   private exitCommand(): Command {
     return {
       name: 'exit',
-      description: 'Exit assistants',
+      description: 'Exit the assistant session and return to shell',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -3111,7 +3094,8 @@ Created: ${new Date(job.createdAt).toISOString()}
    */
   private sessionCommand(): Command {
     return {
-      name: 'session',
+      name: 'sessions',
+      aliases: ['session'],
       description: 'Manage sessions: list, create with agent, switch, assign agent',
       builtin: true,
       selfHandled: true,
@@ -3242,7 +3226,7 @@ Created: ${new Date(job.createdAt).toISOString()}
   private tokensCommand(): Command {
     return {
       name: 'tokens',
-      description: 'Show token usage',
+      description: 'Show token usage breakdown (input, output, cache, total)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4096,7 +4080,7 @@ Created: ${new Date(job.createdAt).toISOString()}
   private restCommand(): Command {
     return {
       name: 'rest',
-      description: 'Recharge assistant energy',
+      description: 'Recharge assistant energy (optional: amount, e.g. /rest 5000)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4130,7 +4114,7 @@ Created: ${new Date(job.createdAt).toISOString()}
   private skillCommand(): Command {
     return {
       name: 'skill',
-      description: 'Create or manage skills',
+      description: 'Create or manage skills (create, edit, invoke by name)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4309,7 +4293,7 @@ Created: ${new Date(job.createdAt).toISOString()}
   private skillsCommand(loader: CommandLoader): Command {
     return {
       name: 'skills',
-      description: 'List available skills',
+      description: 'List all available skills with descriptions and argument hints',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4342,7 +4326,7 @@ Created: ${new Date(job.createdAt).toISOString()}
   private statusCommand(): Command {
     return {
       name: 'status',
-      description: 'Show current session status, energy, identity, and token usage',
+      description: 'Show session overview: status, energy, identity, tokens, and runtime info',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4451,7 +4435,7 @@ Created: ${new Date(job.createdAt).toISOString()}
   private compactCommand(): Command {
     return {
       name: 'compact',
-      description: 'Summarize conversation to save context space',
+      description: 'Summarize conversation to save context space (auto-compaction)',
       builtin: true,
       selfHandled: false,
       content: `Please summarize our conversation so far into a concise format that preserves:
@@ -4470,7 +4454,7 @@ Format the summary as a brief bullet-point list. This summary will replace the c
   private configCommand(): Command {
     return {
       name: 'config',
-      description: 'View and edit configuration interactively',
+      description: 'View and edit configuration interactively (model, context, energy, etc.)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4527,7 +4511,7 @@ Format the summary as a brief bullet-point list. This summary will replace the c
   private budgetCommand(): Command {
     return {
       name: 'budget',
-      description: 'View and manage resource usage budgets',
+      description: 'View and manage resource budgets (tokens, calls, duration limits)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -5178,7 +5162,7 @@ Format the summary as a brief bullet-point list. This summary will replace the c
   private initCommand(): Command {
     return {
       name: 'init',
-      description: 'Initialize assistants config and create example command',
+      description: 'Initialize .assistants/ config directory with example commands and hooks',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -5230,23 +5214,28 @@ Please summarize the last interaction and suggest 2-3 next steps.
   private costCommand(): Command {
     return {
       name: 'cost',
-      description: 'Show estimated API cost for this session',
+      description: 'Show estimated API cost for this session (input + output pricing)',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
         const usage = this.tokenUsage;
 
-        // Claude 3.5 Sonnet pricing (approximate)
-        const inputCostPer1M = 3.0;  // $3 per 1M input tokens
-        const outputCostPer1M = 15.0; // $15 per 1M output tokens
+        // Look up pricing from model registry based on active model
+        const { getModelById } = await import('../llm/models');
+        const activeModelId = context.getModel?.();
+        const model = activeModelId ? getModelById(activeModelId) : null;
+
+        const inputCostPer1M = model?.inputCostPer1M ?? 3.0;
+        const outputCostPer1M = model?.outputCostPer1M ?? 15.0;
+        const modelName = model?.name ?? 'Unknown model';
 
         const inputCost = (usage.inputTokens / 1_000_000) * inputCostPer1M;
         const outputCost = (usage.outputTokens / 1_000_000) * outputCostPer1M;
         const totalCost = inputCost + outputCost;
 
         // Cache savings (if applicable)
-        const cacheReadCostPer1M = 0.3; // $0.30 per 1M cached input tokens
+        const cacheReadCostPer1M = inputCostPer1M * 0.1; // ~10% of input cost
         const cacheSavings = usage.cacheReadTokens
           ? ((usage.cacheReadTokens / 1_000_000) * (inputCostPer1M - cacheReadCostPer1M))
           : 0;
@@ -5260,7 +5249,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
           message += `\nCache savings: ~$${cacheSavings.toFixed(4)}\n`;
         }
 
-        message += '\n*Based on Claude 3.5 Sonnet pricing*\n';
+        message += `\n*Based on ${modelName} pricing ($${inputCostPer1M}/1M in, $${outputCostPer1M}/1M out)*\n`;
 
         context.emit('text', message);
         context.emit('done');
@@ -5275,7 +5264,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
   private modelCommand(): Command {
     return {
       name: 'model',
-      description: 'Show or switch models (list, <model-id>)',
+      description: 'Show current model or switch to another (e.g. /model claude-sonnet-4-5-20250929)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -5976,93 +5965,13 @@ Please summarize the last interaction and suggest 2-3 next steps.
   /**
    * /schedule - Schedule a command
    */
-  private scheduleCommand(): Command {
-    return {
-      name: 'schedule',
-      description: 'Schedule a command (ISO time or cron)',
-      builtin: true,
-      selfHandled: true,
-      content: '',
-      handler: async (args, context) => {
-        const parts = splitArgs(args);
-        if (parts.length < 2) {
-          context.emit('text', 'Usage:\n  /schedule <ISO time> <command>\n  /schedule cron "<expr>" <command>\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        const now = Date.now();
-        let kind: 'once' | 'cron' = 'once';
-        let at: string | undefined;
-        let cron: string | undefined;
-        let commandStart = 1;
-
-        if (parts[0] === 'cron') {
-          kind = 'cron';
-          cron = parts[1];
-          commandStart = 2;
-        } else {
-          at = parts[0];
-        }
-
-        if (kind === 'cron' && !cron) {
-          context.emit('text', 'Usage:\n  /schedule cron "<expr>" <command>\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        const command = parts.slice(commandStart).join(' ').trim();
-        if (!command) {
-          context.emit('text', 'Error: command is required.\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        const schedule: ScheduledCommand = {
-          id: generateId(),
-          createdAt: now,
-          updatedAt: now,
-          createdBy: 'user',
-          sessionId: context.sessionId,
-          command,
-          status: 'active',
-          schedule: {
-            kind,
-            at,
-            cron,
-          },
-        };
-
-        schedule.nextRunAt = computeNextRun(schedule, now);
-        if (!schedule.nextRunAt) {
-          context.emit('text', 'Error: unable to compute next run time.\n');
-          context.emit('done');
-          return { handled: true };
-        }
-        if (schedule.nextRunAt <= now) {
-          context.emit('text', 'Error: scheduled time must be in the future.\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        await saveSchedule(context.cwd, schedule);
-        context.emit(
-          'text',
-          `Scheduled ${schedule.command}\n  id: ${schedule.id}\n  next: ${new Date(schedule.nextRunAt).toISOString()}\n`
-        );
-        context.emit('done');
-        return { handled: true };
-      },
-    };
-  }
-
   /**
-   * /schedules - List schedules for current session
+   * /schedules - Browse and manage all scheduled commands
    */
   private schedulesCommand(): Command {
     return {
       name: 'schedules',
-      description: 'Browse and manage scheduled commands',
+      description: 'Browse and manage all scheduled commands (active, paused, completed)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -6105,181 +6014,10 @@ Please summarize the last interaction and suggest 2-3 next steps.
         // Show help
         context.emit('text', '\n**Schedules** - Manage scheduled commands\n\n');
         context.emit('text', 'Usage:\n');
-        context.emit('text', '  /schedules           Open interactive panel\n');
-        context.emit('text', '  /schedules ui        Open interactive panel\n');
-        context.emit('text', '  /schedules list      Show text table (this session)\n');
+        context.emit('text', '  /schedules             Open interactive panel (create, delete, pause, resume)\n');
+        context.emit('text', '  /schedules ui          Open interactive panel\n');
+        context.emit('text', '  /schedules list        Show text table (this session)\n');
         context.emit('text', '  /schedules list --all  Show all schedules\n');
-        context.emit('text', '  /schedule <time> <cmd>  Create a schedule\n');
-        context.emit('text', '  /unschedule <id>     Delete a schedule\n');
-        context.emit('text', '  /pause <id>          Pause a schedule\n');
-        context.emit('text', '  /resume <id>         Resume a schedule\n');
-        context.emit('done');
-        return { handled: true };
-      },
-    };
-  }
-
-  /**
-   * /unschedule - Delete a schedule
-   */
-  private unscheduleCommand(): Command {
-    return {
-      name: 'unschedule',
-      description: 'Delete a scheduled command',
-      builtin: true,
-      selfHandled: true,
-      content: '',
-      handler: async (args, context) => {
-        const id = args.trim();
-        if (!id) {
-          context.emit('text', 'Usage: /unschedule <id>\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // Check schedule ownership
-        const schedule = await getSchedule(context.cwd, id);
-        if (!schedule) {
-          context.emit('text', `Schedule ${id} not found.\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // Allow if schedule is global (no sessionId) or owned by current session
-        if (schedule.sessionId && schedule.sessionId !== context.sessionId) {
-          context.emit('text', `Schedule ${id} belongs to another session. Cannot delete.\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-
-        const ok = await deleteSchedule(context.cwd, id);
-        context.emit('text', ok ? `Deleted schedule ${id}.\n` : `Schedule ${id} not found.\n`);
-        context.emit('done');
-        return { handled: true };
-      },
-    };
-  }
-
-  /**
-   * /pause - Pause a schedule
-   */
-  private pauseScheduleCommand(): Command {
-    return {
-      name: 'pause',
-      description: 'Pause a scheduled command',
-      builtin: true,
-      selfHandled: true,
-      content: '',
-      handler: async (args, context) => {
-        const id = args.trim();
-        if (!id) {
-          // Only show schedules owned by this session or global
-          const schedules = await listSchedules(context.cwd, { sessionId: context.sessionId });
-          if (schedules.length === 0) {
-            context.emit('text', 'No schedules found for this session.\n');
-          } else {
-            const lines = schedules
-              .sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))
-              .map((schedule) => `- ${schedule.id} [${schedule.status}] ${schedule.command}`);
-            context.emit('text', `Usage: /pause <id>\n\nAvailable schedules:\n${lines.join('\n')}\n`);
-          }
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // Check schedule ownership
-        const schedule = await getSchedule(context.cwd, id);
-        if (!schedule) {
-          context.emit('text', `Schedule ${id} not found.\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // Allow if schedule is global (no sessionId) or owned by current session
-        if (schedule.sessionId && schedule.sessionId !== context.sessionId) {
-          context.emit('text', `Schedule ${id} belongs to another session. Cannot pause.\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-
-        const updated = await updateSchedule(context.cwd, id, (s) => ({
-          ...s,
-          status: 'paused',
-          updatedAt: Date.now(),
-        }));
-        context.emit('text', updated ? `Paused schedule ${id}.\n` : `Schedule ${id} not found.\n`);
-        context.emit('done');
-        return { handled: true };
-      },
-    };
-  }
-
-  /**
-   * /resume - Resume a schedule
-   */
-  private resumeScheduleCommand(): Command {
-    return {
-      name: 'resume',
-      description: 'Resume a scheduled command',
-      builtin: true,
-      selfHandled: true,
-      content: '',
-      handler: async (args, context) => {
-        const id = args.trim();
-        if (!id) {
-          // Only show schedules owned by this session or global
-          const schedules = await listSchedules(context.cwd, { sessionId: context.sessionId });
-          if (schedules.length === 0) {
-            context.emit('text', 'No schedules found for this session.\n');
-          } else {
-            const lines = schedules
-              .sort((a, b) => (a.nextRunAt || 0) - (b.nextRunAt || 0))
-              .map((schedule) => `- ${schedule.id} [${schedule.status}] ${schedule.command}`);
-            context.emit('text', `Usage: /resume <id>\n\nAvailable schedules:\n${lines.join('\n')}\n`);
-          }
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // Check schedule ownership
-        const schedule = await getSchedule(context.cwd, id);
-        if (!schedule) {
-          context.emit('text', `Schedule ${id} not found.\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // Allow if schedule is global (no sessionId) or owned by current session
-        if (schedule.sessionId && schedule.sessionId !== context.sessionId) {
-          context.emit('text', `Schedule ${id} belongs to another session. Cannot resume.\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-
-        let computedNext: number | undefined;
-        const updated = await updateSchedule(context.cwd, id, (s) => {
-          computedNext = computeNextRun(s, Date.now());
-          if (!computedNext) {
-            return s;
-          }
-          return {
-            ...s,
-            status: 'active',
-            updatedAt: Date.now(),
-            nextRunAt: computedNext,
-          };
-        });
-        if (!updated) {
-          context.emit('text', `Schedule ${id} not found.\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-        if (!computedNext) {
-          context.emit('text', `Failed to compute next run for schedule ${id}.\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-        context.emit('text', `Resumed schedule ${id}.\n`);
         context.emit('done');
         return { handled: true };
       },
@@ -6300,7 +6038,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
   private connectorsCommand(): Command {
     return {
       name: 'connectors',
-      description: 'Browse connectors interactively (refresh to re-discover)',
+      description: 'Browse and search connectors interactively (view commands, refresh)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -6530,7 +6268,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
   private securityLogCommand(): Command {
     return {
       name: 'security-log',
-      description: 'Show recent security events (optional: limit, severity, type)',
+      description: 'Show recent security events with filtering (limit, severity, type)',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -6591,7 +6329,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
   private feedbackCommand(): Command {
     return {
       name: 'feedback',
-      description: 'Submit feedback or report an issue on GitHub',
+      description: 'Submit feedback (good/bad/bug/idea) or report an issue on GitHub',
       builtin: true,
       selfHandled: true,
       content: '',

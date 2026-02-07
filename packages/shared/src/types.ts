@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'agents' | 'swarm' | 'workspace';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -405,6 +405,29 @@ export interface SessionInfo {
 // Config Types
 // ============================================
 
+/**
+ * Status line configuration for terminal UI
+ * Controls which metrics are shown in the bottom status bar
+ */
+export interface StatusLineConfig {
+  /** Show context usage percentage (default: true) */
+  showContext?: boolean;
+  /** Show session index when multiple sessions exist (default: true) */
+  showSession?: boolean;
+  /** Show processing elapsed time (default: true) */
+  showElapsed?: boolean;
+  /** Show heartbeat indicator (default: true) */
+  showHeartbeat?: boolean;
+  /** Show voice indicator (default: true) */
+  showVoice?: boolean;
+  /** Show queue length (default: true) */
+  showQueue?: boolean;
+  /** Show recent tool calls (default: true) */
+  showRecentTools?: boolean;
+  /** Show verbose tool names (default: false) */
+  verboseTools?: boolean;
+}
+
 export interface AssistantsConfig {
   llm: LLMConfig;
   voice?: VoiceConfig;
@@ -427,6 +450,7 @@ export interface AssistantsConfig {
   budget?: BudgetConfig;
   guardrails?: GuardrailsConfigShared;
   capabilities?: CapabilitiesConfigShared;
+  statusLine?: StatusLineConfig;
 }
 
 /**

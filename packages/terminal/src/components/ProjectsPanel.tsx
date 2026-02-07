@@ -112,8 +112,8 @@ export function ProjectsPanel({
       return;
     }
 
-    // Escape: cancel
-    if (key.escape) {
+    // Escape or q: cancel
+    if (key.escape || input === 'q' || input === 'Q') {
       onCancel();
       return;
     }

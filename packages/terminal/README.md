@@ -123,6 +123,14 @@ assistants -p "Continue from where we left off" --resume abc123
 | `Up/Down` | Navigate command history |
 | `Tab` | Autocomplete commands |
 
+### Shell Passthrough
+
+Prefix a line with `!` to run a local shell command and send the output to the assistant:
+
+```bash
+!ls -la
+```
+
 ### Slash Commands
 
 | Command | Description |
@@ -184,7 +192,7 @@ assistants -p "Continue from where we left off" --resume abc123
 |---------|-------------|
 | `/voice` | Toggle voice mode |
 | `/say <text>` | Speak text aloud |
-| `/listen` | Listen for voice input |
+| `/listen` | Start persistent dictation (pause ~3s to send, Ctrl+L to stop) |
 | `/identity` | Manage assistant identity |
 | `/whoami` | Show current identity |
 | `/assistant` | Configure assistant settings |
