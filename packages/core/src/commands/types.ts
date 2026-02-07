@@ -141,7 +141,7 @@ export interface CommandResult {
   /** Agent name/ID to assign to session */
   sessionAgent?: string;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills';
   /** Initial value for panel (e.g., connector name) */
   panelInitialValue?: string;
 }

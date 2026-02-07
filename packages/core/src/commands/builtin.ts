@@ -179,7 +179,6 @@ export class BuiltinCommands {
     loader.register(this.initCommand());
     loader.register(this.costCommand());
     loader.register(this.modelCommand());
-    loader.register(this.skillCommand());
     loader.register(this.skillsCommand(loader));
     loader.register(this.memoryCommand());
     loader.register(this.hooksCommand());
@@ -189,7 +188,6 @@ export class BuiltinCommands {
     loader.register(this.securityLogCommand());
     loader.register(this.guardrailsCommand());
     loader.register(this.verificationCommand());
-    loader.register(this.inboxCommand());
     loader.register(this.walletCommand());
     loader.register(this.secretsCommand());
     loader.register(this.jobsCommand());
@@ -1570,216 +1568,6 @@ export class BuiltinCommands {
   /**
    * /inbox - Manage assistant inbox
    */
-  private inboxCommand(): Command {
-    return {
-      name: 'inbox',
-      description: 'Manage assistant inbox (list, fetch, read, send emails)',
-      builtin: true,
-      selfHandled: true,
-      content: '',
-      handler: async (args, context) => {
-        const manager = context.getInboxManager?.();
-        if (!manager) {
-          context.emit('text', 'Inbox is not enabled. Configure inbox in config.json.\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        const parts = splitArgs(args);
-        const subcommand = parts[0]?.toLowerCase();
-
-        // /inbox (no args) - show interactive panel
-        if (!subcommand || !args.trim()) {
-          context.emit('done');
-          return { handled: true, showPanel: 'inbox' as const };
-        }
-
-        // /inbox list - text-based list output
-        if (subcommand === 'list') {
-          const unreadOnly = parts.includes('--unread') || parts.includes('-u');
-          const limitArg = parts.find((p) => p.match(/^\d+$/));
-          const limit = limitArg ? parseInt(limitArg, 10) : 20;
-
-          try {
-            const emails = await manager.list({ limit, unreadOnly });
-            if (emails.length === 0) {
-              context.emit('text', unreadOnly ? 'No unread emails.\n' : 'Inbox is empty.\n');
-            } else {
-              context.emit('text', `\n## Inbox (${emails.length} email${emails.length === 1 ? '' : 's'})\n\n`);
-              for (const email of emails) {
-                const readIndicator = email.isRead ? '📖' : '📬';
-                const attachmentIndicator = email.hasAttachments ? ' 📎' : '';
-                const date = new Date(email.date).toLocaleDateString();
-                context.emit('text', `${readIndicator} **${email.id}**${attachmentIndicator}\n`);
-                context.emit('text', `   From: ${email.from}\n`);
-                context.emit('text', `   Subject: ${email.subject}\n`);
-                context.emit('text', `   Date: ${date}\n\n`);
-              }
-            }
-          } catch (error) {
-            context.emit('text', `Error listing emails: ${error instanceof Error ? error.message : String(error)}\n`);
-          }
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // /inbox fetch [limit]
-        if (subcommand === 'fetch') {
-          const limitArg = parts[1];
-          const limit = limitArg ? parseInt(limitArg, 10) : 20;
-
-          context.emit('text', 'Fetching emails...\n');
-          try {
-            const count = await manager.fetch({ limit });
-            if (count === 0) {
-              context.emit('text', 'No new emails found.\n');
-            } else {
-              context.emit('text', `Fetched ${count} new email(s).\n`);
-            }
-          } catch (error) {
-            context.emit('text', `Error fetching: ${error instanceof Error ? error.message : String(error)}\n`);
-          }
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // /inbox read <id>
-        if (subcommand === 'read') {
-          const emailId = parts[1];
-          if (!emailId) {
-            context.emit('text', 'Usage: /inbox read <id>\n');
-            context.emit('done');
-            return { handled: true };
-          }
-
-          try {
-            const email = await manager.read(emailId);
-            if (!email) {
-              context.emit('text', `Email ${emailId} not found.\n`);
-            } else {
-              // Import formatEmailAsMarkdown dynamically to avoid circular deps
-              const { formatEmailAsMarkdown } = await import('../inbox/parser/email-parser');
-              context.emit('text', '\n' + formatEmailAsMarkdown(email) + '\n');
-            }
-          } catch (error) {
-            context.emit('text', `Error reading: ${error instanceof Error ? error.message : String(error)}\n`);
-          }
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // /inbox download <id> <index>
-        if (subcommand === 'download') {
-          const emailId = parts[1];
-          const indexArg = parts[2];
-
-          if (!emailId || !indexArg) {
-            context.emit('text', 'Usage: /inbox download <email-id> <attachment-index>\n');
-            context.emit('done');
-            return { handled: true };
-          }
-
-          const index = parseInt(indexArg, 10);
-          if (isNaN(index) || index < 0) {
-            context.emit('text', 'Invalid attachment index.\n');
-            context.emit('done');
-            return { handled: true };
-          }
-
-          try {
-            const path = await manager.downloadAttachment(emailId, index);
-            context.emit('text', `Downloaded to: ${path}\n`);
-          } catch (error) {
-            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
-          }
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // /inbox send <to> <subject>
-        if (subcommand === 'send') {
-          const to = parts[1];
-          const subject = parts.slice(2).join(' ');
-
-          if (!to || !subject) {
-            context.emit('text', 'Usage: /inbox send <to> <subject>\n');
-            context.emit('text', 'Then type your message and send.\n');
-            context.emit('done');
-            return { handled: true };
-          }
-
-          // This is interactive - we need to prompt for the body
-          // For now, return a prompt to the LLM to help compose
-          context.emit('done');
-          return {
-            handled: false,
-            prompt: `Help me compose an email to ${to} with subject "${subject}". Ask me what I want to say, then use the inbox_send tool to send it.`,
-          };
-        }
-
-        // /inbox reply <id>
-        if (subcommand === 'reply') {
-          const emailId = parts[1];
-          if (!emailId) {
-            context.emit('text', 'Usage: /inbox reply <id>\n');
-            context.emit('done');
-            return { handled: true };
-          }
-
-          // Load the email to show context
-          try {
-            const email = await manager.read(emailId);
-            if (!email) {
-              context.emit('text', `Email ${emailId} not found.\n`);
-              context.emit('done');
-              return { handled: true };
-            }
-
-            // Return a prompt to help compose the reply
-            context.emit('done');
-            return {
-              handled: false,
-              prompt: `Help me reply to this email from ${email.from.name || email.from.address} with subject "${email.subject}". Ask me what I want to say, then use the inbox_send tool with replyToId="${emailId}" to send it.`,
-            };
-          } catch (error) {
-            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
-            context.emit('done');
-            return { handled: true };
-          }
-        }
-
-        // /inbox address
-        if (subcommand === 'address') {
-          const address = manager.getEmailAddress();
-          context.emit('text', `Assistant email address: ${address}\n`);
-          context.emit('done');
-          return { handled: true };
-        }
-
-        // /inbox help
-        if (subcommand === 'help') {
-          context.emit('text', '\n## Inbox Commands\n\n');
-          context.emit('text', '/inbox                     List emails (default)\n');
-          context.emit('text', '/inbox list [--unread]     List emails, optionally unread only\n');
-          context.emit('text', '/inbox fetch [limit]       Sync from S3 (default: 20)\n');
-          context.emit('text', '/inbox read <id>           Read specific email\n');
-          context.emit('text', '/inbox download <id> <n>   Download attachment\n');
-          context.emit('text', '/inbox send <to> <subject> Compose and send email\n');
-          context.emit('text', '/inbox reply <id>          Reply to an email\n');
-          context.emit('text', '/inbox address             Show assistant email address\n');
-          context.emit('text', '/inbox help                Show this help\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        context.emit('text', `Unknown inbox command: ${subcommand}\n`);
-        context.emit('text', 'Use /inbox help for available commands.\n');
-        context.emit('done');
-        return { handled: true };
-      },
-    };
-  }
-
   /**
    * /wallet - Manage assistant payment cards
    */
@@ -2376,13 +2164,17 @@ Created: ${new Date(job.createdAt).toISOString()}
   private messagesCommand(): Command {
     return {
       name: 'messages',
-      description: 'Assistant-to-assistant messaging (list, send, read, threads)',
+      aliases: ['inbox'],
+      description: 'Assistant messaging and email inbox',
       builtin: true,
       selfHandled: true,
       content: '',
       handler: async (args, context) => {
         const manager = context.getMessagesManager?.();
-        if (!manager) {
+        const inboxManager = context.getInboxManager?.();
+
+        // If neither is enabled, show error
+        if (!manager && !inboxManager) {
           context.emit('text', 'Messages are not enabled. Configure messages in config.json.\n');
           context.emit('text', '\nTo enable:\n');
           context.emit('text', '```json\n');
@@ -2405,8 +2197,147 @@ Created: ${new Date(job.createdAt).toISOString()}
           return { handled: true, showPanel: 'messages' };
         }
 
+        // --- Inbox subcommands (delegated to InboxManager) ---
+
+        // /messages fetch [limit] (inbox)
+        if (subcommand === 'fetch') {
+          if (!inboxManager) {
+            context.emit('text', 'Inbox is not enabled. Configure inbox in config.json.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const limitArg = parts[1];
+          const limit = limitArg ? parseInt(limitArg, 10) : 20;
+
+          context.emit('text', 'Fetching emails...\n');
+          try {
+            const count = await inboxManager.fetch({ limit });
+            if (count === 0) {
+              context.emit('text', 'No new emails found.\n');
+            } else {
+              context.emit('text', `Fetched ${count} new email(s).\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error fetching: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages email <id> (read email by id)
+        if (subcommand === 'email') {
+          if (!inboxManager) {
+            context.emit('text', 'Inbox is not enabled. Configure inbox in config.json.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const emailId = parts[1];
+          if (!emailId) {
+            context.emit('text', 'Usage: /messages email <id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const email = await inboxManager.read(emailId);
+            if (!email) {
+              context.emit('text', `Email ${emailId} not found.\n`);
+            } else {
+              const { formatEmailAsMarkdown } = await import('../inbox/parser/email-parser');
+              context.emit('text', '\n' + formatEmailAsMarkdown(email) + '\n');
+            }
+          } catch (error) {
+            context.emit('text', `Error reading: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages download <id> <index> (inbox attachment)
+        if (subcommand === 'download') {
+          if (!inboxManager) {
+            context.emit('text', 'Inbox is not enabled. Configure inbox in config.json.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const emailId = parts[1];
+          const indexArg = parts[2];
+
+          if (!emailId || !indexArg) {
+            context.emit('text', 'Usage: /messages download <email-id> <attachment-index>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const index = parseInt(indexArg, 10);
+          if (isNaN(index) || index < 0) {
+            context.emit('text', 'Invalid attachment index.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const path = await inboxManager.downloadAttachment(emailId, index);
+            context.emit('text', `Downloaded to: ${path}\n`);
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /messages compose <to> <subject> (inbox send)
+        if (subcommand === 'compose') {
+          if (!inboxManager) {
+            context.emit('text', 'Inbox is not enabled. Configure inbox in config.json.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const to = parts[1];
+          const subject = parts.slice(2).join(' ');
+
+          if (!to || !subject) {
+            context.emit('text', 'Usage: /messages compose <to> <subject>\n');
+            context.emit('text', 'Then type your message and send.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          context.emit('done');
+          return {
+            handled: false,
+            prompt: `Help me compose an email to ${to} with subject "${subject}". Ask me what I want to say, then use the inbox_send tool to send it.`,
+          };
+        }
+
+        // /messages address (inbox email address)
+        if (subcommand === 'address') {
+          if (!inboxManager) {
+            context.emit('text', 'Inbox is not enabled. Configure inbox in config.json.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const address = inboxManager.getEmailAddress();
+          context.emit('text', `Assistant email address: ${address}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // --- Assistant messages subcommands (delegated to MessagesManager) ---
+
         // /messages list
         if (subcommand === 'list') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           const unreadOnly = parts.includes('--unread') || parts.includes('-u');
           const limitArg = parts.find((p) => p.match(/^\d+$/));
           const limit = limitArg ? parseInt(limitArg, 10) : 20;
@@ -2444,6 +2375,12 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         // /messages threads
         if (subcommand === 'threads') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           try {
             const threads = await manager.listThreads();
             if (threads.length === 0) {
@@ -2471,6 +2408,12 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         // /messages read <id>
         if (subcommand === 'read') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           const messageId = parts[1];
           if (!messageId) {
             context.emit('text', 'Usage: /messages read <id>\n');
@@ -2510,6 +2453,12 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         // /messages thread <id>
         if (subcommand === 'thread') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           const threadId = parts[1];
           if (!threadId) {
             context.emit('text', 'Usage: /messages thread <id>\n');
@@ -2544,6 +2493,12 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         // /messages send <to> <subject>
         if (subcommand === 'send') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           context.emit('text', 'To send a message, use the messages_send tool:\n\n');
           context.emit('text', 'Example:\n');
           context.emit('text', '```\n');
@@ -2559,6 +2514,12 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         // /messages reply <id>
         if (subcommand === 'reply') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           const messageId = parts[1];
           if (!messageId) {
             context.emit('text', 'Usage: /messages reply <id>\n');
@@ -2580,6 +2541,12 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         // /messages delete <id>
         if (subcommand === 'delete') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           const messageId = parts[1];
           if (!messageId) {
             context.emit('text', 'Usage: /messages delete <id>\n');
@@ -2599,6 +2566,12 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         // /messages assistants
         if (subcommand === 'assistants') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           try {
             const assistants = await manager.listAssistants();
             if (assistants.length === 0) {
@@ -2620,6 +2593,12 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         // /messages stats
         if (subcommand === 'stats') {
+          if (!manager) {
+            context.emit('text', 'Messages are not enabled.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
           try {
             const stats = await manager.getStats();
             context.emit('text', '\n## Messages Statistics\n\n');
@@ -2636,7 +2615,8 @@ Created: ${new Date(job.createdAt).toISOString()}
         // /messages help
         if (subcommand === 'help') {
           context.emit('text', '\n## Messages Commands\n\n');
-          context.emit('text', '/messages                List recent messages (default: 20)\n');
+          context.emit('text', '### Assistant Messages\n\n');
+          context.emit('text', '/messages                Open messages panel\n');
           context.emit('text', '/messages list [--unread] List messages, optionally unread only\n');
           context.emit('text', '/messages threads        List conversation threads\n');
           context.emit('text', '/messages read <id>      Read specific message\n');
@@ -2646,14 +2626,24 @@ Created: ${new Date(job.createdAt).toISOString()}
           context.emit('text', '/messages delete <id>    Delete a message\n');
           context.emit('text', '/messages assistants     List known assistants\n');
           context.emit('text', '/messages stats          Show inbox statistics\n');
-          context.emit('text', '/messages help           Show this help\n\n');
-          context.emit('text', '## Tools\n\n');
+          context.emit('text', '\n### Email Inbox\n\n');
+          context.emit('text', '/messages fetch [limit]     Sync emails from S3 (default: 20)\n');
+          context.emit('text', '/messages email <id>        Read specific email\n');
+          context.emit('text', '/messages download <id> <n> Download attachment\n');
+          context.emit('text', '/messages compose <to> <subj> Compose and send email\n');
+          context.emit('text', '/messages address           Show assistant email address\n');
+          context.emit('text', '\n### Tools\n\n');
           context.emit('text', 'messages_send            Send a message to another assistant\n');
           context.emit('text', 'messages_list            List inbox messages\n');
           context.emit('text', 'messages_read            Read a specific message\n');
           context.emit('text', 'messages_read_thread     Read entire thread\n');
           context.emit('text', 'messages_delete          Delete a message\n');
           context.emit('text', 'messages_list_assistants  List known assistants\n');
+          context.emit('text', 'inbox_fetch              Fetch emails from server\n');
+          context.emit('text', 'inbox_list               List emails\n');
+          context.emit('text', 'inbox_read               Read specific email\n');
+          context.emit('text', 'inbox_send               Send/reply to email\n');
+          context.emit('text', '\n/inbox is an alias for /messages.\n');
           context.emit('done');
           return { handled: true };
         }
@@ -2974,9 +2964,16 @@ Created: ${new Date(job.createdAt).toISOString()}
         const parts = trimmedArgs.split(/\s+/);
         const action = parts[0]?.toLowerCase() || '';
 
+        // /workspace (no args) - show interactive panel
+        if (action === '') {
+          context.emit('done');
+          return { handled: true, showPanel: 'workspace' as const };
+        }
+
         // /workspace help
-        if (action === 'help' || action === '') {
+        if (action === 'help') {
           let message = '\n## Workspace Commands\n\n';
+          message += '/workspace                       Browse workspaces interactively\n';
           message += '/workspace list                  List all workspaces\n';
           message += '/workspace create <name>         Create a new shared workspace\n';
           message += '/workspace info <id>             Show workspace details\n';
@@ -4108,12 +4105,13 @@ Created: ${new Date(job.createdAt).toISOString()}
   }
 
   /**
-   * /skill - Create/manage skills
+   * /skills - Interactive skills panel (merged with /skill create)
    */
-  private skillCommand(): Command {
+  private skillsCommand(loader: CommandLoader): Command {
     return {
-      name: 'skill',
-      description: 'Create or manage skills (create, edit, invoke by name)',
+      name: 'skills',
+      aliases: ['skill'],
+      description: 'Browse, create, delete, and execute skills interactively',
       builtin: true,
       selfHandled: true,
       content: '',
@@ -4121,198 +4119,166 @@ Created: ${new Date(job.createdAt).toISOString()}
         const tokens = splitArgs(args || '');
         const subcommand = tokens.shift()?.toLowerCase();
 
-        const emitHelp = () => {
-          let message = '\n**/skill commands**\n\n';
-          message += '/skill create <name> [--project|--global] [options]\n';
-          message += '\nOptions:\n';
+        // /skills create <name> [options] - create flow (from old /skill command)
+        if (subcommand === 'create') {
+          let name: string | undefined;
+          let scope: SkillScope | undefined;
+          let description: string | undefined;
+          let argumentHint: string | undefined;
+          let content: string | undefined;
+          let overwrite = false;
+          let yes = false;
+          let interactive = false;
+          let allowedTools: string[] | undefined;
+
+          for (let i = 0; i < tokens.length; i += 1) {
+            const token = tokens[i];
+            if (!token) continue;
+            if (token.startsWith('--')) {
+              switch (token) {
+                case '--project':
+                  scope = 'project';
+                  break;
+                case '--global':
+                  scope = 'global';
+                  break;
+                case '--desc':
+                case '--description':
+                  description = tokens[i + 1];
+                  i += 1;
+                  break;
+                case '--tools': {
+                  const list = tokens[i + 1] || '';
+                  allowedTools = list
+                    .split(',')
+                    .map((tool) => tool.trim())
+                    .filter(Boolean);
+                  i += 1;
+                  break;
+                }
+                case '--hint':
+                  argumentHint = tokens[i + 1];
+                  i += 1;
+                  break;
+                case '--content':
+                  content = tokens[i + 1];
+                  i += 1;
+                  break;
+                case '--interactive':
+                case '--ask':
+                case '--interview':
+                  interactive = true;
+                  break;
+                case '--force':
+                case '--overwrite':
+                  overwrite = true;
+                  break;
+                case '--yes':
+                  yes = true;
+                  break;
+                default:
+                  break;
+              }
+            } else if (!name) {
+              name = token;
+            }
+          }
+
+          if (!name) {
+            context.emit('text', 'Usage: /skills create <name> [--project|--global]\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          if (interactive || (!scope && !yes)) {
+            const known: string[] = [];
+            if (scope) known.push(`scope: ${scope}`);
+            if (description) known.push(`description: ${description}`);
+            if (content) known.push(`content: provided`);
+            if (allowedTools && allowedTools.length > 0) known.push(`allowed_tools: ${allowedTools.join(', ')}`);
+            if (argumentHint) known.push(`argument_hint: ${argumentHint}`);
+
+            const missing: string[] = [];
+            if (!scope) missing.push('scope (project/global, default project)');
+            if (!description) missing.push('description');
+            if (!content) missing.push('content (multi-line allowed)');
+            if (!allowedTools || allowedTools.length === 0) missing.push('allowed tools (optional)');
+            if (!argumentHint) missing.push('argument hint (optional)');
+
+            const knownBlock = known.length > 0 ? `Known values:\\n- ${known.join('\\n- ')}\\n\\n` : '';
+            const missingBlock = missing.length > 0 ? `Ask for:\\n- ${missing.join('\\n- ')}\\n\\n` : '';
+
+            context.emit('done');
+            return {
+              handled: false,
+              prompt: `We are creating a new skill named \"${name}\".\\n\\n${knownBlock}${missingBlock}` +
+                'Use the ask_user tool to interview the user and collect missing fields. ' +
+                'Then call skill_create with name, scope, and any provided fields. ' +
+                'If the user leaves optional fields blank, omit them. ' +
+                'If scope is not specified, default to project.',
+            };
+          }
+
+          const finalScope: SkillScope = scope ?? 'project';
+
+          try {
+            const result = await createSkill({
+              name,
+              scope: finalScope,
+              description,
+              allowedTools,
+              argumentHint,
+              content,
+              cwd: context.cwd,
+              overwrite,
+            });
+
+            await context.refreshSkills?.();
+
+            let message = `\nCreated skill \"${result.name}\" (${result.scope}).\n`;
+            message += `Location: ${result.filePath}\n`;
+            message += `Invoke with: $${result.name} [args] or /${result.name} [args]\n`;
+            if (!scope) {
+              message += 'Defaulted to project scope. Use --global for a global skill.\n';
+            }
+            context.emit('text', message);
+            context.emit('done');
+            return { handled: true };
+          } catch (error) {
+            context.emit('text', `Failed to create skill: ${error instanceof Error ? error.message : String(error)}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+        }
+
+        // /skills help
+        if (subcommand === 'help') {
+          let message = '\n**/skills commands**\n\n';
+          message += '/skills                Open interactive skills panel\n';
+          message += '/skills create <name>  Create a new skill\n';
+          message += '\nOptions for create:\n';
           message += '  --project            Create in project (.assistants/skills)\n';
           message += '  --global             Create globally (~/.assistants/shared/skills)\n';
-          message += '  --desc \"...\"         Description\n';
+          message += '  --desc "..."         Description\n';
           message += '  --tools a,b,c        Allowed tools list\n';
-          message += '  --hint \"...\"         Argument hint\n';
-          message += '  --content \"...\"      Skill body content\n';
+          message += '  --hint "..."         Argument hint\n';
+          message += '  --content "..."      Skill body content\n';
           message += '  --interactive         Ask follow-up questions\n';
           message += '  --force              Overwrite existing skill\n';
           message += '  --yes                Accept default (project) scope\n';
-          message += '\nNotes:\n';
-          message += '  - Skill directories must start with \"skill-\"\n';
-          message += '  - Skill names should not include the word \"skill\"\n';
-          context.emit('text', message);
-          context.emit('done');
-        };
-
-        if (!subcommand || subcommand === 'help') {
-          emitHelp();
-          return { handled: true };
-        }
-
-        if (subcommand !== 'create') {
-          context.emit('text', `Unknown /skill command: ${subcommand}\n`);
-          context.emit('text', 'Use /skill help for available commands.\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        let name: string | undefined;
-        let scope: SkillScope | undefined;
-        let description: string | undefined;
-        let argumentHint: string | undefined;
-        let content: string | undefined;
-        let overwrite = false;
-        let yes = false;
-        let interactive = false;
-        let allowedTools: string[] | undefined;
-
-        for (let i = 0; i < tokens.length; i += 1) {
-          const token = tokens[i];
-          if (!token) continue;
-          if (token.startsWith('--')) {
-            switch (token) {
-              case '--project':
-                scope = 'project';
-                break;
-              case '--global':
-                scope = 'global';
-                break;
-              case '--desc':
-              case '--description':
-                description = tokens[i + 1];
-                i += 1;
-                break;
-              case '--tools': {
-                const list = tokens[i + 1] || '';
-                allowedTools = list
-                  .split(',')
-                  .map((tool) => tool.trim())
-                  .filter(Boolean);
-                i += 1;
-                break;
-              }
-              case '--hint':
-                argumentHint = tokens[i + 1];
-                i += 1;
-                break;
-              case '--content':
-                content = tokens[i + 1];
-                i += 1;
-                break;
-              case '--interactive':
-              case '--ask':
-              case '--interview':
-                interactive = true;
-                break;
-              case '--force':
-              case '--overwrite':
-                overwrite = true;
-                break;
-              case '--yes':
-                yes = true;
-                break;
-              default:
-                // ignore unknown flags
-                break;
-            }
-          } else if (!name) {
-            name = token;
-          }
-        }
-
-        if (!name) {
-          context.emit('text', 'Usage: /skill create <name> [--project|--global]\n');
-          context.emit('done');
-          return { handled: true };
-        }
-
-        if (interactive || (!scope && !yes)) {
-          const known: string[] = [];
-          if (scope) known.push(`scope: ${scope}`);
-          if (description) known.push(`description: ${description}`);
-          if (content) known.push(`content: provided`);
-          if (allowedTools && allowedTools.length > 0) known.push(`allowed_tools: ${allowedTools.join(', ')}`);
-          if (argumentHint) known.push(`argument_hint: ${argumentHint}`);
-
-          const missing: string[] = [];
-          if (!scope) missing.push('scope (project/global, default project)');
-          if (!description) missing.push('description');
-          if (!content) missing.push('content (multi-line allowed)');
-          if (!allowedTools || allowedTools.length === 0) missing.push('allowed tools (optional)');
-          if (!argumentHint) missing.push('argument hint (optional)');
-
-          const knownBlock = known.length > 0 ? `Known values:\\n- ${known.join('\\n- ')}\\n\\n` : '';
-          const missingBlock = missing.length > 0 ? `Ask for:\\n- ${missing.join('\\n- ')}\\n\\n` : '';
-
-          context.emit('done');
-          return {
-            handled: false,
-            prompt: `We are creating a new skill named \"${name}\".\\n\\n${knownBlock}${missingBlock}` +
-              'Use the ask_user tool to interview the user and collect missing fields. ' +
-              'Then call skill_create with name, scope, and any provided fields. ' +
-              'If the user leaves optional fields blank, omit them. ' +
-              'If scope is not specified, default to project.',
-          };
-        }
-
-        const finalScope: SkillScope = scope ?? 'project';
-
-        try {
-          const result = await createSkill({
-            name,
-            scope: finalScope,
-            description,
-            allowedTools,
-            argumentHint,
-            content,
-            cwd: context.cwd,
-            overwrite,
-          });
-
-          await context.refreshSkills?.();
-
-          let message = `\nCreated skill \"${result.name}\" (${result.scope}).\n`;
-          message += `Location: ${result.filePath}\n`;
-          message += `Invoke with: $${result.name} [args] or /${result.name} [args]\n`;
-          if (!scope) {
-            message += 'Defaulted to project scope. Use --global for a global skill.\n';
-          }
           context.emit('text', message);
           context.emit('done');
           return { handled: true };
-        } catch (error) {
-          context.emit('text', `Failed to create skill: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
+
+        // /skills (no args or unknown) → open interactive panel
+        if (!subcommand) {
           context.emit('done');
-          return { handled: true };
-        }
-      },
-    };
-  }
-
-  /**
-   * /skills - List available skills
-   */
-  private skillsCommand(loader: CommandLoader): Command {
-    return {
-      name: 'skills',
-      description: 'List all available skills with descriptions and argument hints',
-      builtin: true,
-      selfHandled: true,
-      content: '',
-      handler: async (args, context) => {
-        let message = '\n**Available Skills**\n\n';
-        message += 'Skills are invoked with $skill-name [arguments] or /skill-name [arguments]\n\n';
-        message += 'Create a skill with /skill create <name>\n\n';
-
-        if (context.skills.length === 0) {
-          message += 'No skills loaded.\n';
-          message += '\nAdd skills to ~/.assistants/shared/skills/ or .assistants/skills/\n';
-        } else {
-          for (const skill of context.skills) {
-            const hint = skill.argumentHint ? ` ${skill.argumentHint}` : '';
-            message += `  $${skill.name}${hint} - ${skill.description}\n`;
-          }
-          message += `\n${context.skills.length} skill(s) available.\n`;
+          return { handled: true, showPanel: 'skills' };
         }
 
-        context.emit('text', message);
+        context.emit('text', `Unknown /skills subcommand: ${subcommand}\n`);
+        context.emit('text', 'Use /skills help for available commands.\n');
         context.emit('done');
         return { handled: true };
       },
