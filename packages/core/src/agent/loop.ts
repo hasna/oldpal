@@ -13,7 +13,7 @@ import {
   type ContextInjectionConfig,
 } from '../context';
 import { ToolRegistry } from '../tools/registry';
-import { ConnectorBridge, registerConnectorsListTool } from '../tools/connector';
+import { ConnectorBridge, registerConnectorExecuteTool, registerConnectorsListTool, registerConnectorsSearchTool } from '../tools/connector';
 import { registerConnectorAutoRefreshTool } from '../tools/connector-refresh';
 import { registerConfigTools } from '../tools/config';
 import { registerAssistantTools } from '../tools/assistant';
@@ -545,6 +545,15 @@ export class AssistantLoop {
 
     // Register connectors list tool
     registerConnectorsListTool(this.toolRegistry, {
+      getConnectorBridge: () => this.connectorBridge,
+    });
+    registerConnectorsSearchTool(this.toolRegistry, {
+      getConnectorBridge: () => this.connectorBridge,
+      onConnectorSelected: (connectorName) => {
+        this.connectorBridge.registerConnector(this.toolRegistry, connectorName);
+      },
+    });
+    registerConnectorExecuteTool(this.toolRegistry, {
       getConnectorBridge: () => this.connectorBridge,
     });
     registerConnectorAutoRefreshTool(this.toolRegistry);
@@ -1096,6 +1105,25 @@ export class AssistantLoop {
         hook_event_name: 'Stop',
         cwd: this.cwd,
       });
+
+      // Run native Stop hooks (e.g., auto-schedule heartbeat) unconditionally
+      try {
+        await nativeHookRegistry.execute(
+          'Stop',
+          {
+            session_id: this.sessionId,
+            hook_event_name: 'Stop',
+            cwd: this.cwd,
+          },
+          {
+            sessionId: this.sessionId,
+            cwd: this.cwd,
+            messages: this.context.getMessages(),
+          }
+        );
+      } catch {
+        // Native Stop hooks must never block the assistant
+      }
 
       const shouldSkipVerification = this.shouldStop || streamError !== null;
       if (shouldSkipVerification) {
