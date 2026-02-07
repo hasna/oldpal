@@ -134,6 +134,16 @@ export {
   registerSwarmTools,
 } from './tools/swarm';
 export type { SwarmToolContext } from './tools/swarm';
+export {
+  logsTools,
+  logsQueryTool,
+  logsStatsTool,
+  logsSearchTool,
+  logsTailTool,
+  createLogsToolExecutors,
+  registerLogsTools,
+} from './tools/logs';
+export type { LogsToolContext, LogSource, NormalizedLogEntry } from './tools/logs';
 
 // Commands
 export { CommandLoader, CommandExecutor, BuiltinCommands } from './commands';
@@ -142,7 +152,8 @@ export type { Command, CommandContext, CommandResult, TokenUsage } from './comma
 // Skills
 export { SkillLoader } from './skills/loader';
 export { SkillExecutor } from './skills/executor';
-export { createSkill } from './skills/create';
+export { createSkill, deleteSkill } from './skills/create';
+export type { SkillScope, CreateSkillOptions, CreateSkillResult } from './skills/create';
 
 // Hooks
 export { HookLoader } from './hooks/loader';
@@ -311,7 +322,14 @@ export { Logger, SessionStorage, initAssistantsDir } from './logger';
 export type { SessionData, SavedSessionInfo } from './logger';
 
 // History
-export * from './history';
+export {
+  loadHistory,
+  saveHistory,
+  appendToHistory,
+  getHistoryPath,
+  CommandHistory,
+  getCommandHistory,
+} from './history/storage';
 
 // Projects
 export * from './projects';

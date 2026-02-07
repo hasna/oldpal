@@ -254,6 +254,29 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Refresh skills from disk
+   */
+  async refreshSkills(): Promise<Skill[]> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    if (typeof (this.assistantLoop as any).refreshSkills === 'function') {
+      await (this.assistantLoop as any).refreshSkills();
+    }
+    return this.assistantLoop.getSkills();
+  }
+
+  /**
+   * Get the skill loader (for panel operations like ensureSkillContent)
+   */
+  getSkillLoader(): any {
+    if (typeof (this.assistantLoop as any).getSkillLoader === 'function') {
+      return (this.assistantLoop as any).getSkillLoader();
+    }
+    return null;
+  }
+
+  /**
    * Stop the current processing
    */
   stop(): void {
