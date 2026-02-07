@@ -32,6 +32,7 @@ export class EmbeddedClient implements AssistantClient {
       initialMessages?: Message[];
       systemPrompt?: string;
       allowedTools?: string[];
+      assistantId?: string;
       /** Override the model from config (e.g., assistant-specific model selection) */
       model?: string;
       startedAt?: string;
@@ -54,6 +55,7 @@ export class EmbeddedClient implements AssistantClient {
     this.assistantLoop = createAssistant({
       cwd: this.cwd,
       sessionId,
+      assistantId: options?.assistantId,
       allowedTools: options?.allowedTools,
       extraSystemPrompt: options?.systemPrompt,
       model: options?.model,
@@ -413,6 +415,16 @@ export class EmbeddedClient implements AssistantClient {
   getMessagesManager(): any {
     if (typeof (this.assistantLoop as any).getMessagesManager === 'function') {
       return (this.assistantLoop as any).getMessagesManager();
+    }
+    return null;
+  }
+
+  /**
+   * Get the webhooks manager
+   */
+  getWebhooksManager(): any {
+    if (typeof (this.assistantLoop as any).getWebhooksManager === 'function') {
+      return (this.assistantLoop as any).getWebhooksManager();
     }
     return null;
   }

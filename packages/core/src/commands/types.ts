@@ -1,4 +1,4 @@
-import type { Tool, TokenUsage, EnergyState, VoiceState, HookConfig, BudgetConfig, GuardrailsConfigShared } from '@hasna/assistants-shared';
+import type { Tool, TokenUsage, EnergyState, VoiceState, HeartbeatState, HeartbeatConfig, HookConfig, BudgetConfig, GuardrailsConfigShared } from '@hasna/assistants-shared';
 import type { BudgetScope } from '../budget/types';
 import type { GuardrailsConfig, GuardrailsPolicy, PolicyAction } from '../guardrails/types';
 import type { RecordOptions } from '../voice/recorder';
@@ -9,6 +9,7 @@ import type { InboxManager } from '../inbox';
 import type { WalletManager } from '../wallet';
 import type { SecretsManager } from '../secrets';
 import type { MessagesManager } from '../messages';
+import type { WebhooksManager } from '../webhooks';
 import type { GlobalMemoryManager } from '../memory';
 import type { SwarmCoordinator } from '../swarm';
 
@@ -78,6 +79,8 @@ export interface CommandContext {
   getModel?: () => string | undefined;
   getEnergyState?: () => EnergyState | null;
   getVoiceState?: () => VoiceState | null;
+  getHeartbeatState?: () => HeartbeatState | null;
+  getHeartbeatConfig?: () => HeartbeatConfig | null;
   enableVoice?: () => void;
   disableVoice?: () => void;
   speak?: (text: string) => Promise<void>;
@@ -90,6 +93,7 @@ export interface CommandContext {
   getWalletManager?: () => WalletManager | null;
   getSecretsManager?: () => SecretsManager | null;
   getMessagesManager?: () => MessagesManager | null;
+  getWebhooksManager?: () => WebhooksManager | null;
   getMemoryManager?: () => GlobalMemoryManager | null;
   getHooks?: () => HookConfig;
   setHookEnabled?: (hookId: string, enabled: boolean) => Promise<boolean>;
@@ -141,7 +145,7 @@ export interface CommandResult {
   /** Agent name/ID to assign to session */
   sessionAgent?: string;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks';
   /** Initial value for panel (e.g., connector name) */
   panelInitialValue?: string;
 }

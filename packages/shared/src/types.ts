@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -451,6 +451,7 @@ export interface AssistantsConfig {
   secrets?: SecretsConfig;
   jobs?: JobsConfig;
   messages?: MessagesConfig;
+  webhooks?: WebhooksConfig;
   memory?: MemoryConfigShared;
   subassistants?: SubassistantConfigShared;
   input?: InputConfig;
@@ -864,6 +865,7 @@ export interface HeartbeatConfig {
   intervalMs?: number;
   staleThresholdMs?: number;
   persistPath?: string;
+  historyPath?: string;
   /** Enable autonomous self-scheduling (default: false). */
   autonomous?: boolean;
   /** Maximum ms the agent can sleep between heartbeats. */
@@ -1171,6 +1173,41 @@ export interface MessagesConfig {
     maxMessages?: number;
     /** Max age in days (default: 90) */
     maxAgeDays?: number;
+  };
+}
+
+/**
+ * Configuration for webhooks system
+ * Enables external apps and connectors to push events to the assistant
+ */
+export interface WebhooksConfig {
+  /** Whether webhooks are enabled (default: false) */
+  enabled?: boolean;
+
+  /** Auto-injection settings for webhook events */
+  injection?: {
+    /** Auto-inject events at turn start (default: true) */
+    enabled?: boolean;
+    /** Max events to inject per turn (default: 5) */
+    maxPerTurn?: number;
+  };
+
+  /** Storage settings */
+  storage?: {
+    /** Base path (default: ~/.assistants/webhooks) */
+    basePath?: string;
+    /** Max events to retain per webhook (default: 1000) */
+    maxEvents?: number;
+    /** Max event age in days (default: 30) */
+    maxAgeDays?: number;
+  };
+
+  /** Security settings */
+  security?: {
+    /** Max timestamp age in milliseconds for replay protection (default: 300000 = 5 min) */
+    maxTimestampAgeMs?: number;
+    /** Rate limit: max events per webhook per minute (default: 60) */
+    rateLimitPerMinute?: number;
   };
 }
 

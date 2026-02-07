@@ -6,6 +6,7 @@ import { getRuntime } from '../runtime';
 import { buildCommandArgs } from '../utils/command-line';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
+import { SessionStorage } from '../logger';
 import { generateId } from '@hasna/assistants-shared';
 import { saveFeedbackEntry, type FeedbackType } from '../tools/feedback';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
@@ -13,6 +14,7 @@ import type { InboxManager } from '../inbox';
 import type { WalletManager } from '../wallet';
 import type { SecretsManager } from '../secrets';
 import type { MessagesManager } from '../messages';
+import type { Heartbeat } from '../heartbeat/types';
 import {
   saveSchedule,
   listSchedules,
@@ -22,6 +24,11 @@ import {
   computeNextRun,
 } from '../scheduler/store';
 import { formatRelativeTime } from '../scheduler/format';
+import {
+  listHeartbeatHistorySessions,
+  readHeartbeatHistory,
+  resolveHeartbeatHistoryPath,
+} from '../heartbeat/history';
 import {
   createProject,
   deleteProject,
@@ -156,6 +163,7 @@ export class BuiltinCommands {
     loader.register(this.clearCommand());
     loader.register(this.newCommand());
     loader.register(this.sessionCommand());
+    loader.register(this.resumeCommand());
     loader.register(this.statusCommand());
     loader.register(this.tokensCommand());
     loader.register(this.contextCommand());
@@ -184,6 +192,7 @@ export class BuiltinCommands {
     loader.register(this.hooksCommand());
     loader.register(this.feedbackCommand());
     loader.register(this.schedulesCommand());
+    loader.register(this.heartbeatCommand());
     loader.register(this.connectorsCommand());
     loader.register(this.securityLogCommand());
     loader.register(this.guardrailsCommand());
@@ -192,6 +201,7 @@ export class BuiltinCommands {
     loader.register(this.secretsCommand());
     loader.register(this.jobsCommand());
     loader.register(this.messagesCommand());
+    loader.register(this.webhooksCommand());
     loader.register(this.tasksCommand());
     loader.register(this.exitCommand());
   }
@@ -2657,6 +2667,181 @@ Created: ${new Date(job.createdAt).toISOString()}
   }
 
   /**
+   * /webhooks - Manage webhooks for receiving external events
+   */
+  private webhooksCommand(): Command {
+    return {
+      name: 'webhooks',
+      description: 'Manage webhooks for receiving push events from external sources',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const trimmed = args.trim();
+        const [subcommand, ...rest] = trimmed.split(/\s+/);
+        const subArgs = rest.join(' ');
+
+        // /webhooks (no args) or /webhooks ui → open interactive panel
+        if (!subcommand || subcommand === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'webhooks' };
+        }
+
+        const manager = context.getWebhooksManager?.();
+        if (!manager) {
+          context.emit('text', 'Webhooks are not enabled. Set webhooks.enabled: true in config.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /webhooks list
+        if (subcommand === 'list') {
+          try {
+            const webhooks = await manager.list();
+            if (webhooks.length === 0) {
+              context.emit('text', 'No webhooks registered. Use /webhooks create <name> <source> to create one.\n');
+            } else {
+              context.emit('text', `Webhooks (${webhooks.length}):\n\n`);
+              for (const wh of webhooks) {
+                const statusIcon = wh.status === 'active' ? '●' : wh.status === 'paused' ? '◐' : '✗';
+                const lastDelivery = wh.lastDeliveryAt
+                  ? new Date(wh.lastDeliveryAt).toLocaleDateString()
+                  : 'never';
+                context.emit('text', `  ${statusIcon} ${wh.name} (${wh.id})\n`);
+                context.emit('text', `    Source: ${wh.source} | Events: ${wh.deliveryCount} | Last: ${lastDelivery}\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /webhooks create <name> <source>
+        if (subcommand === 'create') {
+          const parts = subArgs.split(/\s+/);
+          const name = parts[0];
+          const source = parts[1] || 'custom';
+
+          if (!name) {
+            context.emit('text', 'Usage: /webhooks create <name> [source]\n');
+            context.emit('text', 'Example: /webhooks create gmail-hook gmail\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = await manager.create({ name, source });
+            if (result.success) {
+              context.emit('text', `Webhook created!\n\n`);
+              context.emit('text', `  ID:     ${result.webhookId}\n`);
+              context.emit('text', `  URL:    ${result.url}\n`);
+              context.emit('text', `  Secret: ${result.secret}\n`);
+              context.emit('text', `\nConfigure the external source with the URL and secret above.\n`);
+            } else {
+              context.emit('text', `Error: ${result.message}\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /webhooks delete <id>
+        if (subcommand === 'delete') {
+          const id = subArgs.trim();
+          if (!id) {
+            context.emit('text', 'Usage: /webhooks delete <webhook-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = await manager.delete(id);
+            context.emit('text', `${result.message}\n`);
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /webhooks events <webhookId>
+        if (subcommand === 'events') {
+          const webhookId = subArgs.trim();
+          if (!webhookId) {
+            context.emit('text', 'Usage: /webhooks events <webhook-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const events = await manager.listEvents(webhookId, { limit: 20 });
+            if (events.length === 0) {
+              context.emit('text', 'No events received for this webhook.\n');
+            } else {
+              context.emit('text', `Recent events (${events.length}):\n\n`);
+              for (const evt of events) {
+                const statusIcon = evt.status === 'pending' ? '⏳' : evt.status === 'injected' ? '📨' : '✓';
+                context.emit('text', `  ${statusIcon} ${evt.eventType} (${evt.id})\n`);
+                context.emit('text', `    ${new Date(evt.timestamp).toLocaleString()} | ${evt.preview}\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /webhooks test <id>
+        if (subcommand === 'test') {
+          const id = subArgs.trim();
+          if (!id) {
+            context.emit('text', 'Usage: /webhooks test <webhook-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = await manager.sendTestEvent(id);
+            if (result.success) {
+              context.emit('text', `Test event sent! Event ID: ${result.eventId}\n`);
+            } else {
+              context.emit('text', `Error: ${result.message}\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /webhooks help
+        if (subcommand === 'help') {
+          context.emit('text', 'Webhook Commands:\n\n');
+          context.emit('text', '/webhooks                Open webhooks panel\n');
+          context.emit('text', '/webhooks list           List all webhooks\n');
+          context.emit('text', '/webhooks create <name> <source>  Create a webhook\n');
+          context.emit('text', '/webhooks delete <id>    Delete a webhook\n');
+          context.emit('text', '/webhooks events <id>    List events for a webhook\n');
+          context.emit('text', '/webhooks test <id>      Send a test event\n');
+          context.emit('text', '/webhooks help           Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown command: ${subcommand}\n`);
+        context.emit('text', 'Use /webhooks help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
    * /tasks - Task queue management
    */
   private tasksCommand(): Command {
@@ -3212,6 +3397,100 @@ Created: ${new Date(job.createdAt).toISOString()}
         // /session list or no arg - signal to show session list
         context.emit('done');
         return { handled: true, sessionAction: 'list' };
+      },
+    };
+  }
+
+  /**
+   * /resume - Resume saved sessions
+   */
+  private resumeCommand(): Command {
+    return {
+      name: 'resume',
+      description: 'Resume saved sessions from disk',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const trimmed = args.trim().toLowerCase();
+        const showAll = trimmed.includes('--all');
+        const cleanedArgs = trimmed.replace('--all', '').trim();
+
+        if (!cleanedArgs || cleanedArgs === 'ui') {
+          context.emit('done');
+          return {
+            handled: true,
+            showPanel: 'resume',
+            panelInitialValue: showAll ? 'all' : 'cwd',
+          };
+        }
+
+        if (cleanedArgs === 'list' || cleanedArgs === '--list') {
+          const allSessions = SessionStorage.listAllSessions();
+          const normalizeCwd = (value: string) => value.replace(/\/+$/, '');
+          const targetCwd = normalizeCwd(context.cwd);
+          const sessions = showAll
+            ? allSessions
+            : allSessions.filter((session) => normalizeCwd(session.cwd) === targetCwd);
+
+          if (sessions.length === 0) {
+            context.emit(
+              'text',
+              showAll
+                ? 'No saved sessions found.\n'
+                : 'No saved sessions found for this directory.\n'
+            );
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const assistantManager = context.getAssistantManager?.();
+          const assistantNames = assistantManager
+            ? new Map(assistantManager.listAssistants().map((a) => [a.id, a.name]))
+            : null;
+
+          const truncate = (value: string, maxLen: number) =>
+            value.length > maxLen ? `${value.slice(0, maxLen - 3)}...` : value;
+          const escapeCell = (value: string) =>
+            value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+
+          let output = '\n';
+          if (showAll) {
+            output += '| ID | Assistant | Updated | Messages | CWD |\n';
+            output += '|----|-----------|---------|----------|-----|\n';
+          } else {
+            output += '| ID | Updated | Messages | CWD |\n';
+            output += '|----|---------|----------|-----|\n';
+          }
+
+          for (const session of sessions) {
+            const updated = formatRelativeTime(new Date(session.updatedAt).getTime());
+            const messageCount = session.messageCount ?? 0;
+            const cwd = escapeCell(truncate(singleLine(session.cwd || ''), 48));
+            const id = escapeCell(session.id.slice(0, 8));
+            if (showAll) {
+              const assistantLabel = session.assistantId
+                ? assistantNames?.get(session.assistantId) || session.assistantId
+                : 'default';
+              output += `| ${id} | ${escapeCell(truncate(assistantLabel, 16))} | ${updated} | ${messageCount} | ${cwd} |\n`;
+            } else {
+              output += `| ${id} | ${updated} | ${messageCount} | ${cwd} |\n`;
+            }
+          }
+
+          context.emit('text', output);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', '\n**Resume** - Load saved sessions from disk\n\n');
+        context.emit('text', 'Usage:\n');
+        context.emit('text', '  /resume             Open interactive panel (current folder)\n');
+        context.emit('text', '  /resume --all       Open interactive panel (all sessions)\n');
+        context.emit('text', '  /resume list        Show text table (current folder)\n');
+        context.emit('text', '  /resume list --all  Show text table (all sessions)\n');
+        context.emit('done');
+        return { handled: true };
       },
     };
   }
@@ -5983,6 +6262,138 @@ Please summarize the last interaction and suggest 2-3 next steps.
         context.emit('text', '  /schedules ui          Open interactive panel\n');
         context.emit('text', '  /schedules list        Show text table (this session)\n');
         context.emit('text', '  /schedules list --all  Show all schedules\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /heartbeat - View heartbeat status and run history
+   */
+  private heartbeatCommand(): Command {
+    return {
+      name: 'heartbeat',
+      description: 'View heartbeat status and recent heartbeat runs',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const trimmed = args.trim().toLowerCase();
+        const showAll = trimmed.includes('--all');
+        const cleanedArgs = trimmed.replace('--all', '').trim();
+
+        const heartbeatState = context.getHeartbeatState?.() ?? null;
+        const heartbeatConfig = context.getHeartbeatConfig?.() ?? null;
+        const historyPathTemplate = heartbeatConfig?.historyPath;
+
+        // Show interactive panel for no args or 'ui' command
+        if (!cleanedArgs || cleanedArgs === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'heartbeat' };
+        }
+
+        // Text-based list for 'list' or '--list'
+        if (cleanedArgs === 'list' || cleanedArgs === '--list') {
+          const canEnumerate =
+            !historyPathTemplate || historyPathTemplate.includes('{sessionId}');
+          const sessionIds = showAll && canEnumerate
+            ? listHeartbeatHistorySessions()
+            : [context.sessionId];
+
+          const rows: Array<{ sessionId: string; run: Heartbeat }> = [];
+          for (const sessionId of sessionIds) {
+            const historyPath = resolveHeartbeatHistoryPath(sessionId, historyPathTemplate);
+            const runs = await readHeartbeatHistory(historyPath, { order: 'desc' });
+            for (const run of runs) {
+              rows.push({ sessionId, run });
+            }
+          }
+
+          if (rows.length === 0) {
+            context.emit(
+              'text',
+              showAll
+                ? 'No heartbeat runs found.\n'
+                : 'No heartbeat runs found for this session.\n'
+            );
+            context.emit('done');
+            return { handled: true };
+          }
+
+          rows.sort((a, b) => {
+            const aTime = new Date(a.run.timestamp).getTime();
+            const bTime = new Date(b.run.timestamp).getTime();
+            return bTime - aTime;
+          });
+
+          const rel = (iso?: string) =>
+            formatRelativeTime(iso ? new Date(iso).getTime() : undefined);
+
+          if (heartbeatState) {
+            const stateLine = `State: ${heartbeatState.state} | ` +
+              `Stale: ${heartbeatState.isStale ? 'yes' : 'no'} | ` +
+              `Last Activity: ${rel(heartbeatState.lastActivity)}`;
+            context.emit('text', `\n**Heartbeat Status**\n${stateLine}\n\n`);
+          }
+
+          const escapeCell = (value: string) =>
+            value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+
+          let output = '\n';
+          if (showAll) {
+            output += '| Session | Time | State | Last Activity | Msgs | Tools | Errors |\n';
+            output += '|--------|------|-------|---------------|------|-------|--------|\n';
+          } else {
+            output += '| Time | State | Last Activity | Msgs | Tools | Errors |\n';
+            output += '|------|-------|---------------|------|-------|--------|\n';
+          }
+
+          for (const { sessionId, run } of rows) {
+            const time = rel(run.timestamp);
+            const activity = rel(run.lastActivity);
+            const stats = run.stats || { messagesProcessed: 0, toolCallsExecuted: 0, errorsEncountered: 0 };
+            if (showAll) {
+              output += `| ${escapeCell(sessionId.slice(0, 8))} | ${time} | ${run.state} | ${activity} | ${stats.messagesProcessed} | ${stats.toolCallsExecuted} | ${stats.errorsEncountered} |\n`;
+            } else {
+              output += `| ${time} | ${run.state} | ${activity} | ${stats.messagesProcessed} | ${stats.toolCallsExecuted} | ${stats.errorsEncountered} |\n`;
+            }
+          }
+
+          context.emit('text', output);
+          if (showAll && historyPathTemplate && !historyPathTemplate.includes('{sessionId}')) {
+            context.emit('text', '\nNote: custom heartbeat historyPath does not include {sessionId}; showing current session only.\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        if (cleanedArgs === 'status') {
+          if (!heartbeatState) {
+            context.emit('text', 'Heartbeat status unavailable.\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const rel = (iso?: string) =>
+            formatRelativeTime(iso ? new Date(iso).getTime() : undefined);
+          context.emit('text', '\n**Heartbeat Status**\n');
+          context.emit('text', `State: ${heartbeatState.state}\n`);
+          context.emit('text', `Enabled: ${heartbeatState.enabled ? 'yes' : 'no'}\n`);
+          context.emit('text', `Stale: ${heartbeatState.isStale ? 'yes' : 'no'}\n`);
+          context.emit('text', `Last Activity: ${rel(heartbeatState.lastActivity)}\n`);
+          context.emit('text', `Uptime: ${heartbeatState.uptimeSeconds}s\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // Show help
+        context.emit('text', '\n**Heartbeat** - View heartbeat status and run history\n\n');
+        context.emit('text', 'Usage:\n');
+        context.emit('text', '  /heartbeat             Open interactive panel\n');
+        context.emit('text', '  /heartbeat ui          Open interactive panel\n');
+        context.emit('text', '  /heartbeat list        Show text table (this session)\n');
+        context.emit('text', '  /heartbeat list --all  Show text table for all sessions\n');
+        context.emit('text', '  /heartbeat status      Show current heartbeat status\n');
         context.emit('done');
         return { handled: true };
       },

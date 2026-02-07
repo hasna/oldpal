@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { spawn } from 'child_process';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
-import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, AudioRecorder, ElevenLabsSTT, WhisperSTT, type SessionInfo, type RecoverableSession, type CreateIdentityOptions } from '@hasna/assistants-core';
+import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, AudioRecorder, ElevenLabsSTT, WhisperSTT, readHeartbeatHistoryBySession, type SessionInfo, type RecoverableSession, type CreateIdentityOptions, type Heartbeat, type SavedSessionInfo, type CreateSessionOptions } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand, Skill } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input, type InputHandle } from './Input';
@@ -24,6 +24,7 @@ import { IdentityPanel } from './IdentityPanel';
 import { HooksPanel } from './HooksPanel';
 import { ConfigPanel } from './ConfigPanel';
 import { MessagesPanel } from './MessagesPanel';
+import { WebhooksPanel } from './WebhooksPanel';
 import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
 import { AssistantsRegistryPanel } from './AssistantsRegistryPanel';
@@ -37,8 +38,11 @@ import { WorkspacePanel } from './WorkspacePanel';
 import { AssistantsDashboard } from './AssistantsDashboard';
 import { SwarmPanel } from './SwarmPanel';
 import { LogsPanel } from './LogsPanel';
+import { HeartbeatPanel } from './HeartbeatPanel';
+import { ResumePanel } from './ResumePanel';
 import type { QueuedMessage } from './appTypes';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
+import { CLEAR_SCREEN_TOKEN } from '../output/sanitize';
 import {
   getTasks,
   addTask,
@@ -329,6 +333,9 @@ export function App({ cwd, version }: AppProps) {
   const [projectConfig, setProjectConfig] = useState<Partial<AssistantsConfig> | null>(null);
   const [localConfig, setLocalConfig] = useState<Partial<AssistantsConfig> | null>(null);
 
+  // Webhooks panel state
+  const [showWebhooksPanel, setShowWebhooksPanel] = useState(false);
+
   // Messages panel state
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const [messagesPanelError, setMessagesPanelError] = useState<string | null>(null);
@@ -382,6 +389,12 @@ export function App({ cwd, version }: AppProps) {
 
   // Logs panel state
   const [showLogsPanel, setShowLogsPanel] = useState(false);
+  const [showHeartbeatPanel, setShowHeartbeatPanel] = useState(false);
+  const [heartbeatRuns, setHeartbeatRuns] = useState<Heartbeat[]>([]);
+  const [showResumePanel, setShowResumePanel] = useState(false);
+  const [resumeSessions, setResumeSessions] = useState<SavedSessionInfo[]>([]);
+  const [resumeFilter, setResumeFilter] = useState<'cwd' | 'all'>('cwd');
+  const [staticResetKey, setStaticResetKey] = useState(0);
 
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
@@ -407,6 +420,9 @@ export function App({ cwd, version }: AppProps) {
   const [lastWorkedFor, setLastWorkedFor] = useState<string | undefined>();
   const [isListening, setIsListening] = useState(false);
   const [listeningDraft, setListeningDraft] = useState('');
+
+  const renderedMessageIdsRef = useRef<Set<string>>(new Set());
+  const cachedDisplayMessagesRef = useRef<Map<string, ReturnType<typeof buildDisplayMessages>[0][]>>(new Map());
 
   // Push-to-talk state
   const [pttRecording, setPttRecording] = useState(false);
@@ -901,6 +917,133 @@ export function App({ cwd, version }: AppProps) {
     }
   }, []);
 
+  const clearSessionWindow = useCallback(() => {
+    if (stdout?.write) {
+      stdout.write(CLEAR_SCREEN_TOKEN);
+    } else if (process.stdout?.write) {
+      process.stdout.write(CLEAR_SCREEN_TOKEN);
+    }
+    renderedMessageIdsRef.current.clear();
+    cachedDisplayMessagesRef.current.clear();
+    setStaticResetKey((prev) => prev + 1);
+  }, [stdout]);
+
+  const switchToSession = useCallback(async (sessionId: string) => {
+    if (sessionId === activeSessionId) {
+      return;
+    }
+
+    saveCurrentSessionState();
+    clearSessionWindow();
+
+    // Load new session state BEFORE switching (prevents race with buffered chunk replay)
+    loadSessionState(sessionId);
+
+    const session = registry.getSession(sessionId);
+    if (session) {
+      setIsProcessing(session.isProcessing);
+      isProcessingRef.current = session.isProcessing;
+      setEnergyState(session.client.getEnergyState() ?? undefined);
+      setVoiceState(session.client.getVoiceState() ?? undefined);
+      setHeartbeatState(session.client.getHeartbeatState?.() ?? undefined);
+      setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
+      await loadSessionMetadata(session);
+    }
+
+    // Now switch session in registry (may replay buffered chunks to the reset state)
+    await registry.switchSession(sessionId);
+    setActiveSessionId(sessionId);
+  }, [
+    activeSessionId,
+    saveCurrentSessionState,
+    clearSessionWindow,
+    loadSessionState,
+    registry,
+    loadSessionMetadata,
+  ]);
+
+  const createAndActivateSession = useCallback(async (options: CreateSessionOptions) => {
+    saveCurrentSessionState();
+    const newSession = await registry.createSession(options);
+    newSession.client.setAskUserHandler((request) => beginAskUser(newSession.id, request));
+
+    clearSessionWindow();
+
+    await registry.switchSession(newSession.id);
+    setActiveSessionId(newSession.id);
+
+    // Initialize empty state AFTER switching (prevents old-session chunks from repopulating UI)
+    loadSessionState(newSession.id);
+    setIsProcessing(false);
+    isProcessingRef.current = false;
+    setEnergyState(newSession.client.getEnergyState() ?? undefined);
+    setVoiceState(newSession.client.getVoiceState() ?? undefined);
+    setHeartbeatState(newSession.client.getHeartbeatState?.() ?? undefined);
+    setIdentityInfo(newSession.client.getIdentityInfo() ?? undefined);
+    await loadSessionMetadata(newSession);
+
+    return newSession;
+  }, [registry, beginAskUser, clearSessionWindow, loadSessionState, loadSessionMetadata, saveCurrentSessionState]);
+
+  const seedSessionState = useCallback((sessionId: string, seededMessages: Message[]) => {
+    sessionUIStates.current.set(sessionId, {
+      messages: seededMessages,
+      currentResponse: '',
+      activityLog: [],
+      toolCalls: [],
+      toolResults: [],
+      tokenUsage: undefined,
+      energyState: undefined,
+      voiceState: undefined,
+      heartbeatState: undefined,
+      identityInfo: undefined,
+      processingStartTime: undefined,
+      currentTurnTokens: 0,
+      error: null,
+      lastWorkedFor: undefined,
+    });
+  }, []);
+
+  const refreshResumeSessions = useCallback(async () => {
+    setResumeSessions(SessionStorage.listAllSessions());
+  }, []);
+
+  const resumeFromSavedSession = useCallback(async (saved: SavedSessionInfo) => {
+    setShowResumePanel(false);
+
+    const sessionData = SessionStorage.loadSession(saved.id, saved.assistantId ?? null);
+    if (!sessionData) {
+      setError('Failed to load saved session.');
+      return;
+    }
+
+    let session = registry.getSession(saved.id);
+    if (!session) {
+      try {
+        session = await registry.createSession({
+          cwd: sessionData.cwd || cwd,
+          assistantId: saved.assistantId || undefined,
+          sessionId: saved.id,
+          initialMessages: sessionData.messages as Message[],
+          startedAt: sessionData.startedAt,
+        });
+      } catch (error) {
+        session = await registry.createSession({
+          cwd: sessionData.cwd || cwd,
+          assistantId: saved.assistantId || undefined,
+          initialMessages: sessionData.messages as Message[],
+          startedAt: sessionData.startedAt,
+        });
+      }
+      session.client.setAskUserHandler((request) => beginAskUser(session.id, request));
+    }
+
+    if (!sessionUIStates.current.has(session.id)) {
+      seedSessionState(session.id, sessionData.messages as Message[]);
+    }
+    await switchToSession(session.id);
+  }, [cwd, registry, beginAskUser, seedSessionState, switchToSession]);
+
   // Handle chunk from registry
   const handleChunk = useCallback((chunk: StreamChunk) => {
     const isStartChunk = chunk.type === 'text' || chunk.type === 'tool_use';
@@ -1106,14 +1249,12 @@ export function App({ cwd, version }: AppProps) {
             if (payload.action === 'list') {
               setShowSessionSelector(true);
             } else if (payload.action === 'new') {
-              registry.createSession({
+              createAndActivateSession({
                 cwd,
                 label: payload.label,
                 assistantId: payload.agent,
-              }).then((newSession) => {
-                registry.switchSession(newSession.id).then(() => {
-                  setActiveSessionId(newSession.id);
-                });
+              }).catch((err) => {
+                setError(err instanceof Error ? err.message : 'Failed to create session');
               });
             } else if (payload.action === 'assign' && payload.agent) {
               const active = registry.getActiveSession();
@@ -1124,8 +1265,8 @@ export function App({ cwd, version }: AppProps) {
               const allSessions = registry.listSessions();
               const target = allSessions[payload.number - 1];
               if (target) {
-                registry.switchSession(target.id).then(() => {
-                  setActiveSessionId(target.id);
+                switchToSession(target.id).catch((err) => {
+                  setError(err instanceof Error ? err.message : 'Failed to switch session');
                 });
               }
             }
@@ -1154,6 +1295,8 @@ export function App({ cwd, version }: AppProps) {
         // Load config and show panel
         loadConfigFiles();
         setShowConfigPanel(true);
+      } else if (chunk.panel === 'webhooks') {
+        setShowWebhooksPanel(true);
       } else if (chunk.panel === 'messages') {
         // Load messages and inbox data, then show unified panel
         const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
@@ -1350,11 +1493,40 @@ export function App({ cwd, version }: AppProps) {
           setWorkspacesList(workspaces);
           setShowWorkspacePanel(true);
         });
+      } else if (chunk.panel === 'resume') {
+        const mode = chunk.panelValue === 'all' ? 'all' : 'cwd';
+        setResumeFilter(mode);
+        setResumeSessions(SessionStorage.listAllSessions());
+        setShowResumePanel(true);
+      } else if (chunk.panel === 'heartbeat') {
+        const sessionId = activeSessionId || registry.getActiveSession()?.id;
+        if (sessionId) {
+          readHeartbeatHistoryBySession(sessionId, {
+            historyPath: currentConfig?.heartbeat?.historyPath,
+            order: 'desc',
+          }).then((runs) => {
+            setHeartbeatRuns(runs);
+            setShowHeartbeatPanel(true);
+          });
+        } else {
+          setHeartbeatRuns([]);
+          setShowHeartbeatPanel(true);
+        }
       } else if (chunk.panel === 'logs') {
         setShowLogsPanel(true);
       }
     }
-  }, [registry, exit, finalizeResponse, resetTurnState, cwd, activeSessionId]);
+  }, [
+    registry,
+    exit,
+    finalizeResponse,
+    resetTurnState,
+    cwd,
+    activeSessionId,
+    currentConfig,
+    createAndActivateSession,
+    switchToSession,
+  ]);
 
   // Load config files helper
   const loadConfigFiles = useCallback(async () => {
@@ -1678,11 +1850,6 @@ export function App({ cwd, version }: AppProps) {
   const renderWidth = columns ? Math.max(1, columns - 2) : undefined;
   const wrapChars = renderWidth ?? MESSAGE_WRAP_CHARS;
 
-  // Use a ref to track which messages have been rendered to Static
-  // This ensures keys remain stable even when terminal width changes
-  const renderedMessageIdsRef = useRef<Set<string>>(new Set());
-  const cachedDisplayMessagesRef = useRef<Map<string, ReturnType<typeof buildDisplayMessages>[0][]>>(new Map());
-
   const displayMessages = useMemo(() => {
     const result: ReturnType<typeof buildDisplayMessages> = [];
 
@@ -1765,32 +1932,8 @@ export function App({ cwd, version }: AppProps) {
     // Close selector IMMEDIATELY
     setShowSessionSelector(false);
 
-    if (sessionId === activeSessionId) {
-      return;
-    }
-
-    // Save current session state first
-    saveCurrentSessionState();
-
-    // Load new session state BEFORE switching (prevents race with buffered chunk replay)
-    loadSessionState(sessionId);
-
-    // Update processing state from new session
-    const session = registry.getSession(sessionId);
-    if (session) {
-      setIsProcessing(session.isProcessing);
-      isProcessingRef.current = session.isProcessing;
-      setEnergyState(session.client.getEnergyState() ?? undefined);
-      setVoiceState(session.client.getVoiceState() ?? undefined);
-      setHeartbeatState(session.client.getHeartbeatState?.() ?? undefined);
-      setIdentityInfo(session.client.getIdentityInfo() ?? undefined);
-      await loadSessionMetadata(session);
-    }
-
-    // Now switch session in registry (may replay buffered chunks to the reset state)
-    await registry.switchSession(sessionId);
-    setActiveSessionId(sessionId);
-  }, [activeSessionId, registry, saveCurrentSessionState, loadSessionState]);
+    await switchToSession(sessionId);
+  }, [switchToSession]);
 
   // Handle new session creation
   const handleNewSession = useCallback(async () => {
@@ -1798,30 +1941,11 @@ export function App({ cwd, version }: AppProps) {
     setShowSessionSelector(false);
 
     try {
-      // Save current session state
-      saveCurrentSessionState();
-
-      // Create new session
-      const newSession = await registry.createSession(cwd);
-      newSession.client.setAskUserHandler((request) => beginAskUser(newSession.id, request));
-
-      // Now switch to new session
-      await registry.switchSession(newSession.id);
-      setActiveSessionId(newSession.id);
-
-      // Initialize empty state AFTER switching (prevents old-session chunks from repopulating UI)
-      loadSessionState(newSession.id);
-      setIsProcessing(false);
-      isProcessingRef.current = false;
-      setEnergyState(newSession.client.getEnergyState() ?? undefined);
-      setVoiceState(newSession.client.getVoiceState() ?? undefined);
-      setHeartbeatState(newSession.client.getHeartbeatState?.() ?? undefined);
-      setIdentityInfo(newSession.client.getIdentityInfo() ?? undefined);
-      await loadSessionMetadata(newSession);
+      await createAndActivateSession({ cwd });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create session');
     }
-  }, [cwd, registry, saveCurrentSessionState, loadSessionState, beginAskUser]);
+  }, [cwd, createAndActivateSession]);
 
 
   // Handle keyboard shortcuts (inactive when session selector is shown)
@@ -2272,13 +2396,11 @@ export function App({ cwd, version }: AppProps) {
             if (labelParts.length > 0) label = labelParts.join(' ');
           }
 
-          const newSession = await registry.createSession({
+          await createAndActivateSession({
             cwd,
             label,
             assistantId: agentId,
           });
-          await registry.switchSession(newSession.id);
-          setActiveSessionId(newSession.id);
           return;
         }
 
@@ -2510,6 +2632,7 @@ export function App({ cwd, version }: AppProps) {
       sessions,
       handleNewSession,
       handleSessionSwitch,
+      createAndActivateSession,
       finalizeResponse,
       resetTurnState,
       activeSessionId,
@@ -3513,8 +3636,7 @@ export function App({ cwd, version }: AppProps) {
           swarmStatus={swarmState?.status || null}
           swarmTaskProgress={swarmState ? `${swarmState.metrics.completedTasks}/${swarmState.metrics.totalTasks}` : null}
           onSwitchSession={async (sessionId) => {
-            await registry.switchSession(sessionId);
-            setActiveSessionId(sessionId);
+            await switchToSession(sessionId);
             setShowAssistantsDashboard(false);
           }}
           onMessageAgent={(assistantId) => {
@@ -3587,6 +3709,51 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
+  // Show resume panel
+  if (showResumePanel) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <ResumePanel
+          sessions={resumeSessions}
+          activeCwd={cwd}
+          initialFilter={resumeFilter}
+          onResume={(session) => {
+            void resumeFromSavedSession(session);
+          }}
+          onRefresh={refreshResumeSessions}
+          onClose={() => setShowResumePanel(false)}
+        />
+      </Box>
+    );
+  }
+
+  // Show heartbeat panel
+  if (showHeartbeatPanel) {
+    const sessionId = activeSessionId || registry.getActiveSession()?.id;
+    const handleRefresh = async () => {
+      if (!sessionId) {
+        setHeartbeatRuns([]);
+        return;
+      }
+      const runs = await readHeartbeatHistoryBySession(sessionId, {
+        historyPath: currentConfig?.heartbeat?.historyPath,
+        order: 'desc',
+      });
+      setHeartbeatRuns(runs);
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <HeartbeatPanel
+          runs={heartbeatRuns}
+          heartbeatState={heartbeatState}
+          onRefresh={handleRefresh}
+          onClose={() => setShowHeartbeatPanel(false)}
+        />
+      </Box>
+    );
+  }
+
   // Show logs panel
   if (showLogsPanel) {
     return (
@@ -3649,6 +3816,25 @@ export function App({ cwd, version }: AppProps) {
           onCancel={() => setShowConfigPanel(false)}
         />
       </Box>
+    );
+  }
+
+  // Show webhooks panel
+  if (showWebhooksPanel) {
+    const webhooksManager = activeSession?.client.getWebhooksManager?.();
+    if (!webhooksManager) {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text color="red">Webhooks are not enabled. Set webhooks.enabled: true in config.</Text>
+          <Text color="gray">Press any key to close.</Text>
+        </Box>
+      );
+    }
+    return (
+      <WebhooksPanel
+        manager={webhooksManager}
+        onClose={() => setShowWebhooksPanel(false)}
+      />
     );
   }
 
@@ -3851,7 +4037,7 @@ export function App({ cwd, version }: AppProps) {
       )}
 
       {/* Historical messages - rendered with Static for native terminal scrollback */}
-      <Static items={displayMessages}>
+      <Static key={staticResetKey} items={displayMessages}>
         {(message) => (
           <Messages
             key={message.id}

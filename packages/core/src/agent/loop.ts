@@ -20,6 +20,7 @@ import { registerAssistantTools } from '../tools/assistant';
 import { registerIdentityTools } from '../tools/identity';
 import { registerModelTools } from '../tools/model';
 import { registerEnergyTools } from '../tools/energy';
+import { registerHeartbeatTools } from '../tools/heartbeat';
 import { registerContextEntryTools } from '../tools/context-entries';
 import { registerSecurityTools } from '../tools/security';
 import { getSecurityLogger } from '../security/logger';
@@ -82,6 +83,7 @@ import { createWalletManager, registerWalletTools, type WalletManager } from '..
 import { createSecretsManager, registerSecretsTools, type SecretsManager } from '../secrets';
 import { JobManager, createJobTools } from '../jobs';
 import { createMessagesManager, registerMessagesTools, type MessagesManager } from '../messages';
+import { createWebhooksManager, registerWebhookTools, type WebhooksManager } from '../webhooks';
 import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
 import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
 import { registerSelfAwarenessTools } from '../tools/self-awareness';
@@ -142,6 +144,7 @@ export class AssistantLoop {
   private heartbeatManager: HeartbeatManager | null = null;
   private heartbeatPersistence: StatePersistence | null = null;
   private heartbeatRecovery: RecoveryManager | null = null;
+  private heartbeatRuntimeConfig: HeartbeatRuntimeConfig | null = null;
   private lastUserMessage: string | null = null;
   private lastToolName: string | null = null;
   private pendingToolCalls: Map<string, string> = new Map();
@@ -183,6 +186,7 @@ export class AssistantLoop {
   private secretsManager: SecretsManager | null = null;
   private jobManager: JobManager | null = null;
   private messagesManager: MessagesManager | null = null;
+  private webhooksManager: WebhooksManager | null = null;
   private memoryManager: GlobalMemoryManager | null = null;
   private memoryInjector: MemoryInjector | null = null;
   private contextInjector: ContextInjector | null = null;
@@ -190,6 +194,7 @@ export class AssistantLoop {
   private subassistantManager: SubassistantManager | null = null;
   private depth: number = 0;
   private pendingMessagesContext: string | null = null;
+  private pendingWebhooksContext: string | null = null;
   private pendingMemoryContext: string | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
@@ -468,6 +473,25 @@ export class AssistantLoop {
       });
     }
 
+    // Initialize webhooks if enabled
+    if (this.config?.webhooks?.enabled) {
+      const assistant = this.assistantManager?.getActive();
+      const assistantId = assistant?.id || this.sessionId;
+      this.webhooksManager = createWebhooksManager(assistantId, this.config.webhooks);
+      await this.webhooksManager.initialize();
+      registerWebhookTools(this.toolRegistry, () => this.webhooksManager);
+
+      // Start watching for real-time webhook event notifications
+      this.webhooksManager.startWatching();
+      this.webhooksManager.onEvent((event) => {
+        // When a new event arrives, prepare it for injection at the next turn
+        const context = this.webhooksManager!.buildInjectionContext([event]);
+        if (context) {
+          this.pendingWebhooksContext = context;
+        }
+      });
+    }
+
     // Initialize memory system if enabled
     const memoryConfig = this.config?.memory;
     if (memoryConfig?.enabled !== false) {
@@ -589,6 +613,13 @@ export class AssistantLoop {
           this.refreshEnergyEffects();
         }
       },
+    });
+
+    // Register heartbeat tools
+    registerHeartbeatTools(this.toolRegistry, {
+      sessionId: this.sessionId,
+      getHeartbeatState: () => this.getHeartbeatState(),
+      getHeartbeatConfig: () => this.heartbeatRuntimeConfig,
     });
 
     // Register context entry tools
@@ -759,6 +790,64 @@ export class AssistantLoop {
       this.context.addSystemMessage(this.extraSystemPrompt);
     }
 
+    if (this.config?.heartbeat?.enabled !== false) {
+      this.context.addSystemMessage(`## Heartbeat Basics
+- The system can trigger scheduled runs via \`/main-loop\` or \`/watchdog\`.
+- If invoked with those commands, follow the heartbeat skill instructions.
+- Heartbeat schedules use the id \`heartbeat-${this.sessionId}\`.`);
+    }
+
+    if (this.config?.heartbeat?.autonomous) {
+      const maxSleepMin = Math.round((this.config.heartbeat.maxSleepMs ?? 1800000) / 60000);
+      this.context.addSystemMessage(`## Autonomous Heartbeat System
+
+You are running in **autonomous mode**. You manage your own wakeup schedule.
+
+### How it works
+- After every turn, a safety-net hook ensures a heartbeat schedule exists
+- The heartbeat fires \`/main-loop\` which runs your autonomous check-in skill
+- A watchdog monitors your health and forces a wakeup if you're overdue
+
+### Your responsibilities at the END of every turn
+1. **Save state** to memory before the turn ends:
+   - \`memory_save agent.heartbeat.intention "what you plan to do next"\`
+   - \`memory_save agent.state.pending "items waiting for follow-up"\`
+   - \`memory_save agent.state.lastActions "what you just did"\`
+2. **Schedule your next heartbeat**:
+   - Delete old: \`schedule_delete heartbeat-${this.sessionId}\`
+   - Create new: \`schedule_create\` with \`kind: "once"\`, \`actionType: "message"\`, \`message: "/main-loop"\`, and \`at\` set to your chosen time
+3. **Save goals** when they change: \`memory_save agent.goals "..."\`
+
+### Timing guidelines
+| Situation | Wake up in |
+|-----------|-----------|
+| Active jobs running or tasks pending | 1–3 minutes |
+| Goals exist but nothing urgent | 5–15 minutes |
+| Nothing pending, user idle | 15–${maxSleepMin} minutes (max) |
+
+### Key memory keys
+- \`agent.heartbeat.last\` — when you last ran (save ISO timestamp)
+- \`agent.heartbeat.next\` — when you plan to run next
+- \`agent.heartbeat.intention\` — why you're waking up
+- \`agent.goals\` — your active goals
+- \`agent.state.pending\` — items waiting
+- \`agent.state.lastActions\` — what you did recently
+
+### Rules
+- **Stay fast** — if work takes >30s, delegate to a subassistant
+- **Never sleep longer than ${maxSleepMin} minutes** — the system enforces this cap
+- **Always schedule your next heartbeat** — if you forget, the safety net creates a default one
+`);
+    }
+
+    // Always provide basic heartbeat awareness so agents know how to respond to /main-loop
+    if (this.config.heartbeat?.enabled !== false) {
+      this.context.addSystemMessage(`## Heartbeat Basics
+- The system can trigger scheduled runs via \`/main-loop\` or \`/watchdog\`.
+- If invoked with those commands, follow the heartbeat skill instructions.
+- Heartbeat schedules use the id \`heartbeat-${this.sessionId}\`.`);
+    }
+
     // Inject heartbeat awareness into system prompt when autonomous mode is enabled
     if (this.config.heartbeat?.autonomous) {
       const maxSleepMin = Math.round((this.config.heartbeat.maxSleepMs ?? 1800000) / 60000);
@@ -833,6 +922,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     try {
       // Inject pending messages before processing
       await this.injectPendingMessages();
+      // Inject pending webhook events before processing
+      await this.injectPendingWebhookEvents();
       // Inject relevant memories based on user message
       await this.injectMemoryContext(userMessage);
       // Inject environment context (datetime, cwd, etc.)
@@ -1743,6 +1834,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       getWalletManager: () => this.walletManager,
       getSecretsManager: () => this.secretsManager,
       getMessagesManager: () => this.messagesManager,
+      getWebhooksManager: () => this.webhooksManager,
       getMemoryManager: () => this.memoryManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
@@ -1769,6 +1861,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
         this.setProjectContext(content);
       },
       getVoiceState: () => this.getVoiceState(),
+      getHeartbeatState: () => this.getHeartbeatState(),
+      getHeartbeatConfig: () => this.heartbeatRuntimeConfig,
       enableVoice: () => {
         if (!this.voiceManager) {
           throw new Error('Voice support is not available.');
@@ -2033,6 +2127,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     this.voiceManager?.stopListening();
     // Stop message watching
     this.messagesManager?.stopWatching();
+    // Stop webhook watching
+    this.webhooksManager?.stopWatching();
     // Close memory database connection
     this.memoryManager?.close();
     this.memoryManager = null;
@@ -2129,6 +2225,10 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
 
   getMessagesManager(): MessagesManager | null {
     return this.messagesManager;
+  }
+
+  getWebhooksManager(): WebhooksManager | null {
+    return this.webhooksManager;
   }
 
   getWalletManager(): WalletManager | null {
@@ -2489,6 +2589,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
 
     const heartbeatConfig = this.buildHeartbeatConfig(this.config);
     if (!heartbeatConfig) return;
+    this.heartbeatRuntimeConfig = heartbeatConfig;
 
     const statePath = join(getConfigDir(), 'state', `${this.sessionId}.json`);
 
@@ -2727,6 +2828,43 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       // Log but don't fail - messages are non-critical
       console.error('Failed to inject pending messages:', error);
       this.pendingMessagesContext = null;
+    }
+  }
+
+  /**
+   * Inject pending webhook events into context at turn start
+   */
+  private async injectPendingWebhookEvents(): Promise<void> {
+    if (!this.webhooksManager) return;
+
+    try {
+      if (this.pendingWebhooksContext) {
+        const previous = this.pendingWebhooksContext.trim();
+        this.context.removeSystemMessages((content) => content.trim() === previous);
+        this.pendingWebhooksContext = null;
+      }
+
+      const pending = await this.webhooksManager.getPendingForInjection();
+      if (pending.length === 0) {
+        return;
+      }
+
+      // Build and store context string
+      this.pendingWebhooksContext = this.webhooksManager.buildInjectionContext(pending);
+
+      // Add as system message so it appears in context
+      if (this.pendingWebhooksContext) {
+        this.context.addSystemMessage(this.pendingWebhooksContext);
+      }
+
+      // Mark events as injected
+      await this.webhooksManager.markInjected(
+        pending.map((e) => ({ webhookId: e.webhookId, eventId: e.id }))
+      );
+    } catch (error) {
+      // Log but don't fail - webhooks are non-critical
+      console.error('Failed to inject pending webhook events:', error);
+      this.pendingWebhooksContext = null;
     }
   }
 
@@ -3050,11 +3188,15 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     const persistPath =
       config.heartbeat?.persistPath ??
       join(getConfigDir(), 'heartbeats', `${this.sessionId}.json`);
+    const historyPath =
+      config.heartbeat?.historyPath ??
+      join(getConfigDir(), 'heartbeats', 'runs', `${this.sessionId}.jsonl`);
 
     return {
       intervalMs,
       staleThresholdMs,
       persistPath,
+      historyPath,
     };
   }
 

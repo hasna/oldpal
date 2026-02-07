@@ -90,6 +90,14 @@ export {
   type SelfAwarenessContext,
 } from './tools/self-awareness';
 export {
+  heartbeatTools,
+  heartbeatStatusTool,
+  heartbeatRunsTool,
+  createHeartbeatToolExecutors,
+  registerHeartbeatTools,
+  type HeartbeatToolsContext,
+} from './tools/heartbeat';
+export {
   assistantTools,
   assistantSpawnTool,
   assistantListTool,
@@ -289,6 +297,9 @@ export * from './jobs';
 
 // Messages (Assistant-to-Assistant)
 export * from './messages';
+
+// Webhooks (External Event Reception)
+export * from './webhooks';
 
 // Client
 export { EmbeddedClient } from './client';

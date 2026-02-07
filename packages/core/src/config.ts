@@ -188,6 +188,21 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       maxAgeDays: 90,
     },
   },
+  webhooks: {
+    enabled: false,
+    injection: {
+      enabled: true,
+      maxPerTurn: 5,
+    },
+    storage: {
+      maxEvents: 1000,
+      maxAgeDays: 30,
+    },
+    security: {
+      maxTimestampAgeMs: 300_000, // 5 minutes
+      rateLimitPerMinute: 60,
+    },
+  },
   memory: {
     enabled: true,
     injection: {
@@ -393,6 +408,22 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
         ...(override.messages?.storage || {}),
       },
     },
+    webhooks: {
+      ...(base.webhooks || {}),
+      ...(override.webhooks || {}),
+      injection: {
+        ...(base.webhooks?.injection || {}),
+        ...(override.webhooks?.injection || {}),
+      },
+      storage: {
+        ...(base.webhooks?.storage || {}),
+        ...(override.webhooks?.storage || {}),
+      },
+      security: {
+        ...(base.webhooks?.security || {}),
+        ...(override.webhooks?.security || {}),
+      },
+    },
     memory: {
       ...(base.memory || {}),
       ...(override.memory || {}),
@@ -590,6 +621,7 @@ export async function ensureConfigDir(sessionId?: string): Promise<void> {
     mkdir(join(configDir, 'energy'), { recursive: true }),
     mkdir(join(configDir, 'jobs'), { recursive: true }),
     mkdir(join(configDir, 'inbox'), { recursive: true }),
+    mkdir(join(configDir, 'webhooks'), { recursive: true }),
   ];
 
   // Create session-specific temp folder if provided
