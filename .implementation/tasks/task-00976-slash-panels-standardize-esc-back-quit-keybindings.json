@@ -1,0 +1,14 @@
+{
+  "id": "976",
+  "subject": "Slash panels: standardize Esc/back/quit keybindings",
+  "description": "Audit interactive slash-command panels (wallet, assistants, connectors, tasks, schedules, inbox, messages, config, etc.). Ensure Esc consistently goes back one level and closes from top-level, and q is optional. Update on-screen hints to match behavior.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "ux",
+    "commands"
+  ],
+  "created": "2026-02-07T14:19:48.704Z",
+  "updated": "2026-02-07T14:19:48.704Z"
+}

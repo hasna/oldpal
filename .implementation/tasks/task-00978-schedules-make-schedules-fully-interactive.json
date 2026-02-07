@@ -1,0 +1,14 @@
+{
+  "id": "978",
+  "subject": "Schedules: make /schedules fully interactive",
+  "description": "Upgrade /schedules panel to support create/edit/unschedule actions (interactive form, arrow navigation, confirm dialogs). Include ability to schedule a new command and unschedule from the list (similar UX to /assistants).",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "schedules",
+    "terminal",
+    "ux"
+  ],
+  "created": "2026-02-07T14:24:06.271Z",
+  "updated": "2026-02-07T14:24:06.271Z"
+}

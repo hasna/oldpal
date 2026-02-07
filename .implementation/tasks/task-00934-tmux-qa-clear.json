@@ -1,0 +1,14 @@
+{
+  "id": "934",
+  "subject": "Tmux QA: /clear",
+  "description": "Open a tmux window, run the terminal app, execute /clear and verify it behaves correctly (no crashes, expected UI/output). Record any errors or missing behavior.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "qa",
+    "tmux",
+    "commands"
+  ],
+  "created": "2026-02-07T14:15:55.752Z",
+  "updated": "2026-02-07T14:15:55.752Z"
+}

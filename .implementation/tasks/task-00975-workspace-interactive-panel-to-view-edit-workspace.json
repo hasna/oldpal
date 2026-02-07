@@ -1,0 +1,15 @@
+{
+  "id": "975",
+  "subject": "Workspace: interactive panel to view/edit workspaces",
+  "description": "Upgrade /workspace to an interactive panel (like /assistants): list workspaces, view details, edit fields, create/delete, and set active workspace. Provide keyboard navigation and save flow.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "workspace",
+    "ux",
+    "commands"
+  ],
+  "created": "2026-02-07T14:17:56.462Z",
+  "updated": "2026-02-07T14:17:56.462Z"
+}

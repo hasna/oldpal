@@ -1,0 +1,8 @@
+{
+  "id": "994",
+  "subject": "Slash: /plans panel Esc/q returns to Projects panel",
+  "description": "Repro (tmux, repo root):\n1) Run /plans from main input (not from /projects panel).\n2) Plans panel opens (\"Plans for <project>\").\n3) Press Esc or q.\n\nActual: Plans panel closes and Projects panel opens (Projects list).\nExpected: /plans behaves like /tasks or /projects and returns to main input when closed. If /plans is opened directly, Esc/q should not jump to Projects unless explicitly requested.",
+  "status": "pending",
+  "created": "2026-02-07T14:46:32.801Z",
+  "updated": "2026-02-07T14:46:32.801Z"
+}

@@ -4,6 +4,77 @@ This file contains an index of all tasks for this project.
 
 | ID | Subject | Status | Owner | BlockedBy |
 |----|---------|--------|-------|-----------|
+| 994 | Slash: /plans panel Esc/q returns to Pro | pending | - | - |
+| 993 | Slash: /tasks run warns paused but still | pending | - | - |
+| 992 | Fix /clear and /new not clearing convers | pending | - | - |
+| 991 | Fix /rest energy update not reflected in | pending | - | - |
+| 990 | Fix /cost pricing to reflect active mode | pending | - | - |
+| 989 | Terminal slash commands routed to LLM in | pending | - | - |
+| 988 | Assistants command: remove /assistant al | pending | - | - |
+| 987 | Workspace: migrate agents/ to assistants | pending | - | - |
+| 986 | AssistantsDashboard: handle empty sessio | pending | - | - |
+| 985 | BudgetPanel: save onExceeded action corr | pending | - | - |
+| 984 | Tasks panel: add-new only captures name | pending | - | - |
+| 983 | Config panel: Esc/quit not working | pending | - | - |
+| 982 | Config: add status line settings | pending | - | - |
+| 981 | Recovery panel: default selection should | pending | - | - |
+| 980 | Connectors: fix and test search in conne | pending | - | - |
+| 979 | Connectors: full discovery should replac | pending | - | - |
+| 978 | Schedules: make /schedules fully interac | pending | - | - |
+| 977 | Schedules: merge /schedule and /unschedu | pending | - | - |
+| 976 | Slash panels: standardize Esc/back/quit  | pending | - | - |
+| 975 | Workspace: interactive panel to view/edi | pending | - | - |
+| 974 | Config: Energy settings should be editab | pending | - | - |
+| 973 | Tmux QA: /feedback | pending | - | - |
+| 972 | Tmux QA: /security-log | pending | - | - |
+| 971 | Tmux QA: /connectors | pending | - | - |
+| 970 | Tmux QA: /resume | pending | - | - |
+| 969 | Tmux QA: /pause | pending | - | - |
+| 968 | Tmux QA: /unschedule | pending | - | - |
+| 967 | Tmux QA: /schedules | pending | - | - |
+| 966 | Tmux QA: /schedule | pending | - | - |
+| 965 | Tmux QA: /memory | pending | - | - |
+| 964 | Tmux QA: /model | pending | - | - |
+| 963 | Tmux QA: /cost | pending | - | - |
+| 962 | Tmux QA: /init | pending | - | - |
+| 961 | Tmux QA: /swarm | pending | - | - |
+| 960 | Tmux QA: /registry | pending | - | - |
+| 959 | Tmux QA: /budget | pending | - | - |
+| 958 | Tmux QA: /config | pending | - | - |
+| 957 | Tmux QA: /compact | pending | - | - |
+| 956 | Tmux QA: /status | pending | - | - |
+| 955 | Tmux QA: /skills | pending | - | - |
+| 954 | Tmux QA: /skill | pending | - | - |
+| 953 | Tmux QA: /rest | pending | - | - |
+| 952 | Tmux QA: /summarize | pending | - | - |
+| 951 | Tmux QA: /plans | pending | - | - |
+| 950 | Tmux QA: /projects | pending | - | - |
+| 949 | Tmux QA: /context | pending | - | - |
+| 948 | Tmux QA: /tokens | pending | - | - |
+| 947 | Tmux QA: /session | pending | - | - |
+| 946 | Tmux QA: /exit | pending | - | - |
+| 945 | Tmux QA: /agents | pending | - | - |
+| 944 | Tmux QA: /workspace | pending | - | - |
+| 943 | Tmux QA: /tasks | pending | - | - |
+| 942 | Tmux QA: /messages | pending | - | - |
+| 941 | Tmux QA: /jobs | pending | - | - |
+| 940 | Tmux QA: /secrets | pending | - | - |
+| 939 | Tmux QA: /wallet | pending | - | - |
+| 938 | Tmux QA: /inbox | pending | - | - |
+| 937 | Tmux QA: /verification | pending | - | - |
+| 936 | Tmux QA: /guardrails | pending | - | - |
+| 935 | Tmux QA: /new | pending | - | - |
+| 934 | Tmux QA: /clear | pending | - | - |
+| 933 | Tmux QA: /help | pending | - | - |
+| 932 | Tmux QA: /whoami | pending | - | - |
+| 931 | Tmux QA: /identity | pending | - | - |
+| 930 | Tmux QA: /hooks | pending | - | - |
+| 929 | Tmux QA: /assistants | pending | - | - |
+| 928 | Tmux QA: /listen | pending | - | - |
+| 927 | Tmux QA: /say | pending | - | - |
+| 926 | Tmux QA: /voice | pending | - | - |
+| 925 | Budget: terminal form UI | pending | - | - |
+| 924 | Budget: editable form UI | pending | - | - |
 | 923 | Terminal: investigate scroll jumping to  | pending | - | - |
 | 922 | Queue UI: clear stale inlinePending entr | pending | - | - |
 | 921 | EmbeddedClient: drain queue when process | pending | - | - |

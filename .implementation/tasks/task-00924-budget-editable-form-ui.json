@@ -1,0 +1,14 @@
+{
+  "id": "924",
+  "subject": "Budget: editable form UI",
+  "description": "Add UI to edit budgets like a form (interactive fields, validation, save/cancel). Support session/agent/global scopes and persist changes. Hook into /budget command and config storage.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "budget",
+    "ux",
+    "commands"
+  ],
+  "created": "2026-02-07T14:14:41.566Z",
+  "updated": "2026-02-07T14:14:41.566Z"
+}

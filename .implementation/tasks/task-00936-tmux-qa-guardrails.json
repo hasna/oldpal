@@ -1,0 +1,14 @@
+{
+  "id": "936",
+  "subject": "Tmux QA: /guardrails",
+  "description": "Open a tmux window, run the terminal app, execute /guardrails and verify it behaves correctly (no crashes, expected UI/output). Record any errors or missing behavior.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "qa",
+    "tmux",
+    "commands"
+  ],
+  "created": "2026-02-07T14:15:55.879Z",
+  "updated": "2026-02-07T14:15:55.879Z"
+}

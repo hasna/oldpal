@@ -1,0 +1,14 @@
+{
+  "id": "962",
+  "subject": "Tmux QA: /init",
+  "description": "Open a tmux window, run the terminal app, execute /init and verify it behaves correctly (no crashes, expected UI/output). Record any errors or missing behavior.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "qa",
+    "tmux",
+    "commands"
+  ],
+  "created": "2026-02-07T14:15:57.619Z",
+  "updated": "2026-02-07T14:15:57.619Z"
+}

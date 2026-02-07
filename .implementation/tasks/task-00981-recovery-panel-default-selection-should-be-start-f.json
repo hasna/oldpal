@@ -1,0 +1,14 @@
+{
+  "id": "981",
+  "subject": "Recovery panel: default selection should be Start Fresh",
+  "description": "On session recovery prompt, default focus should be 'Start fresh' (new session) instead of resume. Allow switching to resume list only if user chooses. Update navigation/selection state and hints.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "ux",
+    "sessions"
+  ],
+  "created": "2026-02-07T14:26:55.349Z",
+  "updated": "2026-02-07T14:26:55.349Z"
+}

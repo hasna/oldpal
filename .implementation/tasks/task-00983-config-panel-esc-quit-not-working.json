@@ -1,0 +1,15 @@
+{
+  "id": "983",
+  "subject": "Config panel: Esc/quit not working",
+  "description": "Investigate /config panel navigation where Esc/quit fails. Ensure Esc backs out of edit modes and closes from top-level; align with other panels and update hints.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "terminal",
+    "config",
+    "bug",
+    "ux"
+  ],
+  "created": "2026-02-07T14:28:28.779Z",
+  "updated": "2026-02-07T14:28:28.779Z"
+}

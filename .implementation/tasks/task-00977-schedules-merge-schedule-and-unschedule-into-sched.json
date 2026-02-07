@@ -1,0 +1,14 @@
+{
+  "id": "977",
+  "subject": "Schedules: merge /schedule and /unschedule into /schedules",
+  "description": "Deprecate /schedule and /unschedule (or keep as thin aliases) and move all scheduling creation/removal into /schedules. Update help text and command routing.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "schedules",
+    "commands",
+    "ux"
+  ],
+  "created": "2026-02-07T14:24:02.548Z",
+  "updated": "2026-02-07T14:24:02.548Z"
+}

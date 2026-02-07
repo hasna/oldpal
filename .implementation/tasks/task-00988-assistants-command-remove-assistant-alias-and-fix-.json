@@ -1,0 +1,14 @@
+{
+  "id": "988",
+  "subject": "Assistants command: remove /assistant alias and fix usage strings",
+  "description": "Command is /assistants but help/usage still references /assistant and alias remains. Update usage text to /assistants and remove deprecated alias if backward-compat not desired.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "commands",
+    "ux",
+    "assistants"
+  ],
+  "created": "2026-02-07T14:38:53.513Z",
+  "updated": "2026-02-07T14:38:53.513Z"
+}

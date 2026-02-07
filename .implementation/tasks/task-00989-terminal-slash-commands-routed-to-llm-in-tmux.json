@@ -1,0 +1,14 @@
+{
+  "id": "989",
+  "subject": "Terminal slash commands routed to LLM in tmux",
+  "description": "Repro (2026-02-07): In tmux session (2x2 grid, pane D) at repo root, run bun run dev to start terminal app. Clear input (Ctrl+U) and enter /connectors, /messages, /inbox, /hooks, /jobs, /voice, /say hello, /listen. Actual: each command triggers LLM response (Conjuring/Manifesting), with generic text or tool calls (voice_status/voice_listen, ELEVENLABS_VOICE_ID error) instead of opening panels or showing built-in command output. Expected: slash commands handled locally (panels for /connectors,/hooks,/messages,/inbox; text for /jobs; voice toggle/say/listen). Note: even /help is routed to LLM.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "terminal",
+    "slash-commands",
+    "tmux"
+  ],
+  "created": "2026-02-07T14:39:28.173Z",
+  "updated": "2026-02-07T14:39:28.173Z"
+}

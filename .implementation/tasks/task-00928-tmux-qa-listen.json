@@ -1,0 +1,14 @@
+{
+  "id": "928",
+  "subject": "Tmux QA: /listen",
+  "description": "Open a tmux window, run the terminal app, execute /listen and verify it behaves correctly (no crashes, expected UI/output). Record any errors or missing behavior.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "qa",
+    "tmux",
+    "commands"
+  ],
+  "created": "2026-02-07T14:15:55.375Z",
+  "updated": "2026-02-07T14:15:55.375Z"
+}

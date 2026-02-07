@@ -1,0 +1,15 @@
+{
+  "id": "925",
+  "subject": "Budget: terminal form UI",
+  "description": "Implement editable budget form in terminal UI (Ink): interactive fields, validation, save/cancel. Wire to /budget command in terminal and persist changes to config.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "budget",
+    "terminal",
+    "ux",
+    "commands"
+  ],
+  "created": "2026-02-07T14:14:54.441Z",
+  "updated": "2026-02-07T14:14:54.441Z"
+}

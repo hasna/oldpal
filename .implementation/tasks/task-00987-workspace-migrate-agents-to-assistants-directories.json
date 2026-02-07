@@ -1,0 +1,14 @@
+{
+  "id": "987",
+  "subject": "Workspace: migrate agents/ to assistants/ directories",
+  "description": "Workspace shared storage path renamed from 'agents' to 'assistants'. Add migration or fallback so existing workspaces aren't orphaned. Consider auto-move on load or support both paths with deprecation notice.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "workspace",
+    "bug",
+    "migration"
+  ],
+  "created": "2026-02-07T14:38:30.311Z",
+  "updated": "2026-02-07T14:38:30.311Z"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "980",
+  "subject": "Connectors: fix and test search in connectors panel",
+  "description": "Connector search appears broken. Investigate search input handling, scoring/filtering logic, and state transitions in ConnectorsPanel. Add tests and fix so search reliably filters by name/description/commands.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "connectors",
+    "terminal",
+    "bug",
+    "ux",
+    "tests"
+  ],
+  "created": "2026-02-07T14:26:44.416Z",
+  "updated": "2026-02-07T14:26:44.416Z"
+}

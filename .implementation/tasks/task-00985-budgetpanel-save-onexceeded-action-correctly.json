@@ -1,0 +1,14 @@
+{
+  "id": "985",
+  "subject": "BudgetPanel: save onExceeded action correctly",
+  "description": "In edit-limits mode, editOnExceeded is never persisted. saveEditValues currently calls onToggleEnabled(config.enabled ?? false), which does not update onExceeded and may flip enabled state. Add explicit onSetConfig or onSetOnExceeded handler to persist action; remove misuse of onToggleEnabled.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "budget",
+    "terminal",
+    "bug"
+  ],
+  "created": "2026-02-07T14:38:11.261Z",
+  "updated": "2026-02-07T14:38:11.261Z"
+}

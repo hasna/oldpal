@@ -1,0 +1,15 @@
+{
+  "id": "982",
+  "subject": "Config: add status line settings",
+  "description": "Extend /config to include Status Line settings (what metrics to show: percent, cost, budget, tokens, etc.). Provide interactive toggles and persist to config.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "config",
+    "ux",
+    "status"
+  ],
+  "created": "2026-02-07T14:28:11.574Z",
+  "updated": "2026-02-07T14:28:11.574Z"
+}

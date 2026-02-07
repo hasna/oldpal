@@ -1,0 +1,8 @@
+{
+  "id": "993",
+  "subject": "Slash: /tasks run warns paused but still runs",
+  "description": "Repro (tmux, repo root):\n1) /tasks add -p high \"Fix tests\" (or any task)\n2) /tasks pause\n3) /tasks run\n\nActual: output shows \"Task queue is paused. Use /tasks resume to enable auto-run.\" and immediately \"Running task: Fix tests\" (task executes, tool calls start).\nExpected: Either (a) do not run while paused and only show paused warning, or (b) clarify that manual /tasks run will execute even when auto-run is paused (message should reflect this).\n\nNotes: Observed in tmux segment F; tasks run despite pause.",
+  "status": "pending",
+  "created": "2026-02-07T14:46:21.437Z",
+  "updated": "2026-02-07T14:46:21.437Z"
+}

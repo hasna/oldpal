@@ -1,0 +1,15 @@
+{
+  "id": "984",
+  "subject": "Tasks panel: add-new only captures name",
+  "description": "Bug: add new task flow only allows entering name; other fields (description, priority, blocked-by, etc.) aren't captured. Investigate TasksPanel add flow and fix to collect all fields.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "terminal",
+    "tasks",
+    "bug",
+    "ux"
+  ],
+  "created": "2026-02-07T14:29:31.299Z",
+  "updated": "2026-02-07T14:29:31.299Z"
+}

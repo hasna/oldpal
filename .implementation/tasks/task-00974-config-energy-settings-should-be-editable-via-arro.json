@@ -1,0 +1,14 @@
+{
+  "id": "974",
+  "subject": "Config: Energy settings should be editable via arrow/enter UI",
+  "description": "Current /config Energy section uses numeric key + text input for maxEnergy/regenRate and no arrow-based adjustment. Update Energy settings UI to allow entering the section, then use ↑/↓ to increment/decrement values and Enter to commit (similar to model maxTokens). Keep toggle for enabled; add validation and save flow.",
+  "status": "pending",
+  "priority": "normal",
+  "tags": [
+    "terminal",
+    "config",
+    "ux"
+  ],
+  "created": "2026-02-07T14:17:08.122Z",
+  "updated": "2026-02-07T14:17:08.122Z"
+}

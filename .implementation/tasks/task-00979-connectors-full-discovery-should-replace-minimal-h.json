@@ -1,0 +1,15 @@
+{
+  "id": "979",
+  "subject": "Connectors: full discovery should replace minimal help-only cache",
+  "description": "Root cause: ConnectorBridge.fastDiscover/populateCache caches minimal connectors (only help) and discover() never runs discoverConnector/parseHelpOutput. Make full discovery actually run --help and parse commands; treat help-only cache as stale or add force/full option. Update terminal handleLoadCommands to call full discovery. Bump cache version or add discoveryLevel flag to invalidate minimal caches.",
+  "status": "pending",
+  "priority": "high",
+  "tags": [
+    "connectors",
+    "bug",
+    "core",
+    "terminal"
+  ],
+  "created": "2026-02-07T14:26:30.602Z",
+  "updated": "2026-02-07T14:26:30.602Z"
+}
