@@ -758,6 +758,51 @@ export class AssistantLoop {
     if (this.extraSystemPrompt) {
       this.context.addSystemMessage(this.extraSystemPrompt);
     }
+
+    // Inject heartbeat awareness into system prompt when autonomous mode is enabled
+    if (this.config.heartbeat?.autonomous) {
+      const maxSleepMin = Math.round((this.config.heartbeat.maxSleepMs ?? 1800000) / 60000);
+      this.context.addSystemMessage(`## Autonomous Heartbeat System
+
+You are running in **autonomous mode**. You manage your own wakeup schedule.
+
+### How it works
+- After every turn, a safety-net hook ensures a heartbeat schedule exists
+- The heartbeat fires \`/main-loop\` which runs your autonomous check-in skill
+- A watchdog monitors your health and forces a wakeup if you're overdue
+
+### Your responsibilities at the END of every turn
+1. **Save state** to memory before the turn ends:
+   - \`memory_save agent.heartbeat.intention "what you plan to do next"\`
+   - \`memory_save agent.state.pending "items waiting for follow-up"\`
+   - \`memory_save agent.state.lastActions "what you just did"\`
+2. **Schedule your next heartbeat**:
+   - Delete old: \`schedule_delete heartbeat-${this.sessionId}\`
+   - Create new: \`schedule_create\` with \`kind: "once"\`, \`actionType: "message"\`, \`message: "/main-loop"\`, and \`at\` set to your chosen time
+3. **Save goals** when they change: \`memory_save agent.goals "..."\`
+
+### Timing guidelines
+| Situation | Wake up in |
+|-----------|-----------|
+| Active jobs running or tasks pending | 1–3 minutes |
+| Goals exist but nothing urgent | 5–15 minutes |
+| Nothing pending, user idle | 15–${maxSleepMin} minutes (max) |
+
+### Key memory keys
+- \`agent.heartbeat.last\` — when you last ran (save ISO timestamp)
+- \`agent.heartbeat.next\` — when you plan to run next
+- \`agent.heartbeat.intention\` — why you're waking up
+- \`agent.goals\` — your active goals
+- \`agent.state.pending\` — items waiting
+- \`agent.state.lastActions\` — what you did recently
+
+### Rules
+- **Stay fast** — if work takes >30s, delegate to a subassistant
+- **Never sleep longer than ${maxSleepMin} minutes** — the system enforces this cap
+- **Always schedule your next heartbeat** — if you forget, the safety net creates a default one
+`);
+    }
+
     this.contextManager?.refreshState(this.context.getMessages());
 
     // Run session start hooks
