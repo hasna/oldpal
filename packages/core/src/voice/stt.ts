@@ -62,6 +62,57 @@ export class WhisperSTT {
   }
 }
 
+/**
+ * Speech-to-Text using ElevenLabs Scribe v2 API
+ */
+export class ElevenLabsSTT {
+  private apiKey: string;
+  private model: string;
+  private language?: string;
+
+  constructor(options: STTOptions = {}) {
+    this.apiKey = options.apiKey
+      || process.env.ELEVENLABS_API_KEY
+      || loadApiKeyFromSecrets('ELEVENLABS_API_KEY')
+      || '';
+    this.model = options.model || 'scribe_v2';
+    this.language = options.language;
+  }
+
+  async transcribe(audioBuffer: ArrayBuffer): Promise<STTResult> {
+    if (!this.apiKey) {
+      throw new Error('Missing ELEVENLABS_API_KEY for ElevenLabs STT. Set it in env or ~/.secrets.');
+    }
+
+    const form = new FormData();
+    form.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), 'audio.wav');
+    form.append('model_id', this.model);
+    if (this.language) {
+      form.append('language_code', this.language);
+    }
+
+    const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: {
+        'xi-api-key': this.apiKey,
+      },
+      body: form,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ElevenLabs STT failed (${response.status}): ${errorText || response.statusText}`);
+    }
+
+    const result = await response.json() as { text?: string; language_code?: string };
+    return {
+      text: result.text || '',
+      confidence: 1,
+      language: result.language_code,
+    };
+  }
+}
+
 export class SystemSTT {
   async transcribe(_audioBuffer: ArrayBuffer): Promise<STTResult> {
     throw new Error('System STT is not available yet. Use Whisper STT instead.');

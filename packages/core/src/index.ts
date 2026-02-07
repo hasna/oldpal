@@ -36,6 +36,11 @@ export {
   createConnectorsListExecutor,
   registerConnectorsListTool,
 } from './tools/connector';
+export {
+  connectorAutoRefreshTool,
+  createConnectorAutoRefreshExecutor,
+  registerConnectorAutoRefreshTool,
+} from './tools/connector-refresh';
 export type {
   ConnectorExecuteContext,
   ConnectorSearchContext,
@@ -224,7 +229,7 @@ export * from './voice/types';
 export { VoiceManager } from './voice/manager';
 export { AudioPlayer } from './voice/player';
 export { AudioRecorder } from './voice/recorder';
-export { WhisperSTT, SystemSTT } from './voice/stt';
+export { WhisperSTT, ElevenLabsSTT, SystemSTT } from './voice/stt';
 export { ElevenLabsTTS, SystemTTS } from './voice/tts';
 
 // Identity

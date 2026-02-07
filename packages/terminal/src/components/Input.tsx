@@ -124,6 +124,12 @@ interface InputProps {
   history?: CommandHistory;
   /** Optional paste handling configuration */
   pasteConfig?: PasteConfig;
+  /** Whether push-to-talk recording is active */
+  isRecording?: boolean;
+  /** Recording status: 'recording' or 'transcribing' */
+  recordingStatus?: 'recording' | 'transcribing' | null;
+  /** Callback to stop recording (e.g. when Enter is pressed during recording) */
+  onStopRecording?: () => void;
 }
 
 export interface InputHandle {
@@ -146,6 +152,9 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
   assistantName,
   history: historyProp,
   pasteConfig,
+  isRecording = false,
+  recordingStatus,
+  onStopRecording,
 }: InputProps, ref) {
   // Paste handling configuration with defaults
   const pasteEnabled = pasteConfig?.enabled !== false;
@@ -489,6 +498,12 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
       return;
     }
 
+    // Ctrl+U: clear line (standard readline behavior)
+    if (key.ctrl && input === 'u') {
+      setValueAndCursor('');
+      return;
+    }
+
     if (!isAskingUser) {
       // Tab: autocomplete selected item
       if (key.tab) {
@@ -616,6 +631,11 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
     }
 
     if (key.return) {
+      // During push-to-talk recording, Enter stops recording
+      if (isRecording && onStopRecording) {
+        onStopRecording();
+        return;
+      }
       // Shift+Enter or Ctrl+Enter: interrupt and send immediately
       if ((key.shift || key.ctrl) && value.trim()) {
         onSubmit(value, 'interrupt');
@@ -704,6 +724,19 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
           <Text color="#666666">{'─'.repeat(terminalWidth)}</Text>
         )}
       </Box>
+
+      {/* Recording indicator */}
+      {recordingStatus === 'recording' && (
+        <Box paddingY={0}>
+          <Text color="red" bold>  🎤 Recording... </Text>
+          <Text dimColor>[Ctrl+R or Enter to stop]</Text>
+        </Box>
+      )}
+      {recordingStatus === 'transcribing' && (
+        <Box paddingY={0}>
+          <Text color="yellow" bold>  ⏳ Transcribing...</Text>
+        </Box>
+      )}
 
       {/* Input area */}
       <Box paddingY={0} flexDirection="column">

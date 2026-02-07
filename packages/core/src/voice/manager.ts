@@ -1,7 +1,7 @@
 import type { VoiceConfig } from '@hasna/assistants-shared';
 import type { STTProvider, TTSProvider, VoiceState } from './types';
 import type { RecordOptions } from './recorder';
-import { WhisperSTT, SystemSTT } from './stt';
+import { WhisperSTT, ElevenLabsSTT, SystemSTT } from './stt';
 import { ElevenLabsTTS, SystemTTS } from './tts';
 import { AudioPlayer, type PlayOptions } from './player';
 import { AudioRecorder } from './recorder';
@@ -118,6 +118,12 @@ export class VoiceManager {
   private createSttProvider(): STTProvider {
     if (this.config.stt.provider === 'system') {
       return new SystemSTT();
+    }
+    if (this.config.stt.provider === 'elevenlabs') {
+      return new ElevenLabsSTT({
+        model: this.config.stt.model,
+        language: this.config.stt.language,
+      });
     }
     return new WhisperSTT({
       model: this.config.stt.model,

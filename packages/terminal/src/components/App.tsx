@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { spawn } from 'child_process';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
-import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, type SessionInfo, type RecoverableSession, type CreateIdentityOptions } from '@hasna/assistants-core';
+import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, AudioRecorder, ElevenLabsSTT, WhisperSTT, type SessionInfo, type RecoverableSession, type CreateIdentityOptions } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input, type InputHandle } from './Input';
@@ -391,6 +391,11 @@ export function App({ cwd, version }: AppProps) {
   const [lastWorkedFor, setLastWorkedFor] = useState<string | undefined>();
   const [isListening, setIsListening] = useState(false);
 
+  // Push-to-talk state
+  const [pttRecording, setPttRecording] = useState(false);
+  const [pttTranscribing, setPttTranscribing] = useState(false);
+  const pttRecorderRef = useRef<AudioRecorder | null>(null);
+
   // Available skills for autocomplete
   const [skills, setSkills] = useState<{ name: string; description: string; argumentHint?: string }[]>([]);
   const [commands, setCommands] = useState<{ name: string; description: string }[]>([]);
@@ -729,6 +734,82 @@ export function App({ cwd, version }: AppProps) {
   useEffect(() => () => {
     stopListening();
   }, [stopListening]);
+
+  // Push-to-talk: toggle recording
+  const togglePushToTalk = useCallback(async () => {
+    // If transcribing, ignore toggle
+    if (pttTranscribing) return;
+
+    // If already recording, stop and transcribe
+    if (pttRecording) {
+      setPttRecording(false);
+      const recorder = pttRecorderRef.current;
+      if (!recorder) return;
+      recorder.stop();
+      // Audio will be captured from the record() promise
+      return;
+    }
+
+    // Start recording
+    setPttRecording(true);
+    const recorder = new AudioRecorder();
+    pttRecorderRef.current = recorder;
+
+    let audioBuffer: ArrayBuffer;
+    try {
+      audioBuffer = await recorder.record({ durationSeconds: 120 });
+    } catch (err) {
+      setPttRecording(false);
+      pttRecorderRef.current = null;
+      setError(err instanceof Error ? err.message : 'Failed to start recording');
+      return;
+    }
+
+    // Recording stopped (either by toggle or by reaching max duration)
+    setPttRecording(false);
+    pttRecorderRef.current = null;
+
+    if (!audioBuffer || audioBuffer.byteLength === 0) return;
+
+    // Transcribe
+    setPttTranscribing(true);
+    try {
+      // Auto-detect STT provider: config → ELEVENLABS_API_KEY → OPENAI_API_KEY
+      let stt: { transcribe(audio: ArrayBuffer): Promise<{ text: string }> };
+      const config = currentConfig ?? await loadConfig(cwd);
+      const sttConfig = config?.voice?.stt;
+
+      if (sttConfig?.provider === 'elevenlabs') {
+        stt = new ElevenLabsSTT({ model: sttConfig.model, language: sttConfig.language });
+      } else if (sttConfig?.provider === 'whisper') {
+        stt = new WhisperSTT({ model: sttConfig.model, language: sttConfig.language });
+      } else if (process.env.ELEVENLABS_API_KEY) {
+        stt = new ElevenLabsSTT();
+      } else if (process.env.OPENAI_API_KEY) {
+        stt = new WhisperSTT();
+      } else {
+        throw new Error('No STT API key found. Set ELEVENLABS_API_KEY or OPENAI_API_KEY.');
+      }
+
+      const result = await stt.transcribe(audioBuffer);
+      const text = result.text.trim();
+      if (text) {
+        inputRef.current?.appendValue(text);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Transcription failed');
+    } finally {
+      setPttTranscribing(false);
+    }
+  }, [pttRecording, pttTranscribing, currentConfig, cwd]);
+
+  // Cleanup PTT on unmount
+  useEffect(() => () => {
+    if (pttRecorderRef.current) {
+      pttRecorderRef.current.stop();
+      pttRecorderRef.current = null;
+    }
+  }, []);
 
   // Save current session UI state
   const saveCurrentSessionState = useCallback(() => {
@@ -1503,6 +1584,8 @@ export function App({ cwd, version }: AppProps) {
     return ['listening...', 'pause 3s to send', '[ctrl+l] stop'];
   }, [isListening]);
 
+  const pttStatus = pttTranscribing ? 'transcribing' as const : pttRecording ? 'recording' as const : null;
+
   // Show welcome banner only when no messages
   const showWelcome = messages.length === 0 && !isProcessing;
 
@@ -1643,6 +1726,11 @@ export function App({ cwd, version }: AppProps) {
   useInput((input, key) => {
     if (isListeningRef.current && key.ctrl && input === 'l') {
       stopListening();
+      return;
+    }
+    // Ctrl+R: push-to-talk recording toggle
+    if (key.ctrl && input === 'r') {
+      togglePushToTalk();
       return;
     }
     // Ctrl+]: show session selector (avoiding Ctrl+S which conflicts with terminal XOFF)
@@ -1828,6 +1916,233 @@ export function App({ cwd, version }: AppProps) {
         return;
       }
 
+      // Check for /exit command
+      if (trimmedInput === '/exit') {
+        registry.closeAll();
+        exit();
+        return;
+      }
+
+      // Intercept panel commands at terminal level for reliability.
+      // These commands open interactive panels and should bypass the LLM entirely.
+      const panelMatch = trimmedInput.match(/^\/(\S+)(?:\s+(.*))?$/);
+      if (panelMatch && activeSession) {
+        const cmdName = panelMatch[1].toLowerCase();
+        const cmdArgs = (panelMatch[2] || '').trim();
+
+        // /connectors (no args) → open panel
+        if (cmdName === 'connectors' && !cmdArgs) {
+          setConnectorsPanelInitial(undefined);
+          setShowConnectorsPanel(true);
+          return;
+        }
+
+        // /hooks (no args) → open panel
+        if (cmdName === 'hooks' && !cmdArgs) {
+          if (!hookStoreRef.current) {
+            hookStoreRef.current = new HookStore(cwd);
+          }
+          const hooks = hookStoreRef.current.loadAll();
+          setHooksConfig(hooks);
+          setShowHooksPanel(true);
+          return;
+        }
+
+        // /config (no args) → open panel
+        if (cmdName === 'config' && !cmdArgs) {
+          loadConfigFiles();
+          setShowConfigPanel(true);
+          return;
+        }
+
+        // /identity (no args) → open panel
+        if (cmdName === 'identity' && !cmdArgs) {
+          setShowIdentityPanel(true);
+          return;
+        }
+
+        // /guardrails (no args) → open panel
+        if (cmdName === 'guardrails' && !cmdArgs) {
+          if (!guardrailsStoreRef.current) {
+            guardrailsStoreRef.current = new GuardrailsStore(cwd);
+          }
+          const config = guardrailsStoreRef.current.loadAll();
+          const policies = guardrailsStoreRef.current.listPolicies();
+          setGuardrailsConfig(config);
+          setGuardrailsPolicies(policies);
+          setShowGuardrailsPanel(true);
+          return;
+        }
+
+        // /budget (no args) → open panel
+        if (cmdName === 'budget' && !cmdArgs) {
+          if (!budgetTrackerRef.current) {
+            budgetTrackerRef.current = new BudgetTracker(activeSessionId || 'default');
+          }
+          const config = budgetTrackerRef.current.getConfig();
+          const sessionStatus = budgetTrackerRef.current.checkBudget('session');
+          const swarmStatus = budgetTrackerRef.current.checkBudget('swarm');
+          setBudgetConfig(config);
+          setSessionBudgetStatus(sessionStatus);
+          setSwarmBudgetStatus(swarmStatus);
+          setShowBudgetPanel(true);
+          return;
+        }
+
+        // /swarm (no args) → open panel
+        if (cmdName === 'swarm' && !cmdArgs) {
+          setShowSwarmPanel(true);
+          return;
+        }
+
+        // /tasks (no args) → open panel
+        if (cmdName === 'tasks' && !cmdArgs) {
+          getTasks(cwd).then((tasks) => {
+            setTasksList(tasks);
+            isPaused(cwd).then((paused) => {
+              setTasksPaused(paused);
+              setShowTasksPanel(true);
+            });
+          });
+          return;
+        }
+
+        // /schedules (no args) → open panel
+        if (cmdName === 'schedules' && !cmdArgs) {
+          listSchedules(cwd, { sessionId: activeSessionId || undefined }).then((schedules) => {
+            setSchedulesList(schedules);
+            setShowSchedulesPanel(true);
+          });
+          return;
+        }
+
+        // /assistants (no args) → open panel or dashboard
+        if (cmdName === 'assistants' && !cmdArgs) {
+          // Show the dashboard view
+          setShowAssistantsPanel(true);
+          return;
+        }
+
+        // /projects (no args) → open panel
+        if (cmdName === 'projects' && !cmdArgs) {
+          listProjects(cwd).then((projects) => {
+            const activeId = registry.getActiveSession()?.client.getActiveProjectId?.();
+            setProjectsList(projects);
+            setActiveProjectId(activeId || undefined);
+            setShowProjectsPanel(true);
+          });
+          return;
+        }
+
+        // /plans (no args) → open panel
+        if (cmdName === 'plans' && !cmdArgs) {
+          const activeId = registry.getActiveSession()?.client.getActiveProjectId?.();
+          if (activeId) {
+            readProject(cwd, activeId).then((project) => {
+              if (project) {
+                setPlansProject(project);
+                setShowPlansPanel(true);
+              }
+            });
+          } else {
+            listProjects(cwd).then((projects) => {
+              setProjectsList(projects);
+              setActiveProjectId(undefined);
+              setShowProjectsPanel(true);
+            });
+          }
+          return;
+        }
+
+        // /messages (no args) → open panel
+        if (cmdName === 'messages' && !cmdArgs) {
+          const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
+          if (messagesManager) {
+            messagesManager.list({ limit: 50 }).then((msgs: any[]) => {
+              setMessagesList(msgs.map((m: any) => ({
+                id: m.id,
+                threadId: m.threadId,
+                fromAssistantId: m.fromAssistantId,
+                fromAssistantName: m.fromAssistantName,
+                subject: m.subject,
+                preview: m.preview,
+                body: m.body,
+                priority: m.priority as 'low' | 'normal' | 'high' | 'urgent',
+                status: m.status as 'unread' | 'read' | 'archived' | 'injected',
+                createdAt: m.createdAt,
+                replyCount: m.replyCount,
+              })));
+              setMessagesPanelError(null);
+              setShowMessagesPanel(true);
+            }).catch((err: Error) => {
+              setMessagesPanelError(err instanceof Error ? err.message : String(err));
+              setShowMessagesPanel(true);
+            });
+          } else {
+            setMessagesPanelError(null);
+            setShowMessagesPanel(true);
+          }
+          return;
+        }
+
+        // /inbox (no args) → open panel
+        if (cmdName === 'inbox' && !cmdArgs) {
+          const inboxManager = registry.getActiveSession()?.client.getInboxManager?.();
+          if (inboxManager) {
+            inboxManager.list({ limit: 50 }).then((emails: EmailListItem[]) => {
+              setInboxEmails(emails);
+              setInboxError(null);
+              setShowInboxPanel(true);
+            }).catch((err: Error) => {
+              setInboxError(err instanceof Error ? err.message : String(err));
+              setShowInboxPanel(true);
+            });
+          } else {
+            setInboxError('Inbox not enabled. Configure inbox in config.json.');
+            setShowInboxPanel(true);
+          }
+          return;
+        }
+
+        // /wallet (no args) → open panel
+        if (cmdName === 'wallet' && !cmdArgs) {
+          const walletManager = registry.getActiveSession()?.client.getWalletManager?.();
+          if (walletManager) {
+            walletManager.list().then((cards: any[]) => {
+              setWalletCards(cards);
+              setWalletError(null);
+              setShowWalletPanel(true);
+            }).catch((err: Error) => {
+              setWalletError(err instanceof Error ? err.message : String(err));
+              setShowWalletPanel(true);
+            });
+          } else {
+            setWalletError('Wallet not enabled. Configure wallet in config.json.');
+            setShowWalletPanel(true);
+          }
+          return;
+        }
+
+        // /secrets (no args) → open panel
+        if (cmdName === 'secrets' && !cmdArgs) {
+          const secretsManager = registry.getActiveSession()?.client.getSecretsManager?.();
+          if (secretsManager) {
+            secretsManager.list('all').then((secrets: any[]) => {
+              setSecretsList(secrets);
+              setSecretsError(null);
+              setShowSecretsPanel(true);
+            }).catch((err: Error) => {
+              setSecretsError(err instanceof Error ? err.message : String(err));
+              setShowSecretsPanel(true);
+            });
+          } else {
+            setSecretsError('Secrets not enabled. Configure secrets in config.json.');
+            setShowSecretsPanel(true);
+          }
+          return;
+        }
+      }
+
       // Check for /session command
       if (trimmedInput.startsWith('/session')) {
         const arg = trimmedInput.slice(8).trim();
@@ -1882,21 +2197,81 @@ export function App({ cwd, version }: AppProps) {
         }
       }
 
+      // Handle /clear and /new entirely at terminal level for reliability.
       const isClearCommand = trimmedInput === '/clear' || trimmedInput === '/new';
 
-      if (isClearCommand && isProcessing) {
-        activeSession.client.stop();
-        const finalized = finalizeResponse('interrupted');
-        if (finalized) {
-          skipNextDoneRef.current = true;
+      if (isClearCommand) {
+        // Stop any ongoing processing
+        if (isProcessing) {
+          activeSession.client.stop();
+          const finalized = finalizeResponse('interrupted');
+          if (finalized) {
+            skipNextDoneRef.current = true;
+          }
+          resetTurnState();
+          setIsProcessing(false);
+          isProcessingRef.current = false;
+          registry.setProcessing(activeSession.id, false);
+          setQueueFlushTrigger((prev) => prev + 1);
+          await new Promise((r) => setTimeout(r, 100));
         }
-        resetTurnState();
-        setIsProcessing(false);
-        isProcessingRef.current = false;
-        registry.setProcessing(activeSession.id, false);
-        // Trigger queue flush check after clear/new interrupts processing
-        setQueueFlushTrigger((prev) => prev + 1);
-        await new Promise((r) => setTimeout(r, 100));
+
+        // Clear UI state
+        setMessageQueue((prev) => prev.filter((msg) => msg.sessionId !== activeSession.id));
+        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== activeSession.id));
+        pendingSendsRef.current = pendingSendsRef.current.filter(
+          (entry) => entry.sessionId !== activeSession.id
+        );
+        setActivityLog([]);
+        activityLogRef.current = [];
+        setLastWorkedFor(undefined);
+        setError(null);
+        setCurrentResponse('');
+        responseRef.current = '';
+        toolCallsRef.current = [];
+        toolResultsRef.current = [];
+
+        // Clear conversation on the client side (resets context, tokens, etc.)
+        activeSession.client.clearConversation();
+
+        // Show confirmation message, then clear all messages
+        const confirmText = trimmedInput === '/new'
+          ? 'Starting new conversation.'
+          : 'Conversation cleared. Starting fresh.';
+        setMessages([{
+          id: generateId(),
+          role: 'assistant',
+          content: confirmText,
+          timestamp: now(),
+        }]);
+
+        // Update session UI state cache
+        sessionUIStates.current.set(activeSession.id, {
+          messages: [],
+          currentResponse: '',
+          activityLog: [],
+          toolCalls: [],
+          toolResults: [],
+          tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxContextTokens: tokenUsage?.maxContextTokens || 200000 },
+          energyState,
+          voiceState,
+          heartbeatState,
+          identityInfo,
+          processingStartTime: undefined,
+          currentTurnTokens: 0,
+          error: null,
+          lastWorkedFor: undefined,
+        });
+
+        // Reset token usage display
+        setTokenUsage({
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          maxContextTokens: tokenUsage?.maxContextTokens || 200000,
+        });
+
+        return;
       }
 
       // Queue mode: add to queue for later
@@ -1976,48 +2351,19 @@ export function App({ cwd, version }: AppProps) {
         await new Promise((r) => setTimeout(r, 100));
       }
 
-      if (isClearCommand) {
-        // Reset UI state for this session before executing clear on the assistant.
-        setMessages([]);
-        setMessageQueue((prev) => prev.filter((msg) => msg.sessionId !== activeSession.id));
-        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== activeSession.id));
-        pendingSendsRef.current = pendingSendsRef.current.filter(
-          (entry) => entry.sessionId !== activeSession.id
-        );
-        setActivityLog([]);
-        activityLogRef.current = [];
-        setLastWorkedFor(undefined);
-        sessionUIStates.current.set(activeSession.id, {
-          messages: [],
-          currentResponse: '',
-          activityLog: [],
-          toolCalls: [],
-          toolResults: [],
-          tokenUsage,
-          energyState,
-          voiceState,
-          heartbeatState,
-          identityInfo,
-          processingStartTime: undefined,
-          currentTurnTokens: 0,
-          error: null,
-          lastWorkedFor: undefined,
-        });
-      } else {
-        // Add user message
-        const userMessage: Message = {
-          id: generateId(),
-          role: 'user',
-          content: trimmedInput,
-          timestamp: now(),
-        };
-        setMessages((prev) => {
-          if (prev.some((msg) => msg.id === userMessage.id)) {
-            return prev;
-          }
-          return [...prev, userMessage];
-        });
-      }
+      // Add user message
+      const userMessage: Message = {
+        id: generateId(),
+        role: 'user',
+        content: trimmedInput,
+        timestamp: now(),
+      };
+      setMessages((prev) => {
+        if (prev.some((msg) => msg.id === userMessage.id)) {
+          return prev;
+        }
+        return [...prev, userMessage];
+      });
 
       // Reset state
       skipNextDoneRef.current = false;
@@ -3374,6 +3720,9 @@ export function App({ cwd, version }: AppProps) {
         allowBlankAnswer={activeAskQuestion?.required === false}
         footerHints={listenHints}
         assistantName={identityInfo?.assistant?.name || undefined}
+        isRecording={pttRecording}
+        recordingStatus={pttStatus}
+        onStopRecording={togglePushToTalk}
       />
 
       {/* Status bar */}

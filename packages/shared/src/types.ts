@@ -689,7 +689,7 @@ export interface VoiceConfig {
 }
 
 export interface STTConfig {
-  provider: 'whisper' | 'system';
+  provider: 'whisper' | 'elevenlabs' | 'system';
   model?: string;
   language?: string;
 }
@@ -785,6 +785,7 @@ export interface IdentityContacts {
   emails: ContactEntry[];
   phones: ContactEntry[];
   addresses: AddressEntry[];
+  virtualAddresses?: ContactEntry[];
   social?: SocialEntry[];
 }
 
