@@ -19,6 +19,14 @@ export interface HeartbeatConfig {
   intervalMs: number;
   staleThresholdMs: number;
   persistPath: string;
+  /** Enable autonomous self-scheduling (default: false). */
+  autonomous?: boolean;
+  /** Maximum ms the agent can sleep between heartbeats. */
+  maxSleepMs?: number;
+  /** Enable the watchdog safety-net schedule (default: false). */
+  watchdogEnabled?: boolean;
+  /** Watchdog polling interval in ms. */
+  watchdogIntervalMs?: number;
 }
 
 export interface PersistedState {

@@ -93,6 +93,10 @@ const DEFAULT_CONFIG: AssistantsConfig = {
     enabled: true,
     intervalMs: 15000,
     staleThresholdMs: 120000,
+    autonomous: false,
+    maxSleepMs: 30 * 60 * 1000, // 30 min
+    watchdogEnabled: false,
+    watchdogIntervalMs: 60 * 60 * 1000, // 1 hour
   },
   context: {
     enabled: true,

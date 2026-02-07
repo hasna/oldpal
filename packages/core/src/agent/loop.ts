@@ -23,6 +23,7 @@ import { registerEnergyTools } from '../tools/energy';
 import { registerContextEntryTools } from '../tools/context-entries';
 import { registerSecurityTools } from '../tools/security';
 import { getSecurityLogger } from '../security/logger';
+import { registerLogsTools } from '../tools/logs';
 import { registerVerificationTools } from '../tools/verification';
 import { BashTool } from '../tools/bash';
 import { FilesystemTools } from '../tools/filesystem';
@@ -39,9 +40,11 @@ import { SkillExecutor } from '../skills/executor';
 import {
   HookLoader,
   HookExecutor,
+  HookStore,
   nativeHookRegistry,
   ScopeContextManager,
   createScopeVerificationHook,
+  registerHooksTools,
 } from '../hooks';
 import { CommandLoader, CommandExecutor, BuiltinCommands, type TokenUsage, type CommandContext, type CommandResult } from '../commands';
 import { createLLMClient, type LLMClient } from '../llm/client';
@@ -50,6 +53,9 @@ import {
   HeartbeatManager,
   StatePersistence,
   RecoveryManager,
+  createAutoScheduleHeartbeatHook,
+  ensureWatchdogSchedule,
+  installHeartbeatSkills,
   type AssistantState,
   type Heartbeat,
   type HeartbeatConfig as HeartbeatRuntimeConfig,
@@ -89,8 +95,8 @@ import { registerSwarmTools, type SwarmToolContext } from '../tools/swarm';
 import { SwarmCoordinator, type SwarmCoordinatorContext } from '../swarm/coordinator';
 import { GlobalMemoryManager, MemoryInjector, type MemoryConfig } from '../memory';
 import { SubassistantManager, type SubassistantManagerContext, type SubassistantResult, type SubassistantLoopConfig } from './subagent-manager';
-import { BudgetTracker, type BudgetScope } from '../budget';
-import { PolicyEvaluator, type GuardrailsConfig, type PolicyEvaluationResult } from '../guardrails';
+import { BudgetTracker, registerBudgetTools, type BudgetScope } from '../budget';
+import { PolicyEvaluator, GuardrailsStore, registerGuardrailsTools, type GuardrailsConfig, type PolicyEvaluationResult } from '../guardrails';
 import { getGlobalRegistry, type AssistantRegistryService, type RegisteredAssistant, type AssistantType } from '../registry';
 import { CapabilityEnforcer, type CapabilityEnforcementResult } from '../capabilities';
 import type { BudgetConfig, CapabilitiesConfigShared } from '@hasna/assistants-shared';
@@ -600,6 +606,11 @@ export class AssistantLoop {
       sessionId: this.sessionId,
     });
 
+    // Register logs tools (read-only access to all log sources)
+    registerLogsTools(this.toolRegistry, {
+      sessionId: this.sessionId,
+    });
+
     // Register verification tools
     registerVerificationTools(this.toolRegistry, {
       sessionId: this.sessionId,
@@ -640,6 +651,15 @@ export class AssistantLoop {
     registerVoiceTools(this.toolRegistry, {
       getVoiceManager: () => this.voiceManager,
     });
+
+    // Register budget tools (always available for budget introspection)
+    registerBudgetTools(this.toolRegistry, () => this.budgetTracker);
+
+    // Register guardrails tools (read-only, always available)
+    registerGuardrailsTools(this.toolRegistry, () => new GuardrailsStore(this.cwd));
+
+    // Register hooks tools (always available for hook inspection)
+    registerHooksTools(this.toolRegistry, () => new HookStore(this.cwd));
 
     // Initialize jobs system if enabled
     if (this.config?.jobs?.enabled !== false) {
@@ -688,6 +708,32 @@ export class AssistantLoop {
       nativeHookRegistry.setConfig(nativeConfig);
       if (nativeConfig.scopeVerification) {
         this.scopeContextManager.setConfig(nativeConfig.scopeVerification);
+      }
+    }
+
+    // Register autonomous heartbeat Stop hook and setup watchdog
+    const heartbeatCfg = this.config.heartbeat;
+    if (heartbeatCfg?.autonomous) {
+      nativeHookRegistry.register(createAutoScheduleHeartbeatHook());
+      // Install main-loop and watchdog skills (no-op if already present)
+      installHeartbeatSkills().catch(() => {});
+      // Pass heartbeat config to native hook context
+      nativeHookRegistry.setConfig({
+        ...nativeHookRegistry.getConfig(),
+        heartbeat: {
+          autonomous: heartbeatCfg.autonomous,
+          maxSleepMs: heartbeatCfg.maxSleepMs,
+          watchdogEnabled: heartbeatCfg.watchdogEnabled,
+          watchdogIntervalMs: heartbeatCfg.watchdogIntervalMs,
+        },
+      });
+      // Setup watchdog if enabled
+      if (heartbeatCfg.watchdogEnabled) {
+        ensureWatchdogSchedule(
+          this.cwd,
+          this.sessionId,
+          heartbeatCfg.watchdogIntervalMs,
+        ).catch(() => {});
       }
     }
 
@@ -2152,6 +2198,20 @@ export class AssistantLoop {
    */
   getSkills() {
     return this.skillLoader.getSkills();
+  }
+
+  /**
+   * Reload skills from disk
+   */
+  async refreshSkills(): Promise<void> {
+    await this.skillLoader.loadAll(this.cwd, { includeContent: false });
+  }
+
+  /**
+   * Get the skill loader (for panel operations)
+   */
+  getSkillLoader() {
+    return this.skillLoader;
   }
 
   /**

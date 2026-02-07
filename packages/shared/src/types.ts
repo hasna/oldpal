@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -313,6 +313,13 @@ export interface NativeHookContext {
  */
 export interface NativeHookConfig {
   scopeVerification?: ScopeVerificationConfig;
+  /** Autonomous heartbeat configuration passed to the auto-schedule Stop hook. */
+  heartbeat?: {
+    autonomous?: boolean;
+    maxSleepMs?: number;
+    watchdogEnabled?: boolean;
+    watchdogIntervalMs?: number;
+  };
 }
 
 /**
@@ -857,6 +864,14 @@ export interface HeartbeatConfig {
   intervalMs?: number;
   staleThresholdMs?: number;
   persistPath?: string;
+  /** Enable autonomous self-scheduling (default: false). */
+  autonomous?: boolean;
+  /** Maximum ms the agent can sleep between heartbeats. */
+  maxSleepMs?: number;
+  /** Enable the watchdog safety-net schedule (default: false). */
+  watchdogEnabled?: boolean;
+  /** Watchdog polling interval in ms. */
+  watchdogIntervalMs?: number;
 }
 
 export interface ContextConfig {
