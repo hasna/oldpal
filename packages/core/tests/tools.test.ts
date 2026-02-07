@@ -105,7 +105,10 @@ describe('FilesystemTools', () => {
     const writeResult = await FilesystemTools.writeExecutor({ filename: 'test.txt', content: 'hello', cwd: tempDir });
     expect(writeResult).toContain('Successfully wrote');
 
-    const readResult = await FilesystemTools.readExecutor({ path: join(tempDir, '.assistants', 'scripts', 'test', 'test.txt') });
+    const readResult = await FilesystemTools.readExecutor({
+      path: join(tempDir, '.assistants', 'scripts', 'test', 'test.txt'),
+      cwd: tempDir,
+    });
     expect(readResult).toContain('hello');
   });
 
@@ -128,19 +131,35 @@ describe('FilesystemTools', () => {
   test('should glob and grep files', async () => {
     await FilesystemTools.writeExecutor({ filename: 'notes.txt', content: 'alpha\nbeta', cwd: tempDir });
 
-    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.txt', path: join(tempDir, '.assistants', 'scripts') });
+    const globResult = await FilesystemTools.globExecutor({
+      pattern: '**/*.txt',
+      path: join(tempDir, '.assistants', 'scripts'),
+      cwd: tempDir,
+    });
     expect(globResult).toContain('notes.txt');
 
-    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'beta', path: join(tempDir, '.assistants', 'scripts') });
+    const grepResult = await FilesystemTools.grepExecutor({
+      pattern: 'beta',
+      path: join(tempDir, '.assistants', 'scripts'),
+      cwd: tempDir,
+    });
     expect(grepResult).toContain('beta');
   });
 
   test('should handle glob and grep misses', async () => {
     await mkdir(join(tempDir, '.assistants', 'scripts'), { recursive: true });
-    const globResult = await FilesystemTools.globExecutor({ pattern: '**/*.nope', path: join(tempDir, '.assistants', 'scripts') });
+    const globResult = await FilesystemTools.globExecutor({
+      pattern: '**/*.nope',
+      path: join(tempDir, '.assistants', 'scripts'),
+      cwd: tempDir,
+    });
     expect(globResult).toContain('No files found');
 
-    const grepResult = await FilesystemTools.grepExecutor({ pattern: 'nope', path: join(tempDir, '.assistants', 'scripts') });
+    const grepResult = await FilesystemTools.grepExecutor({
+      pattern: 'nope',
+      path: join(tempDir, '.assistants', 'scripts'),
+      cwd: tempDir,
+    });
     expect(grepResult).toContain('No matches found');
   });
 
@@ -710,6 +729,7 @@ describe('FeedbackTool', () => {
       type: 'feedback',
       title: 'Test feedback',
       description: 'Something went wrong',
+      cwd: tempDir,
     });
 
     expect(result).toContain('Feedback saved locally');

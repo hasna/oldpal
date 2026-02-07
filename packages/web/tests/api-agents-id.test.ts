@@ -1,11 +1,16 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockAssistant: any = null;
 let mockUpdatedAssistant: any = null;
 let updateSetData: any = null;
 let deleteWasCalled = false;
+const assistantId = '11111111-1111-1111-1111-111111111111';
+const missingAssistantId = '22222222-2222-2222-2222-222222222222';
 
 // Mock database
 mock.module('@/db', () => ({
@@ -32,15 +37,16 @@ mock.module('@/db', () => ({
       },
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   assistants: 'assistants',
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any, context: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -62,7 +68,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
@@ -135,7 +141,7 @@ function createDeleteRequest(
 describe('GET /api/v1/assistants/:id', () => {
   beforeEach(() => {
     mockAssistant = {
-      id: 'assistant-123',
+      id: assistantId,
       userId: 'user-123',
       name: 'Test Assistant',
       description: 'A test assistant',
@@ -153,9 +159,9 @@ describe('GET /api/v1/assistants/:id', () => {
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/assistants/assistant-123');
+      const url = new URL(`http://localhost:3001/api/v1/assistants/${assistantId}`);
       const request = new NextRequest(url);
-      const context = { params: { id: 'assistant-123' } };
+      const context = { params: { id: assistantId } };
 
       const response = await GET(request, context);
 
@@ -163,7 +169,7 @@ describe('GET /api/v1/assistants/:id', () => {
     });
 
     test('returns 401 for invalid token', async () => {
-      const [request, context] = createGetRequest('assistant-123', { token: 'invalid' });
+      const [request, context] = createGetRequest(assistantId, { token: 'invalid' });
 
       const response = await GET(request, context);
 
@@ -173,20 +179,20 @@ describe('GET /api/v1/assistants/:id', () => {
 
   describe('assistant retrieval', () => {
     test('returns assistant when user owns it', async () => {
-      const [request, context] = createGetRequest('assistant-123');
+      const [request, context] = createGetRequest(assistantId);
 
       const response = await GET(request, context);
       const data = await response.json();
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.data.id).toBe('assistant-123');
+      expect(data.data.id).toBe(assistantId);
       expect(data.data.name).toBe('Test Assistant');
     });
 
     test('returns 404 when assistant not found', async () => {
       mockAssistant = null;
-      const [request, context] = createGetRequest('nonexistent');
+      const [request, context] = createGetRequest(missingAssistantId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -197,7 +203,7 @@ describe('GET /api/v1/assistants/:id', () => {
 
     test('returns 403 when assistant belongs to different user', async () => {
       mockAssistant = { ...mockAssistant, userId: 'different-user' };
-      const [request, context] = createGetRequest('assistant-123');
+      const [request, context] = createGetRequest(assistantId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -211,7 +217,7 @@ describe('GET /api/v1/assistants/:id', () => {
 describe('PATCH /api/v1/assistants/:id', () => {
   beforeEach(() => {
     mockAssistant = {
-      id: 'assistant-123',
+      id: assistantId,
       userId: 'user-123',
       name: 'Test Assistant',
       description: 'A test assistant',
@@ -228,13 +234,13 @@ describe('PATCH /api/v1/assistants/:id', () => {
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/assistants/assistant-123');
+      const url = new URL(`http://localhost:3001/api/v1/assistants/${assistantId}`);
       const request = new NextRequest(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'New Name' }),
       });
-      const context = { params: { id: 'assistant-123' } };
+      const context = { params: { id: assistantId } };
 
       const response = await PATCH(request, context);
 
@@ -244,7 +250,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
 
   describe('assistant updates', () => {
     test('updates assistant name', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { name: 'Updated Assistant' });
+      const [request, context] = createPatchRequest(assistantId, { name: 'Updated Assistant' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -255,7 +261,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('updates assistant description', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { description: 'New description' });
+      const [request, context] = createPatchRequest(assistantId, { description: 'New description' });
 
       await PATCH(request, context);
 
@@ -263,7 +269,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('updates avatar with valid URL', async () => {
-      const [request, context] = createPatchRequest('assistant-123', {
+      const [request, context] = createPatchRequest(assistantId, {
         avatar: 'https://example.com/avatar.png',
       });
 
@@ -273,7 +279,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('allows null avatar', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { avatar: null });
+      const [request, context] = createPatchRequest(assistantId, { avatar: null });
 
       const response = await PATCH(request, context);
 
@@ -282,7 +288,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('updates model', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { model: 'claude-3-sonnet' });
+      const [request, context] = createPatchRequest(assistantId, { model: 'claude-3-sonnet' });
 
       await PATCH(request, context);
 
@@ -290,7 +296,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('updates systemPrompt', async () => {
-      const [request, context] = createPatchRequest('assistant-123', {
+      const [request, context] = createPatchRequest(assistantId, {
         systemPrompt: 'New system prompt',
       });
 
@@ -300,7 +306,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('updates settings object', async () => {
-      const [request, context] = createPatchRequest('assistant-123', {
+      const [request, context] = createPatchRequest(assistantId, {
         settings: {
           temperature: 0.5,
           maxTokens: 2000,
@@ -317,7 +323,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('updates isActive flag', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { isActive: false });
+      const [request, context] = createPatchRequest(assistantId, { isActive: false });
 
       await PATCH(request, context);
 
@@ -325,7 +331,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('sets updatedAt timestamp', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { name: 'New' });
+      const [request, context] = createPatchRequest(assistantId, { name: 'New' });
 
       await PATCH(request, context);
 
@@ -333,7 +339,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('accepts empty body', async () => {
-      const [request, context] = createPatchRequest('assistant-123', {});
+      const [request, context] = createPatchRequest(assistantId, {});
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -346,7 +352,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
   describe('authorization', () => {
     test('returns 404 when assistant not found', async () => {
       mockAssistant = null;
-      const [request, context] = createPatchRequest('nonexistent', { name: 'New' });
+      const [request, context] = createPatchRequest(missingAssistantId, { name: 'New' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -357,7 +363,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
 
     test('returns 403 when assistant belongs to different user', async () => {
       mockAssistant = { ...mockAssistant, userId: 'different-user' };
-      const [request, context] = createPatchRequest('assistant-123', { name: 'New' });
+      const [request, context] = createPatchRequest(assistantId, { name: 'New' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -369,7 +375,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
 
   describe('validation', () => {
     test('returns 422 when name is empty', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { name: '' });
+      const [request, context] = createPatchRequest(assistantId, { name: '' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -379,7 +385,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('returns 422 when name exceeds 255 characters', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { name: 'a'.repeat(256) });
+      const [request, context] = createPatchRequest(assistantId, { name: 'a'.repeat(256) });
 
       const response = await PATCH(request, context);
 
@@ -387,7 +393,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('returns 422 for invalid avatar URL', async () => {
-      const [request, context] = createPatchRequest('assistant-123', { avatar: 'not-a-url' });
+      const [request, context] = createPatchRequest(assistantId, { avatar: 'not-a-url' });
 
       const response = await PATCH(request, context);
 
@@ -395,7 +401,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('returns 422 for invalid temperature (> 2)', async () => {
-      const [request, context] = createPatchRequest('assistant-123', {
+      const [request, context] = createPatchRequest(assistantId, {
         settings: { temperature: 3 },
       });
 
@@ -405,7 +411,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
     });
 
     test('returns 422 for negative maxTokens', async () => {
-      const [request, context] = createPatchRequest('assistant-123', {
+      const [request, context] = createPatchRequest(assistantId, {
         settings: { maxTokens: -100 },
       });
 
@@ -419,7 +425,7 @@ describe('PATCH /api/v1/assistants/:id', () => {
 describe('DELETE /api/v1/assistants/:id', () => {
   beforeEach(() => {
     mockAssistant = {
-      id: 'assistant-123',
+      id: assistantId,
       userId: 'user-123',
       name: 'Test Assistant',
     };
@@ -430,9 +436,9 @@ describe('DELETE /api/v1/assistants/:id', () => {
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/assistants/assistant-123');
+      const url = new URL(`http://localhost:3001/api/v1/assistants/${assistantId}`);
       const request = new NextRequest(url, { method: 'DELETE' });
-      const context = { params: { id: 'assistant-123' } };
+      const context = { params: { id: assistantId } };
 
       const response = await DELETE(request, context);
 
@@ -442,7 +448,7 @@ describe('DELETE /api/v1/assistants/:id', () => {
 
   describe('assistant deletion', () => {
     test('deletes assistant and returns success', async () => {
-      const [request, context] = createDeleteRequest('assistant-123');
+      const [request, context] = createDeleteRequest(assistantId);
 
       const response = await DELETE(request, context);
       const data = await response.json();
@@ -457,7 +463,7 @@ describe('DELETE /api/v1/assistants/:id', () => {
   describe('authorization', () => {
     test('returns 404 when assistant not found', async () => {
       mockAssistant = null;
-      const [request, context] = createDeleteRequest('nonexistent');
+      const [request, context] = createDeleteRequest(missingAssistantId);
 
       const response = await DELETE(request, context);
       const data = await response.json();
@@ -468,7 +474,7 @@ describe('DELETE /api/v1/assistants/:id', () => {
 
     test('returns 403 when assistant belongs to different user', async () => {
       mockAssistant = { ...mockAssistant, userId: 'different-user' };
-      const [request, context] = createDeleteRequest('assistant-123');
+      const [request, context] = createDeleteRequest(assistantId);
 
       const response = await DELETE(request, context);
       const data = await response.json();
@@ -477,4 +483,8 @@ describe('DELETE /api/v1/assistants/:id', () => {
       expect(deleteWasCalled).toBe(false);
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

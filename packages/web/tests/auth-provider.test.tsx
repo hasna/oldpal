@@ -1,6 +1,7 @@
 import React from 'react';
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, afterAll, mock, beforeEach } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createUseAuthMock } from './helpers/mock-use-auth';
 
 // Mock state
 let mockAccessToken: string | null = null;
@@ -8,7 +9,7 @@ let mockRefreshAccessToken: ReturnType<typeof mock>;
 let mockSetLoading: ReturnType<typeof mock>;
 
 // Mock useAuth hook
-mock.module('@/hooks/use-auth', () => ({
+mock.module('@/hooks/use-auth', () => createUseAuthMock({
   useAuth: () => ({
     accessToken: mockAccessToken,
     refreshAccessToken: mockRefreshAccessToken,
@@ -96,4 +97,8 @@ describe('AuthProvider', () => {
     expect(markup).toContain('<main>');
     expect(markup).toContain('Main Content');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

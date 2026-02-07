@@ -4,10 +4,31 @@ import { act, create } from 'react-test-renderer';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { useChatStore } from '../src/lib/store';
 import { chatWs } from '../src/lib/ws';
-import { Input } from '../src/components/ui/Input';
+import { Textarea } from '../src/components/ui/textarea';
 import { MessageBubble } from '../src/components/chat/MessageBubble';
 import { MessageList } from '../src/components/chat/MessageList';
 import type { ToolCall, ToolResult, Message } from '@hasna/assistants-shared';
+
+// Mock next/navigation for components relying on App Router hooks
+mock.module('next/navigation', () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+mock.module('@/hooks/use-theme', () => ({
+  useTheme: () => ({
+    theme: 'light',
+    resolvedTheme: 'light',
+    setTheme: () => {},
+  }),
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
+  themeScript: '',
+}));
 
 const sent: any[] = [];
 const connected: string[] = [];
@@ -44,6 +65,21 @@ const createWindowStub = () => {
     removeEventListener,
     location: { protocol: 'http:', host: 'example.com' },
   };
+  (globalThis as any).document = {
+    activeElement: null,
+    documentElement: {
+      classList: {
+        add: () => {},
+        remove: () => {},
+      },
+    },
+  };
+  if (!(globalThis as any).requestAnimationFrame) {
+    (globalThis as any).requestAnimationFrame = (cb: () => void) => {
+      cb();
+      return 0;
+    };
+  }
 
   return {
     listeners,
@@ -55,6 +91,9 @@ describe('web extra components', () => {
   let originalNavigator: any;
   let originalCrypto: any;
   let originalChatWs: { send: any; connect: any; disconnect: any } | null = null;
+  let originalFetch: any;
+  let originalDocument: any;
+  let originalRequestAnimationFrame: any;
 
   beforeEach(() => {
     sent.length = 0;
@@ -81,11 +120,16 @@ describe('web extra components', () => {
       sessionId: null,
       sessions: [],
       sessionSnapshots: {},
+      isListening: false,
+      listeningDraft: '',
     });
 
     originalWindow = (globalThis as any).window;
     originalNavigator = (globalThis as any).navigator;
     originalCrypto = (globalThis as any).crypto;
+    originalFetch = (globalThis as any).fetch;
+    originalDocument = (globalThis as any).document;
+    originalRequestAnimationFrame = (globalThis as any).requestAnimationFrame;
   });
 
   afterEach(() => {
@@ -100,10 +144,25 @@ describe('web extra components', () => {
     }
     (globalThis as any).navigator = originalNavigator;
     (globalThis as any).crypto = originalCrypto;
+    if (originalDocument === undefined) {
+      delete (globalThis as any).document;
+    } else {
+      (globalThis as any).document = originalDocument;
+    }
+    if (originalRequestAnimationFrame === undefined) {
+      delete (globalThis as any).requestAnimationFrame;
+    } else {
+      (globalThis as any).requestAnimationFrame = originalRequestAnimationFrame;
+    }
     if (originalChatWs) {
       chatWs.send = originalChatWs.send;
       chatWs.connect = originalChatWs.connect;
       chatWs.disconnect = originalChatWs.disconnect;
+    }
+    if (originalFetch === undefined) {
+      delete (globalThis as any).fetch;
+    } else {
+      (globalThis as any).fetch = originalFetch;
     }
   });
 
@@ -166,11 +225,20 @@ describe('web extra components', () => {
     });
 
     const tree = renderer!.toJSON();
-    expect(JSON.stringify(tree)).toContain('Commands');
+    expect(JSON.stringify(tree)).toContain('Search commands');
 
-    const buttons = renderer!.root.findAll((node) => typeof node.props?.onClick === 'function');
+    const optionButtons = renderer!.root.findAll((node) => node.props?.role === 'option');
+    const textContent = (node: any): string => {
+      if (!node) return '';
+      if (typeof node === 'string') return node;
+      if (Array.isArray(node.children)) {
+        return node.children.map(textContent).join('');
+      }
+      return '';
+    };
+    const newSessionButton = optionButtons.find((node) => textContent(node).includes('New chat session'));
     await act(async () => {
-      buttons[0].props.onClick();
+      newSessionButton?.props.onClick();
     });
 
     expect(sent.some((msg) => msg.type === 'cancel' && msg.sessionId === 'session-1')).toBe(true);
@@ -184,7 +252,7 @@ describe('web extra components', () => {
 
     const renderer = await renderWithAct(<InputArea />);
 
-    const input = renderer!.root.findByType(Input);
+    const input = renderer!.root.findByType(Textarea);
     await act(async () => {
       input.props.onChange({ target: { value: 'Hello' } });
     });
@@ -204,6 +272,292 @@ describe('web extra components', () => {
     expect(sent.some((msg) => msg.type === 'cancel' && msg.sessionId === 'session-5')).toBe(true);
     expect(useChatStore.getState().isStreaming).toBe(false);
 
+    renderer!.unmount();
+  });
+
+  test('InputArea toggles /listen without sending a message', async () => {
+    const { listeners } = createWindowStub();
+    (globalThis as any).crypto = { randomUUID: () => 'session-6' };
+    (globalThis as any).navigator = { language: 'en-US' };
+
+    let startCalls = 0;
+    let stopCalls = 0;
+
+    class FakeSpeechRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onresult: any = null;
+      onerror: any = null;
+      onend: any = null;
+      start() {
+        startCalls += 1;
+      }
+      stop() {
+        stopCalls += 1;
+      }
+    }
+
+    (globalThis as any).window.SpeechRecognition = FakeSpeechRecognition;
+    (globalThis as any).window.webkitSpeechRecognition = FakeSpeechRecognition;
+
+    const renderer = await renderWithAct(<InputArea />);
+
+    const input = renderer!.root.findByType(Textarea);
+    await act(async () => {
+      input.props.onChange({ target: { value: '/listen' } });
+    });
+    await act(async () => {
+      input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+    });
+
+    expect(startCalls).toBe(1);
+    expect(sent.some((msg) => msg.type === 'message' && msg.content === '/listen')).toBe(false);
+
+    let tree = renderer!.toJSON();
+    expect(JSON.stringify(tree)).toContain('listening...');
+
+    await act(async () => {
+      listeners.keydown?.[0]({ key: 'Escape' });
+    });
+
+    expect(stopCalls).toBeGreaterThan(0);
+    tree = renderer!.toJSON();
+    expect(JSON.stringify(tree)).not.toContain('listening...');
+
+    renderer!.unmount();
+  });
+
+  test('InputArea stops listening on /listen stop', async () => {
+    createWindowStub();
+    (globalThis as any).crypto = { randomUUID: () => 'session-9' };
+    (globalThis as any).navigator = { language: 'en-US' };
+
+    let startCalls = 0;
+    let stopCalls = 0;
+
+    class FakeSpeechRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onresult: any = null;
+      onerror: any = null;
+      onend: any = null;
+      start() {
+        startCalls += 1;
+      }
+      stop() {
+        stopCalls += 1;
+      }
+    }
+
+    (globalThis as any).window.SpeechRecognition = FakeSpeechRecognition;
+    (globalThis as any).window.webkitSpeechRecognition = FakeSpeechRecognition;
+
+    const renderer = await renderWithAct(<InputArea />);
+    const input = renderer!.root.findByType(Textarea);
+
+    await act(async () => {
+      input.props.onChange({ target: { value: '/listen' } });
+    });
+    await act(async () => {
+      input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+    });
+
+    expect(startCalls).toBe(1);
+
+    await act(async () => {
+      input.props.onChange({ target: { value: '/listen stop' } });
+    });
+    await act(async () => {
+      input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+    });
+
+    expect(stopCalls).toBeGreaterThan(0);
+    expect(sent.some((msg) => msg.type === 'message' && msg.content.includes('/listen stop'))).toBe(false);
+
+    renderer!.unmount();
+  });
+
+  test('InputArea ignores manual typing while listening', async () => {
+    createWindowStub();
+    (globalThis as any).crypto = { randomUUID: () => 'session-10' };
+    (globalThis as any).navigator = { language: 'en-US' };
+
+    class FakeSpeechRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onresult: any = null;
+      onerror: any = null;
+      onend: any = null;
+      start() {}
+      stop() {}
+    }
+
+    (globalThis as any).window.SpeechRecognition = FakeSpeechRecognition;
+    (globalThis as any).window.webkitSpeechRecognition = FakeSpeechRecognition;
+
+    const renderer = await renderWithAct(<InputArea />);
+    const input = renderer!.root.findByType(Textarea);
+
+    await act(async () => {
+      input.props.onChange({ target: { value: '/listen' } });
+    });
+    await act(async () => {
+      input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+    });
+
+    await act(async () => {
+      input.props.onChange({ target: { value: 'manual typing' } });
+    });
+
+    const updated = renderer!.root.findByType(Textarea);
+    expect(updated.props.value).toBe('');
+
+    renderer!.unmount();
+  });
+
+  test('InputArea sends shell command output on ! prefix', async () => {
+    createWindowStub();
+    (globalThis as any).crypto = { randomUUID: () => 'session-7' };
+    useChatStore.setState({ sessionId: 'session-7' });
+
+    (globalThis as any).fetch = async (_input: any, init?: any) => {
+      const body = init?.body ? JSON.parse(init.body) : {};
+      if (body.command !== 'pwd') {
+        return new Response(JSON.stringify({ success: false, error: { message: 'Unexpected command' } }), { status: 400 });
+      }
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          ok: true,
+          stdout: '/tmp/project',
+          stderr: '',
+          exitCode: 0,
+          truncated: false,
+        },
+      }), { status: 200 });
+    };
+
+    const renderer = await renderWithAct(<InputArea />);
+
+    const input = renderer!.root.findByType(Textarea);
+    await act(async () => {
+      input.props.onChange({ target: { value: '!pwd' } });
+    });
+    await act(async () => {
+      input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+    });
+
+    expect(sent.some((msg) => msg.type === 'message' && msg.content.includes('Local shell command executed'))).toBe(true);
+    expect(sent.some((msg) => msg.type === 'message' && msg.content.includes('$ pwd'))).toBe(true);
+
+    renderer!.unmount();
+  });
+
+  test('InputArea sends shell command error output on ! prefix failure', async () => {
+    createWindowStub();
+    (globalThis as any).crypto = { randomUUID: () => 'session-12' };
+    useChatStore.setState({ sessionId: 'session-12' });
+
+    (globalThis as any).fetch = async () => {
+      return new Response(JSON.stringify({ success: false, error: { message: 'Not allowed' } }), { status: 400 });
+    };
+
+    const renderer = await renderWithAct(<InputArea />);
+
+    const input = renderer!.root.findByType(Textarea);
+    await act(async () => {
+      input.props.onChange({ target: { value: '!whoami' } });
+    });
+    await act(async () => {
+      input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+    });
+
+    expect(sent.some((msg) => msg.type === 'message' && msg.content.includes('Local shell command executed'))).toBe(true);
+    expect(sent.some((msg) => msg.type === 'message' && msg.content.includes('Not allowed'))).toBe(true);
+
+    renderer!.unmount();
+  });
+
+  test('InputArea sends dictation after silence threshold', async () => {
+    createWindowStub();
+    (globalThis as any).crypto = { randomUUID: () => 'session-8' };
+    (globalThis as any).navigator = { language: 'en-US' };
+
+    let recognitionInstance: any = null;
+    class FakeSpeechRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onresult: any = null;
+      onerror: any = null;
+      onend: any = null;
+      start() {
+        recognitionInstance = this;
+      }
+      stop() {}
+    }
+
+    (globalThis as any).window.SpeechRecognition = FakeSpeechRecognition;
+    (globalThis as any).window.webkitSpeechRecognition = FakeSpeechRecognition;
+
+    const originalNow = Date.now;
+    const originalSetInterval = globalThis.setInterval;
+    const originalClearInterval = globalThis.clearInterval;
+    let intervalCallback: (() => void) | null = null;
+    let nowValue = 0;
+    Date.now = () => nowValue;
+    globalThis.setInterval = ((cb: () => void) => {
+      intervalCallback = cb;
+      return 1 as any;
+    }) as any;
+    globalThis.clearInterval = (() => {}) as any;
+
+    let renderer: ReturnType<typeof create> | null = null;
+    try {
+      renderer = await renderWithAct(<InputArea />);
+      const input = renderer!.root.findByType(Textarea);
+      await act(async () => {
+        input.props.onChange({ target: { value: '/listen' } });
+      });
+      await act(async () => {
+        input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
+      });
+
+      nowValue = 1000;
+      await act(async () => {
+        recognitionInstance?.onresult?.({
+          resultIndex: 0,
+          results: [
+            { isFinal: true, 0: { transcript: 'hello' } },
+          ],
+        });
+      });
+
+      nowValue = 5000;
+      await act(async () => {
+        intervalCallback?.();
+      });
+
+      expect(sent.some((msg) => msg.type === 'message' && msg.content === 'hello')).toBe(true);
+    } finally {
+      renderer?.unmount();
+      Date.now = originalNow;
+      globalThis.setInterval = originalSetInterval;
+      globalThis.clearInterval = originalClearInterval;
+    }
+  });
+
+  test('MessageList shows live dictation draft when listening', async () => {
+    const renderer = await renderWithAct(<MessageList messages={[]} />);
+    await act(async () => {
+      useChatStore.setState({ isListening: true, listeningDraft: 'dictating now' });
+    });
+    const tree = renderer!.toJSON();
+    expect(JSON.stringify(tree)).toContain('dictating now');
+    expect(JSON.stringify(tree)).toContain('Live dictation');
     renderer!.unmount();
   });
 

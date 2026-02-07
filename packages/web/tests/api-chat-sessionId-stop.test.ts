@@ -1,10 +1,15 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockSession: any = null;
 let stopSessionCalled = false;
 let stopSessionError: Error | null = null;
+const sessionId = '11111111-1111-1111-1111-111111111111';
+const missingSessionId = '22222222-2222-2222-2222-222222222222';
 
 // Mock database
 mock.module('@/db', () => ({
@@ -15,15 +20,16 @@ mock.module('@/db', () => ({
       },
     },
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   sessions: 'sessions',
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any, context: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -56,7 +62,7 @@ mock.module('@/lib/server/agent-pool', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
@@ -84,7 +90,7 @@ function createRequest(
 describe('POST /api/v1/chat/:sessionId/stop', () => {
   beforeEach(() => {
     mockSession = {
-      id: 'session-123',
+      id: sessionId,
       userId: 'user-123',
       assistantId: 'assistant-1',
       createdAt: new Date(),
@@ -95,9 +101,9 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/chat/session-123/stop');
+      const url = new URL(`http://localhost:3001/api/v1/chat/${sessionId}/stop`);
       const request = new NextRequest(url, { method: 'POST' });
-      const context = { params: { sessionId: 'session-123' } };
+      const context = { params: { sessionId: sessionId } };
 
       const response = await POST(request, context);
 
@@ -105,7 +111,7 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
     });
 
     test('returns 401 for invalid token', async () => {
-      const [request, context] = createRequest('session-123', { token: 'invalid' });
+      const [request, context] = createRequest(sessionId, { token: 'invalid' });
 
       const response = await POST(request, context);
 
@@ -116,7 +122,7 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
   describe('session validation', () => {
     test('returns 404 when session not found', async () => {
       mockSession = null;
-      const [request, context] = createRequest('nonexistent-session');
+      const [request, context] = createRequest(missingSessionId);
 
       const response = await POST(request, context);
       const data = await response.json();
@@ -128,11 +134,11 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
 
     test('returns 403 when session belongs to different user', async () => {
       mockSession = {
-        id: 'session-123',
+        id: sessionId,
         userId: 'different-user',
         assistantId: 'assistant-1',
       };
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await POST(request, context);
       const data = await response.json();
@@ -145,7 +151,7 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
 
   describe('successful stop', () => {
     test('returns success when session stopped', async () => {
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await POST(request, context);
       const data = await response.json();
@@ -156,7 +162,7 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
     });
 
     test('calls stopSession with correct session ID', async () => {
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       await POST(request, context);
 
@@ -167,7 +173,7 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
   describe('error handling', () => {
     test('handles stopSession errors gracefully', async () => {
       stopSessionError = new Error('Failed to stop session');
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await POST(request, context);
       const data = await response.json();
@@ -176,4 +182,8 @@ describe('POST /api/v1/chat/:sessionId/stop', () => {
       expect(data.success).toBe(false);
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

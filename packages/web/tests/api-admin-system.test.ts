@@ -1,5 +1,8 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockDbLatency = 5;
@@ -37,16 +40,17 @@ mock.module('@/db', () => ({
       return createSelectChain([{ count: mockActiveSessionsLastHour }]);
     },
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: { userId: 'userId' },
   sessions: { updatedAt: 'updatedAt', userId: 'userId' },
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAdminAuth: (handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -74,7 +78,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   count: () => ({ count: 'count' }),
   sql: (strings: TemplateStringsArray, ...values: any[]) => ({ sql: strings, values }),
   gte: (field: any, value: any) => ({ gte: [field, value] }),
@@ -268,4 +272,8 @@ describe('GET /api/v1/admin/system', () => {
       expect(data.data.activity).toHaveProperty('activeUsersLastHour');
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

@@ -441,7 +441,7 @@ describe('AssistantLoop process', () => {
     });
 
     await assistant.process('/skills');
-    await assistant.process('/connectors');
+    await assistant.process('/connectors --list');
 
     const textChunks = chunks.filter((c) => c.type === 'text' && c.content);
     expect(textChunks.some((c) => c.content?.includes('alpha'))).toBe(true);

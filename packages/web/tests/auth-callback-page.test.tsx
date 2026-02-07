@@ -1,6 +1,7 @@
 import React from 'react';
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, afterAll, mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createUseAuthMock } from './helpers/mock-use-auth';
 
 // Mock next/navigation
 mock.module('next/navigation', () => ({
@@ -13,7 +14,7 @@ mock.module('next/navigation', () => ({
 }));
 
 // Mock useAuth hook
-mock.module('@/hooks/use-auth', () => ({
+mock.module('@/hooks/use-auth', () => createUseAuthMock({
   useAuth: () => ({
     setAuth: () => {},
     user: null,
@@ -79,4 +80,8 @@ describe('AuthCallbackPage', () => {
 
     expect(markup).toContain('text-center');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

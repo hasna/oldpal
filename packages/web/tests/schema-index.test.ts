@@ -16,14 +16,14 @@ describe('schema/index re-exports', () => {
     expect(mod.refreshTokens).toBeDefined();
   });
 
-  test('exports agents table', async () => {
+  test('exports assistants table', async () => {
     const mod = await import('../src/db/schema/index');
-    expect(mod.agents).toBeDefined();
+    expect(mod.assistants).toBeDefined();
   });
 
-  test('exports agentsRelations', async () => {
+  test('exports assistantsRelations', async () => {
     const mod = await import('../src/db/schema/index');
-    expect(mod.agentsRelations).toBeDefined();
+    expect(mod.assistantsRelations).toBeDefined();
   });
 
   test('exports sessions table', async () => {
@@ -46,14 +46,14 @@ describe('schema/index re-exports', () => {
     expect(mod.messageRoleEnum).toBeDefined();
   });
 
-  test('exports agentMessages table', async () => {
+  test('exports assistantMessages table', async () => {
     const mod = await import('../src/db/schema/index');
-    expect(mod.agentMessages).toBeDefined();
+    expect(mod.assistantMessages).toBeDefined();
   });
 
-  test('exports agentMessagesRelations', async () => {
+  test('exports assistantMessagesRelations', async () => {
     const mod = await import('../src/db/schema/index');
-    expect(mod.agentMessagesRelations).toBeDefined();
+    expect(mod.assistantMessagesRelations).toBeDefined();
   });
 
   test('exports messagePriorityEnum', async () => {
@@ -66,9 +66,18 @@ describe('schema/index re-exports', () => {
     expect(mod.messageStatusEnum).toBeDefined();
   });
 
-  test('all 13 expected exports are present', async () => {
+  test('exports additional schema modules', async () => {
     const mod = await import('../src/db/schema/index');
-    const exports = Object.keys(mod);
-    expect(exports.length).toBe(13);
+    expect(mod.schedules).toBeDefined();
+    expect(mod.scheduleExecutions).toBeDefined();
+    expect(mod.subscriptionPlans).toBeDefined();
+    expect(mod.subscriptions).toBeDefined();
+    expect(mod.invoices).toBeDefined();
+    expect(mod.usageMetrics).toBeDefined();
+    expect(mod.adminAuditLogs).toBeDefined();
+    expect(mod.loginHistory).toBeDefined();
+    expect(mod.notifications).toBeDefined();
+    expect(mod.identities).toBeDefined();
+    expect(mod.apiKeys).toBeDefined();
   });
 });

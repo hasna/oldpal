@@ -1,21 +1,10 @@
 import React from 'react';
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, afterAll, mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createSidebarMock } from './helpers/mock-sidebar';
 
 // Mock sidebar components
-mock.module('@/components/ui/sidebar', () => ({
-  SidebarGroup: ({ children, ...props }: any) => (
-    <div data-sidebar-group {...props}>{children}</div>
-  ),
-  SidebarGroupContent: ({ children }: any) => (
-    <div data-sidebar-group-content>{children}</div>
-  ),
-  SidebarMenu: ({ children }: any) => <nav data-sidebar-menu>{children}</nav>,
-  SidebarMenuButton: ({ children, asChild, size }: any) => (
-    <button data-sidebar-menu-button data-size={size}>{children}</button>
-  ),
-  SidebarMenuItem: ({ children }: any) => <div data-sidebar-menu-item>{children}</div>,
-}));
+mock.module('@/components/ui/sidebar', () => createSidebarMock());
 
 // Create mock icon component
 const MockIcon = () => <span data-mock-icon>Icon</span>;
@@ -143,4 +132,8 @@ describe('NavSecondary', () => {
     expect(markup).toContain('<span>Support</span>');
     expect(markup).toContain('<span>Feedback</span>');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

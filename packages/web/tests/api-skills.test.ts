@@ -1,5 +1,6 @@
 import { describe, expect, test, mock, beforeAll, afterAll } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Token types for testing different auth scenarios
 const TOKEN_NO_SCOPE = 'api-key-no-scope';
@@ -9,7 +10,7 @@ const TOKEN_ADMIN = 'api-key-admin';
 const TOKEN_JWT = 'jwt-token';
 
 // Mock auth middleware to test scoped API key authentication
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withScopedApiKeyAuth: (requiredScopes: string[], handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -407,4 +408,8 @@ describe('GET /api/v1/skills', () => {
       }
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

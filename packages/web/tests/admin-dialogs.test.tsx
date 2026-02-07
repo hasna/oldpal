@@ -263,7 +263,7 @@ describe('API response handling', () => {
     expect(mockResponse.success).toBe(true);
     expect(mockResponse.data.id).toBe('user-123');
     expect(mockResponse.data._counts.sessions).toBe(5);
-    expect(mockResponse.data._counts.agents).toBe(2);
+    expect(mockResponse.data._counts.assistants).toBe(2);
   });
 
   test('billing response structure', async () => {

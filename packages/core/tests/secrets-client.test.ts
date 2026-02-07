@@ -95,10 +95,10 @@ describe('SecretsStorageClient', () => {
           ],
         };
       }
-      if (filter === `${prefix}agent/assistant-1/`) {
+      if (filter === `${prefix}assistant/assistant-1/`) {
         return {
           SecretList: [
-            { Name: `${prefix}agent/assistant-1/key/name`, Description: 'Assistant', CreatedDate: new Date(3), LastChangedDate: new Date(4) },
+            { Name: `${prefix}assistant/assistant-1/key/name`, Description: 'Assistant', CreatedDate: new Date(3), LastChangedDate: new Date(4) },
           ],
         };
       }

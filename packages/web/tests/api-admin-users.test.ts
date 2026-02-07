@@ -1,5 +1,8 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockUsers: any[] = [];
@@ -18,20 +21,25 @@ mock.module('@/db', () => ({
       },
     },
     select: () => ({
-      from: () => ({
-        where: () => Promise.resolve([{ total: mockUserCount }]),
-      }),
+      from: () => {
+        const result = Promise.resolve([{ total: mockUserCount }]);
+        return {
+          where: () => result,
+          then: result.then.bind(result),
+        };
+      },
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: 'users',
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAdminAuth: (handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -59,7 +67,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   count: () => 'count',
   desc: (field: any) => ({ desc: field }),
   ilike: (field: any, value: any) => ({ ilike: [field, value] }),
@@ -317,4 +325,8 @@ describe('GET /api/v1/admin/users', () => {
       expect(userWithAvatar.avatarUrl).toBe('https://example.com/avatar.png');
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

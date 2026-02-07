@@ -1,18 +1,20 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest } from 'next/server';
+import { createCryptoMock } from './helpers/mock-crypto';
+import { createOAuthMock } from './helpers/mock-oauth';
 
 // Mock state
 let mockIsConfigured = true;
 let mockAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?mock=true';
 
 // Mock OAuth utilities
-mock.module('@/lib/auth/oauth', () => ({
+mock.module('@/lib/auth/oauth', () => createOAuthMock({
   generateGoogleAuthUrl: (state: string) => `${mockAuthUrl}&state=${state}`,
   isGoogleOAuthConfigured: () => mockIsConfigured,
 }));
 
 // Mock crypto
-mock.module('crypto', () => ({
+mock.module('crypto', () => createCryptoMock({
   randomUUID: () => 'test-csrf-state',
 }));
 
@@ -122,4 +124,8 @@ describe('OAuth Google initiate route', () => {
       expect(response.status).toBe(307);
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

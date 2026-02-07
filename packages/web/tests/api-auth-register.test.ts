@@ -1,5 +1,10 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createCryptoMock } from './helpers/mock-crypto';
+import { createJwtMock } from './helpers/mock-auth-jwt';
+import { createPasswordMock } from './helpers/mock-auth-password';
 
 // Mock state
 let mockExistingUser: any = null;
@@ -37,33 +42,37 @@ mock.module('@/db', () => ({
       },
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: 'users',
   refreshTokens: 'refreshTokens',
 }));
 
 // Mock password utilities
-mock.module('@/lib/auth/password', () => ({
-  hashPassword: async (password: string) => `hashed_${password}`,
-}));
+mock.module('@/lib/auth/password', () => createPasswordMock());
 
 // Mock JWT utilities
-mock.module('@/lib/auth/jwt', () => ({
+mock.module('@/lib/auth/jwt', () => createJwtMock({
   createAccessToken: async () => 'mock-access-token',
   createRefreshToken: async () => 'mock-refresh-token',
   getRefreshTokenExpiry: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
 }));
 
+mock.module('@/lib/rate-limit', () => ({
+  checkRateLimit: () => null,
+  RateLimitPresets: { auth: {} },
+}));
+
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
 // Mock crypto
-mock.module('crypto', () => ({
+mock.module('crypto', () => createCryptoMock({
   randomUUID: () => 'test-uuid-1234',
 }));
 
@@ -99,7 +108,8 @@ describe('register API route', () => {
     expect(data.data.user.email).toBe('newuser@example.com');
     expect(data.data.user.name).toBe('New User');
     expect(data.data.accessToken).toBe('mock-access-token');
-    expect(data.data.refreshToken).toBe('mock-refresh-token');
+    const cookie = response.headers.get('set-cookie') || '';
+    expect(cookie).toContain('refresh_token=');
   });
 
   test('lowercases email before storing', async () => {
@@ -123,8 +133,9 @@ describe('register API route', () => {
 
     await POST(request);
 
-    expect(mockInsertedUser.passwordHash).toBe('hashed_mySecretPassword');
+    expect(typeof mockInsertedUser.passwordHash).toBe('string');
     expect(mockInsertedUser.passwordHash).not.toBe('mySecretPassword');
+    expect(mockInsertedUser.passwordHash.startsWith('$argon2')).toBe(true);
   });
 
   test('sets role to user for new registrations', async () => {
@@ -283,4 +294,8 @@ describe('register API route', () => {
     expect(user.role).toBeDefined();
     expect('avatarUrl' in user).toBe(true);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

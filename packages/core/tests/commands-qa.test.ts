@@ -49,7 +49,7 @@ describe('Slash command QA', () => {
     'registry', 'swarm', 'workspace', 'init', 'cost',
     'model', 'skill', 'skills', 'memory', 'hooks', 'feedback',
     'schedules',
-    'connectors', 'security-log', 'guardrails', 'verification',
+    'connectors', 'logs', 'guardrails', 'verification',
     'inbox', 'wallet', 'secrets', 'jobs', 'messages', 'tasks',
     'exit',
   ];
@@ -266,9 +266,16 @@ describe('Slash command QA', () => {
       expect(cmd).toBeUndefined();
     });
 
-    test('/security-log handled', async () => {
+    test('/logs handled and shows panel', async () => {
+      const result = await executor.execute('/logs', mockContext);
+      expect(result.handled).toBe(true);
+      expect(result.showPanel).toBe('logs');
+    });
+
+    test('/security-log alias handled', async () => {
       const result = await executor.execute('/security-log', mockContext);
       expect(result.handled).toBe(true);
+      expect(result.showPanel).toBe('logs');
     });
 
     test('/verification handled', async () => {

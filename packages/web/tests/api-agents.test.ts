@@ -1,5 +1,8 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockAssistants: any[] = [];
@@ -41,15 +44,16 @@ mock.module('@/db', () => ({
       },
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   assistants: 'assistants',
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -71,7 +75,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
   desc: (field: any) => ({ desc: field }),
   count: () => 'count',
@@ -424,4 +428,8 @@ describe('POST /api/v1/assistants', () => {
       expect(response.status).toBe(422);
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

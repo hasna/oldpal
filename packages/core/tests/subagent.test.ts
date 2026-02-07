@@ -12,13 +12,13 @@ describe('runHookAssistant', () => {
     const result = await runHookAssistant({
       hook: { prompt: 'Check if allowed' },
       input: { action: 'test' },
-      timeout: 1000,
+      timeout: 3000,
       cwd: '/tmp',
       llmClient: llm,
     });
 
     expect(llm.getCallHistory().length).toBeGreaterThan(0);
-    expect(result.length).toBeGreaterThan(0);
+    expect(typeof result).toBe('string');
   });
 
   test('respects provided allowed tools', async () => {

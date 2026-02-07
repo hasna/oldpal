@@ -1,5 +1,8 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockUser: { userId: string; role: string } | null = null;
@@ -11,7 +14,7 @@ let mockSentMessages: string[] = [];
 let mockInsertedSessions: Array<{ userId: string; label: string }> = [];
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   getAuthUser: async () => mockUser,
 }));
 
@@ -49,15 +52,16 @@ mock.module('@/db', () => ({
       }),
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   sessions: 'sessions',
   messages: 'messages',
 }));
@@ -262,4 +266,8 @@ describe('api v1 chat route', () => {
 
     expect(mockInsertedSessions[0].label.length).toBeLessThanOrEqual(53); // 50 + "..."
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

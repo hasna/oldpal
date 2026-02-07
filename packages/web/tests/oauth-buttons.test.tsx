@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, afterAll, mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 // Mock Button component
@@ -85,4 +85,8 @@ describe('OAuthButtons', () => {
     const pathCount = (markup.match(/<path/g) || []).length;
     expect(pathCount).toBe(4);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

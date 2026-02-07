@@ -1,12 +1,17 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockUser: any = null;
 let mockUpdatedUser: any = null;
 let updateSetData: any = null;
 let currentUserRole = 'user';
-let currentUserId = 'user-123';
+const validUserId = '11111111-1111-1111-1111-111111111111';
+const otherUserId = '22222222-2222-2222-2222-222222222222';
+let currentUserId = validUserId;
 
 // Mock database
 mock.module('@/db', () => ({
@@ -27,10 +32,11 @@ mock.module('@/db', () => ({
       },
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: {
     id: 'id',
     email: 'email',
@@ -41,7 +47,7 @@ mock.module('@/db/schema', () => ({
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any, context: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -63,7 +69,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
@@ -117,7 +123,7 @@ function createPatchRequest(
 describe('GET /api/v1/users/:id', () => {
   beforeEach(() => {
     mockUser = {
-      id: 'user-123',
+      id: validUserId,
       email: 'test@example.com',
       name: 'Test User',
       avatarUrl: null,
@@ -128,14 +134,14 @@ describe('GET /api/v1/users/:id', () => {
     mockUpdatedUser = null;
     updateSetData = null;
     currentUserRole = 'user';
-    currentUserId = 'user-123';
+    currentUserId = validUserId;
   });
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/users/user-123');
+      const url = new URL(`http://localhost:3001/api/v1/users/${validUserId}`);
       const request = new NextRequest(url);
-      const context = { params: { id: 'user-123' } };
+      const context = { params: { id: validUserId } };
 
       const response = await GET(request, context);
 
@@ -143,7 +149,7 @@ describe('GET /api/v1/users/:id', () => {
     });
 
     test('returns 401 for invalid token', async () => {
-      const [request, context] = createGetRequest('user-123', { token: 'invalid' });
+      const [request, context] = createGetRequest(validUserId, { token: 'invalid' });
 
       const response = await GET(request, context);
 
@@ -153,19 +159,19 @@ describe('GET /api/v1/users/:id', () => {
 
   describe('user retrieval', () => {
     test('returns user profile when user views own profile', async () => {
-      const [request, context] = createGetRequest('user-123');
+      const [request, context] = createGetRequest(validUserId);
 
       const response = await GET(request, context);
       const data = await response.json();
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.data.id).toBe('user-123');
+      expect(data.data.id).toBe(validUserId);
       expect(data.data.email).toBe('test@example.com');
     });
 
     test('returns user data with expected fields', async () => {
-      const [request, context] = createGetRequest('user-123');
+      const [request, context] = createGetRequest(validUserId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -181,7 +187,7 @@ describe('GET /api/v1/users/:id', () => {
 
     test('returns 404 when user not found', async () => {
       mockUser = null;
-      const [request, context] = createGetRequest('user-123');
+      const [request, context] = createGetRequest(validUserId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -193,9 +199,9 @@ describe('GET /api/v1/users/:id', () => {
 
   describe('authorization', () => {
     test('returns 403 when user tries to view another user profile', async () => {
-      currentUserId = 'user-123';
-      mockUser = { id: 'other-user' };
-      const [request, context] = createGetRequest('other-user');
+      currentUserId = validUserId;
+      mockUser = { id: otherUserId };
+      const [request, context] = createGetRequest(otherUserId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -206,20 +212,20 @@ describe('GET /api/v1/users/:id', () => {
 
     test('admin can view any user profile', async () => {
       currentUserRole = 'admin';
-      currentUserId = 'admin-123';
+      currentUserId = '33333333-3333-3333-3333-333333333333';
       mockUser = {
-        id: 'other-user',
+        id: otherUserId,
         email: 'other@example.com',
         name: 'Other User',
         role: 'user',
       };
-      const [request, context] = createGetRequest('other-user');
+      const [request, context] = createGetRequest(otherUserId);
 
       const response = await GET(request, context);
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.data.id).toBe('other-user');
+      expect(data.data.id).toBe(otherUserId);
     });
   });
 });
@@ -227,7 +233,7 @@ describe('GET /api/v1/users/:id', () => {
 describe('PATCH /api/v1/users/:id', () => {
   beforeEach(() => {
     mockUser = {
-      id: 'user-123',
+      id: validUserId,
       email: 'test@example.com',
       name: 'Test User',
       avatarUrl: null,
@@ -236,18 +242,18 @@ describe('PATCH /api/v1/users/:id', () => {
     mockUpdatedUser = null;
     updateSetData = null;
     currentUserRole = 'user';
-    currentUserId = 'user-123';
+    currentUserId = validUserId;
   });
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/users/user-123');
+      const url = new URL(`http://localhost:3001/api/v1/users/${validUserId}`);
       const request = new NextRequest(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'New Name' }),
       });
-      const context = { params: { id: 'user-123' } };
+      const context = { params: { id: validUserId } };
 
       const response = await PATCH(request, context);
 
@@ -257,7 +263,7 @@ describe('PATCH /api/v1/users/:id', () => {
 
   describe('user updates', () => {
     test('updates user name', async () => {
-      const [request, context] = createPatchRequest('user-123', { name: 'Updated Name' });
+      const [request, context] = createPatchRequest(validUserId, { name: 'Updated Name' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -268,7 +274,7 @@ describe('PATCH /api/v1/users/:id', () => {
     });
 
     test('updates user avatarUrl', async () => {
-      const [request, context] = createPatchRequest('user-123', {
+      const [request, context] = createPatchRequest(validUserId, {
         avatarUrl: 'https://example.com/avatar.png',
       });
 
@@ -279,7 +285,7 @@ describe('PATCH /api/v1/users/:id', () => {
     });
 
     test('allows null avatarUrl', async () => {
-      const [request, context] = createPatchRequest('user-123', { avatarUrl: null });
+      const [request, context] = createPatchRequest(validUserId, { avatarUrl: null });
 
       const response = await PATCH(request, context);
 
@@ -288,7 +294,7 @@ describe('PATCH /api/v1/users/:id', () => {
     });
 
     test('updates both name and avatarUrl', async () => {
-      const [request, context] = createPatchRequest('user-123', {
+      const [request, context] = createPatchRequest(validUserId, {
         name: 'New Name',
         avatarUrl: 'https://example.com/new-avatar.png',
       });
@@ -301,7 +307,7 @@ describe('PATCH /api/v1/users/:id', () => {
     });
 
     test('sets updatedAt timestamp', async () => {
-      const [request, context] = createPatchRequest('user-123', { name: 'New Name' });
+      const [request, context] = createPatchRequest(validUserId, { name: 'New Name' });
 
       await PATCH(request, context);
 
@@ -310,18 +316,18 @@ describe('PATCH /api/v1/users/:id', () => {
 
     test('returns updated user data', async () => {
       mockUpdatedUser = {
-        id: 'user-123',
+        id: validUserId,
         email: 'test@example.com',
         name: 'Updated Name',
         avatarUrl: null,
         role: 'user',
       };
-      const [request, context] = createPatchRequest('user-123', { name: 'Updated Name' });
+      const [request, context] = createPatchRequest(validUserId, { name: 'Updated Name' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
 
-      expect(data.data.id).toBe('user-123');
+      expect(data.data.id).toBe(validUserId);
       expect(data.data.email).toBe('test@example.com');
       expect(data.data.name).toBe('Updated Name');
     });
@@ -329,8 +335,8 @@ describe('PATCH /api/v1/users/:id', () => {
 
   describe('authorization', () => {
     test('returns 403 when user tries to update another user', async () => {
-      currentUserId = 'user-123';
-      const [request, context] = createPatchRequest('other-user', { name: 'New Name' });
+      currentUserId = validUserId;
+      const [request, context] = createPatchRequest(otherUserId, { name: 'New Name' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -341,8 +347,8 @@ describe('PATCH /api/v1/users/:id', () => {
 
     test('admin cannot update other users', async () => {
       currentUserRole = 'admin';
-      currentUserId = 'admin-123';
-      const [request, context] = createPatchRequest('other-user', { name: 'New Name' });
+      currentUserId = '33333333-3333-3333-3333-333333333333';
+      const [request, context] = createPatchRequest(otherUserId, { name: 'New Name' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -354,7 +360,7 @@ describe('PATCH /api/v1/users/:id', () => {
 
   describe('validation', () => {
     test('returns 422 when name is empty', async () => {
-      const [request, context] = createPatchRequest('user-123', { name: '' });
+      const [request, context] = createPatchRequest(validUserId, { name: '' });
 
       const response = await PATCH(request, context);
 
@@ -362,7 +368,7 @@ describe('PATCH /api/v1/users/:id', () => {
     });
 
     test('returns 422 when name exceeds 255 characters', async () => {
-      const [request, context] = createPatchRequest('user-123', { name: 'a'.repeat(256) });
+      const [request, context] = createPatchRequest(validUserId, { name: 'a'.repeat(256) });
 
       const response = await PATCH(request, context);
 
@@ -370,7 +376,7 @@ describe('PATCH /api/v1/users/:id', () => {
     });
 
     test('returns 422 for invalid avatarUrl', async () => {
-      const [request, context] = createPatchRequest('user-123', { avatarUrl: 'not-a-url' });
+      const [request, context] = createPatchRequest(validUserId, { avatarUrl: 'not-a-url' });
 
       const response = await PATCH(request, context);
 
@@ -378,11 +384,15 @@ describe('PATCH /api/v1/users/:id', () => {
     });
 
     test('accepts empty body (no updates)', async () => {
-      const [request, context] = createPatchRequest('user-123', {});
+      const [request, context] = createPatchRequest(validUserId, {});
 
       const response = await PATCH(request, context);
 
       expect(response.status).toBe(200);
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

@@ -38,6 +38,7 @@ describe('AssistantLoop initialize', () => {
 
     const tools = assistant.getTools();
     expect(tools.length).toBeGreaterThan(0);
+    expect(tools.some((tool) => tool.name === 'connector_autorefresh')).toBe(true);
   });
 
 });

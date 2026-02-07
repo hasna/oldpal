@@ -1,5 +1,8 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockFoundUser: any = null;
@@ -14,15 +17,16 @@ mock.module('@/db', () => ({
       },
     },
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: 'users',
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (request: NextRequest) => {
     if (!mockTokenPayload) {
       return NextResponse.json(
@@ -36,7 +40,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
@@ -192,4 +196,8 @@ describe('auth/me API route', () => {
     expect('emailVerified' in data.data).toBe(true);
     expect('createdAt' in data.data).toBe(true);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

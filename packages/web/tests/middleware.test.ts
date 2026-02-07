@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Track rate limit calls for verification
@@ -231,4 +231,8 @@ describe('middleware', () => {
       expect(data.error.message).toContain('10KB'); // Should mention the limit
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

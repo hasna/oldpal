@@ -1,5 +1,8 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockUserAssistants: any[] = [];
@@ -9,6 +12,10 @@ let mockFromAssistant: any = null;
 let mockToAssistant: any = null;
 let mockInsertedMessage: any = null;
 let insertValuesData: any = null;
+let mockParentMessage: any = null;
+const assistantId1 = '11111111-1111-1111-1111-111111111111';
+const assistantId2 = '22222222-2222-2222-2222-222222222222';
+const parentMessageId = '33333333-3333-3333-3333-333333333333';
 
 // Track which assistant is being queried
 let assistantQueryCount = 0;
@@ -34,6 +41,7 @@ mock.module('@/db', () => ({
           const end = start + (limit || mockMessages.length);
           return mockMessages.slice(start, end);
         },
+        findFirst: async () => mockParentMessage,
       },
     },
     select: () => ({
@@ -56,16 +64,17 @@ mock.module('@/db', () => ({
       },
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   assistantMessages: 'assistantMessages',
   assistants: 'assistants',
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -87,7 +96,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
   desc: (field: any) => ({ desc: field }),
   count: () => 'count',
@@ -142,17 +151,18 @@ function createPostRequest(
 
 describe('GET /api/v1/messages', () => {
   beforeEach(() => {
-    mockUserAssistants = [{ id: 'assistant-1' }, { id: 'assistant-2' }];
+    mockUserAssistants = [{ id: assistantId1 }, { id: assistantId2 }];
     mockMessages = [
-      { id: 'msg-1', toAssistantId: 'assistant-1', subject: 'Test 1', status: 'unread' },
-      { id: 'msg-2', toAssistantId: 'assistant-2', subject: 'Test 2', status: 'read' },
-      { id: 'msg-3', toAssistantId: 'assistant-1', subject: 'Test 3', status: 'unread' },
+      { id: 'msg-1', toAssistantId: assistantId1, subject: 'Test 1', status: 'unread' },
+      { id: 'msg-2', toAssistantId: assistantId2, subject: 'Test 2', status: 'read' },
+      { id: 'msg-3', toAssistantId: assistantId1, subject: 'Test 3', status: 'unread' },
     ];
     mockMessageCount = 3;
     mockFromAssistant = null;
     mockToAssistant = null;
     mockInsertedMessage = null;
     insertValuesData = null;
+    mockParentMessage = null;
     assistantQueryCount = 0;
   });
 
@@ -223,7 +233,7 @@ describe('GET /api/v1/messages', () => {
     });
 
     test('filters by assistantId when user owns the assistant', async () => {
-      const request = createGetRequest({ assistantId: 'assistant-1' });
+      const request = createGetRequest({ assistantId: assistantId1 });
 
       const response = await GET(request);
       const data = await response.json();
@@ -267,13 +277,14 @@ describe('GET /api/v1/messages', () => {
 
 describe('POST /api/v1/messages', () => {
   beforeEach(() => {
-    mockUserAssistants = [{ id: 'assistant-1' }, { id: 'assistant-2' }];
+    mockUserAssistants = [{ id: assistantId1 }, { id: assistantId2 }];
     mockMessages = [];
     mockMessageCount = 0;
-    mockFromAssistant = { id: 'assistant-1', userId: 'user-123' };
-    mockToAssistant = { id: 'assistant-2', userId: 'other-user' };
+    mockFromAssistant = { id: assistantId1, userId: 'user-123' };
+    mockToAssistant = { id: assistantId2, userId: 'user-123' };
     mockInsertedMessage = null;
     insertValuesData = null;
+    mockParentMessage = null;
     assistantQueryCount = 0;
   });
 
@@ -283,7 +294,7 @@ describe('POST /api/v1/messages', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          toAssistantId: 'assistant-2',
+          toAssistantId: assistantId2,
           body: 'Hello',
         }),
       });
@@ -310,6 +321,12 @@ describe('POST /api/v1/messages', () => {
     });
 
     test('creates message with all optional fields', async () => {
+      mockParentMessage = {
+        id: parentMessageId,
+        threadId: '550e8400-e29b-41d4-a716-446655440002',
+        fromAssistantId: assistantId1,
+        toAssistantId: assistantId2,
+      };
       const request = createPostRequest({
         toAssistantId: '550e8400-e29b-41d4-a716-446655440000',
         fromAssistantId: '550e8400-e29b-41d4-a716-446655440001',
@@ -317,7 +334,7 @@ describe('POST /api/v1/messages', () => {
         body: 'Hello, world!',
         priority: 'high',
         threadId: '550e8400-e29b-41d4-a716-446655440002',
-        parentId: '550e8400-e29b-41d4-a716-446655440003',
+        parentId: parentMessageId,
       });
 
       const response = await POST(request);
@@ -462,4 +479,8 @@ describe('POST /api/v1/messages', () => {
       expect(response.status).toBe(422);
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

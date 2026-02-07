@@ -529,13 +529,14 @@ describe('Jobs System', () => {
   describe('Job Tools', () => {
     test('createJobTools returns all tools', () => {
       const tools = createJobTools(() => null);
-      expect(tools.length).toBe(4);
+      expect(tools.length).toBe(5);
 
       const toolNames = tools.map((t) => t.tool.name);
       expect(toolNames).toContain('job_status');
       expect(toolNames).toContain('job_result');
       expect(toolNames).toContain('job_cancel');
       expect(toolNames).toContain('job_list');
+      expect(toolNames).toContain('job_clear');
     });
 
     test('job_status tool returns job info', async () => {

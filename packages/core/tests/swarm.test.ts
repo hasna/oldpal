@@ -94,7 +94,7 @@ describe('SwarmDecisionPolicy', () => {
 
   test('should return single_assistant for simple task', () => {
     const { decision, reasons } = policy.evaluate('fix typo');
-    expect(decision).toBe('single_agent');
+    expect(decision).toBe('single_assistant');
     expect(reasons.length).toBe(0);
   });
 
@@ -111,7 +111,7 @@ describe('SwarmDecisionPolicy', () => {
     const { decision } = disabledPolicy.evaluate(
       'complex multi-part system implementation'
     );
-    expect(decision).toBe('single_agent');
+    expect(decision).toBe('single_assistant');
   });
 });
 

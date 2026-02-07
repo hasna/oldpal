@@ -1,9 +1,14 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockUserAssistants: any[] = [];
 let mockThreadMessages: any[] = [];
+const threadId = '11111111-1111-1111-1111-111111111111';
+const emptyThreadId = '22222222-2222-2222-2222-222222222222';
 
 // Mock database
 mock.module('@/db', () => ({
@@ -17,16 +22,17 @@ mock.module('@/db', () => ({
       },
     },
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   assistantMessages: 'assistantMessages',
   assistants: 'assistants',
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any, context: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -48,7 +54,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
   asc: (field: any) => ({ asc: field }),
   or: (...args: any[]) => ({ or: args }),
@@ -81,7 +87,7 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
     mockThreadMessages = [
       {
         id: 'msg-1',
-        threadId: 'thread-123',
+        threadId: threadId,
         fromAssistantId: 'assistant-1',
         toAssistantId: 'assistant-other',
         body: 'First message',
@@ -89,7 +95,7 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
       },
       {
         id: 'msg-2',
-        threadId: 'thread-123',
+        threadId: threadId,
         fromAssistantId: 'assistant-other',
         toAssistantId: 'assistant-1',
         body: 'Reply',
@@ -97,7 +103,7 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
       },
       {
         id: 'msg-3',
-        threadId: 'thread-123',
+        threadId: threadId,
         fromAssistantId: 'assistant-1',
         toAssistantId: 'assistant-other',
         body: 'Second reply',
@@ -108,9 +114,9 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/messages/threads/thread-123');
+      const url = new URL(`http://localhost:3001/api/v1/messages/threads/${threadId}`);
       const request = new NextRequest(url);
-      const context = { params: { threadId: 'thread-123' } };
+      const context = { params: { threadId } };
 
       const response = await GET(request, context);
 
@@ -118,7 +124,7 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
     });
 
     test('returns 401 for invalid token', async () => {
-      const [request, context] = createRequest('thread-123', { token: 'invalid' });
+      const [request, context] = createRequest(threadId, { token: 'invalid' });
 
       const response = await GET(request, context);
 
@@ -128,20 +134,20 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
 
   describe('thread retrieval', () => {
     test('returns all messages in thread when user has access', async () => {
-      const [request, context] = createRequest('thread-123');
+      const [request, context] = createRequest(threadId);
 
       const response = await GET(request, context);
       const data = await response.json();
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.data.threadId).toBe('thread-123');
+      expect(data.data.threadId).toBe(threadId);
       expect(data.data.messages).toHaveLength(3);
       expect(data.data.count).toBe(3);
     });
 
     test('returns messages in chronological order', async () => {
-      const [request, context] = createRequest('thread-123');
+      const [request, context] = createRequest(threadId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -153,7 +159,7 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
 
     test('returns empty thread when no messages found', async () => {
       mockThreadMessages = [];
-      const [request, context] = createRequest('empty-thread');
+      const [request, context] = createRequest(emptyThreadId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -167,7 +173,7 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
   describe('authorization', () => {
     test('returns 403 when user has no assistants', async () => {
       mockUserAssistants = [];
-      const [request, context] = createRequest('thread-123');
+      const [request, context] = createRequest(threadId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -182,14 +188,14 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
       mockThreadMessages = [
         {
           id: 'msg-1',
-          threadId: 'thread-123',
+          threadId,
           fromAssistantId: 'other-assistant-1',
           toAssistantId: 'other-assistant-2',
           body: 'Message between others',
         },
       ];
 
-      const [request, context] = createRequest('thread-123');
+      const [request, context] = createRequest(threadId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -203,14 +209,14 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
       mockThreadMessages = [
         {
           id: 'msg-1',
-          threadId: 'thread-123',
+          threadId: threadId,
           fromAssistantId: 'assistant-1',
           toAssistantId: 'other-assistant',
           body: 'I sent this',
         },
       ];
 
-      const [request, context] = createRequest('thread-123');
+      const [request, context] = createRequest(threadId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -224,14 +230,14 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
       mockThreadMessages = [
         {
           id: 'msg-1',
-          threadId: 'thread-123',
+          threadId: threadId,
           fromAssistantId: 'other-assistant',
           toAssistantId: 'assistant-2',
           body: 'Message to me',
         },
       ];
 
-      const [request, context] = createRequest('thread-123');
+      const [request, context] = createRequest(threadId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -263,14 +269,14 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
         },
       ];
 
-      const [request, context] = createRequest('thread-123');
+      const [request, context] = createRequest(threadId);
 
       const response = await GET(request, context);
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      // Returns all messages in thread, not just the ones involving user
-      expect(data.data.messages).toHaveLength(3);
+      // Returns only messages accessible to the user
+      expect(data.data.messages).toHaveLength(1);
     });
   });
 
@@ -279,7 +285,7 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
       mockThreadMessages = [
         {
           id: 'msg-1',
-          threadId: 'thread-123',
+          threadId: threadId,
           fromAssistantId: 'assistant-1',
           toAssistantId: 'assistant-2',
           subject: 'Test Subject',
@@ -290,7 +296,7 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
         },
       ];
 
-      const [request, context] = createRequest('thread-123');
+      const [request, context] = createRequest(threadId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -303,4 +309,8 @@ describe('GET /api/v1/messages/threads/:threadId', () => {
       expect(msg).toHaveProperty('body');
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

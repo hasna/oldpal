@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, afterAll, mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 mock.module('next/font/google', () => ({
@@ -130,4 +130,8 @@ describe('app layout and pages', () => {
     expect(typeof mod.default).toBe('function');
   });
 
+});
+
+afterAll(() => {
+  mock.restore();
 });

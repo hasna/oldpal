@@ -312,7 +312,7 @@ describe('AssistantLoop', () => {
     test('should throw when not initialized', async () => {
       const assistant = new AssistantLoop();
 
-      await expect(assistant.process('Hello')).rejects.toThrow('Agent not initialized');
+      await expect(assistant.process('Hello')).rejects.toThrow('Assistant not initialized');
     });
   });
 

@@ -1,5 +1,30 @@
-import { describe, expect, test, beforeEach } from 'bun:test';
+import { describe, expect, test, beforeEach, mock } from 'bun:test';
 import { getMockClients, resetMockClients } from './helpers/mock-assistants-core';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+
+mock.module('@/db', () => ({
+  db: {
+    query: {
+      sessions: {
+        findFirst: async () => null,
+      },
+      assistants: {
+        findFirst: async () => null,
+      },
+    },
+  },
+  schema: createSchemaMock(),
+}));
+
+mock.module('@/db/schema', () => createSchemaMock({
+  sessions: { id: 'id', assistantId: 'assistantId' },
+  assistants: { id: 'id', settings: 'settings', systemPrompt: 'systemPrompt', model: 'model', isActive: 'isActive' },
+}));
+
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
+  eq: (field: any, value: any) => ({ field, value }),
+}));
 
 const { getSession, subscribeToSession, sendSessionMessage, stopSession, closeSession } = await import('../src/lib/server/agent-pool');
 let sessionCounter = 0;

@@ -52,7 +52,7 @@ describe('ToolIndex', () => {
       expect(categories).toContain('memory');
       expect(categories).toContain('connectors');
       expect(categories).toContain('web');
-      expect(categories).toContain('agents');
+      expect(categories).toContain('assistants');
     });
 
     test('returns sorted categories', () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, afterAll, mock } from 'bun:test';
 
 // Mock the database modules to prevent actual connection
 mock.module('postgres', () => {
@@ -43,9 +43,9 @@ describe('db/index exports', () => {
     expect(mod.schema.messages).toBeDefined();
   });
 
-  test('schema includes agents table', async () => {
+  test('schema includes assistants table', async () => {
     const mod = await import('../src/db/index');
-    expect(mod.schema.agents).toBeDefined();
+    expect(mod.schema.assistants).toBeDefined();
   });
 
   test('schema includes refreshTokens table', async () => {
@@ -53,8 +53,12 @@ describe('db/index exports', () => {
     expect(mod.schema.refreshTokens).toBeDefined();
   });
 
-  test('schema includes agentMessages table', async () => {
+  test('schema includes assistantMessages table', async () => {
     const mod = await import('../src/db/index');
-    expect(mod.schema.agentMessages).toBeDefined();
+    expect(mod.schema.assistantMessages).toBeDefined();
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

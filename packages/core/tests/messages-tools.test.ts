@@ -123,20 +123,20 @@ describe('Messages tools', () => {
     expect(error).toBe('Error deleting message: boom');
   });
 
-  test('messages_list_agents handles empty and errors', async () => {
+  test('messages_list_assistants handles empty and errors', async () => {
     const executors = createMessagesToolExecutors(() => manager);
 
-    const output = await executors.messages_list_agents({});
+    const output = await executors.messages_list_assistants({});
     expect(output).toContain('Known Assistants');
 
     manager.listAssistants = mock(async () => []);
-    const empty = await executors.messages_list_agents({});
+    const empty = await executors.messages_list_assistants({});
     expect(empty).toBe('No other assistants found. Assistants appear here after sending or receiving messages.');
 
     manager.listAssistants = mock(async () => {
       throw new Error('boom');
     });
-    const error = await executors.messages_list_agents({});
+    const error = await executors.messages_list_assistants({});
     expect(error).toBe('Error listing assistants: boom');
   });
 

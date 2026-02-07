@@ -1,12 +1,61 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
-import {
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createJwtMock } from './helpers/mock-auth-jwt';
+
+type AuthenticatedRequest = import('../src/lib/auth/middleware').AuthenticatedRequest;
+
+let mockDbUser: { isActive: boolean; role: 'user' | 'admin' } | null = null;
+const tokenPayloads = new Map<string, any>();
+let tokenCounter = 0;
+
+mock.module('@/db', () => ({
+  db: {
+    query: {
+      users: {
+        findFirst: async () => mockDbUser,
+      },
+    },
+  },
+  schema: createSchemaMock(),
+}));
+
+mock.module('@/db/schema', () => createSchemaMock({
+  users: { id: 'id', isActive: 'isActive', role: 'role' },
+}));
+
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
+  eq: (field: any, value: any) => ({ field, value }),
+}));
+
+mock.module('@/lib/auth/jwt', () => createJwtMock({
+  createAccessToken: async (payload: any) => {
+    const token = `token-${++tokenCounter}`;
+    tokenPayloads.set(token, payload);
+    return token;
+  },
+  verifyAccessToken: async (token: string) => tokenPayloads.get(token) ?? null,
+}));
+
+const {
   withAuth,
   withAdminAuth,
   getAuthUser,
-  type AuthenticatedRequest,
-} from '../src/lib/auth/middleware';
-import { createAccessToken } from '../src/lib/auth/jwt';
+  clearUserStatusCache,
+} = await import('../src/lib/auth/middleware');
+const { createAccessToken } = await import('../src/lib/auth/jwt');
+
+beforeEach(() => {
+  tokenPayloads.clear();
+  tokenCounter = 0;
+  mockDbUser = { isActive: true, role: 'user' };
+  clearUserStatusCache();
+});
+
+afterAll(() => {
+  mock.restore();
+});
 
 describe('auth middleware', () => {
   describe('getAuthUser', () => {
@@ -87,7 +136,7 @@ describe('auth middleware', () => {
     });
 
     test('returns 401 for missing token', async () => {
-      const handler = async (req: AuthenticatedRequest) => {
+      const handler = async () => {
         return NextResponse.json({ success: true });
       };
 
@@ -103,7 +152,7 @@ describe('auth middleware', () => {
     });
 
     test('returns 401 for invalid token', async () => {
-      const handler = async (req: AuthenticatedRequest) => {
+      const handler = async () => {
         return NextResponse.json({ success: true });
       };
 
@@ -122,6 +171,7 @@ describe('auth middleware', () => {
 
   describe('withAdminAuth', () => {
     test('allows admin users', async () => {
+      mockDbUser = { isActive: true, role: 'admin' };
       const token = await createAccessToken({
         userId: 'admin-1',
         email: 'admin@example.com',
@@ -129,7 +179,7 @@ describe('auth middleware', () => {
       });
 
       let called = false;
-      const handler = async (req: AuthenticatedRequest) => {
+      const handler = async () => {
         called = true;
         return NextResponse.json({ success: true });
       };
@@ -147,13 +197,14 @@ describe('auth middleware', () => {
     });
 
     test('returns 403 for non-admin users', async () => {
+      mockDbUser = { isActive: true, role: 'user' };
       const token = await createAccessToken({
         userId: 'user-1',
         email: 'user@example.com',
         role: 'user',
       });
 
-      const handler = async (req: AuthenticatedRequest) => {
+      const handler = async () => {
         return NextResponse.json({ success: true });
       };
 
@@ -171,7 +222,7 @@ describe('auth middleware', () => {
     });
 
     test('returns 401 for missing token (checked before admin check)', async () => {
-      const handler = async (req: AuthenticatedRequest) => {
+      const handler = async () => {
         return NextResponse.json({ success: true });
       };
 

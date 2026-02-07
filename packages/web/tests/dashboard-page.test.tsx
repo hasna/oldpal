@@ -1,6 +1,8 @@
 import React from 'react';
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, afterAll, mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createUseAuthMock } from './helpers/mock-use-auth';
+import { createSidebarMock } from './helpers/mock-sidebar';
 
 // Mock next/navigation
 mock.module('next/navigation', () => ({
@@ -20,34 +22,17 @@ mock.module('next/link', () => ({
 }));
 
 // Mock useAuth hook
-mock.module('@/hooks/use-auth', () => ({
+mock.module('@/hooks/use-auth', () => createUseAuthMock({
   useAuth: () => ({
     user: { id: 'user-123', name: 'Test User', email: 'test@example.com' },
     isAuthenticated: true,
+    isLoading: false,
     logout: () => {},
   }),
 }));
 
 // Mock useSidebar hook - this is exported from sidebar component
-mock.module('@/components/ui/sidebar', () => ({
-  SidebarProvider: ({ children }: any) => <div data-testid="sidebar-provider">{children}</div>,
-  SidebarInset: ({ children }: any) => <div data-testid="sidebar-inset">{children}</div>,
-  SidebarTrigger: (props: any) => <button {...props}>Toggle</button>,
-  useSidebar: () => ({
-    state: 'expanded',
-    open: true,
-    setOpen: () => {},
-    openMobile: false,
-    setOpenMobile: () => {},
-    isMobile: false,
-    toggleSidebar: () => {},
-  }),
-}));
-
-// Mock AppSidebar
-mock.module('@/components/app-sidebar', () => ({
-  AppSidebar: () => <div data-testid="app-sidebar">Sidebar</div>,
-}));
+mock.module('@/components/ui/sidebar', () => createSidebarMock());
 
 describe('Dashboard Page', () => {
   test('exports default component', async () => {
@@ -56,56 +41,25 @@ describe('Dashboard Page', () => {
     expect(typeof mod.default).toBe('function');
   });
 
-  test('renders page with sidebar provider', async () => {
+  test('renders loading shell', async () => {
     const { default: DashboardPage } = await import('../src/app/dashboard/page');
     const markup = renderToStaticMarkup(<DashboardPage />);
 
-    expect(markup).toContain('sidebar-provider');
+    expect(markup).toContain('min-h-screen');
+    expect(markup).toContain('items-center');
+    expect(markup).toContain('justify-center');
   });
 
-  test('renders breadcrumb navigation', async () => {
+  test('renders spinner indicator', async () => {
     const { default: DashboardPage } = await import('../src/app/dashboard/page');
     const markup = renderToStaticMarkup(<DashboardPage />);
 
-    expect(markup).toContain('Building Your Application');
-    expect(markup).toContain('Data Fetching');
+    expect(markup).toContain('animate-spin');
+    expect(markup).toContain('rounded-full');
+    expect(markup).toContain('border-b-2');
   });
+});
 
-  test('renders grid layout for content', async () => {
-    const { default: DashboardPage } = await import('../src/app/dashboard/page');
-    const markup = renderToStaticMarkup(<DashboardPage />);
-
-    expect(markup).toContain('grid');
-    expect(markup).toContain('md:grid-cols-3');
-  });
-
-  test('renders placeholder cards', async () => {
-    const { default: DashboardPage } = await import('../src/app/dashboard/page');
-    const markup = renderToStaticMarkup(<DashboardPage />);
-
-    expect(markup).toContain('aspect-video');
-    expect(markup).toContain('rounded-xl');
-    expect(markup).toContain('bg-muted/50');
-  });
-
-  test('renders header with fixed height', async () => {
-    const { default: DashboardPage } = await import('../src/app/dashboard/page');
-    const markup = renderToStaticMarkup(<DashboardPage />);
-
-    expect(markup).toContain('h-16');
-  });
-
-  test('renders sidebar inset section', async () => {
-    const { default: DashboardPage } = await import('../src/app/dashboard/page');
-    const markup = renderToStaticMarkup(<DashboardPage />);
-
-    expect(markup).toContain('sidebar-inset');
-  });
-
-  test('uses flexbox layout', async () => {
-    const { default: DashboardPage } = await import('../src/app/dashboard/page');
-    const markup = renderToStaticMarkup(<DashboardPage />);
-
-    expect(markup).toContain('flex');
-  });
+afterAll(() => {
+  mock.restore();
 });

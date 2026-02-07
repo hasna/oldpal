@@ -7,6 +7,11 @@ if (!Array.isArray(existing)) {
   (globalThis as any)[globalKey] = clients;
 }
 
+const bashExecutorKey = '__mockBashExecutor';
+if (!(globalThis as any)[bashExecutorKey]) {
+  (globalThis as any)[bashExecutorKey] = async () => 'Command completed successfully (no output)';
+}
+
 class MockEmbeddedClient {
   public sent: string[] = [];
   public stopped = false;
@@ -55,17 +60,31 @@ class MockEmbeddedClient {
   }
 }
 
-mock.module('@hasna/assistants-core', () => ({
-  EmbeddedClient: MockEmbeddedClient,
-  setRuntime: () => {},
-  hasRuntime: () => true,
-  getRuntime: () => null,
-}));
+function registerAssistantsCoreMock() {
+  mock.module('@hasna/assistants-core', () => ({
+    EmbeddedClient: MockEmbeddedClient,
+    setRuntime: () => {},
+    hasRuntime: () => true,
+    getRuntime: () => null,
+    BashTool: {
+      executor: (input: any) => (globalThis as any)[bashExecutorKey](input),
+    },
+  }));
+}
+
+registerAssistantsCoreMock();
 
 export function getMockClients() {
+  registerAssistantsCoreMock();
   return clients as Array<InstanceType<typeof MockEmbeddedClient>>;
 }
 
 export function resetMockClients() {
+  registerAssistantsCoreMock();
   clients.length = 0;
+}
+
+export function setMockBashExecutor(executor: (input: any) => Promise<string>) {
+  registerAssistantsCoreMock();
+  (globalThis as any)[bashExecutorKey] = executor;
 }

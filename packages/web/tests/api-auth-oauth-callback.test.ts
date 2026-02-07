@@ -1,5 +1,11 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createCryptoMock } from './helpers/mock-crypto';
+import { createOAuthMock } from './helpers/mock-oauth';
+import { createJwtMock } from './helpers/mock-auth-jwt';
+import { createPasswordMock } from './helpers/mock-auth-password';
 
 // Mock state
 let mockGoogleUser: any = null;
@@ -62,21 +68,20 @@ mock.module('@/db', () => ({
       };
     },
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: 'users',
   refreshTokens: 'refreshTokens',
 }));
 
 // Mock password utilities
-mock.module('@/lib/auth/password', () => ({
-  hashPassword: async (password: string) => `hashed_${password}`,
-}));
+mock.module('@/lib/auth/password', () => createPasswordMock());
 
 // Mock OAuth utilities
-mock.module('@/lib/auth/oauth', () => ({
+mock.module('@/lib/auth/oauth', () => createOAuthMock({
   getGoogleUserInfo: async (code: string) => {
     if (mockGetGoogleUserError) {
       throw mockGetGoogleUserError;
@@ -86,19 +91,19 @@ mock.module('@/lib/auth/oauth', () => ({
 }));
 
 // Mock JWT utilities
-mock.module('@/lib/auth/jwt', () => ({
+mock.module('@/lib/auth/jwt', () => createJwtMock({
   createAccessToken: async () => 'mock-access-token',
   createRefreshToken: async () => 'mock-refresh-token',
   getRefreshTokenExpiry: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
 // Mock crypto
-mock.module('crypto', () => ({
+mock.module('crypto', () => createCryptoMock({
   randomUUID: () => 'test-uuid',
 }));
 
@@ -106,7 +111,7 @@ const { GET } = await import('../src/app/api/v1/auth/oauth/google/callback/route
 
 function createCallbackRequest(
   params: { code?: string; state?: string; error?: string; error_description?: string } = {},
-  cookies: { oauth_state?: string } = {}
+  cookies: { oauth_state?: string; oauth_code_verifier?: string } = {}
 ): NextRequest {
   const url = new URL('http://localhost:3001/api/v1/auth/oauth/google/callback');
   if (params.code) url.searchParams.set('code', params.code);
@@ -116,8 +121,15 @@ function createCallbackRequest(
 
   // Set cookies via Cookie header
   const headers: Record<string, string> = {};
+  const cookiePairs: string[] = [];
   if (cookies.oauth_state) {
-    headers['Cookie'] = `oauth_state=${cookies.oauth_state}`;
+    cookiePairs.push(`oauth_state=${cookies.oauth_state}`);
+  }
+  if (cookies.oauth_code_verifier) {
+    cookiePairs.push(`oauth_code_verifier=${cookies.oauth_code_verifier}`);
+  }
+  if (cookiePairs.length > 0) {
+    headers['Cookie'] = cookiePairs.join('; ');
   }
 
   return new NextRequest(url, { headers });
@@ -221,7 +233,7 @@ describe('OAuth Google callback route', () => {
       mockGetGoogleUserError = new Error('Token exchange failed');
       const request = createCallbackRequest(
         { code: 'invalid-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       const response = await GET(request);
@@ -244,7 +256,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       const response = await GET(request);
@@ -252,8 +264,6 @@ describe('OAuth Google callback route', () => {
       expect(response.status).toBe(307);
       const location = response.headers.get('location');
       expect(location).toContain('/auth/callback');
-      expect(location).toContain('accessToken=mock-access-token');
-      expect(location).toContain('refreshToken=mock-refresh-token');
     });
 
     test('stores refresh token in database', async () => {
@@ -265,14 +275,15 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       await GET(request);
 
       expect(mockInsertedToken).toBeDefined();
       expect(mockInsertedToken.userId).toBe('existing-user');
-      expect(mockInsertedToken.tokenHash).toBe('hashed_mock-refresh-token');
+      expect(typeof mockInsertedToken.tokenHash).toBe('string');
+      expect(mockInsertedToken.tokenHash.startsWith('$argon2')).toBe(true);
       expect(mockInsertedToken.family).toBe('test-uuid');
     });
   });
@@ -299,7 +310,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       const response = await GET(request);
@@ -327,7 +338,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       await GET(request);
@@ -354,7 +365,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       await GET(request);
@@ -372,7 +383,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       const response = await GET(request);
@@ -394,7 +405,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       await GET(request);
@@ -409,7 +420,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       await GET(request);
@@ -428,7 +439,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       const response = await GET(request);
@@ -436,8 +447,6 @@ describe('OAuth Google callback route', () => {
       expect(response.status).toBe(307);
       const location = response.headers.get('location');
       expect(location).toContain('/auth/callback');
-      expect(location).toContain('accessToken=mock-access-token');
-      expect(location).toContain('refreshToken=mock-refresh-token');
     });
 
     test('clears oauth_state cookie', async () => {
@@ -449,7 +458,7 @@ describe('OAuth Google callback route', () => {
 
       const request = createCallbackRequest(
         { code: 'auth-code', state: 'valid-state' },
-        { oauth_state: 'valid-state' }
+        { oauth_state: 'valid-state', oauth_code_verifier: 'verifier' }
       );
 
       const response = await GET(request);
@@ -459,4 +468,8 @@ describe('OAuth Google callback route', () => {
       expect(setCookieHeader).toContain('oauth_state');
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

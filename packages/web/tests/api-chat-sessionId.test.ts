@@ -1,10 +1,15 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
 let mockSession: any = null;
 let mockMessages: any[] = [];
 let mockMessageCount = 0;
+const sessionId = '11111111-1111-1111-1111-111111111111';
+const missingSessionId = '22222222-2222-2222-2222-222222222222';
 
 // Mock database
 mock.module('@/db', () => ({
@@ -27,16 +32,17 @@ mock.module('@/db', () => ({
       }),
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   sessions: 'sessions',
   messages: 'messages',
 }));
 
 // Mock auth middleware - simulates withAuth behavior
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any, context: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -59,7 +65,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
   asc: (field: any) => ({ asc: field }),
   count: () => 'count',
@@ -92,22 +98,22 @@ function createRequest(
 describe('GET /api/v1/chat/:sessionId', () => {
   beforeEach(() => {
     mockSession = {
-      id: 'session-123',
+      id: sessionId,
       userId: 'user-123',
       assistantId: 'assistant-1',
       createdAt: new Date(),
     };
     mockMessages = [
-      { id: 'msg-1', sessionId: 'session-123', role: 'user', content: 'Hello' },
-      { id: 'msg-2', sessionId: 'session-123', role: 'assistant', content: 'Hi there!' },
-      { id: 'msg-3', sessionId: 'session-123', role: 'user', content: 'How are you?' },
+      { id: 'msg-1', sessionId: sessionId, role: 'user', content: 'Hello' },
+      { id: 'msg-2', sessionId: sessionId, role: 'assistant', content: 'Hi there!' },
+      { id: 'msg-3', sessionId: sessionId, role: 'user', content: 'How are you?' },
     ];
     mockMessageCount = 3;
   });
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const [request, context] = createRequest('session-123', { token: '' });
+      const [request, context] = createRequest(sessionId, { token: '' });
       request.headers.delete('Authorization');
       const req = new NextRequest(request.url);
 
@@ -117,7 +123,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     });
 
     test('returns 401 for invalid token', async () => {
-      const [request, context] = createRequest('session-123', { token: 'invalid' });
+      const [request, context] = createRequest(sessionId, { token: 'invalid' });
 
       const response = await GET(request, context);
 
@@ -128,7 +134,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
   describe('session validation', () => {
     test('returns 404 when session not found', async () => {
       mockSession = null;
-      const [request, context] = createRequest('nonexistent-session');
+      const [request, context] = createRequest(missingSessionId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -139,11 +145,11 @@ describe('GET /api/v1/chat/:sessionId', () => {
 
     test('returns 403 when session belongs to different user', async () => {
       mockSession = {
-        id: 'session-123',
+        id: sessionId,
         userId: 'different-user',
         assistantId: 'assistant-1',
       };
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -155,7 +161,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
 
   describe('successful retrieval', () => {
     test('returns paginated messages for valid session', async () => {
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -167,7 +173,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     });
 
     test('includes pagination metadata', async () => {
-      const [request, context] = createRequest('session-123', { page: 1, limit: 10 });
+      const [request, context] = createRequest(sessionId, { page: 1, limit: 10 });
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -180,7 +186,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     test('returns empty array when no messages', async () => {
       mockMessages = [];
       mockMessageCount = 0;
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -195,13 +201,13 @@ describe('GET /api/v1/chat/:sessionId', () => {
     test('defaults to page 1 and limit 50', async () => {
       mockMessages = Array.from({ length: 60 }, (_, i) => ({
         id: `msg-${i}`,
-        sessionId: 'session-123',
+        sessionId: sessionId,
         role: i % 2 === 0 ? 'user' : 'assistant',
         content: `Message ${i}`,
       }));
       mockMessageCount = 60;
 
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -213,7 +219,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     });
 
     test('respects custom page parameter', async () => {
-      const [request, context] = createRequest('session-123', { page: 2 });
+      const [request, context] = createRequest(sessionId, { page: 2 });
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -222,7 +228,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     });
 
     test('respects custom limit parameter', async () => {
-      const [request, context] = createRequest('session-123', { limit: 25 });
+      const [request, context] = createRequest(sessionId, { limit: 25 });
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -231,7 +237,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     });
 
     test('enforces maximum limit of 100', async () => {
-      const [request, context] = createRequest('session-123', { limit: 200 });
+      const [request, context] = createRequest(sessionId, { limit: 200 });
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -240,7 +246,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     });
 
     test('defaults to 50 when limit is 0 (falsy)', async () => {
-      const [request, context] = createRequest('session-123', { limit: 0 });
+      const [request, context] = createRequest(sessionId, { limit: 0 });
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -250,7 +256,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     });
 
     test('enforces minimum page of 1', async () => {
-      const [request, context] = createRequest('session-123', { page: 0 });
+      const [request, context] = createRequest(sessionId, { page: 0 });
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -266,7 +272,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
       const request = new NextRequest(url, {
         headers: { Authorization: 'Bearer valid-token' },
       });
-      const context = { params: { sessionId: 'session-123' } };
+      const context = { params: { sessionId: sessionId } };
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -280,7 +286,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
 
   describe('message content', () => {
     test('returns messages in chronological order', async () => {
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -291,7 +297,7 @@ describe('GET /api/v1/chat/:sessionId', () => {
     });
 
     test('includes all message fields', async () => {
-      const [request, context] = createRequest('session-123');
+      const [request, context] = createRequest(sessionId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -303,4 +309,8 @@ describe('GET /api/v1/chat/:sessionId', () => {
       expect(firstMessage).toHaveProperty('content');
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

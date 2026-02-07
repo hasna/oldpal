@@ -231,18 +231,18 @@ describe('HookExecutor', () => {
       expect(matchesPattern(executor, 'error', input)).toBe(false);
     });
 
-    test('should match SubagentStart task pattern', () => {
+    test('should match SubassistantStart task pattern', () => {
       const input = createInput({
-        hook_event_name: 'SubagentStart',
+        hook_event_name: 'SubassistantStart',
         task: 'search for files' as any,
       });
       expect(matchesPattern(executor, 'search.*', input)).toBe(true);
       expect(matchesPattern(executor, 'delete.*', input)).toBe(false);
     });
 
-    test('should match SubagentStop status', () => {
+    test('should match SubassistantStop status', () => {
       const input = createInput({
-        hook_event_name: 'SubagentStop',
+        hook_event_name: 'SubassistantStop',
         status: 'completed' as any,
       });
       expect(matchesPattern(executor, 'completed', input)).toBe(true);

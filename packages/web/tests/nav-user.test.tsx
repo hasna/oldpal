@@ -1,18 +1,32 @@
 import React from 'react';
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, afterAll, mock, beforeEach } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createLucideMock } from './helpers/mock-lucide-react';
+import { createSidebarMock } from './helpers/mock-sidebar';
 
 // Mock state
 let mockIsMobile = false;
 
-// Mock lucide-react icons
-mock.module('lucide-react', () => ({
-  BadgeCheck: () => <span data-icon="badge-check">BadgeCheck</span>,
-  Bell: () => <span data-icon="bell">Bell</span>,
-  ChevronsUpDown: () => <span data-icon="chevrons-up-down">ChevronsUpDown</span>,
-  CreditCard: () => <span data-icon="credit-card">CreditCard</span>,
-  LogOut: () => <span data-icon="log-out">LogOut</span>,
-  Sparkles: () => <span data-icon="sparkles">Sparkles</span>,
+// Mock lucide-react icons (generic proxy)
+const lucideMock = createLucideMock();
+mock.module('lucide-react', () => lucideMock);
+mock.module('lucide-react/dist/cjs/lucide-react.js', () => lucideMock);
+
+// Mock next/navigation
+mock.module('next/navigation', () => ({
+  useRouter: () => ({
+    push: () => {},
+    replace: () => {},
+    back: () => {},
+  }),
+  usePathname: () => '/',
+}));
+
+// Mock useAuth hook
+mock.module('@/hooks/use-auth', () => ({
+  useAuth: () => ({
+    logout: async () => {},
+  }),
 }));
 
 // Mock avatar components
@@ -48,13 +62,8 @@ mock.module('@/components/ui/dropdown-menu', () => ({
 }));
 
 // Mock sidebar components
-mock.module('@/components/ui/sidebar', () => ({
-  SidebarMenu: ({ children }: any) => <nav data-sidebar-menu>{children}</nav>,
-  SidebarMenuButton: ({ children, size, className }: any) => (
-    <button data-sidebar-menu-button data-size={size} className={className}>{children}</button>
-  ),
-  SidebarMenuItem: ({ children }: any) => <div data-sidebar-menu-item>{children}</div>,
-  useSidebar: () => ({ isMobile: mockIsMobile }),
+mock.module('@/components/ui/sidebar', () => createSidebarMock({
+  getIsMobile: () => mockIsMobile,
 }));
 
 describe('NavUser', () => {
@@ -133,7 +142,7 @@ describe('NavUser', () => {
     const markup = renderToStaticMarkup(<NavUser user={testUser} />);
 
     expect(markup).toContain('Upgrade to Pro');
-    expect(markup).toContain('data-icon="sparkles"');
+    expect(markup).toContain('data-icon="Sparkles"');
   });
 
   test('renders Account option', async () => {
@@ -141,7 +150,7 @@ describe('NavUser', () => {
     const markup = renderToStaticMarkup(<NavUser user={testUser} />);
 
     expect(markup).toContain('Account');
-    expect(markup).toContain('data-icon="badge-check"');
+    expect(markup).toContain('data-icon="BadgeCheck"');
   });
 
   test('renders Billing option', async () => {
@@ -149,7 +158,7 @@ describe('NavUser', () => {
     const markup = renderToStaticMarkup(<NavUser user={testUser} />);
 
     expect(markup).toContain('Billing');
-    expect(markup).toContain('data-icon="credit-card"');
+    expect(markup).toContain('data-icon="CreditCard"');
   });
 
   test('renders Notifications option', async () => {
@@ -157,7 +166,7 @@ describe('NavUser', () => {
     const markup = renderToStaticMarkup(<NavUser user={testUser} />);
 
     expect(markup).toContain('Notifications');
-    expect(markup).toContain('data-icon="bell"');
+    expect(markup).toContain('data-icon="Bell"');
   });
 
   test('renders Log out option', async () => {
@@ -165,7 +174,7 @@ describe('NavUser', () => {
     const markup = renderToStaticMarkup(<NavUser user={testUser} />);
 
     expect(markup).toContain('Log out');
-    expect(markup).toContain('data-icon="log-out"');
+    expect(markup).toContain('data-icon="LogOut"');
   });
 
   test('renders menu button with large size', async () => {
@@ -209,7 +218,7 @@ describe('NavUser', () => {
     const { NavUser } = await import('../src/components/nav-user');
     const markup = renderToStaticMarkup(<NavUser user={testUser} />);
 
-    expect(markup).toContain('data-icon="chevrons-up-down"');
+    expect(markup).toContain('data-icon="ChevronsUpDown"');
   });
 
   test('renders user info with truncate styling', async () => {
@@ -219,4 +228,8 @@ describe('NavUser', () => {
     expect(markup).toContain('truncate');
     expect(markup).toContain('font-semibold');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

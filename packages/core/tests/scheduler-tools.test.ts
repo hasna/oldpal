@@ -29,8 +29,8 @@ describe('SchedulerTool', () => {
       await saveSchedule(dir, first);
 
       const output = await SchedulerTool.executor({ action: 'list', cwd: dir });
-      const firstIndex = output.indexOf('- a [active] cmd-a');
-      const secondIndex = output.indexOf('- b [active] cmd-b');
+      const firstIndex = output.indexOf('- a [active] [global] cmd-a');
+      const secondIndex = output.indexOf('- b [active] [global] cmd-b');
       expect(firstIndex).toBeGreaterThanOrEqual(0);
       expect(secondIndex).toBeGreaterThan(firstIndex);
     });

@@ -7,7 +7,8 @@ import type { CommandContext, CommandResult } from '../src/commands/types';
 import { mkdirSync, writeFileSync, rmSync, existsSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { listSchedules } from '../src/scheduler/store';
+import { listSchedules, saveSchedule, computeNextRun } from '../src/scheduler/store';
+import { generateId } from '@hasna/assistants-shared';
 import { getRuntime } from '../src/runtime';
 
 describe('CommandLoader', () => {
@@ -640,7 +641,7 @@ describe('BuiltinCommands', () => {
       if (cmd?.handler) {
         const result = await cmd.handler('', mockContext);
         expect(result.handled).toBe(true);
-        expect(emittedContent.some(c => c.includes('Model Information'))).toBe(true);
+        expect(emittedContent.some(c => c.includes('Current Model'))).toBe(true);
       }
     });
   });
@@ -653,7 +654,7 @@ describe('BuiltinCommands', () => {
       if (cmd?.handler) {
         const result = await cmd.handler('', mockContext);
         expect(result.handled).toBe(true);
-        expect(emittedContent.some(c => c.includes('Configuration'))).toBe(true);
+        expect(result.showPanel).toBe('config');
       }
     });
   });
@@ -669,8 +670,7 @@ describe('BuiltinCommands', () => {
     test('/memory should return LLM prompt', () => {
       const cmd = loader.getCommand('memory');
       expect(cmd).toBeDefined();
-      expect(cmd?.selfHandled).toBe(false);
-      expect(cmd?.content).toContain('summary');
+      expect(cmd?.selfHandled).toBe(true);
     });
   });
 
@@ -790,7 +790,7 @@ describe('BuiltinCommands', () => {
       const cmd = loader.getCommand('connectors');
       expect(cmd).toBeDefined();
       if (cmd?.handler) {
-        const result = await cmd.handler('', mockContext);
+        const result = await cmd.handler('--list', mockContext);
         expect(result.handled).toBe(true);
         expect(emittedContent.some(c => c.includes('No connectors found'))).toBe(true);
       }
@@ -808,7 +808,7 @@ describe('BuiltinCommands', () => {
       };
 
       if (cmd?.handler) {
-        const result = await cmd.handler('missing', contextWithConnector);
+        const result = await cmd.handler('--list missing', contextWithConnector);
         expect(result.handled).toBe(true);
         expect(emittedContent.some(c => c.includes('not found'))).toBe(true);
       }
@@ -849,7 +849,7 @@ describe('BuiltinCommands', () => {
 
       try {
         if (cmd?.handler) {
-          const result = await cmd.handler('demo', contextWithConnector);
+          const result = await cmd.handler('--list demo', contextWithConnector);
           expect(result.handled).toBe(true);
           expect(emittedContent.some(c => c.includes('Demo'))).toBe(true);
         }
@@ -893,7 +893,7 @@ describe('BuiltinCommands', () => {
 
       try {
         if (cmd?.handler) {
-          const result = await cmd.handler('', contextWithConnector);
+          const result = await cmd.handler('--list', contextWithConnector);
           expect(result.handled).toBe(true);
           expect(emittedContent.some(c => c.includes('Available Connectors'))).toBe(true);
           expect(emittedContent.some(c => c.includes('demo'))).toBe(true);
@@ -941,7 +941,7 @@ describe('BuiltinCommands', () => {
 
       try {
         if (cmd?.handler) {
-          const result = await cmd.handler('', contextWithConnector);
+          const result = await cmd.handler('--list', contextWithConnector);
           expect(result.handled).toBe(true);
           expect(emittedContent.some(c => c.includes('Available Connectors'))).toBe(true);
           expect(emittedContent.some(c => c.includes('| ○ |'))).toBe(true);
@@ -953,44 +953,42 @@ describe('BuiltinCommands', () => {
     });
   });
 
-  describe('/schedule commands', () => {
-    test('should create a schedule', async () => {
-      const cmd = loader.getCommand('schedule');
-      expect(cmd).toBeDefined();
-
-      if (cmd?.handler) {
-        const future = new Date(Date.now() + 60_000).toISOString();
-        const result = await cmd.handler(`${future} /status`, mockContext);
-        expect(result.handled).toBe(true);
-        const schedules = await listSchedules(tempDir);
-        expect(schedules.length).toBe(1);
-        expect(schedules[0].command).toBe('/status');
-      }
-    });
-
+  describe('/schedules command', () => {
     test('should list schedules', async () => {
       const cmd = loader.getCommand('schedules');
       expect(cmd).toBeDefined();
 
       if (cmd?.handler) {
-        const result = await cmd.handler('', mockContext);
+        const future = new Date(Date.now() + 60_000).toISOString();
+        const scheduleId = generateId();
+        const schedule = {
+          id: scheduleId,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          createdBy: 'user' as const,
+          sessionId: mockContext.sessionId,
+          command: '/status',
+          status: 'active' as const,
+          schedule: { kind: 'once' as const, at: future },
+        };
+        schedule.nextRunAt = computeNextRun(schedule, Date.now());
+        await saveSchedule(tempDir, schedule);
+        const result = await cmd.handler('list', mockContext);
         expect(result.handled).toBe(true);
+        expect(emittedContent.some(c => c.includes('| ID |'))).toBe(true);
       }
     });
 
-    test('should show available schedule ids when resume missing id', async () => {
-      const scheduleCmd = loader.getCommand('schedule');
-      const resumeCmd = loader.getCommand('resume');
-      expect(scheduleCmd).toBeDefined();
-      expect(resumeCmd).toBeDefined();
+    test('should show help on unknown action', async () => {
+      const cmd = loader.getCommand('schedules');
+      expect(cmd).toBeDefined();
 
-      if (scheduleCmd?.handler && resumeCmd?.handler) {
-        const future = new Date(Date.now() + 60_000).toISOString();
-        await scheduleCmd.handler(`${future} /status`, mockContext);
-        const result = await resumeCmd.handler('', mockContext);
+      if (cmd?.handler) {
+        const result = await cmd.handler('resume', mockContext);
         expect(result.handled).toBe(true);
         const output = emittedContent.join('\n');
-        expect(output).toContain('Available schedules');
+        expect(output).toContain('Schedules');
+        expect(output).toContain('Usage');
       }
     });
   });

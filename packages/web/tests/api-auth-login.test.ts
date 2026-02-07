@@ -1,10 +1,15 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createCryptoMock } from './helpers/mock-crypto';
+import { createJwtMock } from './helpers/mock-auth-jwt';
+import { createPasswordMock } from './helpers/mock-auth-password';
 
 // Mock state
 let mockFoundUser: any = null;
 let mockInsertedRefreshToken: any = null;
-let mockPasswordValid = true;
+let setRefreshTokenValue: string | null = null;
 
 // Mock database
 mock.module('@/db', () => ({
@@ -23,34 +28,57 @@ mock.module('@/db', () => ({
       },
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: 'users',
   refreshTokens: 'refreshTokens',
 }));
 
 // Mock password utilities
-mock.module('@/lib/auth/password', () => ({
-  hashPassword: async (password: string) => `hashed_${password}`,
-  verifyPassword: async () => mockPasswordValid,
-}));
+mock.module('@/lib/auth/password', () => createPasswordMock());
 
 // Mock JWT utilities
-mock.module('@/lib/auth/jwt', () => ({
+mock.module('@/lib/auth/jwt', () => createJwtMock({
   createAccessToken: async () => 'mock-access-token',
   createRefreshToken: async () => 'mock-refresh-token',
   getRefreshTokenExpiry: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
 }));
 
+// Mock refresh token cookie helper
+mock.module('@/lib/auth/cookies', () => ({
+  setRefreshTokenCookie: (response: Response, token: string) => {
+    setRefreshTokenValue = token;
+    response.headers.set('set-cookie', `refresh_token=${token}`);
+    return response;
+  },
+}));
+
+// Mock rate limiting
+mock.module('@/lib/rate-limit', () => ({
+  checkRateLimit: () => null,
+  RateLimitPresets: { login: 'login' },
+}));
+
+// Mock login audit logging
+mock.module('@/lib/auth/login-logger', () => ({
+  logLoginAttempt: async () => {},
+}));
+
+// Mock user agent parser
+mock.module('@/lib/auth/user-agent-parser', () => ({
+  parseUserAgent: () => ({ device: 'Device', browser: 'Browser', os: 'OS' }),
+}));
+
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
 }));
 
 // Mock crypto
-mock.module('crypto', () => ({
+mock.module('crypto', () => createCryptoMock({
   randomUUID: () => 'test-uuid-1234',
 }));
 
@@ -68,7 +96,7 @@ describe('login API route', () => {
   beforeEach(() => {
     mockFoundUser = null;
     mockInsertedRefreshToken = null;
-    mockPasswordValid = true;
+    setRefreshTokenValue = null;
   });
 
   test('returns 200 on successful login', async () => {
@@ -78,7 +106,7 @@ describe('login API route', () => {
       name: 'Test User',
       role: 'user',
       avatarUrl: null,
-      passwordHash: 'hashed_password',
+      passwordHash: await createPasswordMock().hashPassword('password123'),
     };
 
     const request = createRequest({
@@ -94,7 +122,7 @@ describe('login API route', () => {
     expect(data.data.user.id).toBe('user-id');
     expect(data.data.user.email).toBe('test@example.com');
     expect(data.data.accessToken).toBe('mock-access-token');
-    expect(data.data.refreshToken).toBe('mock-refresh-token');
+    expect(setRefreshTokenValue).toBe('mock-refresh-token');
   });
 
   test('stores refresh token in database on successful login', async () => {
@@ -104,7 +132,7 @@ describe('login API route', () => {
       name: 'Test User',
       role: 'user',
       avatarUrl: null,
-      passwordHash: 'hashed_password',
+      passwordHash: await createPasswordMock().hashPassword('password123'),
     };
 
     const request = createRequest({
@@ -165,9 +193,8 @@ describe('login API route', () => {
       name: 'Test User',
       role: 'user',
       avatarUrl: null,
-      passwordHash: 'hashed_password',
+      passwordHash: await createPasswordMock().hashPassword('password123'),
     };
-    mockPasswordValid = false;
 
     const request = createRequest({
       email: 'test@example.com',
@@ -188,7 +215,7 @@ describe('login API route', () => {
       name: 'Test User',
       role: 'user',
       avatarUrl: null,
-      passwordHash: 'hashed_password',
+      passwordHash: await createPasswordMock().hashPassword('password123'),
     };
 
     const request = createRequest({
@@ -253,7 +280,7 @@ describe('login API route', () => {
       name: 'Test User',
       role: 'user',
       avatarUrl: null,
-      passwordHash: 'hashed_password',
+      passwordHash: await createPasswordMock().hashPassword('password123'),
     };
 
     const request = createRequest({
@@ -275,7 +302,7 @@ describe('login API route', () => {
       name: 'Admin User',
       role: 'admin',
       avatarUrl: 'https://example.com/avatar.png',
-      passwordHash: 'hashed_password',
+      passwordHash: await createPasswordMock().hashPassword('adminpass'),
     };
 
     const request = createRequest({
@@ -290,4 +317,8 @@ describe('login API route', () => {
     expect(data.data.user.role).toBe('admin');
     expect(data.data.user.avatarUrl).toBe('https://example.com/avatar.png');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

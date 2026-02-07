@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, mock, afterEach } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock, afterEach } from 'bun:test';
 
 // Mock OAuth2Client class
 let mockGenerateAuthUrl = mock(() => 'https://accounts.google.com/o/oauth2/v2/auth?mock=true');
@@ -33,6 +33,7 @@ mock.module('google-auth-library', () => ({
     setCredentials = mockSetCredentials;
     verifyIdToken = mockVerifyIdToken;
   },
+  CodeChallengeMethod: { S256: 'S256' },
 }));
 
 // Store original env vars
@@ -137,7 +138,7 @@ describe('OAuth utilities', () => {
 
       const userInfo = await getGoogleUserInfo('authorization-code');
 
-      expect(mockGetToken).toHaveBeenCalledWith('authorization-code');
+      expect(mockGetToken).toHaveBeenCalledWith({ code: 'authorization-code' });
       expect(mockSetCredentials).toHaveBeenCalled();
       expect(mockVerifyIdToken).toHaveBeenCalled();
 
@@ -254,4 +255,8 @@ describe('OAuth type exports', () => {
     // picture is optional
     expect(userInfo.picture === undefined || typeof userInfo.picture === 'string').toBe(true);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

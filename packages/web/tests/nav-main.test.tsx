@@ -1,11 +1,13 @@
 import React from 'react';
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, afterAll, mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createLucideMock } from './helpers/mock-lucide-react';
+import { createSidebarMock } from './helpers/mock-sidebar';
 
-// Mock lucide-react icons
-mock.module('lucide-react', () => ({
-  ChevronRight: () => <span data-icon="chevron-right">ChevronRight</span>,
-}));
+// Mock lucide-react icons (generic proxy)
+const lucideMock = createLucideMock();
+mock.module('lucide-react', () => lucideMock);
+mock.module('lucide-react/dist/cjs/lucide-react.js', () => lucideMock);
 
 // Mock collapsible components
 mock.module('@/components/ui/collapsible', () => ({
@@ -21,23 +23,7 @@ mock.module('@/components/ui/collapsible', () => ({
 }));
 
 // Mock sidebar components
-mock.module('@/components/ui/sidebar', () => ({
-  SidebarGroup: ({ children }: any) => <div data-sidebar-group>{children}</div>,
-  SidebarGroupLabel: ({ children }: any) => <div data-sidebar-group-label>{children}</div>,
-  SidebarMenu: ({ children }: any) => <nav data-sidebar-menu>{children}</nav>,
-  SidebarMenuAction: ({ children, className }: any) => (
-    <button data-sidebar-menu-action className={className}>{children}</button>
-  ),
-  SidebarMenuButton: ({ children, asChild, tooltip }: any) => (
-    <button data-sidebar-menu-button data-tooltip={tooltip}>{children}</button>
-  ),
-  SidebarMenuItem: ({ children }: any) => <div data-sidebar-menu-item>{children}</div>,
-  SidebarMenuSub: ({ children }: any) => <div data-sidebar-menu-sub>{children}</div>,
-  SidebarMenuSubButton: ({ children, asChild }: any) => (
-    <button data-sidebar-menu-sub-button>{children}</button>
-  ),
-  SidebarMenuSubItem: ({ children }: any) => <div data-sidebar-menu-sub-item>{children}</div>,
-}));
+mock.module('@/components/ui/sidebar', () => createSidebarMock());
 
 // Create mock icon component
 const MockIcon = () => <span data-mock-icon>Icon</span>;
@@ -200,4 +186,8 @@ describe('NavMain', () => {
     // Menu should still exist but be empty
     expect(markup).toContain('data-sidebar-menu');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

@@ -1,10 +1,11 @@
 import React from 'react';
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createUseAuthMock } from './helpers/mock-use-auth';
 
 // Mock useAuth
 let mockIsAuthenticated = false;
-mock.module('@/hooks/use-auth', () => ({
+mock.module('@/hooks/use-auth', () => createUseAuthMock({
   useAuth: () => ({
     isAuthenticated: mockIsAuthenticated,
     isLoading: false,
@@ -68,4 +69,8 @@ describe('SpeculationRules', () => {
       expect(markup).toBe(''); // Returns null
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

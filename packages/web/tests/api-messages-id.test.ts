@@ -1,7 +1,12 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Mock state
+const validMessageId = '11111111-1111-1111-1111-111111111111';
+const otherMessageId = '22222222-2222-2222-2222-222222222222';
 let mockMessage: any = null;
 let mockUserAssistants: any[] = [];
 let mockRecipientAssistant: any = null;
@@ -31,16 +36,17 @@ mock.module('@/db', () => ({
       },
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   assistantMessages: 'assistantMessages',
   assistants: 'assistants',
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any, context: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -62,7 +68,7 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value }),
   or: (...args: any[]) => ({ or: args }),
 }));
@@ -117,7 +123,7 @@ function createPatchRequest(
 describe('GET /api/v1/messages/:id', () => {
   beforeEach(() => {
     mockMessage = {
-      id: 'msg-123',
+      id: validMessageId,
       fromAssistantId: 'assistant-1',
       toAssistantId: 'assistant-2',
       subject: 'Test message',
@@ -132,9 +138,9 @@ describe('GET /api/v1/messages/:id', () => {
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/messages/msg-123');
+      const url = new URL(`http://localhost:3001/api/v1/messages/${validMessageId}`);
       const request = new NextRequest(url);
-      const context = { params: { id: 'msg-123' } };
+      const context = { params: { id: validMessageId } };
 
       const response = await GET(request, context);
 
@@ -142,7 +148,7 @@ describe('GET /api/v1/messages/:id', () => {
     });
 
     test('returns 401 for invalid token', async () => {
-      const [request, context] = createGetRequest('msg-123', { token: 'invalid' });
+      const [request, context] = createGetRequest(validMessageId, { token: 'invalid' });
 
       const response = await GET(request, context);
 
@@ -153,44 +159,44 @@ describe('GET /api/v1/messages/:id', () => {
   describe('message retrieval', () => {
     test('returns message when user owns sender assistant', async () => {
       mockMessage = {
-        id: 'msg-123',
+        id: validMessageId,
         fromAssistantId: 'assistant-1',
         toAssistantId: 'assistant-other',
         content: 'Hello',
       };
       mockUserAssistants = [{ id: 'assistant-1' }];
 
-      const [request, context] = createGetRequest('msg-123');
+      const [request, context] = createGetRequest(validMessageId);
 
       const response = await GET(request, context);
       const data = await response.json();
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.data.id).toBe('msg-123');
+      expect(data.data.id).toBe(validMessageId);
     });
 
     test('returns message when user owns recipient assistant', async () => {
       mockMessage = {
-        id: 'msg-123',
+        id: validMessageId,
         fromAssistantId: 'assistant-other',
         toAssistantId: 'assistant-2',
         content: 'Hello',
       };
       mockUserAssistants = [{ id: 'assistant-2' }];
 
-      const [request, context] = createGetRequest('msg-123');
+      const [request, context] = createGetRequest(validMessageId);
 
       const response = await GET(request, context);
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.data.id).toBe('msg-123');
+      expect(data.data.id).toBe(validMessageId);
     });
 
     test('returns 404 when message not found', async () => {
       mockMessage = null;
-      const [request, context] = createGetRequest('nonexistent');
+      const [request, context] = createGetRequest(otherMessageId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -201,14 +207,14 @@ describe('GET /api/v1/messages/:id', () => {
 
     test('returns 403 when user has no access to message', async () => {
       mockMessage = {
-        id: 'msg-123',
+        id: validMessageId,
         fromAssistantId: 'assistant-other-1',
         toAssistantId: 'assistant-other-2',
         content: 'Hello',
       };
       mockUserAssistants = [{ id: 'assistant-mine' }]; // User has different assistants
 
-      const [request, context] = createGetRequest('msg-123');
+      const [request, context] = createGetRequest(validMessageId);
 
       const response = await GET(request, context);
       const data = await response.json();
@@ -222,7 +228,7 @@ describe('GET /api/v1/messages/:id', () => {
 describe('PATCH /api/v1/messages/:id', () => {
   beforeEach(() => {
     mockMessage = {
-      id: 'msg-123',
+      id: validMessageId,
       fromAssistantId: 'assistant-1',
       toAssistantId: 'assistant-2',
       subject: 'Test message',
@@ -239,13 +245,13 @@ describe('PATCH /api/v1/messages/:id', () => {
 
   describe('authentication', () => {
     test('returns 401 when no token provided', async () => {
-      const url = new URL('http://localhost:3001/api/v1/messages/msg-123');
+      const url = new URL(`http://localhost:3001/api/v1/messages/${validMessageId}`);
       const request = new NextRequest(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'read' }),
       });
-      const context = { params: { id: 'msg-123' } };
+      const context = { params: { id: validMessageId } };
 
       const response = await PATCH(request, context);
 
@@ -255,7 +261,7 @@ describe('PATCH /api/v1/messages/:id', () => {
 
   describe('status updates', () => {
     test('updates status to read', async () => {
-      const [request, context] = createPatchRequest('msg-123', { status: 'read' });
+      const [request, context] = createPatchRequest(validMessageId, { status: 'read' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -266,7 +272,7 @@ describe('PATCH /api/v1/messages/:id', () => {
     });
 
     test('sets readAt when marking as read', async () => {
-      const [request, context] = createPatchRequest('msg-123', { status: 'read' });
+      const [request, context] = createPatchRequest(validMessageId, { status: 'read' });
 
       await PATCH(request, context);
 
@@ -275,7 +281,7 @@ describe('PATCH /api/v1/messages/:id', () => {
 
     test('does not update readAt if already set', async () => {
       mockMessage.readAt = new Date('2024-01-01');
-      const [request, context] = createPatchRequest('msg-123', { status: 'read' });
+      const [request, context] = createPatchRequest(validMessageId, { status: 'read' });
 
       await PATCH(request, context);
 
@@ -283,7 +289,7 @@ describe('PATCH /api/v1/messages/:id', () => {
     });
 
     test('updates status to archived', async () => {
-      const [request, context] = createPatchRequest('msg-123', { status: 'archived' });
+      const [request, context] = createPatchRequest(validMessageId, { status: 'archived' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -293,7 +299,7 @@ describe('PATCH /api/v1/messages/:id', () => {
     });
 
     test('updates status to injected and sets injectedAt', async () => {
-      const [request, context] = createPatchRequest('msg-123', { status: 'injected' });
+      const [request, context] = createPatchRequest(validMessageId, { status: 'injected' });
 
       await PATCH(request, context);
 
@@ -303,7 +309,7 @@ describe('PATCH /api/v1/messages/:id', () => {
 
     test('does not update injectedAt if already set', async () => {
       mockMessage.injectedAt = new Date('2024-01-01');
-      const [request, context] = createPatchRequest('msg-123', { status: 'injected' });
+      const [request, context] = createPatchRequest(validMessageId, { status: 'injected' });
 
       await PATCH(request, context);
 
@@ -314,7 +320,7 @@ describe('PATCH /api/v1/messages/:id', () => {
   describe('authorization', () => {
     test('returns 404 when message not found', async () => {
       mockMessage = null;
-      const [request, context] = createPatchRequest('nonexistent', { status: 'read' });
+      const [request, context] = createPatchRequest(otherMessageId, { status: 'read' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -324,8 +330,8 @@ describe('PATCH /api/v1/messages/:id', () => {
     });
 
     test('returns 403 when user does not own recipient assistant', async () => {
-      mockRecipientAssistant = { id: 'assistant-2', userId: 'different-user' };
-      const [request, context] = createPatchRequest('msg-123', { status: 'read' });
+      mockUserAssistants = [{ id: 'assistant-mine' }];
+      const [request, context] = createPatchRequest(validMessageId, { status: 'read' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -335,8 +341,8 @@ describe('PATCH /api/v1/messages/:id', () => {
     });
 
     test('returns 403 when recipient assistant not found', async () => {
-      mockRecipientAssistant = null;
-      const [request, context] = createPatchRequest('msg-123', { status: 'read' });
+      mockUserAssistants = [];
+      const [request, context] = createPatchRequest(validMessageId, { status: 'read' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -348,7 +354,7 @@ describe('PATCH /api/v1/messages/:id', () => {
 
   describe('validation', () => {
     test('returns 422 for invalid status value', async () => {
-      const [request, context] = createPatchRequest('msg-123', { status: 'invalid' });
+      const [request, context] = createPatchRequest(validMessageId, { status: 'invalid' });
 
       const response = await PATCH(request, context);
       const data = await response.json();
@@ -357,14 +363,18 @@ describe('PATCH /api/v1/messages/:id', () => {
       expect(data.error.code).toBe('VALIDATION_ERROR');
     });
 
-    test('accepts empty body (no changes)', async () => {
-      const [request, context] = createPatchRequest('msg-123', {});
+    test('rejects empty body (no changes)', async () => {
+      const [request, context] = createPatchRequest(validMessageId, {});
 
       const response = await PATCH(request, context);
       const data = await response.json();
 
-      expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
+      expect(response.status).toBe(400);
+      expect(data.success).toBe(false);
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

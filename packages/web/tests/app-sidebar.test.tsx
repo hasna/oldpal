@@ -1,6 +1,9 @@
 import React from 'react';
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, afterAll, mock, beforeEach } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createUseAuthMock } from './helpers/mock-use-auth';
+import { createLucideMock } from './helpers/mock-lucide-react';
+import { createSidebarMock } from './helpers/mock-sidebar';
 
 // Mock state
 let mockUser: any = null;
@@ -23,7 +26,7 @@ mock.module('next/link', () => ({
 }));
 
 // Mock useAuthStore hook
-mock.module('@/hooks/use-auth', () => ({
+mock.module('@/hooks/use-auth', () => createUseAuthMock({
   useAuthStore: () => ({
     user: mockUser,
     isAuthenticated: !!mockUser,
@@ -32,63 +35,55 @@ mock.module('@/hooks/use-auth', () => ({
 }));
 
 // Mock sidebar components
-mock.module('@/components/ui/sidebar', () => ({
-  Sidebar: ({ children, ...props }: any) => <aside data-testid="sidebar" {...props}>{children}</aside>,
-  SidebarContent: ({ children }: any) => <div data-testid="sidebar-content">{children}</div>,
-  SidebarFooter: ({ children }: any) => <footer data-testid="sidebar-footer">{children}</footer>,
-  SidebarHeader: ({ children }: any) => <header data-testid="sidebar-header">{children}</header>,
-  SidebarMenu: ({ children }: any) => <nav data-testid="sidebar-menu">{children}</nav>,
-  SidebarMenuButton: ({ children, asChild, ...props }: any) => <button {...props}>{children}</button>,
-  SidebarMenuItem: ({ children }: any) => <div data-testid="sidebar-menu-item">{children}</div>,
-}));
+mock.module('@/components/ui/sidebar', () => createSidebarMock());
 
-// Mock nav components
-mock.module('@/components/nav-main', () => ({
-  NavMain: ({ items }: any) => (
-    <nav data-testid="nav-main">
-      {items.map((item: any) => (
-        <div key={item.title} data-nav-item={item.title}>{item.title}</div>
-      ))}
-    </nav>
+// Mock collapsible components used in NavMain
+mock.module('@/components/ui/collapsible', () => ({
+  Collapsible: ({ children, defaultOpen }: any) => (
+    <div data-collapsible data-default-open={defaultOpen}>{children}</div>
+  ),
+  CollapsibleContent: ({ children }: any) => (
+    <div data-collapsible-content>{children}</div>
+  ),
+  CollapsibleTrigger: ({ children }: any) => (
+    <div data-collapsible-trigger>{children}</div>
   ),
 }));
 
-mock.module('@/components/nav-projects', () => ({
-  NavProjects: ({ projects }: any) => <nav data-testid="nav-projects">Projects</nav>,
-}));
-
-mock.module('@/components/nav-secondary', () => ({
-  NavSecondary: ({ items }: any) => (
-    <nav data-testid="nav-secondary">
-      {items.map((item: any) => (
-        <div key={item.title} data-nav-item={item.title}>{item.title}</div>
-      ))}
-    </nav>
-  ),
-}));
-
-mock.module('@/components/nav-user', () => ({
-  NavUser: ({ user }: any) => (
-    <div data-testid="nav-user">
-      <span data-user-name>{user.name}</span>
-      <span data-user-email>{user.email}</span>
+// Mock dropdown menu components used in NavProjects/NavUser
+mock.module('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: any) => <div data-dropdown-menu>{children}</div>,
+  DropdownMenuContent: ({ children, className, side, align }: any) => (
+    <div data-dropdown-menu-content className={className} data-side={side} data-align={align}>
+      {children}
     </div>
   ),
+  DropdownMenuGroup: ({ children }: any) => <div data-dropdown-menu-group>{children}</div>,
+  DropdownMenuItem: ({ children }: any) => <div data-dropdown-menu-item>{children}</div>,
+  DropdownMenuLabel: ({ children, className }: any) => (
+    <div data-dropdown-menu-label className={className}>{children}</div>
+  ),
+  DropdownMenuSeparator: () => <hr data-dropdown-menu-separator />,
+  DropdownMenuTrigger: ({ children }: any) => <div data-dropdown-menu-trigger>{children}</div>,
 }));
 
-// Mock lucide-react icons
-mock.module('lucide-react', () => ({
-  Bot: () => <span>Bot</span>,
-  Command: () => <span>Command</span>,
-  Inbox: () => <span>Inbox</span>,
-  LifeBuoy: () => <span>LifeBuoy</span>,
-  MessageSquare: () => <span>MessageSquare</span>,
-  Send: () => <span>Send</span>,
-  Settings2: () => <span>Settings2</span>,
-  SquareTerminal: () => <span>SquareTerminal</span>,
-  History: () => <span>History</span>,
-  Users: () => <span>Users</span>,
+// Mock avatar components used in NavUser
+mock.module('@/components/ui/avatar', () => ({
+  Avatar: ({ children, className }: any) => (
+    <div data-avatar className={className}>{children}</div>
+  ),
+  AvatarFallback: ({ children, className }: any) => (
+    <span data-avatar-fallback className={className}>{children}</span>
+  ),
+  AvatarImage: ({ src, alt }: any) => (
+    <img data-avatar-image src={src} alt={alt} />
+  ),
 }));
+
+// Mock lucide-react icons (generic proxy)
+const lucideMock = createLucideMock();
+mock.module('lucide-react', () => lucideMock);
+mock.module('lucide-react/dist/cjs/lucide-react.js', () => lucideMock);
 
 describe('AppSidebar', () => {
   beforeEach(() => {
@@ -140,7 +135,7 @@ describe('AppSidebar', () => {
     const { AppSidebar } = await import('../src/components/app-sidebar');
     const markup = renderToStaticMarkup(<AppSidebar />);
 
-    expect(markup).toContain('nav-main');
+    expect(markup).toContain('Platform');
   });
 
   test('renders navigation items', async () => {
@@ -157,7 +152,6 @@ describe('AppSidebar', () => {
     const { AppSidebar } = await import('../src/components/app-sidebar');
     const markup = renderToStaticMarkup(<AppSidebar />);
 
-    expect(markup).toContain('nav-secondary');
     expect(markup).toContain('Support');
     expect(markup).toContain('Feedback');
   });
@@ -173,7 +167,7 @@ describe('AppSidebar', () => {
     const { AppSidebar } = await import('../src/components/app-sidebar');
     const markup = renderToStaticMarkup(<AppSidebar />);
 
-    expect(markup).toContain('nav-user');
+    expect(markup).toContain('Test User');
   });
 
   test('passes user data to NavUser', async () => {
@@ -192,4 +186,8 @@ describe('AppSidebar', () => {
     // Should show "Guest" when no user
     expect(markup).toContain('Guest');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

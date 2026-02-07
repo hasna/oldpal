@@ -1,6 +1,7 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import type { ClientMessage } from '../src/lib/protocol';
 import { resetMockClients } from './helpers/mock-assistants-core';
+import { createSchemaMock } from './helpers/mock-schema';
 
 class MockWebSocketServer {
   public handlers: Record<string, any> = {};
@@ -12,6 +13,9 @@ class MockWebSocketServer {
     this.handlers.connection?.(ws, req || { headers: {}, url: '/' });
   }
 }
+
+const sessionId = '11111111-1111-1111-1111-111111111111';
+const sessionId2 = '22222222-2222-2222-2222-222222222222';
 
 mock.module('ws', () => ({
   WebSocketServer: MockWebSocketServer,
@@ -39,9 +43,10 @@ mock.module('@/db', () => ({
       }),
     }),
   },
+  schema: createSchemaMock(),
 }));
 
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: {},
   sessions: {},
   messages: {},
@@ -105,12 +110,13 @@ describe('pages api ws handler', () => {
     const ws = {
       handlers: {} as Record<string, any>,
       send: (msg: string) => sent.push(msg),
+      close: (_code?: number, _reason?: string) => {},
       on: function (event: string, cb: any) { this.handlers[event] = cb; },
     };
 
     wss.triggerConnection(ws);
 
-    const message: ClientMessage = { type: 'message', content: 'Hi', messageId: 'msg-1', sessionId: 'ws-test-1' };
+    const message: ClientMessage = { type: 'message', content: 'Hi', messageId: 'msg-1', sessionId };
     await ws.handlers.message(JSON.stringify(message));
     // Verify message was sent to the assistant pool
     expect(mockAssistantPool.lastMessage).toBe('Hi');
@@ -131,16 +137,21 @@ describe('pages api ws handler', () => {
     const ws = {
       handlers: {} as Record<string, any>,
       send: (_msg: string) => {},
+      close: (_code?: number, _reason?: string) => {},
       on: function (event: string, cb: any) { this.handlers[event] = cb; },
     };
 
     wss.triggerConnection(ws);
-    const switchMessage: ClientMessage = { type: 'message', content: 'Ping', sessionId: 'ws-test-2' };
+    const switchMessage: ClientMessage = { type: 'message', content: 'Ping', sessionId: sessionId2 };
     await ws.handlers.message(JSON.stringify(switchMessage));
 
     const cancel: ClientMessage = { type: 'cancel' };
     await ws.handlers.message(JSON.stringify(cancel));
     // Verify stopSession was called for the session
-    expect(mockAssistantPool.stopped.has('ws-test-2')).toBe(true);
+    expect(mockAssistantPool.stopped.has(sessionId2)).toBe(true);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

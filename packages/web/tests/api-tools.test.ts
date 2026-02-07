@@ -1,5 +1,6 @@
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // Token types for testing different auth scenarios
 const TOKEN_NO_SCOPE = 'api-key-no-scope';
@@ -9,7 +10,7 @@ const TOKEN_ADMIN = 'api-key-admin';
 const TOKEN_JWT = 'jwt-token';
 
 // Mock auth middleware to test scoped API key authentication
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withScopedApiKeyAuth: (requiredScopes: string[], handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -222,6 +223,16 @@ describe('GET /api/v1/tools', () => {
         expect(tool.description.length).toBeGreaterThan(0);
       }
     });
+
+    test('includes connector auto-refresh tool', async () => {
+      const request = createRequest({ searchParams: { search: 'connector_autorefresh' } });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.items.some((tool: any) => tool.name === 'connector_autorefresh')).toBe(true);
+    });
   });
 
   describe('pagination', () => {
@@ -379,4 +390,8 @@ describe('GET /api/v1/tools', () => {
       expect(names).toEqual(sortedNames);
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

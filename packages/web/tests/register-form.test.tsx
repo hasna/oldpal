@@ -1,6 +1,7 @@
 import React from 'react';
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, afterAll, mock, beforeEach } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createUseAuthMock } from './helpers/mock-use-auth';
 
 // Mock state
 let mockRegister: ReturnType<typeof mock>;
@@ -23,7 +24,7 @@ mock.module('next/link', () => ({
 }));
 
 // Mock useAuth hook
-mock.module('@/hooks/use-auth', () => ({
+mock.module('@/hooks/use-auth', () => createUseAuthMock({
   useAuth: () => ({
     register: mockRegister,
     user: null,
@@ -201,4 +202,8 @@ describe('RegisterForm', () => {
     expect(markup).toContain('space-y-4');
     expect(markup).toContain('space-y-2');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

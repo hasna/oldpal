@@ -1,5 +1,10 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
+import { createApiResponseMock } from './helpers/mock-api-response';
+import { createApiErrorsMock } from './helpers/mock-api-errors';
 
 // Mock data
 let mockUser: any = null;
@@ -38,10 +43,11 @@ mock.module('@/db', () => ({
       }),
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   users: { id: 'id', stripeCustomerId: 'stripeCustomerId' },
   subscriptions: {
     id: 'id',
@@ -68,7 +74,7 @@ mock.module('@/db/schema', () => ({
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAdminAuth: (handler: any) => async (req: any, context: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -96,56 +102,17 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock API response helpers
-mock.module('@/lib/api/response', () => ({
-  successResponse: (data: any) => {
-    return NextResponse.json({ success: true, data });
-  },
-  errorResponse: (error: any) => {
-    if (error.name === 'NotFoundError') {
-      return NextResponse.json(
-        { success: false, error: { code: 'NOT_FOUND', message: error.message } },
-        { status: 404 }
-      );
-    }
-    if (error.name === 'BadRequestError') {
-      return NextResponse.json(
-        { success: false, error: { code: 'BAD_REQUEST', message: error.message } },
-        { status: 400 }
-      );
-    }
-    if (error.name === 'ZodError') {
-      return NextResponse.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Validation failed' } },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: error.message } },
-      { status: 500 }
-    );
-  },
-}));
+mock.module('@/lib/api/response', () => createApiResponseMock());
 
 // Mock API errors
+const apiErrors = createApiErrorsMock();
+
 mock.module('@/lib/api/errors', () => ({
+  ...apiErrors,
   validateUUID: (id: string, name: string) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
-      const error = new Error(`Invalid ${name}: ${id}`);
-      error.name = 'BadRequestError';
-      throw error;
-    }
-  },
-  NotFoundError: class NotFoundError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = 'NotFoundError';
-    }
-  },
-  BadRequestError: class BadRequestError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = 'BadRequestError';
+      throw new apiErrors.BadRequestError(`Invalid ${name}: ${id}`);
     }
   },
 }));
@@ -157,24 +124,10 @@ mock.module('@/lib/admin/audit', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ eq: [field, value] }),
   desc: (field: any) => ({ desc: field }),
 }));
-
-// Mock Zod
-mock.module('zod', () => {
-  const z = {
-    object: (schema: any) => ({
-      parse: (data: any) => data,
-    }),
-    string: () => ({
-      uuid: () => ({}),
-      max: () => ({ optional: () => ({}) }),
-    }),
-  };
-  return { z };
-});
 
 const { GET, POST } = await import(
   '../src/app/api/v1/admin/users/[id]/billing/route'
@@ -524,4 +477,8 @@ describe('POST /api/v1/admin/users/:id/billing/override', () => {
       expect(data.error.code).toBe('BAD_REQUEST');
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

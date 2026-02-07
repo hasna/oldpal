@@ -1,5 +1,10 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, afterAll, mock } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
+import { createApiResponseMock } from './helpers/mock-api-response';
+import { createApiErrorsMock } from './helpers/mock-api-errors';
 
 // Mock data
 let mockLogs: any[] = [];
@@ -33,10 +38,11 @@ mock.module('@/db', () => ({
       return createChainMock(mockLogs);
     },
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock db schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   adminAuditLogs: {
     id: 'id',
     action: 'action',
@@ -56,7 +62,7 @@ mock.module('@/db/schema', () => ({
 }));
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAdminAuth: (handler: any) => async (req: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -84,29 +90,13 @@ mock.module('@/lib/auth/middleware', () => ({
 }));
 
 // Mock API response helpers
-mock.module('@/lib/api/response', () => ({
-  paginatedResponse: (items: any[], total: number, page: number, limit: number) => {
-    return NextResponse.json({
-      success: true,
-      data: {
-        items,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    });
-  },
-  errorResponse: (error: any) => {
-    return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: error.message } },
-      { status: 500 }
-    );
-  },
-}));
+mock.module('@/lib/api/response', () => createApiResponseMock());
 
 // Mock API errors
+const apiErrors = createApiErrorsMock();
+
 mock.module('@/lib/api/errors', () => ({
+  ...apiErrors,
   isValidUUID: (id: string) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(id);
@@ -114,7 +104,7 @@ mock.module('@/lib/api/errors', () => ({
 }));
 
 // Mock drizzle-orm
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   count: () => ({ count: 'count' }),
   desc: (field: any) => ({ desc: field }),
   eq: (field: any, value: any) => ({ eq: [field, value] }),
@@ -390,4 +380,8 @@ describe('GET /api/v1/admin/audit', () => {
       }
     });
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

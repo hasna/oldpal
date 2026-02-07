@@ -1,17 +1,16 @@
 import React from 'react';
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, afterAll, mock, beforeEach } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createLucideMock } from './helpers/mock-lucide-react';
+import { createSidebarMock } from './helpers/mock-sidebar';
 
 // Mock state
 let mockIsMobile = false;
 
-// Mock lucide-react icons
-mock.module('lucide-react', () => ({
-  Folder: () => <span data-icon="folder">Folder</span>,
-  MoreHorizontal: () => <span data-icon="more-horizontal">MoreHorizontal</span>,
-  Share: () => <span data-icon="share">Share</span>,
-  Trash2: () => <span data-icon="trash">Trash2</span>,
-}));
+// Mock lucide-react icons (generic proxy)
+const lucideMock = createLucideMock();
+mock.module('lucide-react', () => lucideMock);
+mock.module('lucide-react/dist/cjs/lucide-react.js', () => lucideMock);
 
 // Mock dropdown menu components
 mock.module('@/components/ui/dropdown-menu', () => ({
@@ -21,7 +20,11 @@ mock.module('@/components/ui/dropdown-menu', () => ({
       {children}
     </div>
   ),
+  DropdownMenuGroup: ({ children }: any) => <div data-dropdown-menu-group>{children}</div>,
   DropdownMenuItem: ({ children }: any) => <div data-dropdown-menu-item>{children}</div>,
+  DropdownMenuLabel: ({ children, className }: any) => (
+    <div data-dropdown-menu-label className={className}>{children}</div>
+  ),
   DropdownMenuSeparator: () => <hr data-dropdown-menu-separator />,
   DropdownMenuTrigger: ({ children, asChild }: any) => (
     <div data-dropdown-menu-trigger>{children}</div>
@@ -29,20 +32,8 @@ mock.module('@/components/ui/dropdown-menu', () => ({
 }));
 
 // Mock sidebar components
-mock.module('@/components/ui/sidebar', () => ({
-  SidebarGroup: ({ children, className }: any) => (
-    <div data-sidebar-group className={className}>{children}</div>
-  ),
-  SidebarGroupLabel: ({ children }: any) => <div data-sidebar-group-label>{children}</div>,
-  SidebarMenu: ({ children }: any) => <nav data-sidebar-menu>{children}</nav>,
-  SidebarMenuAction: ({ children, showOnHover }: any) => (
-    <button data-sidebar-menu-action data-show-on-hover={showOnHover}>{children}</button>
-  ),
-  SidebarMenuButton: ({ children, asChild }: any) => (
-    <button data-sidebar-menu-button>{children}</button>
-  ),
-  SidebarMenuItem: ({ children }: any) => <div data-sidebar-menu-item>{children}</div>,
-  useSidebar: () => ({ isMobile: mockIsMobile }),
+mock.module('@/components/ui/sidebar', () => createSidebarMock({
+  getIsMobile: () => mockIsMobile,
 }));
 
 // Create mock icon component
@@ -201,4 +192,8 @@ describe('NavProjects', () => {
     // Should still have the "More" button
     expect(markup).toContain('>More<');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

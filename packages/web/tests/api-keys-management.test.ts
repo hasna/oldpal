@@ -1,5 +1,8 @@
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, afterAll, mock, beforeEach, afterEach } from 'bun:test';
 import { NextRequest, NextResponse } from 'next/server';
+import { createDrizzleOrmMock } from './helpers/mock-drizzle-orm';
+import { createSchemaMock } from './helpers/mock-schema';
+import { createAuthMiddlewareMock } from './helpers/mock-auth-middleware';
 
 // In-memory mock database for API keys
 let mockApiKeys: Array<{
@@ -21,7 +24,7 @@ beforeEach(() => {
 });
 
 // Mock auth middleware
-mock.module('@/lib/auth/middleware', () => ({
+mock.module('@/lib/auth/middleware', () => createAuthMiddlewareMock({
   withAuth: (handler: any) => async (req: any, context?: any) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -99,10 +102,11 @@ mock.module('@/db', () => ({
       }),
     }),
   },
+  schema: createSchemaMock(),
 }));
 
 // Mock drizzle-orm operators
-mock.module('drizzle-orm', () => ({
+mock.module('drizzle-orm', () => createDrizzleOrmMock({
   eq: (field: any, value: any) => ({ field, value, op: 'eq' }),
   and: (...conditions: any[]) => conditions,
   isNull: (field: any) => ({ field, op: 'isNull' }),
@@ -110,7 +114,7 @@ mock.module('drizzle-orm', () => ({
 }));
 
 // Mock schema
-mock.module('@/db/schema', () => ({
+mock.module('@/db/schema', () => createSchemaMock({
   apiKeys: {
     id: 'id',
     userId: 'userId',
@@ -561,4 +565,8 @@ describe('DELETE /api/v1/users/me/api-keys/[id]', () => {
     expect(data.data.success).toBe(true);
     expect(data.data.message).toContain('successfully');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

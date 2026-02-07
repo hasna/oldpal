@@ -339,7 +339,7 @@ describe('RegistryStore', () => {
       const stats = store.getStats();
       expect(stats.totalAssistants).toBe(3);
       expect(stats.byType.assistant).toBe(2);
-      expect(stats.byType.subagent).toBe(1);
+      expect(stats.byType.subassistant).toBe(1);
       expect(stats.byState.idle).toBe(2);
       expect(stats.byState.processing).toBe(1);
     });
