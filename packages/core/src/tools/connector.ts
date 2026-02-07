@@ -7,6 +7,7 @@ import { readdirSync, statSync, existsSync, mkdirSync, writeFileSync, readFileSy
 import { ConnectorError, ErrorCodes } from '../errors';
 import { getRuntime } from '../runtime';
 import { buildCommandArgs, splitCommandLine } from '../utils/command-line';
+import { ConnectorAutoRefreshManager } from '../connectors/auto-refresh';
 
 /**
  * Normalize connectors config to the object format
@@ -248,10 +249,14 @@ export class ConnectorBridge {
       return [];
     }
 
-    // Check cache first
+    // Check cache first - also re-discover minimal connectors (only have 'help')
     const uncached: string[] = [];
     for (const name of names) {
-      if (!ConnectorBridge.cache.has(name)) {
+      const cached = ConnectorBridge.cache.get(name);
+      if (!cached) {
+        uncached.push(name);
+      } else if (this.isMinimalConnector(cached)) {
+        // Minimal connector from fastDiscover - needs full discovery
         uncached.push(name);
       }
     }
@@ -281,6 +286,14 @@ export class ConnectorBridge {
 
     this.connectors = nextConnectors;
     return discovered;
+  }
+
+  /**
+   * Check if a connector is minimal (only has 'help' command, needs full discovery)
+   */
+  private isMinimalConnector(connector: Connector): boolean {
+    return connector.commands.length <= 1 &&
+      (connector.commands.length === 0 || connector.commands[0].name === 'help');
   }
 
   /**
@@ -335,9 +348,14 @@ export class ConnectorBridge {
         return;
       }
 
-      // Lazy: don't run --help, just create minimal connector
-      const connector = this.createMinimalConnector(name, cli);
-      ConnectorBridge.cache.set(name, connector);
+      // Run full discovery: execute --help and parse commands
+      const connector = await this.discoverConnector(name, cli);
+      if (connector) {
+        ConnectorBridge.cache.set(name, connector);
+      } else {
+        // Discovery failed, fall back to minimal connector
+        ConnectorBridge.cache.set(name, this.createMinimalConnector(name, cli));
+      }
     } catch {
       ConnectorBridge.cache.set(name, null);
     }
@@ -1280,6 +1298,8 @@ export function createConnectorsListExecutor(
     }
 
     const connectors = bridge.getConnectors();
+    const autoRefreshManager = ConnectorAutoRefreshManager.getInstance();
+    await autoRefreshManager.start();
     const filterName = input.name as string | undefined;
     const verbose = input.verbose === true;
     const page = Math.max(1, Number(input.page) || 1);
@@ -1318,9 +1338,19 @@ export function createConnectorsListExecutor(
     const paginated = filtered.slice(startIndex, startIndex + limit);
 
     const result = paginated.map((connector) => {
+      const autoRefreshEntry = autoRefreshManager.get(connector.name);
       const base: Record<string, unknown> = {
         name: connector.name,
         description: connector.description,
+        autoRefresh: autoRefreshEntry
+          ? {
+              enabled: autoRefreshEntry.enabled,
+              schedule: autoRefreshEntry.schedule,
+              nextRunAt: autoRefreshEntry.nextRunAt,
+              lastRunAt: autoRefreshEntry.lastRunAt,
+              lastResult: autoRefreshEntry.lastResult,
+            }
+          : null,
         commands: verbose
           ? connector.commands.map((cmd) => ({
               name: cmd.name,

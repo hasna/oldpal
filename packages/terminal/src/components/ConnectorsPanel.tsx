@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Connector, ConnectorCommand, ConnectorStatus } from '@hasna/assistants-shared';
+import { ConnectorAutoRefreshManager } from '@hasna/assistants-core';
+import type { ConnectorAutoRefreshEntry, ConnectorAutoRefreshSchedule } from '@hasna/assistants-core';
 
 type ViewMode = 'list' | 'detail' | 'command';
 
@@ -118,6 +120,17 @@ function getVisibleRange(
   };
 }
 
+function formatAutoRefreshSchedule(schedule?: ConnectorAutoRefreshSchedule | null): string {
+  if (!schedule) return '';
+  if (schedule.kind === 'cron') {
+    return schedule.timezone
+      ? `cron ${schedule.cron} (${schedule.timezone})`
+      : `cron ${schedule.cron}`;
+  }
+  const unit = schedule.unit || 'minutes';
+  return `every ${schedule.interval} ${unit}`;
+}
+
 interface ConnectorsPanelProps {
   connectors: Connector[];
   /** Initial connector name to jump to (from /connectors <name>) */
@@ -153,6 +166,8 @@ export function ConnectorsPanel({
   const [isSearching, setIsSearching] = useState(false);
   const [loadingConnectorName, setLoadingConnectorName] = useState<string | null>(null);
   const [loadedConnectors, setLoadedConnectors] = useState<Map<string, Connector>>(new Map());
+  const [autoRefreshEntries, setAutoRefreshEntries] = useState<Map<string, ConnectorAutoRefreshEntry>>(new Map());
+  const [autoRefreshError, setAutoRefreshError] = useState<string | null>(null);
 
   // Filter and sort connectors based on search query
   const filteredConnectors = useMemo(() => {
@@ -175,6 +190,11 @@ export function ConnectorsPanel({
   useEffect(() => {
     setConnectorIndex(0);
   }, [searchQuery]);
+
+  // Clamp connector index to valid range (prevents out-of-bounds before useEffect fires)
+  const safeConnectorIndex = filteredConnectors.length > 0
+    ? Math.min(connectorIndex, filteredConnectors.length - 1)
+    : 0;
 
   // Jump to initial connector if specified
   useEffect(() => {
@@ -211,7 +231,41 @@ export function ConnectorsPanel({
     loadStatuses();
   }, [connectors, onCheckAuth]);
 
-  const baseConnector = filteredConnectors[connectorIndex];
+  const loadAutoRefreshEntries = useCallback(async () => {
+    try {
+      const manager = ConnectorAutoRefreshManager.getInstance();
+      await manager.start();
+      const entries = manager.list();
+      setAutoRefreshEntries(new Map(entries.map((entry) => [entry.connector, entry])));
+      setAutoRefreshError(null);
+    } catch (err) {
+      setAutoRefreshError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAutoRefreshEntries();
+  }, [loadAutoRefreshEntries, connectors.length]);
+
+  const toggleAutoRefresh = useCallback(async (connectorName: string) => {
+    try {
+      const manager = ConnectorAutoRefreshManager.getInstance();
+      await manager.start();
+      const existing = manager.get(connectorName);
+      if (!existing || !existing.enabled) {
+        await manager.enable(connectorName);
+      } else {
+        await manager.disable(connectorName);
+      }
+      const entries = manager.list();
+      setAutoRefreshEntries(new Map(entries.map((entry) => [entry.connector, entry])));
+      setAutoRefreshError(null);
+    } catch (err) {
+      setAutoRefreshError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
+  const baseConnector = filteredConnectors[safeConnectorIndex];
   // Use loaded connector if available (has full command list)
   const currentConnector = baseConnector
     ? (loadedConnectors.get(baseConnector.name) || baseConnector)
@@ -219,6 +273,9 @@ export function ConnectorsPanel({
   const currentCommands = currentConnector?.commands || [];
   const currentCommand = currentCommands[commandIndex];
   const currentStatus = currentConnector ? authStatuses.get(currentConnector.name) : undefined;
+  const autoRefreshEntry = currentConnector
+    ? autoRefreshEntries.get(currentConnector.name.toLowerCase())
+    : null;
 
   // Load commands when entering detail view
   const loadConnectorCommands = useCallback(async (connector: Connector) => {
@@ -339,6 +396,12 @@ export function ConnectorsPanel({
       return;
     }
 
+    // Toggle auto-refresh in detail view
+    if (mode === 'detail' && currentConnector && input.toLowerCase() === 'a') {
+      void toggleAutoRefresh(currentConnector.name);
+      return;
+    }
+
     // Arrow navigation
     if (key.upArrow) {
       if (mode === 'list' && filteredConnectors.length > 0) {
@@ -366,6 +429,13 @@ export function ConnectorsPanel({
       } else if (mode === 'detail' && num <= currentCommands.length) {
         setCommandIndex(num - 1);
       }
+      return;
+    }
+
+    // Start searching by typing a letter (only in list mode)
+    if (mode === 'list' && input && /^[a-zA-Z]$/.test(input)) {
+      setIsSearching(true);
+      setSearchQuery(input);
     }
   });
 
@@ -379,8 +449,8 @@ export function ConnectorsPanel({
 
   // Calculate visible range for connector list
   const connectorRange = useMemo(
-    () => getVisibleRange(connectorIndex, filteredConnectors.length),
-    [connectorIndex, filteredConnectors.length]
+    () => getVisibleRange(safeConnectorIndex, filteredConnectors.length),
+    [safeConnectorIndex, filteredConnectors.length]
   );
 
   // Calculate visible range for commands list
@@ -508,6 +578,15 @@ export function ConnectorsPanel({
   if (mode === 'detail' && currentConnector) {
     const cli = currentConnector.cli || `connect-${currentConnector.name}`;
     const status = getStatusIcon(currentStatus);
+    const autoRefreshColor = autoRefreshEntry
+      ? (autoRefreshEntry.enabled ? 'green' : 'yellow')
+      : 'gray';
+    const autoRefreshStatus = autoRefreshEntry
+      ? (autoRefreshEntry.enabled ? 'enabled' : 'disabled')
+      : 'not configured';
+    const autoRefreshSchedule = autoRefreshEntry
+      ? formatAutoRefreshSchedule(autoRefreshEntry.schedule)
+      : '';
 
     return (
       <Box flexDirection="column" paddingY={1}>
@@ -545,6 +624,25 @@ export function ConnectorsPanel({
             <Box>
               <Text dimColor>CLI: {cli}</Text>
             </Box>
+            <Box>
+              <Text dimColor>Auto-refresh: </Text>
+              <Text color={autoRefreshColor}>{autoRefreshStatus}</Text>
+              {autoRefreshSchedule && (
+                <Text dimColor> ({autoRefreshSchedule})</Text>
+              )}
+            </Box>
+            {autoRefreshEntry?.nextRunAt && (
+              <Box>
+                <Text dimColor>
+                  Next refresh: {new Date(autoRefreshEntry.nextRunAt).toLocaleString()}
+                </Text>
+              </Box>
+            )}
+            {autoRefreshError && (
+              <Box>
+                <Text color="red">Auto-refresh error: {autoRefreshError}</Text>
+              </Box>
+            )}
           </Box>
 
           <Box marginTop={1} marginBottom={1}>
@@ -599,7 +697,7 @@ export function ConnectorsPanel({
 
         <Box marginTop={1}>
           <Text dimColor>
-            ↑↓ navigate | Enter view command | Esc back | q quit
+            ↑↓ navigate | Enter view command | a auto-refresh | Esc back | q quit
           </Text>
         </Box>
       </Box>
@@ -613,7 +711,7 @@ export function ConnectorsPanel({
         <Text bold color="cyan">Connectors</Text>
         {filteredConnectors.length > 0 && (
           <Text dimColor>
-            {' '}({connectorIndex + 1}/{filteredConnectors.length}
+            {' '}({safeConnectorIndex + 1}/{filteredConnectors.length}
             {searchQuery && ` matching "${searchQuery}"`}
             {connectors.length !== filteredConnectors.length && ` of ${connectors.length} total`})
           </Text>
@@ -663,7 +761,7 @@ export function ConnectorsPanel({
 
             {visibleConnectors.map((connector, visibleIdx) => {
               const actualIdx = connectorRange.start + visibleIdx;
-              const isSelected = actualIdx === connectorIndex;
+              const isSelected = actualIdx === safeConnectorIndex;
               const status = getStatusIcon(authStatuses.get(connector.name));
               const cmdCount = connector.commands?.length || 0;
               const prefix = isSelected ? '> ' : '  ';
