@@ -42,6 +42,7 @@ const DEFAULT_CONTACTS: IdentityContacts = {
   emails: [],
   phones: [],
   addresses: [],
+  virtualAddresses: [],
   social: [],
 };
 
@@ -183,13 +184,31 @@ export class IdentityManager {
     if (!assistant || !identity) return null;
 
     const primaryEmail = identity.contacts.emails.find((e) => e.isPrimary) || identity.contacts.emails[0];
+    const primaryPhone = identity.contacts.phones.find((p) => p.isPrimary) || identity.contacts.phones[0];
+    const primaryVirtual = identity.contacts.virtualAddresses?.find((v) => v.isPrimary) || identity.contacts.virtualAddresses?.[0];
+    const primaryAddress = identity.contacts.addresses[0];
+
+    const formatAddress = (address: IdentityContacts['addresses'][number]): string => {
+      const parts = [
+        address.street,
+        address.city,
+        address.state,
+        address.postalCode,
+        address.country,
+      ].filter((part) => part && String(part).trim().length > 0);
+      const label = address.label ? ` (${address.label})` : '';
+      return `${parts.join(', ')}${label}`;
+    };
 
     const lines: string[] = [];
     lines.push(`You are operating as "${assistant.name}" with the "${identity.name}" identity.`);
     lines.push(`- Name: ${identity.profile.displayName}`);
-    if (identity.profile.title) lines.push(`- Title: ${identity.profile.title}`);
+    if (identity.profile.title) lines.push(`- Role: ${identity.profile.title}`);
     if (identity.profile.company) lines.push(`- Company: ${identity.profile.company}`);
     if (primaryEmail) lines.push(`- Email: ${primaryEmail.value} (${primaryEmail.label || 'primary'})`);
+    if (primaryPhone) lines.push(`- Phone: ${primaryPhone.value} (${primaryPhone.label || 'primary'})`);
+    if (primaryAddress) lines.push(`- Address: ${formatAddress(primaryAddress)}`);
+    if (primaryVirtual) lines.push(`- Virtual address: ${primaryVirtual.value} (${primaryVirtual.label || 'primary'})`);
     lines.push(`- Timezone: ${identity.profile.timezone}`);
     lines.push(`- Locale: ${identity.profile.locale}`);
     lines.push(`- Communication style: ${identity.preferences.communicationStyle}`);

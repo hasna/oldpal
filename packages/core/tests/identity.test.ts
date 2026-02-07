@@ -80,8 +80,21 @@ describe('IdentityManager', () => {
 
       await manager.createIdentity({
         name: 'Primary',
+        profile: {
+          title: 'Ops Lead',
+        },
         contacts: {
           emails: [{ value: 'primary@example.com', label: 'work', isPrimary: true }],
+          phones: [{ value: '+1 555-0000', label: 'mobile', isPrimary: true }],
+          addresses: [{
+            street: '123 Main St',
+            city: 'Springfield',
+            state: 'IL',
+            postalCode: '62701',
+            country: 'USA',
+            label: 'office',
+          }],
+          virtualAddresses: [{ value: 'matrix:@primary:server', label: 'matrix', isPrimary: true }],
         },
         context: 'Use terse replies.',
       });
@@ -89,7 +102,11 @@ describe('IdentityManager', () => {
       const prompt = await manager.buildSystemPromptContext();
       expect(prompt).toContain('TestBot');
       expect(prompt).toContain('Primary');
+      expect(prompt).toContain('Ops Lead');
       expect(prompt).toContain('primary@example.com');
+      expect(prompt).toContain('+1 555-0000');
+      expect(prompt).toContain('123 Main St');
+      expect(prompt).toContain('matrix:@primary:server');
       expect(prompt).toContain('Use terse replies');
     });
   });

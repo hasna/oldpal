@@ -67,7 +67,7 @@ export const identityCreateTool: Tool = {
       },
       title: {
         type: 'string',
-        description: 'Job title or role',
+        description: 'Role or job title',
       },
       company: {
         type: 'string',
@@ -90,6 +90,30 @@ export const identityCreateTool: Tool = {
       context: {
         type: 'string',
         description: 'Additional context or notes for this identity',
+      },
+      email: {
+        type: 'string',
+        description: 'Primary email address',
+      },
+      phone: {
+        type: 'string',
+        description: 'Primary phone number',
+      },
+      address: {
+        type: 'object',
+        description: 'Primary physical address',
+        properties: {
+          street: { type: 'string' },
+          city: { type: 'string' },
+          state: { type: 'string' },
+          postalCode: { type: 'string' },
+          country: { type: 'string' },
+          label: { type: 'string' },
+        },
+      },
+      virtualAddress: {
+        type: 'string',
+        description: 'Primary virtual address (handle, URL, or DID)',
       },
     },
     required: ['name'],
@@ -116,7 +140,7 @@ export const identityUpdateTool: Tool = {
       },
       title: {
         type: 'string',
-        description: 'New job title or role',
+        description: 'New role or job title',
       },
       company: {
         type: 'string',
@@ -139,6 +163,30 @@ export const identityUpdateTool: Tool = {
       context: {
         type: 'string',
         description: 'New context or notes',
+      },
+      email: {
+        type: 'string',
+        description: 'Primary email address',
+      },
+      phone: {
+        type: 'string',
+        description: 'Primary phone number',
+      },
+      address: {
+        type: 'object',
+        description: 'Primary physical address',
+        properties: {
+          street: { type: 'string' },
+          city: { type: 'string' },
+          state: { type: 'string' },
+          postalCode: { type: 'string' },
+          country: { type: 'string' },
+          label: { type: 'string' },
+        },
+      },
+      virtualAddress: {
+        type: 'string',
+        description: 'Primary virtual address (handle, URL, or DID)',
       },
     },
     required: ['id'],
@@ -306,6 +354,8 @@ export function createIdentityToolExecutors(
           contacts: {
             emails: identity.contacts.emails,
             phones: identity.contacts.phones,
+            addresses: identity.contacts.addresses,
+            virtualAddresses: identity.contacts.virtualAddresses || [],
           },
           context: identity.context || null,
           isActive: active?.id === identity.id,
@@ -333,6 +383,33 @@ export function createIdentityToolExecutors(
       }
 
       try {
+        const email = typeof input.email === 'string' ? input.email.trim() : '';
+        const phone = typeof input.phone === 'string' ? input.phone.trim() : '';
+        const virtualAddress = typeof input.virtualAddress === 'string' ? input.virtualAddress.trim() : '';
+        const addressInput = input.address as Record<string, unknown> | undefined;
+        const street = addressInput?.street ? String(addressInput.street).trim() : '';
+        const city = addressInput?.city ? String(addressInput.city).trim() : '';
+        const postalCode = addressInput?.postalCode ? String(addressInput.postalCode).trim() : '';
+        const country = addressInput?.country ? String(addressInput.country).trim() : '';
+        const hasAddress = Boolean(street && city && postalCode && country);
+        const address = hasAddress
+          ? {
+              street,
+              city,
+              state: addressInput?.state ? String(addressInput.state).trim() : undefined,
+              postalCode,
+              country,
+              label: addressInput?.label ? String(addressInput.label).trim() : 'Primary',
+            }
+          : null;
+
+        const contacts = {
+          emails: email ? [{ value: email, label: 'Primary', isPrimary: true }] : [],
+          phones: phone ? [{ value: phone, label: 'Primary', isPrimary: true }] : [],
+          addresses: address ? [address] : [],
+          virtualAddresses: virtualAddress ? [{ value: virtualAddress, label: 'Primary', isPrimary: true }] : [],
+        };
+
         // Check if using a template
         const templateName = input.template as string;
         let createOptions;
@@ -350,6 +427,7 @@ export function createIdentityToolExecutors(
               communicationStyle: input.communicationStyle as 'formal' | 'casual' | 'professional',
               responseLength: input.responseLength as 'concise' | 'detailed' | 'balanced',
             },
+            contacts,
             context: input.context as string,
           });
 
@@ -372,6 +450,7 @@ export function createIdentityToolExecutors(
               communicationStyle: (input.communicationStyle as 'formal' | 'casual' | 'professional') || 'professional',
               responseLength: (input.responseLength as 'concise' | 'detailed' | 'balanced') || 'balanced',
             },
+            contacts,
             context: input.context as string,
           };
         }
@@ -430,6 +509,35 @@ export function createIdentityToolExecutors(
         if (input.communicationStyle) preferences.communicationStyle = input.communicationStyle;
         if (input.responseLength) preferences.responseLength = input.responseLength;
         if (Object.keys(preferences).length > 0) updates.preferences = preferences;
+
+        const email = typeof input.email === 'string' ? input.email.trim() : '';
+        const phone = typeof input.phone === 'string' ? input.phone.trim() : '';
+        const virtualAddress = typeof input.virtualAddress === 'string' ? input.virtualAddress.trim() : '';
+        const addressInput = input.address as Record<string, unknown> | undefined;
+        const street = addressInput?.street ? String(addressInput.street).trim() : '';
+        const city = addressInput?.city ? String(addressInput.city).trim() : '';
+        const postalCode = addressInput?.postalCode ? String(addressInput.postalCode).trim() : '';
+        const country = addressInput?.country ? String(addressInput.country).trim() : '';
+        const hasAddress = Boolean(street && city && postalCode && country);
+        const address = hasAddress
+          ? {
+              street,
+              city,
+              state: addressInput?.state ? String(addressInput.state).trim() : undefined,
+              postalCode,
+              country,
+              label: addressInput?.label ? String(addressInput.label).trim() : 'Primary',
+            }
+          : null;
+
+        if (email || phone || virtualAddress || address) {
+          updates.contacts = {
+            ...(email ? { emails: [{ value: email, label: 'Primary', isPrimary: true }] } : {}),
+            ...(phone ? { phones: [{ value: phone, label: 'Primary', isPrimary: true }] } : {}),
+            ...(address ? { addresses: [address] } : {}),
+            ...(virtualAddress ? { virtualAddresses: [{ value: virtualAddress, label: 'Primary', isPrimary: true }] } : {}),
+          };
+        }
 
         if (Object.keys(updates).length === 0) {
           return JSON.stringify({

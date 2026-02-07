@@ -53,6 +53,7 @@ export interface IdentityContacts {
   emails: ContactEntry[];
   phones: ContactEntry[];
   addresses: AddressEntry[];
+  virtualAddresses?: ContactEntry[];
   social?: SocialEntry[];
 }
 

@@ -34,6 +34,7 @@ const contactsSchema = z.object({
   emails: z.array(contactEntrySchema).optional().default([]),
   phones: z.array(contactEntrySchema).optional().default([]),
   addresses: z.array(addressEntrySchema).optional().default([]),
+  virtualAddresses: z.array(contactEntrySchema).optional().default([]),
   social: z.array(socialEntrySchema).optional(),
 });
 
@@ -173,7 +174,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
         bio: data.bio,
         timezone: data.timezone,
         locale: data.locale,
-        contacts: data.contacts || { emails: [], phones: [], addresses: [] },
+        contacts: data.contacts || { emails: [], phones: [], addresses: [], virtualAddresses: [] },
         preferences: data.preferences || {
           language: 'en',
           dateFormat: 'YYYY-MM-DD',

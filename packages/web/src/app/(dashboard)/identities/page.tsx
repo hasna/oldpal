@@ -62,6 +62,7 @@ interface IdentityContacts {
   emails: { value: string; label: string; isPrimary?: boolean }[];
   phones: { value: string; label: string }[];
   addresses: { street: string; city: string; state?: string; postalCode: string; country: string; label: string }[];
+  virtualAddresses?: { value: string; label: string; isPrimary?: boolean }[];
   social?: { platform: string; value: string; label?: string }[];
 }
 
@@ -106,6 +107,15 @@ export default function IdentitiesPage() {
   const [newIdentityDisplayName, setNewIdentityDisplayName] = useState('');
   const [newIdentityTitle, setNewIdentityTitle] = useState('');
   const [newIdentityCompany, setNewIdentityCompany] = useState('');
+  const [newIdentityEmail, setNewIdentityEmail] = useState('');
+  const [newIdentityPhone, setNewIdentityPhone] = useState('');
+  const [newIdentityAddressStreet, setNewIdentityAddressStreet] = useState('');
+  const [newIdentityAddressCity, setNewIdentityAddressCity] = useState('');
+  const [newIdentityAddressState, setNewIdentityAddressState] = useState('');
+  const [newIdentityAddressPostal, setNewIdentityAddressPostal] = useState('');
+  const [newIdentityAddressCountry, setNewIdentityAddressCountry] = useState('');
+  const [newIdentityAddressLabel, setNewIdentityAddressLabel] = useState('Primary');
+  const [newIdentityVirtualAddress, setNewIdentityVirtualAddress] = useState('');
   const [newIdentityTimezone, setNewIdentityTimezone] = useState('UTC');
   const [newIdentityCommunicationStyle, setNewIdentityCommunicationStyle] = useState<'formal' | 'casual' | 'professional'>('professional');
   const createFormRef = useRef<HTMLDivElement>(null);
@@ -197,6 +207,43 @@ export default function IdentitiesPage() {
 
     setIsCreating(true);
     try {
+      const addressFields = [
+        newIdentityAddressStreet,
+        newIdentityAddressCity,
+        newIdentityAddressPostal,
+        newIdentityAddressCountry,
+      ];
+      const hasAnyAddressField = addressFields.some((field) => field.trim().length > 0);
+      const hasFullAddress = addressFields.every((field) => field.trim().length > 0);
+
+      if (hasAnyAddressField && !hasFullAddress) {
+        setError('Address requires street, city, postal code, and country.');
+        setIsCreating(false);
+        return;
+      }
+
+      const contacts = {
+        emails: newIdentityEmail.trim()
+          ? [{ value: newIdentityEmail.trim(), label: 'Primary', isPrimary: true }]
+          : [],
+        phones: newIdentityPhone.trim()
+          ? [{ value: newIdentityPhone.trim(), label: 'Primary', isPrimary: true }]
+          : [],
+        addresses: hasFullAddress
+          ? [{
+              street: newIdentityAddressStreet.trim(),
+              city: newIdentityAddressCity.trim(),
+              state: newIdentityAddressState.trim() || undefined,
+              postalCode: newIdentityAddressPostal.trim(),
+              country: newIdentityAddressCountry.trim(),
+              label: newIdentityAddressLabel.trim() || 'Primary',
+            }]
+          : [],
+        virtualAddresses: newIdentityVirtualAddress.trim()
+          ? [{ value: newIdentityVirtualAddress.trim(), label: 'Primary', isPrimary: true }]
+          : [],
+      };
+
       const response = await fetchWithAuth('/api/v1/identities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,6 +253,7 @@ export default function IdentitiesPage() {
           title: newIdentityTitle || undefined,
           company: newIdentityCompany || undefined,
           timezone: newIdentityTimezone,
+          contacts,
           preferences: {
             communicationStyle: newIdentityCommunicationStyle,
           },
@@ -218,6 +266,15 @@ export default function IdentitiesPage() {
         setNewIdentityDisplayName('');
         setNewIdentityTitle('');
         setNewIdentityCompany('');
+        setNewIdentityEmail('');
+        setNewIdentityPhone('');
+        setNewIdentityAddressStreet('');
+        setNewIdentityAddressCity('');
+        setNewIdentityAddressState('');
+        setNewIdentityAddressPostal('');
+        setNewIdentityAddressCountry('');
+        setNewIdentityAddressLabel('Primary');
+        setNewIdentityVirtualAddress('');
         setNewIdentityTimezone('UTC');
         setNewIdentityCommunicationStyle('professional');
         toast({
@@ -423,12 +480,12 @@ export default function IdentitiesPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="title">Title (optional)</Label>
+                    <Label htmlFor="title">Role (optional)</Label>
                     <Input
                       id="title"
                       value={newIdentityTitle}
                       onChange={(e) => setNewIdentityTitle(e.target.value)}
-                      placeholder="Software Engineer, Manager..."
+                      placeholder="Engineer, Manager, Founder..."
                     />
                   </div>
                   <div>
@@ -440,6 +497,79 @@ export default function IdentitiesPage() {
                       placeholder="Acme Corp"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="email">Primary Email (optional)</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={newIdentityEmail}
+                      onChange={(e) => setNewIdentityEmail(e.target.value)}
+                      placeholder="email@example.com"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="phone">Primary Phone (optional)</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={newIdentityPhone}
+                      onChange={(e) => setNewIdentityPhone(e.target.value)}
+                      placeholder="+1 (555) 123-4567"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Physical Address (optional)</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <Input
+                        value={newIdentityAddressStreet}
+                        onChange={(e) => setNewIdentityAddressStreet(e.target.value)}
+                        placeholder="Street address"
+                      />
+                    </div>
+                    <Input
+                      value={newIdentityAddressCity}
+                      onChange={(e) => setNewIdentityAddressCity(e.target.value)}
+                      placeholder="City"
+                    />
+                    <Input
+                      value={newIdentityAddressState}
+                      onChange={(e) => setNewIdentityAddressState(e.target.value)}
+                      placeholder="State/Region"
+                    />
+                    <Input
+                      value={newIdentityAddressPostal}
+                      onChange={(e) => setNewIdentityAddressPostal(e.target.value)}
+                      placeholder="Postal code"
+                    />
+                    <Input
+                      value={newIdentityAddressCountry}
+                      onChange={(e) => setNewIdentityAddressCountry(e.target.value)}
+                      placeholder="Country"
+                    />
+                    <div className="sm:col-span-2">
+                      <Input
+                        value={newIdentityAddressLabel}
+                        onChange={(e) => setNewIdentityAddressLabel(e.target.value)}
+                        placeholder="Address label (optional)"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="virtualAddress">Virtual Address (optional)</Label>
+                  <Input
+                    id="virtualAddress"
+                    value={newIdentityVirtualAddress}
+                    onChange={(e) => setNewIdentityVirtualAddress(e.target.value)}
+                    placeholder="Handle, URL, or DID"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -25,8 +25,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface IdentityContacts {
   emails: { value: string; label: string; isPrimary?: boolean }[];
-  phones: { value: string; label: string }[];
+  phones: { value: string; label: string; isPrimary?: boolean }[];
   addresses: { street: string; city: string; state?: string; postalCode: string; country: string; label: string }[];
+  virtualAddresses?: { value: string; label: string; isPrimary?: boolean }[];
   social?: { platform: string; value: string; label?: string }[];
 }
 
@@ -86,6 +87,15 @@ export function IdentityEditDialog({
   // Contacts
   const [primaryEmail, setPrimaryEmail] = useState('');
   const [primaryPhone, setPrimaryPhone] = useState('');
+  const [addressStreet, setAddressStreet] = useState('');
+  const [addressCity, setAddressCity] = useState('');
+  const [addressState, setAddressState] = useState('');
+  const [addressPostalCode, setAddressPostalCode] = useState('');
+  const [addressCountry, setAddressCountry] = useState('');
+  const [addressLabel, setAddressLabel] = useState('Primary');
+  const [virtualAddress, setVirtualAddress] = useState('');
+  const [extraAddresses, setExtraAddresses] = useState<IdentityContacts['addresses']>([]);
+  const [extraVirtualAddresses, setExtraVirtualAddresses] = useState<NonNullable<IdentityContacts['virtualAddresses']>>([]);
 
   // Context
   const [context, setContext] = useState('');
@@ -114,8 +124,27 @@ export function IdentityEditDialog({
 
       // Contacts
       const primaryEmailEntry = identity.contacts?.emails?.find(e => e.isPrimary) || identity.contacts?.emails?.[0];
+      const primaryPhoneEntry = identity.contacts?.phones?.find(p => p.isPrimary) || identity.contacts?.phones?.[0];
       setPrimaryEmail(primaryEmailEntry?.value || '');
-      setPrimaryPhone(identity.contacts?.phones?.[0]?.value || '');
+      setPrimaryPhone(primaryPhoneEntry?.value || '');
+
+      const addresses = identity.contacts?.addresses || [];
+      const primaryAddress = addresses[0];
+      setAddressStreet(primaryAddress?.street || '');
+      setAddressCity(primaryAddress?.city || '');
+      setAddressState(primaryAddress?.state || '');
+      setAddressPostalCode(primaryAddress?.postalCode || '');
+      setAddressCountry(primaryAddress?.country || '');
+      setAddressLabel(primaryAddress?.label || 'Primary');
+      setExtraAddresses(addresses.slice(1));
+
+      const virtuals = identity.contacts?.virtualAddresses || [];
+      let primaryVirtualIndex = 0;
+      const primaryIndexFromFlag = virtuals.findIndex((v) => v.isPrimary);
+      if (primaryIndexFromFlag >= 0) primaryVirtualIndex = primaryIndexFromFlag;
+      const primaryVirtual = virtuals[primaryVirtualIndex];
+      setVirtualAddress(primaryVirtual?.value || '');
+      setExtraVirtualAddresses(virtuals.filter((_, idx) => idx !== primaryVirtualIndex));
 
       setError('');
     }
@@ -128,14 +157,45 @@ export function IdentityEditDialog({
       return;
     }
 
+    const addressFields = [addressStreet, addressCity, addressPostalCode, addressCountry];
+    const hasAnyAddressField = addressFields.some((field) => field.trim().length > 0);
+    const hasFullAddress = addressFields.every((field) => field.trim().length > 0);
+
+    if (hasAnyAddressField && !hasFullAddress) {
+      setError('Address requires street, city, postal code, and country.');
+      return;
+    }
+
     setIsSaving(true);
     setError('');
 
     try {
+      const addresses = hasFullAddress
+        ? [
+            {
+              street: addressStreet.trim(),
+              city: addressCity.trim(),
+              state: addressState.trim() || undefined,
+              postalCode: addressPostalCode.trim(),
+              country: addressCountry.trim(),
+              label: addressLabel.trim() || 'Primary',
+            },
+            ...extraAddresses,
+          ]
+        : extraAddresses;
+
+      const virtualAddresses = virtualAddress.trim()
+        ? [
+            { value: virtualAddress.trim(), label: 'Primary', isPrimary: true },
+            ...extraVirtualAddresses,
+          ]
+        : extraVirtualAddresses;
+
       const contacts: IdentityContacts = {
         emails: primaryEmail ? [{ value: primaryEmail, label: 'Primary', isPrimary: true }] : [],
-        phones: primaryPhone ? [{ value: primaryPhone, label: 'Primary' }] : [],
-        addresses: identity.contacts?.addresses || [],
+        phones: primaryPhone ? [{ value: primaryPhone, label: 'Primary', isPrimary: true }] : [],
+        addresses,
+        virtualAddresses,
         social: identity.contacts?.social || [],
       };
 
@@ -218,10 +278,10 @@ export function IdentityEditDialog({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-title">Title</Label>
+                  <Label htmlFor="edit-title">Role</Label>
                   <Input
                     id="edit-title"
-                    placeholder="Software Engineer"
+                    placeholder="Role or title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                   />
@@ -393,9 +453,55 @@ export function IdentityEditDialog({
                 />
               </div>
 
-              <p className="text-sm text-muted-foreground pt-4">
-                Additional contacts can be added through the API.
-              </p>
+              <div className="space-y-2">
+                <Label>Physical Address</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <Input
+                      placeholder="Street address"
+                      value={addressStreet}
+                      onChange={(e) => setAddressStreet(e.target.value)}
+                    />
+                  </div>
+                  <Input
+                    placeholder="City"
+                    value={addressCity}
+                    onChange={(e) => setAddressCity(e.target.value)}
+                  />
+                  <Input
+                    placeholder="State/Region"
+                    value={addressState}
+                    onChange={(e) => setAddressState(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Postal code"
+                    value={addressPostalCode}
+                    onChange={(e) => setAddressPostalCode(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Country"
+                    value={addressCountry}
+                    onChange={(e) => setAddressCountry(e.target.value)}
+                  />
+                  <div className="col-span-2">
+                    <Input
+                      placeholder="Label (optional)"
+                      value={addressLabel}
+                      onChange={(e) => setAddressLabel(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-virtual-address">Virtual Address</Label>
+                <Input
+                  id="edit-virtual-address"
+                  placeholder="Handle, URL, or DID"
+                  value={virtualAddress}
+                  onChange={(e) => setVirtualAddress(e.target.value)}
+                />
+              </div>
             </TabsContent>
 
             <TabsContent value="context" className="space-y-4 mt-0">

@@ -35,6 +35,7 @@ const contactsSchema = z.object({
   emails: z.array(contactEntrySchema).optional(),
   phones: z.array(contactEntrySchema).optional(),
   addresses: z.array(addressEntrySchema).optional(),
+  virtualAddresses: z.array(contactEntrySchema).optional(),
   social: z.array(socialEntrySchema).optional(),
 });
 
@@ -164,6 +165,7 @@ export const PATCH = withAuth(async (request: AuthenticatedRequest, context?: { 
         emails: data.contacts.emails ?? existingIdentity.contacts?.emails ?? [],
         phones: data.contacts.phones ?? existingIdentity.contacts?.phones ?? [],
         addresses: data.contacts.addresses ?? existingIdentity.contacts?.addresses ?? [],
+        virtualAddresses: data.contacts.virtualAddresses ?? existingIdentity.contacts?.virtualAddresses ?? [],
         social: data.contacts.social ?? existingIdentity.contacts?.social,
       };
     }
