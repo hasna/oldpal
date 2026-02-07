@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { InboxPanel } from './InboxPanel';
+import type { Email, EmailListItem } from '@hasna/assistants-shared';
 
 // Maximum visible items in lists before pagination kicks in
 const MAX_VISIBLE_ITEMS = 5;
 
 type ViewMode = 'list' | 'detail' | 'delete-confirm' | 'inject-confirm';
+type ActiveTab = 'assistant' | 'email';
 
 interface MessageEntry {
   id: string;
@@ -28,6 +31,18 @@ interface MessagesPanelProps {
   onReply: (id: string, body: string) => Promise<void>;
   onClose: () => void;
   error?: string | null;
+  // Inbox props (optional - only passed when inbox is enabled)
+  inboxEmails?: EmailListItem[];
+  onInboxRead?: (id: string) => Promise<Email>;
+  onInboxDelete?: (id: string) => Promise<void>;
+  onInboxFetch?: () => Promise<number>;
+  onInboxMarkRead?: (id: string) => Promise<void>;
+  onInboxMarkUnread?: (id: string) => Promise<void>;
+  onInboxReply?: (id: string) => void;
+  inboxError?: string | null;
+  inboxEnabled?: boolean;
+  /** Which tab to show initially */
+  initialTab?: ActiveTab;
 }
 
 /**
@@ -125,16 +140,55 @@ function getStatusIcon(status: MessageEntry['status']): string {
 }
 
 /**
- * Interactive panel for managing assistant messages
+ * Tab bar component for switching between Assistant Messages and Email Inbox
  */
-export function MessagesPanel({
+function TabBar({ activeTab, inboxEnabled }: { activeTab: ActiveTab; inboxEnabled: boolean }) {
+  if (!inboxEnabled) return null;
+
+  return (
+    <Box marginBottom={1}>
+      <Text
+        bold={activeTab === 'assistant'}
+        color={activeTab === 'assistant' ? 'cyan' : undefined}
+        dimColor={activeTab !== 'assistant'}
+        inverse={activeTab === 'assistant'}
+      >
+        {' Assistant Messages '}
+      </Text>
+      <Text dimColor> | </Text>
+      <Text
+        bold={activeTab === 'email'}
+        color={activeTab === 'email' ? 'cyan' : undefined}
+        dimColor={activeTab !== 'email'}
+        inverse={activeTab === 'email'}
+      >
+        {' Email Inbox '}
+      </Text>
+      <Text dimColor>  [Tab] switch</Text>
+    </Box>
+  );
+}
+
+/**
+ * Inner assistant messages panel (extracted from original MessagesPanel logic)
+ */
+function AssistantMessagesContent({
   messages,
   onRead,
   onDelete,
   onInject,
   onClose,
   error,
-}: MessagesPanelProps) {
+  showTabBar,
+}: {
+  messages: MessageEntry[];
+  onRead: (id: string) => Promise<MessageEntry>;
+  onDelete: (id: string) => Promise<void>;
+  onInject: (id: string) => Promise<void>;
+  onClose: () => void;
+  error?: string | null;
+  showTabBar: boolean;
+}) {
   const [mode, setMode] = useState<ViewMode>('list');
   const [messageIndex, setMessageIndex] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<MessageEntry | null>(null);
@@ -198,7 +252,7 @@ export function MessagesPanel({
     }
   };
 
-  // Keyboard navigation
+  // Keyboard navigation (Tab is handled by parent)
   useInput((input, key) => {
     if (isProcessing) return;
 
@@ -294,10 +348,12 @@ export function MessagesPanel({
   // Empty state
   if (messages.length === 0) {
     return (
-      <Box flexDirection="column" paddingY={1}>
-        <Box marginBottom={1}>
-          <Text bold color="cyan">Messages</Text>
-        </Box>
+      <Box flexDirection="column">
+        {!showTabBar && (
+          <Box marginBottom={1}>
+            <Text bold color="cyan">Messages</Text>
+          </Box>
+        )}
         <Box
           flexDirection="column"
           borderStyle="round"
@@ -318,7 +374,7 @@ export function MessagesPanel({
   // Delete confirmation
   if (mode === 'delete-confirm' && deleteTarget) {
     return (
-      <Box flexDirection="column" paddingY={1}>
+      <Box flexDirection="column">
         <Box marginBottom={1}>
           <Text bold color="red">Delete Message</Text>
         </Box>
@@ -344,7 +400,7 @@ export function MessagesPanel({
   // Inject confirmation
   if (mode === 'inject-confirm' && injectTarget) {
     return (
-      <Box flexDirection="column" paddingY={1}>
+      <Box flexDirection="column">
         <Box marginBottom={1}>
           <Text bold color="green">Inject Message</Text>
         </Box>
@@ -370,7 +426,7 @@ export function MessagesPanel({
   // Detail view
   if (mode === 'detail' && detailMessage) {
     return (
-      <Box flexDirection="column" paddingY={1}>
+      <Box flexDirection="column">
         <Box marginBottom={1}>
           <Text bold color="cyan">{getStatusIcon(detailMessage.status)} Message</Text>
           <Text color={getPriorityColor(detailMessage.priority)}> [{detailMessage.priority}]</Text>
@@ -426,13 +482,15 @@ export function MessagesPanel({
   const visibleMessages = messages.slice(messageRange.start, messageRange.end);
 
   return (
-    <Box flexDirection="column" paddingY={1}>
-      <Box marginBottom={1}>
-        <Text bold color="cyan">Messages</Text>
-        {messages.length > MAX_VISIBLE_ITEMS && (
-          <Text dimColor> ({messageIndex + 1}/{messages.length})</Text>
-        )}
-      </Box>
+    <Box flexDirection="column">
+      {!showTabBar && (
+        <Box marginBottom={1}>
+          <Text bold color="cyan">Messages</Text>
+          {messages.length > MAX_VISIBLE_ITEMS && (
+            <Text dimColor> ({messageIndex + 1}/{messages.length})</Text>
+          )}
+        </Box>
+      )}
 
       <Box
         flexDirection="column"
@@ -498,6 +556,89 @@ export function MessagesPanel({
           ↑↓ select | Enter view | q quit
         </Text>
       </Box>
+    </Box>
+  );
+}
+
+/**
+ * Unified interactive panel for managing messages (assistant + email inbox)
+ */
+export function MessagesPanel({
+  messages,
+  onRead,
+  onDelete,
+  onInject,
+  onReply,
+  onClose,
+  error,
+  // Inbox props
+  inboxEmails,
+  onInboxRead,
+  onInboxDelete,
+  onInboxFetch,
+  onInboxMarkRead,
+  onInboxMarkUnread,
+  onInboxReply,
+  inboxError,
+  inboxEnabled = false,
+  initialTab = 'assistant',
+}: MessagesPanelProps) {
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
+  const hasInbox = inboxEnabled && onInboxRead && onInboxFetch;
+
+  // Tab switching with Tab key (only at top level of each sub-panel)
+  useInput((input, key) => {
+    if (!hasInbox) return;
+    if (key.tab) {
+      setActiveTab((prev) => (prev === 'assistant' ? 'email' : 'assistant'));
+    }
+  });
+
+  // Single-tab mode (no inbox) - render assistant messages directly
+  if (!hasInbox) {
+    return (
+      <Box flexDirection="column" paddingY={1}>
+        <AssistantMessagesContent
+          messages={messages}
+          onRead={onRead}
+          onDelete={onDelete}
+          onInject={onInject}
+          onClose={onClose}
+          error={error}
+          showTabBar={false}
+        />
+      </Box>
+    );
+  }
+
+  // Dual-tab mode - render tab bar + active tab content
+  return (
+    <Box flexDirection="column" paddingY={1}>
+      <TabBar activeTab={activeTab} inboxEnabled={true} />
+
+      {activeTab === 'assistant' ? (
+        <AssistantMessagesContent
+          messages={messages}
+          onRead={onRead}
+          onDelete={onDelete}
+          onInject={onInject}
+          onClose={onClose}
+          error={error}
+          showTabBar={true}
+        />
+      ) : (
+        <InboxPanel
+          emails={inboxEmails || []}
+          onRead={onInboxRead!}
+          onDelete={onInboxDelete || (async () => { throw new Error('Delete not implemented'); })}
+          onFetch={onInboxFetch!}
+          onMarkRead={onInboxMarkRead || (async () => {})}
+          onMarkUnread={onInboxMarkUnread || (async () => {})}
+          onReply={onInboxReply || (() => {})}
+          onClose={onClose}
+          error={inboxError}
+        />
+      )}
     </Box>
   );
 }

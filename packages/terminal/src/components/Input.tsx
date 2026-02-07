@@ -18,8 +18,7 @@ const COMMANDS = [
   { name: '/model', description: 'show model information' },
   { name: '/compact', description: 'summarize to save context' },
   // Skills and tools
-  { name: '/skills', description: 'list available skills' },
-  { name: '/skill', description: 'create or manage skills' },
+  { name: '/skills', description: 'browse, create, and manage skills' },
   { name: '/connectors', description: 'list available connectors' },
   // Configuration
   { name: '/config', description: 'show configuration' },
@@ -41,8 +40,7 @@ const COMMANDS = [
   { name: '/say', description: 'speak text aloud' },
   { name: '/listen', description: 'start dictation (pause 3s to send)' },
   // Assistant communication
-  { name: '/inbox', description: 'view assistant messages' },
-  { name: '/messages', description: 'manage assistant-to-assistant messages' },
+  { name: '/messages', description: 'assistant messaging and email inbox' },
   // Resources
   { name: '/wallet', description: 'manage assistant wallet' },
   { name: '/secrets', description: 'manage assistant secrets' },
@@ -66,6 +64,10 @@ const DEFAULT_PASTE_THRESHOLDS = {
   words: 100,
   lines: 20,
 };
+
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n?/g, '\n');
+}
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -261,13 +263,14 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
   }, [autocompleteItems.length]);
 
   const setValueAndCursor = useCallback((nextValue: string, nextCursor: number = nextValue.length, resetHistory: boolean = true) => {
-    const clamped = Math.max(0, Math.min(nextCursor, nextValue.length));
-    setInputState({ value: nextValue, cursor: clamped });
+    const normalized = normalizeLineEndings(nextValue);
+    const clamped = Math.max(0, Math.min(nextCursor, normalized.length));
+    setInputState({ value: normalized, cursor: clamped });
     setPreferredColumn(null);
     setSelectedIndex(0);
     // Reset history navigation when input changes (unless navigating history)
     if (resetHistory) {
-      historyRef.current.resetIndex(nextValue);
+      historyRef.current.resetIndex(normalized);
     }
   }, []);
 
@@ -282,10 +285,11 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
       setValueAndCursor(nextValue, nextCursor, resetHistory);
     },
     appendValue: (text: string) => {
-      if (!text) return;
+      const cleaned = normalizeLineEndings(text);
+      if (!cleaned) return;
       clearLargePaste();
       setInputState(prev => {
-        const newValue = prev.value + text;
+        const newValue = prev.value + cleaned;
         historyRef.current.resetIndex(newValue);
         return {
           value: newValue,
@@ -305,7 +309,8 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
 
   const handleSubmit = (submittedValue: string) => {
     // If there's a large paste pending, use that content instead
-    const actualValue = largePaste ? largePaste.content : submittedValue;
+    const rawValue = largePaste ? largePaste.content : submittedValue;
+    const actualValue = normalizeLineEndings(rawValue);
 
     // Allow blank submission only for optional ask-user questions
     if (!actualValue.trim() && !allowBlankAnswer) return;
@@ -369,17 +374,18 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
   };
 
   const insertText = (text: string) => {
-    if (!text) return;
+    const cleaned = normalizeLineEndings(text);
+    if (!cleaned) return;
 
     // Detect large paste (multiple characters at once that exceed threshold)
     // A paste is detected when multiple characters arrive at once (text.length > 1)
     // and the total content exceeds the threshold
     // Only apply special handling if paste handling is enabled and mode is not 'inline'
-    if (pasteEnabled && pasteMode !== 'inline' && text.length > 1 && isLargePaste(text, pasteThresholds)) {
+    if (pasteEnabled && pasteMode !== 'inline' && cleaned.length > 1 && isLargePaste(cleaned, pasteThresholds)) {
       // Store the large paste content and show placeholder
       setLargePaste({
-        content: text,
-        placeholder: formatPastePlaceholder(text),
+        content: cleaned,
+        placeholder: formatPastePlaceholder(cleaned),
       });
       setShowPastePreview(false);
       return;
@@ -393,12 +399,12 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
 
     // Use functional update for atomic value+cursor change during rapid pastes
     setInputState(prev => {
-      const newValue = prev.value.slice(0, prev.cursor) + text + prev.value.slice(prev.cursor);
+      const newValue = prev.value.slice(0, prev.cursor) + cleaned + prev.value.slice(prev.cursor);
       // Reset history navigation when user types
       historyRef.current.resetIndex(newValue);
       return {
         value: newValue,
-        cursor: prev.cursor + text.length,
+        cursor: prev.cursor + cleaned.length,
       };
     });
     setPreferredColumn(null);

@@ -441,14 +441,16 @@ function stripAnsi(text: string): string {
 }
 
 function normalizeUserDisplay(content: string): string {
-  const normalized = content.replace(/\u00a0/g, ' ');
+  const normalized = content.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ');
   if (normalized.includes('```')) {
     return normalized.replace(/\t/g, '  ');
   }
-  return normalized
+  const compact = normalized
     .split('\n')
     .map((line) => line.replace(/\t/g, '  ').replace(/ {2,}/g, ' '))
-    .join('\n');
+    .join('\n')
+    .replace(/\n{2,}/g, '\n');
+  return compact;
 }
 
 function ToolCallPanel({

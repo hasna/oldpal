@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { spawn } from 'child_process';
 import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
 import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, AudioRecorder, ElevenLabsSTT, WhisperSTT, type SessionInfo, type RecoverableSession, type CreateIdentityOptions } from '@hasna/assistants-core';
-import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand } from '@hasna/assistants-shared';
+import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand, Skill } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input, type InputHandle } from './Input';
 import { Messages } from './Messages';
@@ -28,11 +28,12 @@ import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
 import { AssistantsRegistryPanel } from './AssistantsRegistryPanel';
 import { SchedulesPanel } from './SchedulesPanel';
+import { SkillsPanel } from './SkillsPanel';
 import { ProjectsPanel } from './ProjectsPanel';
 import { PlansPanel } from './PlansPanel';
 import { WalletPanel } from './WalletPanel';
 import { SecretsPanel } from './SecretsPanel';
-import { InboxPanel } from './InboxPanel';
+import { WorkspacePanel } from './WorkspacePanel';
 import { AssistantsDashboard } from './AssistantsDashboard';
 import { SwarmPanel } from './SwarmPanel';
 import { LogsPanel } from './LogsPanel';
@@ -82,6 +83,9 @@ import {
   type PlanStepStatus,
   type SerializableSwarmState,
   type SwarmConfig,
+  createSkill,
+  deleteSkill,
+  type CreateSkillOptions,
 } from '@hasna/assistants-core';
 import type { BudgetConfig, BudgetLimits } from '@hasna/assistants-shared';
 import type { AssistantsConfig } from '@hasna/assistants-shared';
@@ -282,6 +286,10 @@ export function App({ cwd, version }: AppProps) {
   const [showSchedulesPanel, setShowSchedulesPanel] = useState(false);
   const [schedulesList, setSchedulesList] = useState<ScheduledCommand[]>([]);
 
+  // Skills panel state
+  const [showSkillsPanel, setShowSkillsPanel] = useState(false);
+  const [skillsList, setSkillsList] = useState<Skill[]>([]);
+
   // Assistants panel state
   const [showAssistantsPanel, setShowAssistantsPanel] = useState(false);
   const [assistantsRefreshKey, setAssistantsRefreshKey] = useState(0);
@@ -357,16 +365,20 @@ export function App({ cwd, version }: AppProps) {
   const [secretsList, setSecretsList] = useState<Array<{ name: string; scope: 'global' | 'assistant'; createdAt?: string; updatedAt?: string }>>([]);
   const [secretsError, setSecretsError] = useState<string | null>(null);
 
-  // Inbox panel state
-  const [showInboxPanel, setShowInboxPanel] = useState(false);
+  // Inbox data (loaded alongside messages panel)
   const [inboxEmails, setInboxEmails] = useState<EmailListItem[]>([]);
   const [inboxError, setInboxError] = useState<string | null>(null);
+  const [inboxEnabled, setInboxEnabled] = useState(false);
 
   // Assistants dashboard panel state
   const [showAssistantsDashboard, setShowAssistantsDashboard] = useState(false);
 
   // Swarm panel state
   const [showSwarmPanel, setShowSwarmPanel] = useState(false);
+
+  // Workspace panel state
+  const [showWorkspacePanel, setShowWorkspacePanel] = useState(false);
+  const [workspacesList, setWorkspacesList] = useState<Array<{ id: string; name: string; description?: string; createdAt: number; updatedAt: number; createdBy: string; participants: string[]; status: 'active' | 'archived' }>>([]);
 
   // Logs panel state
   const [showLogsPanel, setShowLogsPanel] = useState(false);
@@ -1077,6 +1089,15 @@ export function App({ cwd, version }: AppProps) {
           setSchedulesList(schedules);
           setShowSchedulesPanel(true);
         });
+      } else if (chunk.panel === 'skills') {
+        // Load skills and show panel
+        const client = registry.getActiveSession()?.client;
+        if (client) {
+          client.getSkills().then((skills: Skill[]) => {
+            setSkillsList(skills);
+            setShowSkillsPanel(true);
+          });
+        }
       } else if (chunk.panel === 'assistants') {
         // Handle session actions or show assistants panel/dashboard
         if (chunk.panelValue?.startsWith('session:')) {
@@ -1134,8 +1155,11 @@ export function App({ cwd, version }: AppProps) {
         loadConfigFiles();
         setShowConfigPanel(true);
       } else if (chunk.panel === 'messages') {
-        // Load messages and show panel
+        // Load messages and inbox data, then show unified panel
         const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
+        const inboxManager = registry.getActiveSession()?.client.getInboxManager?.();
+
+        // Load assistant messages
         if (messagesManager) {
           messagesManager.list({ limit: 50 }).then((msgs: Array<{
             id: string;
@@ -1164,15 +1188,27 @@ export function App({ cwd, version }: AppProps) {
               replyCount: m.replyCount,
             })));
             setMessagesPanelError(null);
-            setShowMessagesPanel(true);
           }).catch((err: Error) => {
             setMessagesPanelError(err instanceof Error ? err.message : String(err));
-            setShowMessagesPanel(true);
           });
         } else {
           setMessagesPanelError(null);
-          setShowMessagesPanel(true);
         }
+
+        // Load inbox emails
+        if (inboxManager) {
+          setInboxEnabled(true);
+          inboxManager.list({ limit: 50 }).then((emails: EmailListItem[]) => {
+            setInboxEmails(emails);
+            setInboxError(null);
+          }).catch((err: Error) => {
+            setInboxError(err instanceof Error ? err.message : String(err));
+          });
+        } else {
+          setInboxEnabled(false);
+        }
+
+        setShowMessagesPanel(true);
       } else if (chunk.panel === 'guardrails') {
         // Load guardrails and show panel
         if (!guardrailsStoreRef.current) {
@@ -1254,26 +1290,66 @@ export function App({ cwd, version }: AppProps) {
           setShowSecretsPanel(true);
         }
       } else if (chunk.panel === 'inbox') {
-        // Load inbox emails and show panel
+        // /inbox alias → open messages panel (with inbox tab active via panelInitialValue)
+        const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
         const inboxManager = registry.getActiveSession()?.client.getInboxManager?.();
+
+        if (messagesManager) {
+          messagesManager.list({ limit: 50 }).then((msgs: Array<{
+            id: string;
+            threadId: string;
+            fromAssistantId: string;
+            fromAssistantName: string;
+            subject?: string;
+            preview: string;
+            body?: string;
+            priority: string;
+            status: string;
+            createdAt: string;
+            replyCount?: number;
+          }>) => {
+            setMessagesList(msgs.map((m: typeof msgs[0]) => ({
+              id: m.id,
+              threadId: m.threadId,
+              fromAssistantId: m.fromAssistantId,
+              fromAssistantName: m.fromAssistantName,
+              subject: m.subject,
+              preview: m.preview,
+              body: m.body,
+              priority: m.priority as 'low' | 'normal' | 'high' | 'urgent',
+              status: m.status as 'unread' | 'read' | 'archived' | 'injected',
+              createdAt: m.createdAt,
+              replyCount: m.replyCount,
+            })));
+            setMessagesPanelError(null);
+          }).catch((err: Error) => {
+            setMessagesPanelError(err instanceof Error ? err.message : String(err));
+          });
+        }
+
         if (inboxManager) {
+          setInboxEnabled(true);
           inboxManager.list({ limit: 50 }).then((emails: EmailListItem[]) => {
             setInboxEmails(emails);
             setInboxError(null);
-            setShowInboxPanel(true);
           }).catch((err: Error) => {
             setInboxError(err instanceof Error ? err.message : String(err));
-            setShowInboxPanel(true);
           });
         } else {
-          setInboxError('Inbox not enabled. Configure inbox in config.json.');
-          setShowInboxPanel(true);
+          setInboxEnabled(false);
         }
+
+        setShowMessagesPanel(true);
       } else if (chunk.panel === 'swarm') {
         setShowSwarmPanel(true);
       } else if (chunk.panel === 'workspace') {
-        // Workspace panel - not yet implemented as interactive UI
-        // The /workspace command handles text output
+        // Load workspaces and show panel
+        import('@hasna/assistants-core').then(({ SharedWorkspaceManager }) => {
+          const mgr = new SharedWorkspaceManager();
+          const workspaces = mgr.list(true);
+          setWorkspacesList(workspaces);
+          setShowWorkspacePanel(true);
+        });
       } else if (chunk.panel === 'logs') {
         setShowLogsPanel(true);
       }
@@ -2042,6 +2118,18 @@ export function App({ cwd, version }: AppProps) {
           return;
         }
 
+        // /skills (no args) → open panel
+        if ((cmdName === 'skills' || cmdName === 'skill') && !cmdArgs) {
+          const client = registry.getActiveSession()?.client;
+          if (client) {
+            client.getSkills().then((skills: Skill[]) => {
+              setSkillsList(skills);
+              setShowSkillsPanel(true);
+            });
+          }
+          return;
+        }
+
         // /assistants (no args) → open panel or dashboard
         if (cmdName === 'assistants' && !cmdArgs) {
           // Show the dashboard view
@@ -2080,9 +2168,11 @@ export function App({ cwd, version }: AppProps) {
           return;
         }
 
-        // /messages (no args) → open panel
-        if (cmdName === 'messages' && !cmdArgs) {
+        // /messages or /inbox (no args) → open unified messages panel
+        if ((cmdName === 'messages' || cmdName === 'inbox') && !cmdArgs) {
           const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
+          const inboxMgr = registry.getActiveSession()?.client.getInboxManager?.();
+
           if (messagesManager) {
             messagesManager.list({ limit: 50 }).then((msgs: any[]) => {
               setMessagesList(msgs.map((m: any) => ({
@@ -2099,34 +2189,26 @@ export function App({ cwd, version }: AppProps) {
                 replyCount: m.replyCount,
               })));
               setMessagesPanelError(null);
-              setShowMessagesPanel(true);
             }).catch((err: Error) => {
               setMessagesPanelError(err instanceof Error ? err.message : String(err));
-              setShowMessagesPanel(true);
             });
           } else {
             setMessagesPanelError(null);
-            setShowMessagesPanel(true);
           }
-          return;
-        }
 
-        // /inbox (no args) → open panel
-        if (cmdName === 'inbox' && !cmdArgs) {
-          const inboxManager = registry.getActiveSession()?.client.getInboxManager?.();
-          if (inboxManager) {
-            inboxManager.list({ limit: 50 }).then((emails: EmailListItem[]) => {
+          if (inboxMgr) {
+            setInboxEnabled(true);
+            inboxMgr.list({ limit: 50 }).then((emails: EmailListItem[]) => {
               setInboxEmails(emails);
               setInboxError(null);
-              setShowInboxPanel(true);
             }).catch((err: Error) => {
               setInboxError(err instanceof Error ? err.message : String(err));
-              setShowInboxPanel(true);
             });
           } else {
-            setInboxError('Inbox not enabled. Configure inbox in config.json.');
-            setShowInboxPanel(true);
+            setInboxEnabled(false);
           }
+
+          setShowMessagesPanel(true);
           return;
         }
 
@@ -2591,6 +2673,68 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
+  // Show skills panel
+  if (showSkillsPanel) {
+    const activeClient = registry.getActiveSession()?.client;
+
+    const handleSkillExecute = (name: string) => {
+      setShowSkillsPanel(false);
+      if (activeClient) {
+        activeClient.send(`/${name}`);
+      }
+    };
+
+    const handleSkillCreate = async (options: CreateSkillOptions) => {
+      const result = await createSkill(options);
+      // Refresh skills in the assistant loop
+      if (activeClient) {
+        await activeClient.refreshSkills();
+      }
+      return result;
+    };
+
+    const handleSkillDelete = async (name: string, filePath: string) => {
+      await deleteSkill(filePath);
+      // Remove from loader and refresh
+      const skillLoader = activeClient?.getSkillLoader();
+      if (skillLoader) {
+        skillLoader.removeSkill(name);
+      }
+    };
+
+    const handleSkillRefresh = async () => {
+      if (activeClient) {
+        const refreshed = await activeClient.refreshSkills();
+        setSkillsList(refreshed);
+        return refreshed;
+      }
+      return skillsList;
+    };
+
+    const handleSkillEnsureContent = async (name: string) => {
+      const skillLoader = activeClient?.getSkillLoader();
+      if (skillLoader && typeof skillLoader.ensureSkillContent === 'function') {
+        return skillLoader.ensureSkillContent(name);
+      }
+      return null;
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <SkillsPanel
+          skills={skillsList}
+          onExecute={handleSkillExecute}
+          onCreate={handleSkillCreate}
+          onDelete={handleSkillDelete}
+          onRefresh={handleSkillRefresh}
+          onEnsureContent={handleSkillEnsureContent}
+          onClose={() => setShowSkillsPanel(false)}
+          cwd={cwd}
+        />
+      </Box>
+    );
+  }
+
   // Show schedules panel
   if (showSchedulesPanel) {
     // Session-scoped schedule list options
@@ -2988,6 +3132,44 @@ export function App({ cwd, version }: AppProps) {
       setGuardrailsPolicies(policies);
     };
 
+    const handleAddPolicy = (policy: any) => {
+      if (!guardrailsStoreRef.current) {
+        guardrailsStoreRef.current = new GuardrailsStore(cwd);
+      }
+      guardrailsStoreRef.current.addPolicy(policy, 'project');
+      const config = guardrailsStoreRef.current.loadAll();
+      const policies = guardrailsStoreRef.current.listPolicies();
+      setGuardrailsConfig(config);
+      setGuardrailsPolicies(policies);
+    };
+
+    const handleRemovePolicy = (policyId: string) => {
+      if (!guardrailsStoreRef.current) {
+        guardrailsStoreRef.current = new GuardrailsStore(cwd);
+      }
+      guardrailsStoreRef.current.removePolicy(policyId);
+      const config = guardrailsStoreRef.current.loadAll();
+      const policies = guardrailsStoreRef.current.listPolicies();
+      setGuardrailsConfig(config);
+      setGuardrailsPolicies(policies);
+    };
+
+    const handleUpdatePolicy = (policyId: string, updates: any) => {
+      if (!guardrailsStoreRef.current) {
+        guardrailsStoreRef.current = new GuardrailsStore(cwd);
+      }
+      const existing = guardrailsStoreRef.current.getPolicy(policyId);
+      if (existing) {
+        guardrailsStoreRef.current.removePolicy(policyId);
+        const merged = { ...existing.policy, ...updates };
+        guardrailsStoreRef.current.addPolicy(merged, existing.location as any);
+      }
+      const config = guardrailsStoreRef.current.loadAll();
+      const policies = guardrailsStoreRef.current.listPolicies();
+      setGuardrailsConfig(config);
+      setGuardrailsPolicies(policies);
+    };
+
     return (
       <Box flexDirection="column" padding={1}>
         <GuardrailsPanel
@@ -2996,6 +3178,9 @@ export function App({ cwd, version }: AppProps) {
           onToggleEnabled={handleToggleEnabled}
           onTogglePolicy={handleTogglePolicy}
           onSetPreset={handleSetPreset}
+          onAddPolicy={handleAddPolicy}
+          onRemovePolicy={handleRemovePolicy}
+          onUpdatePolicy={handleUpdatePolicy}
           onCancel={() => setShowGuardrailsPanel(false)}
         />
       </Box>
@@ -3296,75 +3481,6 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
-  // Show inbox panel
-  if (showInboxPanel) {
-    const inboxManager = activeSession?.client.getInboxManager?.();
-
-    const handleInboxRead = async (id: string): Promise<Email> => {
-      if (!inboxManager) throw new Error('Inbox not available');
-      const email = await inboxManager.read(id);
-      if (!email) throw new Error('Email not found');
-      // Refresh list to update read status
-      const emails = await inboxManager.list({ limit: 50 });
-      setInboxEmails(emails);
-      return email;
-    };
-
-    const handleInboxDelete = async (id: string) => {
-      if (!inboxManager) throw new Error('Inbox not available');
-      // Note: InboxManager doesn't have a delete method currently
-      // This is a placeholder for when it's implemented
-      throw new Error('Delete not implemented yet');
-    };
-
-    const handleInboxFetch = async (): Promise<number> => {
-      if (!inboxManager) throw new Error('Inbox not available');
-      const count = await inboxManager.fetch({ limit: 20 });
-      // Refresh list after fetch
-      const emails = await inboxManager.list({ limit: 50 });
-      setInboxEmails(emails);
-      return count;
-    };
-
-    const handleInboxMarkRead = async (id: string) => {
-      if (!inboxManager) throw new Error('Inbox not available');
-      await inboxManager.markRead(id);
-      // Refresh list
-      const emails = await inboxManager.list({ limit: 50 });
-      setInboxEmails(emails);
-    };
-
-    const handleInboxMarkUnread = async (id: string) => {
-      if (!inboxManager) throw new Error('Inbox not available');
-      await inboxManager.markUnread(id);
-      // Refresh list
-      const emails = await inboxManager.list({ limit: 50 });
-      setInboxEmails(emails);
-    };
-
-    const handleInboxReply = (id: string) => {
-      // Close panel and send a prompt to compose a reply
-      setShowInboxPanel(false);
-      activeSession?.client.send(`/inbox reply ${id}`);
-    };
-
-    return (
-      <Box flexDirection="column" padding={1}>
-        <InboxPanel
-          emails={inboxEmails}
-          onRead={handleInboxRead}
-          onDelete={handleInboxDelete}
-          onFetch={handleInboxFetch}
-          onMarkRead={handleInboxMarkRead}
-          onMarkUnread={handleInboxMarkUnread}
-          onReply={handleInboxReply}
-          onClose={() => setShowInboxPanel(false)}
-          error={inboxError}
-        />
-      </Box>
-    );
-  }
-
   // Show assistants dashboard panel
   if (showAssistantsDashboard) {
     const sessions = registry.listSessions();
@@ -3443,6 +3559,34 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
+  // Show workspace panel
+  if (showWorkspacePanel) {
+    const handleWorkspaceArchive = async (id: string) => {
+      const { SharedWorkspaceManager } = await import('@hasna/assistants-core');
+      const mgr = new SharedWorkspaceManager();
+      mgr.archive(id);
+      setWorkspacesList(mgr.list(true));
+    };
+
+    const handleWorkspaceDelete = async (id: string) => {
+      const { SharedWorkspaceManager } = await import('@hasna/assistants-core');
+      const mgr = new SharedWorkspaceManager();
+      mgr.delete(id);
+      setWorkspacesList(mgr.list(true));
+    };
+
+    return (
+      <Box flexDirection="column" padding={1}>
+        <WorkspacePanel
+          workspaces={workspacesList}
+          onArchive={handleWorkspaceArchive}
+          onDelete={handleWorkspaceDelete}
+          onClose={() => setShowWorkspacePanel(false)}
+        />
+      </Box>
+    );
+  }
+
   // Show logs panel
   if (showLogsPanel) {
     return (
@@ -3508,10 +3652,12 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
-  // Show messages panel
+  // Show messages panel (unified: assistant messages + email inbox)
   if (showMessagesPanel) {
     const messagesManager = activeSession?.client.getMessagesManager?.();
+    const inboxManager = activeSession?.client.getInboxManager?.();
 
+    // --- Assistant messages handlers ---
     const handleMessagesRead = async (id: string) => {
       if (!messagesManager) throw new Error('Messages not available');
       const msg = await messagesManager.read(id);
@@ -3533,7 +3679,6 @@ export function App({ cwd, version }: AppProps) {
     const handleMessagesDelete = async (id: string) => {
       if (!messagesManager) throw new Error('Messages not available');
       await messagesManager.delete(id);
-      // Refresh the messages list
       const msgs = await messagesManager.list({ limit: 50 });
       setMessagesList(msgs.map((m: { id: string; threadId: string; fromAssistantId: string; fromAssistantName: string; subject?: string; preview: string; body?: string; priority: string; status: string; createdAt: string; replyCount?: number }) => ({
         id: m.id,
@@ -3553,13 +3698,10 @@ export function App({ cwd, version }: AppProps) {
     const handleMessagesInject = async (id: string) => {
       if (!messagesManager) throw new Error('Messages not available');
       const msg = await messagesManager.read(id);
-      // Inject the message content into the current conversation
       if (activeSession) {
         activeSession.client.addSystemMessage(`[Injected message from ${msg.fromAssistantName}]\n\n${msg.body || msg.preview}`);
       }
-      // Mark as injected
       await messagesManager.markStatus?.(id, 'injected');
-      // Refresh the messages list
       const msgs = await messagesManager.list({ limit: 50 });
       setMessagesList(msgs.map((m: { id: string; threadId: string; fromAssistantId: string; fromAssistantName: string; subject?: string; preview: string; body?: string; priority: string; status: string; createdAt: string; replyCount?: number }) => ({
         id: m.id,
@@ -3579,7 +3721,6 @@ export function App({ cwd, version }: AppProps) {
     const handleMessagesReply = async (id: string, body: string) => {
       if (!messagesManager) throw new Error('Messages not available');
       const msg = await messagesManager.read(id);
-      // Send reply using the messages manager
       await messagesManager.send({
         to: msg.fromAssistantId,
         body,
@@ -3587,7 +3728,49 @@ export function App({ cwd, version }: AppProps) {
       });
     };
 
-    if (!messagesManager) {
+    // --- Inbox handlers ---
+    const handleInboxRead = async (id: string): Promise<Email> => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      const email = await inboxManager.read(id);
+      if (!email) throw new Error('Email not found');
+      const emails = await inboxManager.list({ limit: 50 });
+      setInboxEmails(emails);
+      return email;
+    };
+
+    const handleInboxDelete = async (id: string) => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      throw new Error('Delete not implemented yet');
+    };
+
+    const handleInboxFetch = async (): Promise<number> => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      const count = await inboxManager.fetch({ limit: 20 });
+      const emails = await inboxManager.list({ limit: 50 });
+      setInboxEmails(emails);
+      return count;
+    };
+
+    const handleInboxMarkRead = async (id: string) => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      await inboxManager.markRead(id);
+      const emails = await inboxManager.list({ limit: 50 });
+      setInboxEmails(emails);
+    };
+
+    const handleInboxMarkUnread = async (id: string) => {
+      if (!inboxManager) throw new Error('Inbox not available');
+      await inboxManager.markUnread(id);
+      const emails = await inboxManager.list({ limit: 50 });
+      setInboxEmails(emails);
+    };
+
+    const handleInboxReply = (id: string) => {
+      setShowMessagesPanel(false);
+      activeSession?.client.send(`/messages compose ${id}`);
+    };
+
+    if (!messagesManager && !inboxManager) {
       return (
         <Box flexDirection="column" padding={1}>
           <Box marginBottom={1}>
@@ -3620,6 +3803,15 @@ export function App({ cwd, version }: AppProps) {
           onReply={handleMessagesReply}
           onClose={() => setShowMessagesPanel(false)}
           error={messagesPanelError}
+          inboxEmails={inboxEmails}
+          onInboxRead={handleInboxRead}
+          onInboxDelete={handleInboxDelete}
+          onInboxFetch={handleInboxFetch}
+          onInboxMarkRead={handleInboxMarkRead}
+          onInboxMarkUnread={handleInboxMarkUnread}
+          onInboxReply={handleInboxReply}
+          inboxError={inboxError}
+          inboxEnabled={inboxEnabled}
         />
       </Box>
     );
