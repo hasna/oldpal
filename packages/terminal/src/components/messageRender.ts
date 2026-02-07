@@ -5,15 +5,73 @@ import type { DisplayMessage } from './messageLines';
 function wrapTextLines(text: string, wrapChars: number): string[] {
   const rawLines = text.split('\n');
   const lines: string[] = [];
-  for (const line of rawLines) {
-    if (line.length <= wrapChars) {
-      lines.push(line);
+  const maxIndent = Math.min(4, Math.max(0, wrapChars - 1));
+
+  for (const rawLine of rawLines) {
+    const expanded = rawLine.replace(/\t/g, '  ');
+    if (wrapChars <= 0 || expanded.length <= wrapChars) {
+      lines.push(expanded);
       continue;
     }
-    for (let i = 0; i < line.length; i += wrapChars) {
-      lines.push(line.slice(i, i + wrapChars));
+
+    const indentMatch = expanded.match(/^\s+/);
+    const indentRaw = indentMatch ? indentMatch[0] : '';
+    const indent = indentRaw.slice(0, maxIndent);
+    const content = expanded.slice(indentRaw.length).trim();
+
+    if (!content) {
+      lines.push(indent);
+      continue;
+    }
+
+    const words = content.split(/\s+/).filter(Boolean);
+    let current = indent;
+
+    const flush = () => {
+      const trimmed = current.trimEnd();
+      if (trimmed.length > 0 || indent.length > 0) {
+        lines.push(trimmed);
+      }
+      current = indent;
+    };
+
+    const pushWord = (word: string) => {
+      if (!current.trim()) {
+        current = indent + word;
+        return;
+      }
+      if (current.length + 1 + word.length <= wrapChars) {
+        current += ` ${word}`;
+      } else {
+        flush();
+        current = indent + word;
+      }
+    };
+
+    for (const word of words) {
+      if (word.length + indent.length <= wrapChars) {
+        pushWord(word);
+        continue;
+      }
+
+      if (current.trim()) {
+        flush();
+      }
+
+      const chunkSize = Math.max(1, wrapChars - indent.length);
+      for (let i = 0; i < word.length; i += chunkSize) {
+        const chunk = word.slice(i, i + chunkSize);
+        if (chunk.length === 0) continue;
+        lines.push(indent + chunk);
+      }
+      current = indent;
+    }
+
+    if (current.trim() || indent) {
+      lines.push(current.trimEnd());
     }
   }
+
   return lines;
 }
 

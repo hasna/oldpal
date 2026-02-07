@@ -35,6 +35,7 @@ import { SecretsPanel } from './SecretsPanel';
 import { InboxPanel } from './InboxPanel';
 import { AssistantsDashboard } from './AssistantsDashboard';
 import { SwarmPanel } from './SwarmPanel';
+import { LogsPanel } from './LogsPanel';
 import type { QueuedMessage } from './appTypes';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
 import {
@@ -367,6 +368,9 @@ export function App({ cwd, version }: AppProps) {
   // Swarm panel state
   const [showSwarmPanel, setShowSwarmPanel] = useState(false);
 
+  // Logs panel state
+  const [showLogsPanel, setShowLogsPanel] = useState(false);
+
   // Per-session UI state stored by session ID
   const sessionUIStates = useRef<Map<string, SessionUIState>>(new Map());
 
@@ -390,6 +394,7 @@ export function App({ cwd, version }: AppProps) {
   const [currentTurnTokens, setCurrentTurnTokens] = useState(0);
   const [lastWorkedFor, setLastWorkedFor] = useState<string | undefined>();
   const [isListening, setIsListening] = useState(false);
+  const [listeningDraft, setListeningDraft] = useState('');
 
   // Push-to-talk state
   const [pttRecording, setPttRecording] = useState(false);
@@ -638,6 +643,7 @@ export function App({ cwd, version }: AppProps) {
   }, []);
 
   const updateListenDraft = useCallback((next: string) => {
+    setListeningDraft(next);
     inputRef.current?.setValue(next);
   }, []);
 
@@ -648,6 +654,7 @@ export function App({ cwd, version }: AppProps) {
     listenLoopRef.current.buffer = '';
     listenLoopRef.current.manager?.stopListening();
     listenLoopRef.current.manager = null;
+    setListeningDraft('');
     setIsListening(false);
     isListeningRef.current = false;
   }, []);
@@ -692,6 +699,7 @@ export function App({ cwd, version }: AppProps) {
     listenLoopRef.current.manager = manager;
     listenLoopRef.current.buffer = inputRef.current?.getValue() ?? '';
     listenLoopRef.current.silenceMs = 0;
+    updateListenDraft(listenLoopRef.current.buffer);
 
     const chunkSeconds = 1;
     const silenceThresholdMs = 3500;
@@ -1266,6 +1274,8 @@ export function App({ cwd, version }: AppProps) {
       } else if (chunk.panel === 'workspace') {
         // Workspace panel - not yet implemented as interactive UI
         // The /workspace command handles text output
+      } else if (chunk.panel === 'logs') {
+        setShowLogsPanel(true);
       }
     }
   }, [registry, exit, finalizeResponse, resetTurnState, cwd, activeSessionId]);
@@ -1643,10 +1653,26 @@ export function App({ cwd, version }: AppProps) {
     () => estimateDisplayMessagesLines(streamingMessages, renderWidth),
     [streamingMessages, renderWidth]
   );
+  const listeningDraftMessages = useMemo(() => {
+    if (!isListening && !listeningDraft.trim()) return [];
+    const content = listeningDraft.trim() || 'Listening...';
+    const draftMessage: Message = {
+      id: 'listening-draft',
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+    };
+    return buildDisplayMessages([draftMessage], MESSAGE_CHUNK_LINES, wrapChars, { maxWidth: renderWidth });
+  }, [isListening, listeningDraft, wrapChars, renderWidth]);
   const activityTrim = useMemo(() => {
     const activityBudget = Math.max(4, dynamicBudget - streamingLineCount);
     return trimActivityLogByLines(activityLog, wrapChars, renderWidth, activityBudget);
   }, [activityLog, wrapChars, renderWidth, dynamicBudget, streamingLineCount]);
+  const hasListeningDraft = listeningDraftMessages.length > 0;
+  const combinedStreamingMessages = hasListeningDraft
+    ? [...streamingMessages, ...listeningDraftMessages]
+    : streamingMessages;
+  const showDynamicPanel = isProcessing || hasListeningDraft || activityTrim.entries.length > 0;
 
   // Process queue when not busy (not processing and no pending tools)
   // queueFlushTrigger forces re-evaluation when processing completes (done/error)
@@ -3417,6 +3443,17 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
+  // Show logs panel
+  if (showLogsPanel) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <LogsPanel
+          onCancel={() => setShowLogsPanel(false)}
+        />
+      </Box>
+    );
+  }
+
   // Show config panel
   if (showConfigPanel && currentConfig) {
     const handleConfigSave = async (
@@ -3639,14 +3676,14 @@ export function App({ cwd, version }: AppProps) {
       </Static>
 
       {/* Current streaming content and activity - rendered dynamically */}
-      {isProcessing && (
+      {showDynamicPanel && (
         <>
-          {streamingTrimmed && (
+          {isProcessing && streamingTrimmed && (
             <Box marginBottom={1}>
               <Text dimColor>⋯ showing latest output</Text>
             </Box>
           )}
-          {activityTrim.trimmed && (
+          {isProcessing && activityTrim.trimmed && (
             <Box marginBottom={1}>
               <Text dimColor>⋯ showing latest activity</Text>
             </Box>
@@ -3655,10 +3692,10 @@ export function App({ cwd, version }: AppProps) {
             key="streaming"
             messages={[]}
             currentResponse={undefined}
-            streamingMessages={streamingMessages}
+            streamingMessages={combinedStreamingMessages}
             currentToolCall={undefined}
             lastToolResult={undefined}
-            activityLog={activityTrim.entries}
+            activityLog={isProcessing ? activityTrim.entries : []}
             queuedMessageIds={queuedMessageIds}
             verboseTools={verboseTools}
           />

@@ -43,4 +43,19 @@ describe('buildDisplayMessages', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('m2');
   });
+
+  test('normalizes user whitespace when wrapping', () => {
+    const message: Message = {
+      id: 'u2',
+      role: 'user',
+      content: 'hello\t\tworld   there   friend',
+      timestamp: 0,
+    };
+
+    const result = buildDisplayMessages([message], 1, 8);
+    for (const chunk of result) {
+      expect(chunk.content).not.toContain('\t');
+      expect(chunk.content).not.toContain('  ');
+    }
+  });
 });

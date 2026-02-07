@@ -213,11 +213,13 @@ interface MessageBubbleProps {
 function MessageBubble({ message, queuedMessageIds, verboseTools }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
+  const isDraft = message.id.startsWith('listening-draft');
   const isQueued = isUser && queuedMessageIds?.has(message.id);
   const chunkMatch = message.id.match(/::chunk-(\d+)$/);
   const chunkIndex = chunkMatch ? Number(chunkMatch[1]) : -1;
   const isContinuation = chunkIndex > 0;
   const content = message.content ?? '';
+  const displayContent = isUser ? normalizeUserDisplay(content) : content;
   const leadingBullet = !isContinuation && !startsWithListOrTable(content);
 
   if (isSystem) {
@@ -230,13 +232,18 @@ function MessageBubble({ message, queuedMessageIds, verboseTools }: MessageBubbl
     const hasContent = Boolean((message.content ?? '').trim());
     return (
       <Box marginY={isContinuation ? 0 : 1} flexDirection="column">
+        {isDraft && !isContinuation && (
+          <Box>
+            <Text dimColor>  🎤 Live dictation</Text>
+          </Box>
+        )}
         {hasContent && (
           <Box>
-            <Text dimColor>{isContinuation ? '  ' : '❯ '} </Text>
+            <Text dimColor={isDraft || isContinuation}>{isContinuation ? '  ' : '❯ '} </Text>
             {isQueued && !isContinuation ? (
               <Text dimColor>⏳ {message.content ?? ''}</Text>
             ) : (
-              <Text>{message.content ?? ''}</Text>
+              <Text dimColor={isDraft}>{displayContent}</Text>
             )}
           </Box>
         )}
@@ -431,6 +438,17 @@ function startsWithListOrTable(content: string): boolean {
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
+function normalizeUserDisplay(content: string): string {
+  const normalized = content.replace(/\u00a0/g, ' ');
+  if (normalized.includes('```')) {
+    return normalized.replace(/\t/g, '  ');
+  }
+  return normalized
+    .split('\n')
+    .map((line) => line.replace(/\t/g, '  ').replace(/ {2,}/g, ' '))
+    .join('\n');
 }
 
 function ToolCallPanel({

@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, expect, test } from 'bun:test';
 import { render } from 'ink';
 import { PassThrough } from 'stream';
-import { Input } from '../src/components/Input';
+import { Input, type InputHandle } from '../src/components/Input';
 
 const stripAnsi = (text: string) => text.replace(/\x1B\[[0-9;]*m/g, '');
 
@@ -50,6 +50,31 @@ describe('Input component', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const frame = env.getOutput();
     expect(frame).toContain('Answer now');
+    instance.unmount();
+  });
+
+  test('renders footer hints when provided', async () => {
+    const env = createInkTestEnv();
+    const instance = render(
+      <Input onSubmit={() => {}} footerHints={['listening...', 'pause 3s to send']} />,
+      { stdout: env.stdout, stdin: env.stdin }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const frame = env.getOutput();
+    expect(frame).toContain('listening...');
+    expect(frame).toContain('pause 3s to send');
+    instance.unmount();
+  });
+
+  test('shows line count for multiline input', async () => {
+    const env = createInkTestEnv();
+    const ref = React.createRef<InputHandle>();
+    const instance = render(<Input ref={ref} onSubmit={() => {}} />, { stdout: env.stdout, stdin: env.stdin });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    ref.current?.setValue('line one\\nline two');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const frame = env.getOutput();
+    expect(frame).toContain('(2 lines)');
     instance.unmount();
   });
 });

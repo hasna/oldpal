@@ -93,6 +93,11 @@ export function Status({
     ? ` +${backgroundProcessingCount}`
     : '';
 
+  // Energy indicator (compact)
+  const energyInfo = energyState
+    ? `${Math.round((energyState.current / energyState.max) * 100)}%`
+    : '';
+
   // Voice indicator (compact)
   const voiceIcon = voiceState?.enabled
     ? voiceState.isListening ? '🎤' : voiceState.isSpeaking ? '🔊' : '🎙'
@@ -141,6 +146,7 @@ export function Status({
         {voiceIcon && <Text dimColor>{voiceIcon} </Text>}
         {isProcessing && <Text dimColor>esc · </Text>}
         {sessionInfo && <Text dimColor>{sessionInfo}{bgIndicator} · </Text>}
+        {energyInfo && <Text dimColor>⚡{energyInfo} · </Text>}
         {contextInfo && <Text dimColor>{contextInfo}</Text>}
         {isProcessing && processingStartTime && (
           <Text dimColor> · {formatDuration(elapsed)}</Text>

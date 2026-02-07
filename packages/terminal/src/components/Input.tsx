@@ -49,7 +49,7 @@ const COMMANDS = [
   { name: '/jobs', description: 'list background jobs' },
   // System
   { name: '/rest', description: 'enter rest mode' },
-  { name: '/security-log', description: 'view security events' },
+  { name: '/logs', description: 'view security event logs' },
   { name: '/verification', description: 'scope verification status' },
   { name: '/feedback', description: 'submit feedback on GitHub' },
 ];
