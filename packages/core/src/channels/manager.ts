@@ -269,8 +269,13 @@ export class ChannelsManager {
 
     const messages = this.store.getMessages(channel.id, { limit });
 
-    // Mark as read
-    this.store.markRead(channel.id, this.assistantId);
+    // Mark as read up to the newest fetched message to avoid skipping newer arrivals
+    if (messages.length > 0) {
+      const latest = messages[messages.length - 1];
+      this.store.markReadAt(channel.id, this.assistantId, latest.createdAt);
+    } else {
+      this.store.markRead(channel.id, this.assistantId);
+    }
 
     return { channel, messages };
   }
@@ -344,9 +349,15 @@ export class ChannelsManager {
    */
   markInjected(messages: ChannelMessage[]): void {
     // Group by channel and mark each as read
-    const channelIds = new Set(messages.map((m) => m.channelId));
-    for (const channelId of channelIds) {
-      this.store.markRead(channelId, this.assistantId);
+    const byChannel = new Map<string, string>();
+    for (const msg of messages) {
+      const existing = byChannel.get(msg.channelId);
+      if (!existing || msg.createdAt > existing) {
+        byChannel.set(msg.channelId, msg.createdAt);
+      }
+    }
+    for (const [channelId, latestTimestamp] of byChannel) {
+      this.store.markReadAt(channelId, this.assistantId, latestTimestamp);
     }
   }
 

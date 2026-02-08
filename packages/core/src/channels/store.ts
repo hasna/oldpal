@@ -206,11 +206,12 @@ export class ChannelStore {
               (SELECT last_read_at FROM channel_members WHERE channel_id = c.id AND assistant_id = ?),
               '1970-01-01'
             )
+            AND sender_id != ?
           ) as unread_count
         FROM channels c
         INNER JOIN channel_members cm ON c.id = cm.channel_id AND cm.assistant_id = ?
       `;
-      params.push(options.assistantId, options.assistantId);
+      params.push(options.assistantId, options.assistantId, options.assistantId);
 
       if (options?.status) {
         query += ' WHERE c.status = ?';
@@ -422,10 +423,16 @@ export class ChannelStore {
    * Mark all messages as read for an assistant in a channel
    */
   markRead(channelId: string, assistantId: string): void {
-    const now = new Date().toISOString();
+    this.markReadAt(channelId, assistantId, new Date().toISOString());
+  }
+
+  /**
+   * Mark all messages up to a specific time as read for an assistant in a channel
+   */
+  markReadAt(channelId: string, assistantId: string, isoTimestamp: string): void {
     this.db.prepare(
       'UPDATE channel_members SET last_read_at = ? WHERE channel_id = ? AND assistant_id = ?'
-    ).run(now, channelId, assistantId);
+    ).run(isoTimestamp, channelId, assistantId);
   }
 
   /**
