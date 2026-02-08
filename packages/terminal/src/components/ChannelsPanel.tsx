@@ -7,6 +7,10 @@ import { useSafeInput as useInput } from '../hooks/useSafeInput';
 interface ChannelsPanelProps {
   manager: ChannelsManager;
   onClose: () => void;
+  /** Active person ID for message attribution (if logged in) */
+  activePersonId?: string;
+  /** Active person name for message attribution */
+  activePersonName?: string;
 }
 
 type Mode =
@@ -35,7 +39,7 @@ function formatRelativeTime(isoDate: string | null | undefined): string {
   return `${seconds}s ago`;
 }
 
-export function ChannelsPanel({ manager, onClose }: ChannelsPanelProps) {
+export function ChannelsPanel({ manager, onClose, activePersonId, activePersonName }: ChannelsPanelProps) {
   const [mode, setMode] = useState<Mode>('list');
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -88,12 +92,12 @@ export function ChannelsPanel({ manager, onClose }: ChannelsPanelProps) {
     }
   };
 
-  useInput((input, key) => {
-    // Don't handle input during text entry modes
-    if (mode === 'create-name' || mode === 'create-desc' || mode === 'invite') return;
-    if (mode === 'chat' && !key.escape) return; // Chat handles its own input via TextInput
+  // Disable main keyboard handler during text-entry modes so TextInput receives keystrokes
+  const isTextEntry = mode === 'create-name' || mode === 'create-desc' || mode === 'invite' || mode === 'chat';
 
-    if (key.escape || input === 'q') {
+  // Escape handler — always active so user can always go back
+  useInput((_input, key) => {
+    if (key.escape) {
       if (mode === 'list') {
         onClose();
       } else {
@@ -101,8 +105,12 @@ export function ChannelsPanel({ manager, onClose }: ChannelsPanelProps) {
         setSelectedChannel(null);
         setStatusMessage(null);
       }
-      return;
     }
+  });
+
+  // Main keyboard handler — disabled during text entry
+  useInput((input, key) => {
+    if (key.escape) return; // handled above
 
     if (mode === 'list') {
       if (key.upArrow || input === 'k') {
@@ -133,6 +141,8 @@ export function ChannelsPanel({ manager, onClose }: ChannelsPanelProps) {
         const ch = channels[selectedIndex];
         setSelectedChannel(manager.getChannel(ch.id));
         setMode('delete-confirm');
+      } else if (input === 'q') {
+        onClose();
       } else if (input === 'r') {
         loadChannels();
         setStatusMessage('Refreshed');
@@ -153,7 +163,6 @@ export function ChannelsPanel({ manager, onClose }: ChannelsPanelProps) {
         if (result.success) {
           setStatusMessage(`Created #${createName}`);
           loadChannels();
-          // Open the new channel
           if (result.channelId) {
             openChannel(result.channelId);
           } else {
@@ -167,7 +176,7 @@ export function ChannelsPanel({ manager, onClose }: ChannelsPanelProps) {
         setMode('list');
       }
     }
-  });
+  }, { isActive: !isTextEntry });
 
   // Header
   const header = (
@@ -268,7 +277,10 @@ export function ChannelsPanel({ manager, onClose }: ChannelsPanelProps) {
             onChange={setChatInput}
             onSubmit={() => {
               if (chatInput.trim()) {
-                const result = manager.send(selectedChannel.id, chatInput.trim());
+                // Send as person if logged in, otherwise as assistant
+                const result = activePersonId && activePersonName
+                  ? manager.sendAs(selectedChannel.id, chatInput.trim(), activePersonId, activePersonName)
+                  : manager.send(selectedChannel.id, chatInput.trim());
                 if (result.success) {
                   setChatInput('');
                   // Reload messages

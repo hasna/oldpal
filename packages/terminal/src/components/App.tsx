@@ -4127,6 +4127,8 @@ export function App({ cwd, version }: AppProps) {
       <ChannelsPanel
         manager={channelsManager}
         onClose={() => setShowChannelsPanel(false)}
+        activePersonId={activeSession?.client.getPeopleManager?.()?.getActivePersonId?.() || undefined}
+        activePersonName={activeSession?.client.getPeopleManager?.()?.getActivePerson?.()?.name || undefined}
       />
     );
   }

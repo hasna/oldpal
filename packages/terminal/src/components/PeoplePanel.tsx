@@ -41,19 +41,23 @@ export function PeoplePanel({ manager, onClose }: PeoplePanelProps) {
     loadPeople();
   }, []);
 
-  useInput((input, key) => {
-    // Don't handle input during text entry modes
-    if (mode === 'create-name' || mode === 'create-email') return;
+  const isTextEntry = mode === 'create-name' || mode === 'create-email';
 
-    if (key.escape || input === 'q') {
+  // Escape handler - always active
+  useInput((_input, key) => {
+    if (key.escape) {
       if (mode === 'list') {
         onClose();
       } else {
         setMode('list');
         setStatusMessage(null);
       }
-      return;
     }
+  });
+
+  // Main keyboard handler - disabled during text entry
+  useInput((input, key) => {
+    if (key.escape) return; // handled above
 
     if (mode === 'list') {
       if (key.upArrow || input === 'k') {
@@ -121,7 +125,7 @@ export function PeoplePanel({ manager, onClose }: PeoplePanelProps) {
         setMode('list');
       }
     }
-  });
+  }, { isActive: !isTextEntry });
 
   // Header
   const header = (
