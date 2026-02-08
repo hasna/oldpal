@@ -19,7 +19,7 @@ export function MarkdownRenderer({ content, variant = 'assistant' }: MarkdownRen
     );
   }
 
-  const className = 'markdown prose prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-li:my-1 prose-ol:my-2 prose-ul:my-2 prose-pre:my-2';
+  const className = 'markdown prose prose-invert max-w-none break-words prose-p:leading-relaxed prose-p:my-2 prose-li:my-1 prose-ol:my-2 prose-ul:my-2 prose-pre:my-2';
   return (
     <div className={className}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>

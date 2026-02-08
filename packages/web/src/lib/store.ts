@@ -61,6 +61,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [],
       currentToolCalls: [],
       currentStreamMessageId: null,
+      pendingToolResults: new Map(),
+      listeningDraft: '',
+      isListening: false,
       sessionSnapshots: {
         ...state.sessionSnapshots,
         ...(state.sessionId
@@ -100,26 +103,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: snapshot.messages,
         currentToolCalls: snapshot.toolCalls,
         currentStreamMessageId: snapshot.streamMessageId ?? null,
+        pendingToolResults: new Map(),
+        listeningDraft: '',
+        isListening: false,
         sessionSnapshots: snapshots,
       };
     });
   },
 
   addMessage: (message) =>
-    set((state) => ({
-      messages: [...state.messages, message],
-      sessionSnapshots: state.sessionId
-        ? {
-            ...state.sessionSnapshots,
-            [state.sessionId]: {
-              messages: [...state.messages, message],
-              toolCalls: state.currentToolCalls,
-              streamMessageId: state.currentStreamMessageId,
-              isStreaming: state.isStreaming,
-            },
-          }
-        : state.sessionSnapshots,
-    })),
+    set((state) => {
+      if (state.messages.some((existing) => existing.id === message.id)) {
+        return state;
+      }
+      const messages = [...state.messages, message];
+      return {
+        messages,
+        sessionSnapshots: state.sessionId
+          ? {
+              ...state.sessionSnapshots,
+              [state.sessionId]: {
+                messages,
+                toolCalls: state.currentToolCalls,
+                streamMessageId: state.currentStreamMessageId,
+                isStreaming: state.isStreaming,
+              },
+            }
+          : state.sessionSnapshots,
+      };
+    }),
 
   appendMessageContent: (id, content) =>
     set((state) => {

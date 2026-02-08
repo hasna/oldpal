@@ -76,6 +76,15 @@ describe('chat store', () => {
     expect(last?.content).toBe('new');
   });
 
+  test('addMessage ignores duplicate ids', () => {
+    useChatStore.getState().createSession('One');
+    useChatStore.getState().addMessage({ id: 'dup', role: 'user', content: 'hi', timestamp: Date.now() });
+    useChatStore.getState().addMessage({ id: 'dup', role: 'user', content: 'hi again', timestamp: Date.now() });
+    const messages = useChatStore.getState().messages.filter((m) => m.id === 'dup');
+    expect(messages.length).toBe(1);
+    expect(messages[0].content).toBe('hi');
+  });
+
   test('addToolCall falls back to the last assistant message', () => {
     useChatStore.getState().createSession('One');
     useChatStore.getState().addMessage({ id: 'm1', role: 'assistant', content: '', timestamp: Date.now() });

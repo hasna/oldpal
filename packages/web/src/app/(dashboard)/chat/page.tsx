@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ToolCallCard } from '@/components/chat/ToolCallCard';
+import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import {
   ChatSettingsDrawer,
   ChatSettingsButton,
@@ -25,6 +26,48 @@ interface Message {
   toolCalls?: ToolCallWithMeta[];
 }
 
+type AssistantInfo = {
+  id: string;
+  name: string;
+  avatar: string | null;
+} | null;
+
+type AssistantPalette = {
+  accent: string;
+  soft: string;
+  ring: string;
+};
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+}
+
+function buildAssistantPalette(seed?: string | null): AssistantPalette {
+  const fallback: AssistantPalette = {
+    accent: 'hsl(215 16% 46%)',
+    soft: 'hsla(215, 16%, 46%, 0.12)',
+    ring: 'hsla(215, 16%, 46%, 0.35)',
+  };
+
+  if (!seed) return fallback;
+
+  const hash = Math.abs(hashString(seed));
+  const hue = hash % 360;
+  const saturation = 64;
+  const lightness = 52;
+
+  return {
+    accent: `hsl(${hue} ${saturation}% ${lightness}%)`,
+    soft: `hsla(${hue}, ${saturation}%, ${lightness}%, 0.12)`,
+    ring: `hsla(${hue}, ${saturation}%, ${lightness}%, 0.35)`,
+  };
+}
+
 export default function ChatPage() {
   const { fetchWithAuth } = useAuth();
   const router = useRouter();
@@ -34,11 +77,34 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [assistantInfo, setAssistantInfo] = useState<AssistantInfo>(null);
   const [loadError, setLoadError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
   const streamAbortRef = useRef<AbortController | null>(null);
+  const visibleMessages = useMemo(() => {
+    const seen = new Set<string>();
+    const deduped: Message[] = [];
+    for (const message of messages) {
+      if (seen.has(message.id)) continue;
+      seen.add(message.id);
+      const last = deduped[deduped.length - 1];
+      const lastHasTools = !!last?.toolCalls?.length;
+      const nextHasTools = !!message.toolCalls?.length;
+      if (
+        last &&
+        !lastHasTools &&
+        !nextHasTools &&
+        last.role === message.role &&
+        last.content === message.content
+      ) {
+        continue;
+      }
+      deduped.push(message);
+    }
+    return deduped;
+  }, [messages]);
 
   // Chat settings
   const { settings, updateSettings, resetSettings, loaded: settingsLoaded } = useChatSettings();
@@ -70,6 +136,7 @@ export default function ChatPage() {
         setSessionId(null);
         setMessages([]);
         setLoadError('');
+        setAssistantInfo(null);
       }
       return;
     }
@@ -82,6 +149,7 @@ export default function ChatPage() {
     setLoadError('');
     setSessionId(requestedSession);
     setMessages([]);
+    setAssistantInfo(null);
 
     const loadHistory = async () => {
       try {
@@ -97,8 +165,14 @@ export default function ChatPage() {
         }
         const items = (data.data?.items || []) as Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
         if (isActive) {
+          const seen = new Set<string>();
+          const uniqueItems = items.filter((item) => {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+          });
           setMessages(
-            items.map((item) => ({
+            uniqueItems.map((item) => ({
               id: item.id,
               role: item.role,
               content: item.content,
@@ -113,7 +187,36 @@ export default function ChatPage() {
       }
     };
 
+    const loadSessionDetails = async () => {
+      try {
+        const response = await fetchWithAuth(`/api/v1/sessions/${requestedSession}`, {
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.success) {
+          return;
+        }
+        if (isActive) {
+          const assistant = data?.data?.assistant ?? null;
+          if (assistant) {
+            setAssistantInfo({
+              id: assistant.id,
+              name: assistant.name,
+              avatar: assistant.avatar ?? null,
+            });
+          } else {
+            setAssistantInfo(null);
+          }
+        }
+      } catch (error) {
+        if (!isActive || (error instanceof DOMException && error.name === 'AbortError')) {
+          return;
+        }
+      }
+    };
+
     loadHistory();
+    loadSessionDetails();
 
     return () => {
       isActive = false;
@@ -325,9 +428,14 @@ export default function ChatPage() {
     setSessionId(null);
     setMessages([]);
     setLoadError('');
+    setAssistantInfo(null);
     // Navigate to /chat without session param
     router.replace('/chat');
   };
+
+  const assistantSeed = assistantInfo?.id ?? sessionId ?? 'default-assistant';
+  const assistantPalette = useMemo(() => buildAssistantPalette(assistantSeed), [assistantSeed]);
+  const assistantLabel = assistantInfo?.name || 'Assistant';
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -363,7 +471,7 @@ export default function ChatPage() {
             {loadError}
           </div>
         ) : null}
-        {messages.length === 0 ? (
+        {visibleMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <h2 className="text-xl font-semibold text-foreground">Start a conversation</h2>
@@ -371,7 +479,7 @@ export default function ChatPage() {
             </div>
           </div>
         ) : (
-          messages.map((message) => (
+          visibleMessages.map((message) => (
             <div
               key={message.id}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -383,7 +491,10 @@ export default function ChatPage() {
                     : 'bg-muted text-foreground'
                 }`}
               >
-                <p className="whitespace-pre-wrap">{message.content || (message.toolCalls?.length ? '' : '...')}</p>
+                <MarkdownRenderer
+                  content={message.content || (message.toolCalls?.length ? '' : '...')}
+                  variant={message.role === 'user' ? 'user' : 'assistant'}
+                />
                 {message.toolCalls?.map((call) => (
                   <ToolCallCard key={call.id} call={call} result={call.result} />
                 ))}
@@ -395,7 +506,25 @@ export default function ChatPage() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-border p-4">
+      <div
+        className="border-t border-border p-4"
+        style={{ background: `linear-gradient(90deg, ${assistantPalette.soft}, transparent 70%)` }}
+      >
+        <div className="mb-2 flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: assistantPalette.accent }}
+              aria-hidden="true"
+            />
+            <span className="font-medium" style={{ color: assistantPalette.accent }}>
+              {assistantLabel}
+            </span>
+          </div>
+          {sessionId ? (
+            <span className="text-[10px] text-muted-foreground">Session {sessionId.slice(0, 8)}</span>
+          ) : null}
+        </div>
         <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto">
           <Input
             id="chat-message-input"
@@ -405,6 +534,7 @@ export default function ChatPage() {
             placeholder="Type a message..."
             disabled={isStreaming}
             className="flex-1"
+            style={{ boxShadow: `0 0 0 1px ${assistantPalette.ring} inset` }}
           />
           <Button type="submit" disabled={isStreaming || !input.trim()}>
             {isStreaming ? 'Sending...' : 'Send'}

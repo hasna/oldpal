@@ -1,6 +1,7 @@
 'use client';
 
 import type { Message } from '@hasna/assistants-shared';
+import { useMemo } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { useChatStore } from '@/lib/store';
 import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
@@ -25,10 +26,19 @@ export function MessageList({ messages }: MessageListProps) {
   const showDraft = hasDraft || isListening;
   const draftContent = trimmedDraft || (isListening ? 'Listening...' : '');
 
+  const uniqueMessages = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.filter((message) => {
+      if (seen.has(message.id)) return false;
+      seen.add(message.id);
+      return true;
+    });
+  }, [messages]);
+
   return (
     <div className="flex flex-col gap-6">
-      {messages.map((message, index) => {
-        const isLast = index === messages.length - 1;
+      {uniqueMessages.map((message, index) => {
+        const isLast = index === uniqueMessages.length - 1;
         const toolResults = message.toolResults ?? [];
         const toolCalls = message.toolCalls ?? [];
         const isStreamingMessage =

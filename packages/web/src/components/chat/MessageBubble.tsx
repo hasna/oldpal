@@ -23,7 +23,7 @@ export function MessageBubble({ message, isStreaming, toolResults, isDraft }: Me
       )}
       <div
         className={cn(
-          'max-w-[80%] rounded-2xl border px-5 py-4 text-sm shadow-sm',
+          'max-w-[80%] min-w-0 break-words rounded-2xl border px-5 py-4 text-sm shadow-sm',
           isUser
             ? 'border-sky-400/30 bg-sky-500 text-white'
             : 'border-gray-200 bg-gray-100 text-gray-900',

@@ -47,6 +47,7 @@ class ChatWebSocket {
       const store = useChatStore.getState();
       const currentSessionId = store.sessionId || store.createSession('Session 1');
       if (currentSessionId) {
+        this.activeSessionId = currentSessionId;
         this.ws?.send(JSON.stringify({ type: 'session', sessionId: currentSessionId }));
       }
       if (this.pending.length > 0) {
@@ -74,7 +75,7 @@ class ChatWebSocket {
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts += 1;
         const retryDelay = 1000 * this.reconnectAttempts;
-        this.reconnectTimer = setTimeout(() => this.connect(this.url), retryDelay);
+        this.reconnectTimer = setTimeout(() => this.connect(this.url, this.token), retryDelay);
       } else {
         const store = useChatStore.getState();
         store.finalizeToolCalls();
@@ -104,7 +105,7 @@ class ChatWebSocket {
     }
     this.pending.push(message);
     if (this.url && (!this.ws || this.ws.readyState === WebSocket.CLOSED)) {
-      this.connect(this.url);
+      this.connect(this.url, this.token);
     }
   }
 
@@ -126,7 +127,7 @@ class ChatWebSocket {
     // Guard against late messages from previous sessions
     // If the store's sessionId doesn't match the active session we're streaming for,
     // drop the message to prevent cross-session contamination
-    if (this.activeSessionId && store.sessionId && store.sessionId !== this.activeSessionId) {
+    if (this.activeSessionId && store.sessionId !== this.activeSessionId) {
       // Session changed, drop this late message
       return;
     }
