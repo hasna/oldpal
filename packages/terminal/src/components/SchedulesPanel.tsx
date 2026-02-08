@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface SchedulesPanelProps {
   schedules: ScheduledCommand[];
@@ -433,9 +434,12 @@ export function SchedulesPanel({
                   value={createCron}
                   onChange={setCreateCron}
                   onSubmit={() => {
-                    if (createCron.trim()) setCreateStep('command');
+                    const parts = createCron.trim().split(/\s+/);
+                    if (parts.length >= 5 && parts.length <= 6) {
+                      setCreateStep('command');
+                    }
                   }}
-                  placeholder='e.g. "0 9 * * *" (daily at 9am)'
+                  placeholder='e.g. "0 9 * * *" (daily at 9am, 5-6 fields)'
                 />
               </Box>
               <Box marginTop={1}>
@@ -454,9 +458,12 @@ export function SchedulesPanel({
                   value={createTime}
                   onChange={setCreateTime}
                   onSubmit={() => {
-                    if (createTime.trim()) setCreateStep('command');
+                    const parsed = new Date(createTime.trim());
+                    if (!isNaN(parsed.getTime()) && createTime.trim()) {
+                      setCreateStep('command');
+                    }
                   }}
-                  placeholder="e.g. 2026-02-08T09:00:00"
+                  placeholder="e.g. 2026-02-08T09:00:00 (valid ISO date)"
                 />
               </Box>
               <Box marginTop={1}>

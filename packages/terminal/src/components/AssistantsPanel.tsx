@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Assistant, AssistantSettings, CreateAssistantOptions } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 import {
   ANTHROPIC_MODELS,
   DEFAULT_MODEL,
@@ -69,7 +70,7 @@ export function AssistantsPanel({
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [selectedModelIndex, setSelectedModelIndex] = useState(
-    ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL)
+    Math.max(0, ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL))
   );
   const [temperature, setTemperature] = useState(DEFAULT_TEMPERATURE);
   const [newSystemPrompt, setNewSystemPrompt] = useState('');
@@ -87,7 +88,7 @@ export function AssistantsPanel({
   const resetForm = useCallback(() => {
     setNewName('');
     setNewDescription('');
-    setSelectedModelIndex(ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL));
+    setSelectedModelIndex(Math.max(0, ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL)));
     setTemperature(DEFAULT_TEMPERATURE);
     setNewSystemPrompt('');
     setCreateStep('name');
@@ -115,9 +116,9 @@ export function AssistantsPanel({
         setEditingAssistant(assistant);
         setNewName(assistant.name);
         setNewDescription(assistant.description || '');
+        const modelIdx = ANTHROPIC_MODELS.findIndex((m) => m.id === assistant.settings.model);
         setSelectedModelIndex(
-          ANTHROPIC_MODELS.findIndex((m) => m.id === assistant.settings.model) ||
-          ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL)
+          modelIdx >= 0 ? modelIdx : Math.max(0, ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL))
         );
         setTemperature(assistant.settings.temperature ?? DEFAULT_TEMPERATURE);
         setNewSystemPrompt(assistant.settings.systemPromptAddition || '');

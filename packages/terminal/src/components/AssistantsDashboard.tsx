@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import type { BudgetStatus } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface SessionEntry {
   id: string;
@@ -73,6 +74,9 @@ export function AssistantsDashboard({
       const session = sessions[selectedIndex];
       if (session && !session.isActive) {
         onSwitchSession(session.id);
+      } else if (session?.isActive) {
+        // Active session - just close the dashboard
+        onCancel();
       }
       return;
     }

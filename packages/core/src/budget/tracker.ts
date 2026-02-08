@@ -3,7 +3,8 @@ import type { BudgetScope, BudgetCheckResult, BudgetStatus, BudgetUpdate } from 
 import { DEFAULT_BUDGET_CONFIG, WARNING_THRESHOLD } from './defaults';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { atomicWriteFileSync } from '../utils/atomic-write';
 
 /**
  * Creates a fresh usage object
@@ -114,7 +115,7 @@ export class BudgetTracker {
       if (!existsSync(stateDir)) {
         mkdirSync(stateDir, { recursive: true });
       }
-      writeFileSync(statePath, JSON.stringify(usage, null, 2));
+      atomicWriteFileSync(statePath, JSON.stringify(usage, null, 2));
     } catch {
       // Non-critical
     }
@@ -138,7 +139,7 @@ export class BudgetTracker {
         projects: Object.fromEntries(this.projectUsages),
       };
 
-      writeFileSync(statePath, JSON.stringify(state, null, 2));
+      atomicWriteFileSync(statePath, JSON.stringify(state, null, 2));
     } catch {
       // Failed to save state, non-critical
     }

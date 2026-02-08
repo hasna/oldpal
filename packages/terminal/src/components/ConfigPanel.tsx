@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { AssistantsConfig } from '@hasna/assistants-shared';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 import {
   ANTHROPIC_MODELS,
   DEFAULT_MODEL,
@@ -51,9 +52,10 @@ export function ConfigPanel({
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Model editing state
+  const configModelIndex = ANTHROPIC_MODELS.findIndex((m) => m.id === config.llm?.model);
+  const defaultModelIndex = Math.max(0, ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL));
   const [selectedModelIndex, setSelectedModelIndex] = useState(
-    ANTHROPIC_MODELS.findIndex((m) => m.id === config.llm?.model) ||
-    ANTHROPIC_MODELS.findIndex((m) => m.id === DEFAULT_MODEL)
+    configModelIndex >= 0 ? configModelIndex : defaultModelIndex
   );
   const [maxTokens, setMaxTokens] = useState(config.llm?.maxTokens ?? 8192);
 
@@ -113,9 +115,11 @@ export function ConfigPanel({
 
     const section = SECTIONS[selectedSection];
 
-    // Escape to go back
+    // Escape to go back (reset unsaved model selection)
     if (key.escape) {
       setEditingField(null);
+      setSelectedModelIndex(configModelIndex >= 0 ? configModelIndex : defaultModelIndex);
+      setMaxTokens(config.llm?.maxTokens ?? 8192);
       setMode('sections');
       return;
     }

@@ -104,6 +104,7 @@ export function Status({
   }, [heartbeatState?.enabled, heartbeatState?.nextHeartbeatAt, heartbeatState?.lastActivity, heartbeatState?.intervalMs]);
 
   const formatDuration = (seconds: number): string => {
+    if (!Number.isFinite(seconds) || seconds < 0) return '…';
     if (seconds < 60) return `${seconds}s`;
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;

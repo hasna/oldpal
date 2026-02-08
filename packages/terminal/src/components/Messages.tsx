@@ -332,15 +332,22 @@ function ActiveToolsPanel({ activityLog, now, verboseTools }: ActiveToolsPanelPr
     }
 
     // Second pass: build tool info
+    const now = Date.now();
     for (const entry of activityLog) {
       if (entry.type === 'tool_call' && entry.toolCall) {
         const resultInfo = resultMap.get(entry.toolCall.id);
+        let status: 'running' | 'succeeded' | 'failed';
+        if (resultInfo) {
+          status = resultInfo.result.isError ? 'failed' : 'succeeded';
+        } else {
+          // Detect orphaned tool calls (no result after 60s)
+          const elapsed = now - entry.timestamp;
+          status = elapsed > 60_000 ? 'failed' : 'running';
+        }
         calls.push({
           id: entry.toolCall.id,
           toolCall: entry.toolCall,
-          status: resultInfo
-            ? resultInfo.result.isError ? 'failed' : 'succeeded'
-            : 'running',
+          status,
           startTime: entry.timestamp,
           endTime: resultInfo?.timestamp,
           result: resultInfo?.result,

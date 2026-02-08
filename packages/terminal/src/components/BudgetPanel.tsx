@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, { useState, useEffect } from 'react';
+import { Box, Text } from 'ink';
 import type { BudgetConfig, BudgetLimits } from '@hasna/assistants-shared';
 import type { BudgetStatus, BudgetScope } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface BudgetPanelProps {
   config: BudgetConfig;
@@ -117,6 +118,13 @@ export function BudgetPanel({
   const totalEditRows = EDIT_FIELDS.length + 1;
 
   const presetKeys = Object.keys(PRESET_LIMITS) as (keyof typeof PRESET_LIMITS)[];
+
+  // Reset edit state when config or status changes externally
+  useEffect(() => {
+    if (mode !== 'overview') {
+      setMode('overview');
+    }
+  }, [config, sessionStatus]);
 
   function initEditValues() {
     const limits = config.session || {};

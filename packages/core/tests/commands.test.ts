@@ -580,7 +580,7 @@ describe('BuiltinCommands', () => {
         const result = await cmd.handler(`edit ${identity.id}`, contextWithIdentity);
         expect(result.handled).toBe(true);
         expect(result.showPanel).toBe('identity');
-        expect(result.panelInitialValue).toBe(`edit:${identity.id}`);
+        expect(result.panelValue).toBe(`edit:${identity.id}`);
       }
     });
   });

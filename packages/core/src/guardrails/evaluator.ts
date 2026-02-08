@@ -33,8 +33,11 @@ function matchPattern(pattern: string, value: string): boolean {
   // Check if pattern is a regex (starts and ends with /)
   if (pattern.startsWith('/') && pattern.endsWith('/')) {
     try {
-      const regex = new RegExp(pattern.slice(1, -1));
-      return regex.test(value);
+      const regexStr = pattern.slice(1, -1);
+      // Reject overly complex patterns to prevent ReDoS
+      if (regexStr.length > 500) return false;
+      const regex = new RegExp(regexStr);
+      return regex.test(value.slice(0, 10000));
     } catch {
       return false;
     }
@@ -69,8 +72,10 @@ function evaluateCondition(
     case 'input_matches': {
       const input = JSON.stringify(context.toolInput || {});
       try {
-        const regex = new RegExp(String(condition.value));
-        result = regex.test(input);
+        const regexStr = String(condition.value);
+        if (regexStr.length > 500) { result = false; break; }
+        const regex = new RegExp(regexStr);
+        result = regex.test(input.slice(0, 10000));
       } catch {
         result = false;
       }

@@ -22,6 +22,7 @@ import {
   renameSync,
 } from 'fs';
 import { generateId } from '@hasna/assistants-shared';
+import { atomicWriteFileSync } from '../utils/atomic-write';
 
 /**
  * Workspace metadata
@@ -118,7 +119,7 @@ export class SharedWorkspaceManager {
     }
 
     // Save metadata
-    writeFileSync(this.getMetadataPath(id), JSON.stringify(workspace, null, 2));
+    atomicWriteFileSync(this.getMetadataPath(id), JSON.stringify(workspace, null, 2));
 
     return workspace;
   }
@@ -135,7 +136,7 @@ export class SharedWorkspaceManager {
     if (!workspace.participants.includes(assistantId)) {
       workspace.participants.push(assistantId);
       workspace.updatedAt = Date.now();
-      writeFileSync(this.getMetadataPath(workspaceId), JSON.stringify(workspace, null, 2));
+      atomicWriteFileSync(this.getMetadataPath(workspaceId), JSON.stringify(workspace, null, 2));
     }
 
     // Ensure assistant directory exists
@@ -220,7 +221,7 @@ export class SharedWorkspaceManager {
     if (workspace) {
       workspace.status = 'archived';
       workspace.updatedAt = Date.now();
-      writeFileSync(this.getMetadataPath(workspaceId), JSON.stringify(workspace, null, 2));
+      atomicWriteFileSync(this.getMetadataPath(workspaceId), JSON.stringify(workspace, null, 2));
     }
   }
 

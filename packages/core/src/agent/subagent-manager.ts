@@ -609,8 +609,9 @@ export class SubassistantManager {
   private createTimeout(ms: number, runner: SubassistantRunner, subassistantId: string): Promise<SubassistantResult> {
     return new Promise((resolve) => {
       const timerId = setTimeout(() => {
-        // Clean up the timer reference
+        // Clean up the timer reference and runner
         this.activeTimeouts.delete(subassistantId);
+        this.activeRunners.delete(subassistantId);
         runner.stop();
         resolve({
           success: false,

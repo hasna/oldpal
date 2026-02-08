@@ -111,3 +111,36 @@ export function getFeatureStatusMessage(): string {
 
   return lines.join('\n');
 }
+
+/**
+ * Validate that enabled features have their required environment variables.
+ * Returns an array of warning messages for features missing env vars.
+ */
+export function validateFeatureEnvVars(config: {
+  inbox?: { enabled?: boolean };
+  wallet?: { enabled?: boolean };
+  secrets?: { enabled?: boolean };
+  voice?: { enabled?: boolean; stt?: { provider?: string }; tts?: { provider?: string } };
+}): string[] {
+  const warnings: string[] = [];
+
+  if (config.inbox?.enabled && !isAWSConfigured()) {
+    warnings.push('inbox.enabled is true but AWS credentials are not configured');
+  }
+  if (config.wallet?.enabled && !isAWSConfigured()) {
+    warnings.push('wallet.enabled is true but AWS credentials are not configured');
+  }
+  if (config.secrets?.enabled && !isAWSConfigured()) {
+    warnings.push('secrets.enabled is true but AWS credentials are not configured');
+  }
+  if (config.voice?.enabled) {
+    if (config.voice.tts?.provider === 'elevenlabs' && !isElevenLabsConfigured()) {
+      warnings.push('voice.tts.provider is elevenlabs but ELEVENLABS_API_KEY is not set');
+    }
+    if (config.voice.stt?.provider === 'whisper' && !isOpenAIConfigured()) {
+      warnings.push('voice.stt.provider is whisper but OPENAI_API_KEY is not set');
+    }
+  }
+
+  return warnings;
+}

@@ -187,41 +187,11 @@ export interface MessagesOperationResult {
 }
 
 // ============================================
-// Configuration Types
+// Configuration Types (re-exported from shared)
 // ============================================
 
-/**
- * Messages injection configuration
- */
-export interface MessagesInjectionConfig {
-  /** Whether to auto-inject messages at turn start (default: true) */
-  enabled?: boolean;
-  /** Max messages to inject per turn (default: 5) */
-  maxPerTurn?: number;
-  /** Only inject messages >= this priority (default: 'low') */
-  minPriority?: MessagePriority;
-}
-
-/**
- * Messages storage configuration
- */
-export interface MessagesStorageConfig {
-  /** Base path for storage (default: ~/.assistants/messages) */
-  basePath?: string;
-  /** Max messages per inbox (default: 1000) */
-  maxMessages?: number;
-  /** Max message age in days (default: 90) */
-  maxAgeDays?: number;
-}
-
-/**
- * Messages system configuration
- */
-export interface MessagesConfig {
-  /** Whether messages are enabled (default: false) */
-  enabled?: boolean;
-  /** Auto-injection settings */
-  injection?: MessagesInjectionConfig;
-  /** Storage settings */
-  storage?: MessagesStorageConfig;
-}
+export type {
+  MessagesConfig,
+  MessagesInjectionConfig,
+  MessagesStorageConfig,
+} from '@hasna/assistants-shared';

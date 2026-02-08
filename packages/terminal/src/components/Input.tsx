@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback, useImperativeHandle } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import { buildLayout, moveCursorVertical, type InputLayout } from './inputLayout';
 import { CommandHistory, getCommandHistory } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 // Available commands with descriptions
 const COMMANDS = [
@@ -388,6 +389,8 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
         placeholder: formatPastePlaceholder(cleaned),
       });
       setShowPastePreview(false);
+      // Reset history navigation so stale state doesn't persist
+      historyRef.current.resetIndex(cleaned);
       return;
     }
 
@@ -529,7 +532,8 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
       }
 
       // Arrow keys for autocomplete navigation (circular)
-      if (autocompleteItems.length > 0) {
+      // Only capture arrows for autocomplete when input is single-line
+      if (autocompleteItems.length > 0 && !value.includes('\n')) {
         if (key.downArrow) {
           setSelectedIndex((prev) => (prev + 1) % autocompleteItems.length);
           return;

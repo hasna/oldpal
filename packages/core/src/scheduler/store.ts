@@ -1,7 +1,8 @@
 import { join } from 'path';
-import { mkdir, readdir, readFile, unlink, writeFile, open } from 'fs/promises';
+import { mkdir, readdir, readFile, unlink, open } from 'fs/promises';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
 import { getProjectConfigDir } from '../config';
+import { atomicWriteFile } from '../utils/atomic-write';
 import { getNextCronRun } from './cron';
 
 export const DEFAULT_LOCK_TTL_MS = 10 * 60 * 1000;
@@ -73,7 +74,7 @@ export async function saveSchedule(cwd: string, schedule: ScheduledCommand): Pro
   if (!path) {
     throw new Error(`Invalid schedule id: ${schedule.id}`);
   }
-  await writeFile(path, JSON.stringify(schedule, null, 2), 'utf-8');
+  await atomicWriteFile(path, JSON.stringify(schedule, null, 2));
 }
 
 export async function getSchedule(cwd: string, id: string): Promise<ScheduledCommand | null> {
@@ -195,14 +196,17 @@ export async function updateSchedule(
   }
 }
 
+const MAX_LOCK_RETRIES = 2;
+
 export async function acquireScheduleLock(
   cwd: string,
   id: string,
   ownerId: string,
   ttlMs: number = DEFAULT_LOCK_TTL_MS,
-  allowRetry: boolean = true
+  retryDepth: number = 0
 ): Promise<boolean> {
   if (!isSafeId(id)) return false;
+  if (retryDepth >= MAX_LOCK_RETRIES) return false;
   await ensureDirs(cwd);
   const path = lockPath(cwd, id);
   const now = Date.now();
@@ -220,13 +224,13 @@ export async function acquireScheduleLock(
       const ttl = lock?.ttlMs ?? ttlMs;
       if (now - updatedAt > ttl) {
         await unlink(path);
-        return acquireScheduleLock(cwd, id, ownerId, ttlMs, false);
+        return acquireScheduleLock(cwd, id, ownerId, ttlMs, retryDepth + 1);
       }
     } catch {
-      if (allowRetry) {
+      if (retryDepth < MAX_LOCK_RETRIES) {
         try {
           await unlink(path);
-          return acquireScheduleLock(cwd, id, ownerId, ttlMs, false);
+          return acquireScheduleLock(cwd, id, ownerId, ttlMs, retryDepth + 1);
         } catch {
           return false;
         }
@@ -259,7 +263,7 @@ export async function refreshScheduleLock(cwd: string, id: string, ownerId: stri
     const lock = JSON.parse(raw) as { ownerId?: string; createdAt?: number; updatedAt?: number; ttlMs?: number };
     if (lock?.ownerId === ownerId) {
       const updated = { ...lock, updatedAt: Date.now() };
-      await writeFile(path, JSON.stringify(updated, null, 2), 'utf-8');
+      await atomicWriteFile(path, JSON.stringify(updated, null, 2));
     }
   } catch {
     // Ignore refresh errors

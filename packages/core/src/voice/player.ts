@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { unlink, writeFileSync } from 'fs';
+import { unlink, writeFileSync, appendFileSync } from 'fs';
 import { findExecutable } from './utils';
 
 export interface PlayOptions {
@@ -14,7 +14,7 @@ export class AudioPlayer {
 
   async play(audio: ArrayBuffer, options: PlayOptions = {}): Promise<void> {
     const format = options.format ?? 'mp3';
-    const tempFile = join(tmpdir(), `assistants-audio-${Date.now()}.${format}`);
+    const tempFile = join(tmpdir(), `assistants-audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${format}`);
     writeFileSync(tempFile, Buffer.from(audio));
 
     const player = this.resolvePlayer(format);
@@ -35,7 +35,10 @@ export class AudioPlayer {
 
       this.currentProcess.on('error', (error) => {
         this.playing = false;
-        this.currentProcess = null;
+        if (this.currentProcess) {
+          this.currentProcess.kill();
+          this.currentProcess = null;
+        }
         unlink(tempFile, () => {});
         reject(error);
       });
@@ -43,13 +46,38 @@ export class AudioPlayer {
   }
 
   async playStream(chunks: AsyncGenerator<ArrayBuffer>, options: PlayOptions = {}): Promise<void> {
-    const buffers: Buffer[] = [];
+    const format = options.format ?? 'mp3';
+    const tempFile = join(tmpdir(), `assistants-stream-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${format}`);
+    // Write chunks to disk incrementally instead of buffering all in RAM
+    writeFileSync(tempFile, Buffer.alloc(0));
     for await (const chunk of chunks) {
-      buffers.push(Buffer.from(chunk));
+      appendFileSync(tempFile, Buffer.from(chunk));
     }
-    const combined = Buffer.concat(buffers);
-    const arrayBuffer = combined.buffer.slice(combined.byteOffset, combined.byteOffset + combined.byteLength);
-    await this.play(arrayBuffer, options);
+    // Play the completed temp file
+    const player = this.resolvePlayer(format);
+    if (!player) {
+      unlink(tempFile, () => {});
+      throw new Error('No supported audio player found.');
+    }
+    return new Promise<void>((resolve, reject) => {
+      this.playing = true;
+      this.currentProcess = spawn(player.command, [...player.args, tempFile]);
+      this.currentProcess.on('close', () => {
+        this.playing = false;
+        this.currentProcess = null;
+        unlink(tempFile, () => {});
+        resolve();
+      });
+      this.currentProcess.on('error', (error) => {
+        this.playing = false;
+        if (this.currentProcess) {
+          this.currentProcess.kill();
+          this.currentProcess = null;
+        }
+        unlink(tempFile, () => {});
+        reject(error);
+      });
+    });
   }
 
   stop(): void {
