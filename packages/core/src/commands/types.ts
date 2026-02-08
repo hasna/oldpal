@@ -11,7 +11,7 @@ import type { WalletManager } from '../wallet';
 import type { SecretsManager } from '../secrets';
 import type { MessagesManager } from '../messages';
 import type { WebhooksManager } from '../webhooks';
-import type { ChannelsManager } from '../channels';
+import type { ChannelsManager, ChannelAgentPool } from '../channels';
 import type { TelephonyManager } from '../telephony';
 import type { GlobalMemoryManager } from '../memory';
 import type { SwarmCoordinator } from '../swarm';
@@ -99,6 +99,7 @@ export interface CommandContext {
   getMessagesManager?: () => MessagesManager | null;
   getWebhooksManager?: () => WebhooksManager | null;
   getChannelsManager?: () => ChannelsManager | null;
+  getChannelAgentPool?: () => ChannelAgentPool | null;
   getTelephonyManager?: () => TelephonyManager | null;
   getMemoryManager?: () => GlobalMemoryManager | null;
   getHooks?: () => HookConfig;

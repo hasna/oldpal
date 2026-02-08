@@ -28,7 +28,7 @@ import { ConfigPanel } from './ConfigPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { WebhooksPanel } from './WebhooksPanel';
 import { ChannelsPanel } from './ChannelsPanel';
-import { parseMentions, resolveNameToKnown } from '@hasna/assistants-core';
+import { parseMentions, resolveNameToKnown, type ChannelMember } from '@hasna/assistants-core';
 import { PeoplePanel } from './PeoplePanel';
 import { TelephonyPanel } from './TelephonyPanel';
 import { OnboardingPanel, type OnboardingResult } from './OnboardingPanel';
@@ -2406,6 +2406,12 @@ export function App({ cwd, version }: AppProps) {
           return;
         }
 
+        // /onboarding (no args) → rerun onboarding flow
+        if (cmdName === 'onboarding' && !cmdArgs) {
+          setShowOnboardingPanel(true);
+          return;
+        }
+
         // /memory (no args) → open panel
         if (cmdName === 'memory' && !cmdArgs) {
           setMemoryError(null);
@@ -4157,32 +4163,46 @@ export function App({ cwd, version }: AppProps) {
         activePersonId={activeSession?.client.getPeopleManager?.()?.getActivePersonId?.() || undefined}
         activePersonName={activeSession?.client.getPeopleManager?.()?.getActivePerson?.()?.name || undefined}
         onPersonMessage={(channelName, personName, message) => {
-          // Get channel members to know which assistants should respond
-          const members = channelsManager.getMembers(channelName);
-          const assistantMembers = members
-            .filter((m) => m.memberType === 'assistant')
-            .map((m) => m.assistantName);
+          // Get channel members to trigger multi-agent responses
+          const members: ChannelMember[] = channelsManager.getMembers(channelName);
 
-          // Detect @mentions to target specific assistants
+          // Use ChannelAgentPool to trigger independent responses from all assistant members
+          const agentPool = activeSession?.client.getChannelAgentPool?.();
+          if (agentPool) {
+            // Pool handles @mention filtering, concurrent sends, and client caching
+            agentPool.triggerResponses(
+              channelName,
+              personName,
+              message,
+              members,
+              activeSession?.assistantId || undefined,
+            );
+          }
+
+          // Also trigger the active session's assistant (if it's a channel member)
+          const activeAssistantId = activeSession?.assistantId;
+          const isActiveMember = activeAssistantId && members.some(
+            (m) => m.assistantId === activeAssistantId && m.memberType === 'assistant'
+          );
+
+          // Check if @mentions exclude the active assistant
           const mentions = parseMentions(message);
-          let targetAssistants = assistantMembers;
-          if (mentions.length > 0) {
-            const knownNames = assistantMembers.map((name) => ({ id: name, name }));
+          let activeAssistantTargeted = true;
+          if (mentions.length > 0 && isActiveMember) {
+            const assistantMembers = members.filter((m) => m.memberType === 'assistant');
+            const knownNames = assistantMembers.map((m) => ({ id: m.assistantId, name: m.assistantName }));
             const resolved = mentions
               .map((m) => resolveNameToKnown(m, knownNames))
-              .filter(Boolean)
-              .map((r) => r!.name);
+              .filter(Boolean) as Array<{ id: string; name: string }>;
             if (resolved.length > 0) {
-              targetAssistants = resolved;
+              activeAssistantTargeted = resolved.some((r) => r.id === activeAssistantId);
             }
           }
 
-          const assistantList = targetAssistants.length > 0
-            ? `Assistants in this channel: ${targetAssistants.join(', ')}.`
-            : '';
-
-          const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\n${assistantList}\n\nRespond in #${channelName} using channel_send. Be helpful and conversational.`;
-          activeSession?.client.send(prompt);
+          if (isActiveMember && activeAssistantTargeted) {
+            const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\nRespond in #${channelName} using channel_send. Be helpful and conversational.`;
+            activeSession?.client.send(prompt);
+          }
         }}
       />
     );

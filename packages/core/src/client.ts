@@ -450,6 +450,16 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the channel agent pool for multi-agent channel responses
+   */
+  getChannelAgentPool(): any {
+    if (typeof (this.assistantLoop as any).getChannelAgentPool === 'function') {
+      return (this.assistantLoop as any).getChannelAgentPool();
+    }
+    return null;
+  }
+
+  /**
    * Get the people manager
    */
   getPeopleManager(): any {

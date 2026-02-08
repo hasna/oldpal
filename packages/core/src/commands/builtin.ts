@@ -3011,27 +3011,27 @@ Created: ${new Date(job.createdAt).toISOString()}
           context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
           context.emit('done');
 
-          // When a person sends a message, prompt the assistant to respond in the channel
+          // When a person sends a message, trigger multi-agent responses via pool
           if (activePerson && result.success) {
-            // Detect @mentions
-            const mentions = parseMentions(message);
-            let mentionContext = '';
-            if (mentions.length > 0) {
-              const assistantManager = context.getAssistantManager?.();
-              if (assistantManager) {
-                const assistants = assistantManager.listAssistants?.() || [];
-                const knownNames = assistants.map((a: { id: string; name: string }) => ({ id: a.id, name: a.name }));
-                const resolved = mentions
-                  .map((m: string) => resolveNameToKnown(m, knownNames))
-                  .filter(Boolean);
-                if (resolved.length > 0) {
-                  mentionContext = `\n\nNote: ${activePerson.name} mentioned ${resolved.map((r) => r!.name).join(', ')}. Respond as the mentioned assistant.`;
-                }
-              }
+            const agentPool = context.getChannelAgentPool?.();
+            const members = manager.getMembers(channel);
+            if (agentPool && members.length > 0) {
+              // Pool handles @mention filtering, concurrent sends, and client caching
+              // Exclude the current assistant (it responds via the prompt return below)
+              const currentAssistantId = context.getAssistantManager?.()?.getActive?.()?.id;
+              agentPool.triggerResponses(
+                channel,
+                activePerson.name,
+                message,
+                members,
+                currentAssistantId || undefined,
+              );
             }
+
+            // Still trigger the active session's assistant via prompt return
             return {
               handled: false,
-              prompt: `[Channel Message] ${activePerson.name} posted in #${channel}: "${message}"${mentionContext}\n\nRespond in #${channel} using channel_send. Be helpful and conversational.`,
+              prompt: `[Channel Message] ${activePerson.name} posted in #${channel}: "${message}"\n\nRespond in #${channel} using channel_send. Be helpful and conversational.`,
             };
           }
           return { handled: true };

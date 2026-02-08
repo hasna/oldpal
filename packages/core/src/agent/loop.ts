@@ -84,7 +84,7 @@ import { createSecretsManager, registerSecretsTools, type SecretsManager } from 
 import { JobManager, createJobTools } from '../jobs';
 import { createMessagesManager, registerMessagesTools, type MessagesManager } from '../messages';
 import { createWebhooksManager, registerWebhookTools, type WebhooksManager } from '../webhooks';
-import { createChannelsManager, registerChannelTools, type ChannelsManager } from '../channels';
+import { createChannelsManager, registerChannelTools, ChannelAgentPool, type ChannelsManager } from '../channels';
 import { createPeopleManager, type PeopleManager } from '../people';
 import { createTelephonyManager, registerTelephonyTools, type TelephonyManager } from '../telephony';
 import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
@@ -193,6 +193,7 @@ export class AssistantLoop {
   private messagesManager: MessagesManager | null = null;
   private webhooksManager: WebhooksManager | null = null;
   private channelsManager: ChannelsManager | null = null;
+  private channelAgentPool: ChannelAgentPool | null = null;
   private peopleManager: PeopleManager | null = null;
   private telephonyManager: TelephonyManager | null = null;
   private memoryManager: GlobalMemoryManager | null = null;
@@ -513,6 +514,7 @@ export class AssistantLoop {
       const assistantName = assistant?.name || 'assistant';
       this.channelsManager = createChannelsManager(assistantId, assistantName, this.config.channels);
       registerChannelTools(this.toolRegistry, () => this.channelsManager);
+      this.channelAgentPool = new ChannelAgentPool(this.cwd);
     }
 
     // Initialize people manager (always available)
@@ -1908,6 +1910,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       getMessagesManager: () => this.messagesManager,
       getWebhooksManager: () => this.webhooksManager,
       getChannelsManager: () => this.channelsManager,
+      getChannelAgentPool: () => this.channelAgentPool,
       getPeopleManager: () => this.peopleManager,
       getTelephonyManager: () => this.telephonyManager,
       getMemoryManager: () => this.memoryManager,
@@ -2214,7 +2217,9 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     this.messagesManager?.stopWatching();
     // Stop webhook watching
     this.webhooksManager?.stopWatching();
-    // Close channels database connection
+    // Close channels database connection and agent pool
+    this.channelAgentPool?.shutdown();
+    this.channelAgentPool = null;
     this.channelsManager?.close();
     this.channelsManager = null;
     // Close telephony connections
@@ -2332,6 +2337,10 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
 
   getChannelsManager(): ChannelsManager | null {
     return this.channelsManager;
+  }
+
+  getChannelAgentPool(): ChannelAgentPool | null {
+    return this.channelAgentPool;
   }
 
   getPeopleManager(): PeopleManager | null {

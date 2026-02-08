@@ -7,6 +7,9 @@
 export { ChannelsManager, createChannelsManager } from './manager';
 export type { ChannelsManagerOptions } from './manager';
 
+// Agent pool for multi-agent channel responses
+export { ChannelAgentPool } from './agent-pool';
+
 // Store
 export { ChannelStore } from './store';
 
