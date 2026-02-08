@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { mkdir, readdir, readFile, unlink, open } from 'fs/promises';
 import type { ScheduledCommand } from '@hasna/assistants-shared';
+import { generateId } from '@hasna/assistants-shared';
 import { getProjectConfigDir } from '../config';
 import { atomicWriteFile } from '../utils/atomic-write';
 import { getNextCronRun } from './cron';
@@ -181,11 +182,34 @@ export async function getDueSchedules(cwd: string, nowTime: number): Promise<Sch
 export async function updateSchedule(
   cwd: string,
   id: string,
-  updater: (schedule: ScheduledCommand) => ScheduledCommand
+  updater: (schedule: ScheduledCommand) => ScheduledCommand,
+  options?: { ownerId?: string }
 ): Promise<ScheduledCommand | null> {
+  const path = schedulePath(cwd, id);
+  if (!path) return null;
+
+  const ownerId = options?.ownerId;
+  let locked = false;
+  let lockOwner = ownerId;
+
+  if (!lockOwner) {
+    lockOwner = generateId();
+    locked = await acquireScheduleLock(cwd, id, lockOwner);
+    if (!locked) return null;
+  } else {
+    // Best-effort ownership check when a lock exists
+    try {
+      const raw = await readFile(lockPath(cwd, id), 'utf-8');
+      const lock = JSON.parse(raw) as { ownerId?: string };
+      if (lock?.ownerId && lock.ownerId !== lockOwner) {
+        return null;
+      }
+    } catch {
+      // Ignore missing lock files
+    }
+  }
+
   try {
-    const path = schedulePath(cwd, id);
-    if (!path) return null;
     const raw = await readFile(path, 'utf-8');
     const schedule = JSON.parse(raw) as ScheduledCommand;
     const updated = updater(schedule);
@@ -193,6 +217,10 @@ export async function updateSchedule(
     return updated;
   } catch {
     return null;
+  } finally {
+    if (locked && lockOwner) {
+      await releaseScheduleLock(cwd, id, lockOwner);
+    }
   }
 }
 

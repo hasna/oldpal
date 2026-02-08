@@ -1,12 +1,16 @@
 import { join } from 'path';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, open, unlink } from 'fs/promises';
 import { generateId } from '@hasna/assistants-shared';
 import type { Task, TaskPriority, TaskStatus, TaskStoreData, TaskCreateOptions, TaskRecurrence } from './types';
 import { PRIORITY_ORDER } from './types';
 import { getNextCronRun } from '../scheduler/cron';
+import { atomicWriteFile } from '../utils/atomic-write';
 
 const TASKS_DIR = '.assistants/tasks';
 const TASKS_FILE = 'tasks.json';
+const TASKS_LOCK_FILE = 'tasks.lock.json';
+const DEFAULT_TASK_LOCK_TTL_MS = 10 * 1000;
+const MAX_TASK_LOCK_RETRIES = 2;
 
 function tasksDir(cwd: string): string {
   return join(cwd, TASKS_DIR);
@@ -16,8 +20,83 @@ function tasksPath(cwd: string): string {
   return join(tasksDir(cwd), TASKS_FILE);
 }
 
+function taskLockPath(cwd: string): string {
+  return join(tasksDir(cwd), TASKS_LOCK_FILE);
+}
+
 async function ensureTasksDir(cwd: string): Promise<void> {
   await mkdir(tasksDir(cwd), { recursive: true });
+}
+
+async function acquireTaskLock(
+  cwd: string,
+  ownerId: string,
+  ttlMs: number = DEFAULT_TASK_LOCK_TTL_MS,
+  retryDepth: number = 0
+): Promise<boolean> {
+  if (retryDepth >= MAX_TASK_LOCK_RETRIES) return false;
+  await ensureTasksDir(cwd);
+  const path = taskLockPath(cwd);
+  const now = Date.now();
+
+  try {
+    const handle = await open(path, 'wx');
+    await handle.writeFile(JSON.stringify({ ownerId, createdAt: now, updatedAt: now, ttlMs }, null, 2), 'utf-8');
+    await handle.close();
+    return true;
+  } catch {
+    try {
+      const raw = await readFile(path, 'utf-8');
+      const lock = JSON.parse(raw) as { ownerId?: string; createdAt?: number; updatedAt?: number; ttlMs?: number };
+      const updatedAt = lock?.updatedAt || lock?.createdAt || 0;
+      const ttl = lock?.ttlMs ?? ttlMs;
+      if (now - updatedAt > ttl) {
+        await unlink(path);
+        return acquireTaskLock(cwd, ownerId, ttlMs, retryDepth + 1);
+      }
+    } catch {
+      if (retryDepth < MAX_TASK_LOCK_RETRIES) {
+        try {
+          await unlink(path);
+          return acquireTaskLock(cwd, ownerId, ttlMs, retryDepth + 1);
+        } catch {
+          return false;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+async function releaseTaskLock(cwd: string, ownerId: string): Promise<void> {
+  const path = taskLockPath(cwd);
+  try {
+    const raw = await readFile(path, 'utf-8');
+    const lock = JSON.parse(raw) as { ownerId?: string };
+    if (lock?.ownerId === ownerId) {
+      await unlink(path);
+    }
+  } catch {
+    // Ignore missing lock
+  }
+}
+
+async function withTaskStoreLock<T>(cwd: string, fn: (data: TaskStoreData) => Promise<T>): Promise<T> {
+  const ownerId = generateId();
+  const locked = await acquireTaskLock(cwd, ownerId);
+  if (!locked) {
+    throw new Error('Task store is locked');
+  }
+
+  try {
+    const data = await loadTaskStore(cwd);
+    const result = await fn(data);
+    await saveTaskStore(cwd, data);
+    return result;
+  } finally {
+    await releaseTaskLock(cwd, ownerId);
+  }
 }
 
 function defaultStoreData(): TaskStoreData {
@@ -39,6 +118,18 @@ export async function loadTaskStore(cwd: string): Promise<TaskStoreData> {
     if (!Array.isArray(data.tasks)) {
       return defaultStoreData();
     }
+    // Sanitize blockedBy/blocks to remove references to missing tasks
+    const knownIds = new Set(data.tasks.map((t) => t.id));
+    for (const task of data.tasks) {
+      if (task.blockedBy?.length) {
+        const filtered = task.blockedBy.filter((id) => knownIds.has(id));
+        task.blockedBy = filtered.length > 0 ? Array.from(new Set(filtered)) : undefined;
+      }
+      if (task.blocks?.length) {
+        const filtered = task.blocks.filter((id) => knownIds.has(id));
+        task.blocks = filtered.length > 0 ? Array.from(new Set(filtered)) : undefined;
+      }
+    }
     return {
       tasks: data.tasks,
       paused: data.paused ?? false,
@@ -54,7 +145,7 @@ export async function loadTaskStore(cwd: string): Promise<TaskStoreData> {
  */
 export async function saveTaskStore(cwd: string, data: TaskStoreData): Promise<void> {
   await ensureTasksDir(cwd);
-  await writeFile(tasksPath(cwd), JSON.stringify(data, null, 2), 'utf-8');
+  await atomicWriteFile(tasksPath(cwd), JSON.stringify(data, null, 2));
 }
 
 /**
@@ -124,78 +215,82 @@ export async function addTask(
   priority: TaskPriority = 'normal',
   projectId?: string
 ): Promise<Task> {
-  const data = await loadTaskStore(cwd);
-  const now = Date.now();
+  return withTaskStoreLock(cwd, async (data) => {
+    const now = Date.now();
 
-  // Support both old (description, priority, projectId) and new (options object) signatures
-  const opts: TaskCreateOptions =
-    typeof options === 'string'
-      ? { description: options, priority, projectId }
-      : options;
+    // Support both old (description, priority, projectId) and new (options object) signatures
+    const opts: TaskCreateOptions =
+      typeof options === 'string'
+        ? { description: options, priority, projectId }
+        : options;
 
-  // Build recurrence config if provided
-  let recurrence: TaskRecurrence | undefined;
-  let nextRunAt: number | undefined;
-  let isRecurringTemplate = false;
+    // Build recurrence config if provided
+    let recurrence: TaskRecurrence | undefined;
+    let nextRunAt: number | undefined;
+    let isRecurringTemplate = false;
 
-  if (opts.recurrence) {
-    recurrence = {
-      kind: opts.recurrence.kind,
-      cron: opts.recurrence.cron,
-      intervalMs: opts.recurrence.intervalMs,
-      timezone: opts.recurrence.timezone,
-      maxOccurrences: opts.recurrence.maxOccurrences,
-      endAt: opts.recurrence.endAt,
-      occurrenceCount: 0,
+    if (opts.recurrence) {
+      recurrence = {
+        kind: opts.recurrence.kind,
+        cron: opts.recurrence.cron,
+        intervalMs: opts.recurrence.intervalMs,
+        timezone: opts.recurrence.timezone,
+        maxOccurrences: opts.recurrence.maxOccurrences,
+        endAt: opts.recurrence.endAt,
+        occurrenceCount: 0,
+      };
+      nextRunAt = calculateNextRunAt(recurrence, now);
+      isRecurringTemplate = true;
+    }
+
+    const existingIds = new Set(data.tasks.map((t) => t.id));
+    const filteredBlockedBy = opts.blockedBy?.filter((id) => existingIds.has(id)) ?? [];
+    const filteredBlocks = opts.blocks?.filter((id) => existingIds.has(id)) ?? [];
+
+    const task: Task = {
+      id: generateId(),
+      description: opts.description.trim(),
+      status: 'pending',
+      priority: opts.priority ?? 'normal',
+      createdAt: now,
+      projectId: opts.projectId,
+      blockedBy: filteredBlockedBy.length ? filteredBlockedBy : undefined,
+      blocks: filteredBlocks.length ? filteredBlocks : undefined,
+      assignee: opts.assignee || undefined,
+      recurrence,
+      isRecurringTemplate,
+      nextRunAt,
     };
-    nextRunAt = calculateNextRunAt(recurrence, now);
-    isRecurringTemplate = true;
-  }
 
-  const task: Task = {
-    id: generateId(),
-    description: opts.description.trim(),
-    status: 'pending',
-    priority: opts.priority ?? 'normal',
-    createdAt: now,
-    projectId: opts.projectId,
-    blockedBy: opts.blockedBy?.length ? opts.blockedBy : undefined,
-    blocks: opts.blocks?.length ? opts.blocks : undefined,
-    assignee: opts.assignee || undefined,
-    recurrence,
-    isRecurringTemplate,
-    nextRunAt,
-  };
-
-  // If this task blocks other tasks, update those tasks' blockedBy arrays
-  if (opts.blocks?.length) {
-    for (const blockedId of opts.blocks) {
-      const blockedTask = data.tasks.find((t) => t.id === blockedId);
-      if (blockedTask) {
-        blockedTask.blockedBy = blockedTask.blockedBy || [];
-        if (!blockedTask.blockedBy.includes(task.id)) {
-          blockedTask.blockedBy.push(task.id);
+    // If this task blocks other tasks, update those tasks' blockedBy arrays
+    if (filteredBlocks.length) {
+      for (const blockedId of filteredBlocks) {
+        const blockedTask = data.tasks.find((t) => t.id === blockedId);
+        if (blockedTask) {
+          blockedTask.blockedBy = blockedTask.blockedBy || [];
+          if (!blockedTask.blockedBy.includes(task.id)) {
+            blockedTask.blockedBy.push(task.id);
+          }
         }
       }
     }
-  }
 
-  // If this task is blocked by others, update those tasks' blocks arrays
-  if (opts.blockedBy?.length) {
-    for (const blockingId of opts.blockedBy) {
-      const blockingTask = data.tasks.find((t) => t.id === blockingId);
-      if (blockingTask) {
-        blockingTask.blocks = blockingTask.blocks || [];
-        if (!blockingTask.blocks.includes(task.id)) {
-          blockingTask.blocks.push(task.id);
+    // If this task is blocked by others, update those tasks' blocks arrays
+    if (filteredBlockedBy.length) {
+      for (const blockingId of filteredBlockedBy) {
+        const blockingTask = data.tasks.find((t) => t.id === blockingId);
+        if (blockingTask) {
+          blockingTask.blocks = blockingTask.blocks || [];
+          if (!blockingTask.blocks.includes(task.id)) {
+            blockingTask.blocks.push(task.id);
+          }
         }
       }
     }
-  }
 
-  data.tasks.push(task);
-  await saveTaskStore(cwd, data);
-  return task;
+    data.tasks.push(task);
+    return task;
+  });
 }
 
 /**
@@ -206,55 +301,117 @@ export async function updateTask(
   id: string,
   updates: Partial<Pick<Task, 'status' | 'priority' | 'result' | 'error' | 'startedAt' | 'completedAt'>>
 ): Promise<Task | null> {
-  const data = await loadTaskStore(cwd);
-  const task = data.tasks.find((t) => t.id === id);
-  if (!task) return null;
+  return withTaskStoreLock(cwd, async (data) => {
+    const task = data.tasks.find((t) => t.id === id);
+    if (!task) return null;
 
-  if (updates.status !== undefined) task.status = updates.status;
-  if (updates.priority !== undefined) task.priority = updates.priority;
-  if (updates.result !== undefined) task.result = updates.result;
-  if (updates.error !== undefined) task.error = updates.error;
-  if (updates.startedAt !== undefined) task.startedAt = updates.startedAt;
-  if (updates.completedAt !== undefined) task.completedAt = updates.completedAt;
+    if (updates.status !== undefined) task.status = updates.status;
+    if (updates.priority !== undefined) task.priority = updates.priority;
+    if (updates.result !== undefined) task.result = updates.result;
+    if (updates.error !== undefined) task.error = updates.error;
+    if (updates.startedAt !== undefined) task.startedAt = updates.startedAt;
+    if (updates.completedAt !== undefined) task.completedAt = updates.completedAt;
 
-  await saveTaskStore(cwd, data);
-  return task;
+    return task;
+  });
 }
 
 /**
  * Delete a task
  */
 export async function deleteTask(cwd: string, id: string): Promise<boolean> {
-  const data = await loadTaskStore(cwd);
-  const index = data.tasks.findIndex((t) => t.id === id);
-  if (index === -1) return false;
-  data.tasks.splice(index, 1);
-  await saveTaskStore(cwd, data);
-  return true;
+  return withTaskStoreLock(cwd, async (data) => {
+    const removedIds = new Set<string>();
+    const index = data.tasks.findIndex((t) => t.id === id);
+    if (index === -1) return false;
+    removedIds.add(data.tasks[index].id);
+    data.tasks.splice(index, 1);
+    if (removedIds.size > 0) {
+      for (const task of data.tasks) {
+        if (task.blockedBy?.length) {
+          task.blockedBy = task.blockedBy.filter((blockedId) => !removedIds.has(blockedId));
+          if (task.blockedBy.length === 0) {
+            task.blockedBy = undefined;
+          }
+        }
+        if (task.blocks?.length) {
+          task.blocks = task.blocks.filter((blockedId) => !removedIds.has(blockedId));
+          if (task.blocks.length === 0) {
+            task.blocks = undefined;
+          }
+        }
+      }
+    }
+    return true;
+  });
 }
 
 /**
  * Clear all pending tasks
  */
 export async function clearPendingTasks(cwd: string): Promise<number> {
-  const data = await loadTaskStore(cwd);
-  const before = data.tasks.length;
-  data.tasks = data.tasks.filter((t) => t.status !== 'pending');
-  const cleared = before - data.tasks.length;
-  await saveTaskStore(cwd, data);
-  return cleared;
+  return withTaskStoreLock(cwd, async (data) => {
+    const before = data.tasks.length;
+    const removedIds = new Set<string>();
+    data.tasks = data.tasks.filter((t) => {
+      if (t.status === 'pending') {
+        removedIds.add(t.id);
+        return false;
+      }
+      return true;
+    });
+    if (removedIds.size > 0) {
+      for (const task of data.tasks) {
+        if (task.blockedBy?.length) {
+          task.blockedBy = task.blockedBy.filter((blockedId) => !removedIds.has(blockedId));
+          if (task.blockedBy.length === 0) {
+            task.blockedBy = undefined;
+          }
+        }
+        if (task.blocks?.length) {
+          task.blocks = task.blocks.filter((blockedId) => !removedIds.has(blockedId));
+          if (task.blocks.length === 0) {
+            task.blocks = undefined;
+          }
+        }
+      }
+    }
+    return before - data.tasks.length;
+  });
 }
 
 /**
  * Clear completed tasks
  */
 export async function clearCompletedTasks(cwd: string): Promise<number> {
-  const data = await loadTaskStore(cwd);
-  const before = data.tasks.length;
-  data.tasks = data.tasks.filter((t) => t.status !== 'completed' && t.status !== 'failed');
-  const cleared = before - data.tasks.length;
-  await saveTaskStore(cwd, data);
-  return cleared;
+  return withTaskStoreLock(cwd, async (data) => {
+    const before = data.tasks.length;
+    const removedIds = new Set<string>();
+    data.tasks = data.tasks.filter((t) => {
+      if (t.status === 'completed' || t.status === 'failed') {
+        removedIds.add(t.id);
+        return false;
+      }
+      return true;
+    });
+    if (removedIds.size > 0) {
+      for (const task of data.tasks) {
+        if (task.blockedBy?.length) {
+          task.blockedBy = task.blockedBy.filter((blockedId) => !removedIds.has(blockedId));
+          if (task.blockedBy.length === 0) {
+            task.blockedBy = undefined;
+          }
+        }
+        if (task.blocks?.length) {
+          task.blocks = task.blocks.filter((blockedId) => !removedIds.has(blockedId));
+          if (task.blocks.length === 0) {
+            task.blocks = undefined;
+          }
+        }
+      }
+    }
+    return before - data.tasks.length;
+  });
 }
 
 /**
@@ -304,9 +461,9 @@ export async function isPaused(cwd: string): Promise<boolean> {
  * Set the paused state
  */
 export async function setPaused(cwd: string, paused: boolean): Promise<void> {
-  const data = await loadTaskStore(cwd);
-  data.paused = paused;
-  await saveTaskStore(cwd, data);
+  await withTaskStoreLock(cwd, async (data) => {
+    data.paused = paused;
+  });
 }
 
 /**
@@ -321,9 +478,9 @@ export async function isAutoRun(cwd: string): Promise<boolean> {
  * Set auto-run state
  */
 export async function setAutoRun(cwd: string, autoRun: boolean): Promise<void> {
-  const data = await loadTaskStore(cwd);
-  data.autoRun = autoRun;
-  await saveTaskStore(cwd, data);
+  await withTaskStoreLock(cwd, async (data) => {
+    data.autoRun = autoRun;
+  });
 }
 
 /**
@@ -398,41 +555,41 @@ export async function getDueRecurringTasks(cwd: string): Promise<Task[]> {
  * Create a task instance from a recurring template
  */
 export async function createRecurringInstance(cwd: string, templateId: string): Promise<Task | null> {
-  const data = await loadTaskStore(cwd);
-  const template = data.tasks.find((t) => t.id === templateId && t.isRecurringTemplate);
-  if (!template || !template.recurrence) return null;
+  return withTaskStoreLock(cwd, async (data) => {
+    const template = data.tasks.find((t) => t.id === templateId && t.isRecurringTemplate);
+    if (!template || !template.recurrence) return null;
 
-  const now = Date.now();
+    const now = Date.now();
 
-  // Create instance task
-  const instance: Task = {
-    id: generateId(),
-    description: template.description,
-    status: 'pending',
-    priority: template.priority,
-    createdAt: now,
-    projectId: template.projectId,
-    assignee: template.assignee,
-    recurrence: {
-      ...template.recurrence,
-      parentId: template.id,
-    },
-  };
+    // Create instance task
+    const instance: Task = {
+      id: generateId(),
+      description: template.description,
+      status: 'pending',
+      priority: template.priority,
+      createdAt: now,
+      projectId: template.projectId,
+      assignee: template.assignee,
+      recurrence: {
+        ...template.recurrence,
+        parentId: template.id,
+      },
+    };
 
-  // Update template
-  template.recurrence.occurrenceCount = (template.recurrence.occurrenceCount ?? 0) + 1;
-  template.nextRunAt = calculateNextRunAt(template.recurrence, now);
+    // Update template
+    template.recurrence.occurrenceCount = (template.recurrence.occurrenceCount ?? 0) + 1;
+    template.nextRunAt = calculateNextRunAt(template.recurrence, now);
 
-  // If no more runs scheduled, mark template as inactive but keep it
-  if (!template.nextRunAt) {
-    template.status = 'completed';
-    template.completedAt = now;
-    template.result = `Recurring task completed after ${template.recurrence.occurrenceCount} occurrence(s)`;
-  }
+    // If no more runs scheduled, mark template as inactive but keep it
+    if (!template.nextRunAt) {
+      template.status = 'completed';
+      template.completedAt = now;
+      template.result = `Recurring task completed after ${template.recurrence.occurrenceCount} occurrence(s)`;
+    }
 
-  data.tasks.push(instance);
-  await saveTaskStore(cwd, data);
-  return instance;
+    data.tasks.push(instance);
+    return instance;
+  });
 }
 
 /**
@@ -456,15 +613,15 @@ export async function processDueRecurringTasks(cwd: string): Promise<Task[]> {
  * Cancel a recurring task (stops future instances)
  */
 export async function cancelRecurringTask(cwd: string, id: string): Promise<Task | null> {
-  const data = await loadTaskStore(cwd);
-  const task = data.tasks.find((t) => t.id === id && t.isRecurringTemplate);
-  if (!task) return null;
+  return withTaskStoreLock(cwd, async (data) => {
+    const task = data.tasks.find((t) => t.id === id && t.isRecurringTemplate);
+    if (!task) return null;
 
-  task.status = 'completed';
-  task.completedAt = Date.now();
-  task.nextRunAt = undefined;
-  task.result = 'Recurring task cancelled';
+    task.status = 'completed';
+    task.completedAt = Date.now();
+    task.nextRunAt = undefined;
+    task.result = 'Recurring task cancelled';
 
-  await saveTaskStore(cwd, data);
-  return task;
+    return task;
+  });
 }

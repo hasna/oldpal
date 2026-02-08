@@ -4,7 +4,7 @@
 
 import { join } from 'path';
 import { homedir } from 'os';
-import { mkdir, readdir, rm, stat } from 'fs/promises';
+import { mkdir, readdir, rm, open, readFile } from 'fs/promises';
 import type {
   AssistantMessage,
   AssistantRegistry,
@@ -14,6 +14,12 @@ import type {
   MessageThread,
 } from '../types';
 import { getRuntime } from '../../runtime';
+import { atomicWriteFile } from '../../utils/atomic-write';
+import { generateId } from '@hasna/assistants-shared';
+
+const INDEX_LOCK_FILE = 'index.lock.json';
+const INDEX_LOCK_TTL_MS = 10 * 1000;
+const INDEX_LOCK_RETRIES = 2;
 
 export interface LocalStorageOptions {
   /** Base path for storage (default: ~/.assistants/messages) */
@@ -78,6 +84,80 @@ export class LocalMessagesStorage {
   private getAssistantPath(assistantId: string): string {
     this.validateSafeId(assistantId, 'assistantId');
     return join(this.basePath, assistantId);
+  }
+
+  private getIndexLockPath(assistantId: string): string {
+    return join(this.getAssistantPath(assistantId), INDEX_LOCK_FILE);
+  }
+
+  private async acquireIndexLock(
+    assistantId: string,
+    ownerId: string,
+    ttlMs: number = INDEX_LOCK_TTL_MS,
+    retryDepth: number = 0
+  ): Promise<boolean> {
+    if (retryDepth >= INDEX_LOCK_RETRIES) return false;
+    await this.ensureDirectories(assistantId);
+    const path = this.getIndexLockPath(assistantId);
+    const now = Date.now();
+
+    try {
+      const handle = await open(path, 'wx');
+      await handle.writeFile(JSON.stringify({ ownerId, createdAt: now, updatedAt: now, ttlMs }, null, 2), 'utf-8');
+      await handle.close();
+      return true;
+    } catch {
+      try {
+        const raw = await readFile(path, 'utf-8');
+        const lock = JSON.parse(raw) as { ownerId?: string; createdAt?: number; updatedAt?: number; ttlMs?: number };
+        const updatedAt = lock?.updatedAt || lock?.createdAt || 0;
+        const ttl = lock?.ttlMs ?? ttlMs;
+        if (now - updatedAt > ttl) {
+          await rm(path);
+          return this.acquireIndexLock(assistantId, ownerId, ttlMs, retryDepth + 1);
+        }
+      } catch {
+        if (retryDepth < INDEX_LOCK_RETRIES) {
+          try {
+            await rm(path);
+            return this.acquireIndexLock(assistantId, ownerId, ttlMs, retryDepth + 1);
+          } catch {
+            return false;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private async releaseIndexLock(assistantId: string, ownerId: string): Promise<void> {
+    const path = this.getIndexLockPath(assistantId);
+    try {
+      const raw = await readFile(path, 'utf-8');
+      const lock = JSON.parse(raw) as { ownerId?: string };
+      if (lock?.ownerId === ownerId) {
+        await rm(path);
+      }
+    } catch {
+      // Ignore missing lock
+    }
+  }
+
+  private async withIndexLock<T>(
+    assistantId: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const ownerId = generateId();
+    const locked = await this.acquireIndexLock(assistantId, ownerId);
+    if (!locked) {
+      throw new Error('Inbox index is locked');
+    }
+    try {
+      return await fn();
+    } finally {
+      await this.releaseIndexLock(assistantId, ownerId);
+    }
   }
 
   private getIndexPath(assistantId: string): string {
@@ -220,9 +300,8 @@ export class LocalMessagesStorage {
    * Save inbox index for an assistant
    */
   async saveIndex(assistantId: string, index: InboxIndex): Promise<void> {
-    const runtime = getRuntime();
     await this.ensureDirectories(assistantId);
-    await runtime.write(this.getIndexPath(assistantId), JSON.stringify(index, null, 2));
+    await atomicWriteFile(this.getIndexPath(assistantId), JSON.stringify(index, null, 2));
   }
 
   /**
@@ -255,47 +334,47 @@ export class LocalMessagesStorage {
    * Save a message to storage
    */
   async saveMessage(message: AssistantMessage): Promise<void> {
-    const runtime = getRuntime();
     await this.ensureDirectories(message.toAssistantId);
 
     // Save full message
     const messagePath = this.getMessagePath(message.toAssistantId, message.id);
-    await runtime.write(messagePath, JSON.stringify(message, null, 2));
+    await atomicWriteFile(messagePath, JSON.stringify(message, null, 2));
 
-    // Update index
-    const index = await this.loadIndex(message.toAssistantId);
+    await this.withIndexLock(message.toAssistantId, async () => {
+      // Update index
+      const index = await this.loadIndex(message.toAssistantId);
 
-    const listItem: MessageListItem = {
-      id: message.id,
-      threadId: message.threadId,
-      parentId: message.parentId,
-      fromAssistantId: message.fromAssistantId,
-      fromAssistantName: message.fromAssistantName,
-      subject: message.subject,
-      preview: message.body.slice(0, 100) + (message.body.length > 100 ? '...' : ''),
-      priority: message.priority,
-      status: message.status,
-      createdAt: message.createdAt,
-      replyCount: 0,
-    };
+      const listItem: MessageListItem = {
+        id: message.id,
+        threadId: message.threadId,
+        parentId: message.parentId,
+        fromAssistantId: message.fromAssistantId,
+        fromAssistantName: message.fromAssistantName,
+        subject: message.subject,
+        preview: message.body.slice(0, 100) + (message.body.length > 100 ? '...' : ''),
+        priority: message.priority,
+        status: message.status,
+        createdAt: message.createdAt,
+        replyCount: 0,
+      };
 
-    // Add to index (prepend for most recent first)
-    index.messages.unshift(listItem);
+      // Add to index (prepend for most recent first)
+      index.messages.unshift(listItem);
 
-    // Update reply counts for thread
-    if (message.parentId) {
-      for (const msg of index.messages) {
-        if (msg.threadId === message.threadId && msg.id !== message.id) {
-          msg.replyCount = (msg.replyCount || 0) + 1;
+      // Update reply count for parent only
+      if (message.parentId) {
+        const parent = index.messages.find((m) => m.id === message.parentId);
+        if (parent) {
+          parent.replyCount = (parent.replyCount || 0) + 1;
         }
       }
-    }
 
-    await this.rebuildIndexStats(message.toAssistantId, index);
-    await this.saveIndex(message.toAssistantId, index);
+      await this.rebuildIndexStats(message.toAssistantId, index);
+      await this.saveIndex(message.toAssistantId, index);
 
-    // Update thread metadata
-    await this.updateThread(message.toAssistantId, message);
+      // Update thread metadata
+      await this.updateThread(message.toAssistantId, message);
+    });
   }
 
   /**
@@ -323,10 +402,10 @@ export class LocalMessagesStorage {
     status: AssistantMessage['status'],
     timestamp?: string
   ): Promise<void> {
-    const runtime = getRuntime();
     const message = await this.loadMessage(assistantId, messageId);
     if (!message) return;
 
+    const previousStatus = message.status;
     message.status = status;
     if (status === 'read' && timestamp) {
       message.readAt = timestamp;
@@ -334,43 +413,57 @@ export class LocalMessagesStorage {
       message.injectedAt = timestamp;
     }
 
-    await runtime.write(
+    await atomicWriteFile(
       this.getMessagePath(assistantId, messageId),
       JSON.stringify(message, null, 2)
     );
 
-    // Update index
-    const index = await this.loadIndex(assistantId);
-    const indexItem = index.messages.find((m) => m.id === messageId);
-    if (indexItem) {
-      indexItem.status = status;
-    }
-    await this.rebuildIndexStats(assistantId, index);
-    await this.saveIndex(assistantId, index);
+    await this.withIndexLock(assistantId, async () => {
+      // Update index
+      const index = await this.loadIndex(assistantId);
+      const indexItem = index.messages.find((m) => m.id === messageId);
+      if (indexItem) {
+        indexItem.status = status;
+      }
+      await this.rebuildIndexStats(assistantId, index);
+      await this.saveIndex(assistantId, index);
+
+      if (previousStatus !== status && message.threadId) {
+        await this.updateThreadFromIndex(assistantId, message.threadId, index);
+      }
+    });
   }
 
   /**
    * Delete a message
    */
   async deleteMessage(assistantId: string, messageId: string): Promise<boolean> {
-    const runtime = getRuntime();
     const messagePath = this.getMessagePath(assistantId, messageId);
     try {
-      const file = runtime.file(messagePath);
-      if (!(await file.exists())) {
-        return false;
-      }
+      const message = await this.loadMessage(assistantId, messageId);
+      if (!message) return false;
 
       await rm(messagePath);
 
-      // Update index
-      const index = await this.loadIndex(assistantId);
-      const msgIndex = index.messages.findIndex((m) => m.id === messageId);
-      if (msgIndex >= 0) {
-        index.messages.splice(msgIndex, 1);
-        await this.rebuildIndexStats(assistantId, index);
-        await this.saveIndex(assistantId, index);
-      }
+      await this.withIndexLock(assistantId, async () => {
+        // Update index
+        const index = await this.loadIndex(assistantId);
+        if (message.parentId) {
+          const parent = index.messages.find((m) => m.id === message.parentId);
+          if (parent && parent.replyCount) {
+            parent.replyCount = Math.max(0, parent.replyCount - 1);
+          }
+        }
+        const msgIndex = index.messages.findIndex((m) => m.id === messageId);
+        if (msgIndex >= 0) {
+          index.messages.splice(msgIndex, 1);
+          await this.rebuildIndexStats(assistantId, index);
+          await this.saveIndex(assistantId, index);
+          if (message.threadId) {
+            await this.updateThreadFromIndex(assistantId, message.threadId, index);
+          }
+        }
+      });
 
       return true;
     } catch {
@@ -420,12 +513,11 @@ export class LocalMessagesStorage {
    * Update thread metadata
    */
   private async updateThread(assistantId: string, message: AssistantMessage): Promise<void> {
-    const runtime = getRuntime();
     const threadPath = this.getThreadPath(assistantId, message.threadId);
     let thread: MessageThread;
 
     try {
-      const file = runtime.file(threadPath);
+      const file = getRuntime().file(threadPath);
       if (await file.exists()) {
         thread = await file.json();
       } else {
@@ -471,7 +563,7 @@ export class LocalMessagesStorage {
 
     // Update counts
     thread.messageCount++;
-    if (message.status === 'unread') {
+    if (message.status === 'unread' || message.status === 'injected') {
       thread.unreadCount++;
     }
 
@@ -492,7 +584,55 @@ export class LocalMessagesStorage {
 
     thread.updatedAt = message.createdAt;
 
-    await runtime.write(threadPath, JSON.stringify(thread, null, 2));
+    await atomicWriteFile(threadPath, JSON.stringify(thread, null, 2));
+  }
+
+  private async updateThreadFromIndex(
+    assistantId: string,
+    threadId: string,
+    index: InboxIndex
+  ): Promise<void> {
+    const threadPath = this.getThreadPath(assistantId, threadId);
+    let thread: MessageThread | null = null;
+    try {
+      const file = getRuntime().file(threadPath);
+      if (await file.exists()) {
+        thread = await file.json();
+      }
+    } catch {
+      thread = null;
+    }
+
+    const threadMessages = index.messages.filter((m) => m.threadId === threadId);
+    if (threadMessages.length === 0) {
+      try {
+        await rm(threadPath);
+      } catch {
+        // Ignore missing thread file
+      }
+      return;
+    }
+
+    if (!thread) {
+      thread = {
+        threadId,
+        subject: threadMessages[0].subject,
+        participants: [],
+        messageCount: 0,
+        unreadCount: 0,
+        lastMessage: threadMessages[0],
+        createdAt: threadMessages[threadMessages.length - 1].createdAt,
+        updatedAt: threadMessages[0].createdAt,
+      };
+    }
+
+    thread.messageCount = threadMessages.length;
+    thread.unreadCount = threadMessages.filter((m) => m.status === 'unread' || m.status === 'injected').length;
+    thread.lastMessage = threadMessages[0];
+    thread.subject = thread.lastMessage.subject ?? thread.subject;
+    thread.updatedAt = thread.lastMessage.createdAt;
+
+    await atomicWriteFile(threadPath, JSON.stringify(thread, null, 2));
   }
 
   /**
