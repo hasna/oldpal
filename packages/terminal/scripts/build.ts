@@ -354,12 +354,14 @@ export interface SavedSessionInfo {
   startedAt: string;
   updatedAt: string;
   messageCount: number;
+  assistantId?: string | null;
 }
 
 export declare const SessionStorage: {
   saveSession(id: string, data: SessionData): void;
-  loadSession(id: string): SessionData | null;
-  listSessions(): SavedSessionInfo[];
+  loadSession(id: string, assistantId?: string | null): SessionData | null;
+  listSessions(assistantId?: string | null): SavedSessionInfo[];
+  listAllSessions(): SavedSessionInfo[];
   deleteSession(id: string): void;
   getLatestSession(): SavedSessionInfo | null;
 };

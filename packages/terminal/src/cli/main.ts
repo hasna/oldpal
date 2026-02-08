@@ -8,6 +8,7 @@ export interface ParsedOptions {
   version: boolean;
   help: boolean;
   print: string | null;
+  headlessTimeoutMs: number | null;
   outputFormat: 'text' | 'json' | 'stream-json';
   allowedTools: string[];
   systemPrompt: string | null;
@@ -38,6 +39,7 @@ export function parseArgs(argv: string[]): ParsedOptions {
     version: false,
     help: false,
     print: null,
+    headlessTimeoutMs: null,
     outputFormat: 'text',
     allowedTools: [],
     systemPrompt: null,
@@ -154,6 +156,23 @@ export function parseArgs(argv: string[]): ParsedOptions {
       continue;
     }
 
+    // Headless timeout
+    if (arg === '--headless-timeout' || arg === '--headless-timeout-ms') {
+      const nextArg = args[i + 1];
+      if (nextArg === undefined || isFlag(nextArg)) {
+        options.errors.push(`${arg} requires a millisecond value`);
+      } else {
+        const parsed = Number(nextArg);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          options.errors.push(`${arg} must be a positive number of milliseconds`);
+        } else {
+          options.headlessTimeoutMs = Math.floor(parsed);
+        }
+        i++;
+      }
+      continue;
+    }
+
     // Continue last session
     if (arg === '--continue' || arg === '-c') {
       options.continue = true;
@@ -214,6 +233,7 @@ export interface HeadlessOptions {
   continue?: boolean;
   resume?: string | null;
   cwdProvided?: boolean;
+  timeoutMs?: number | null;
 }
 
 export interface MainDependencies {
@@ -269,6 +289,7 @@ Headless Mode:
   --allowed-tools <tools>      Comma-separated tools to auto-approve (e.g., "Read,Edit,Bash")
   --system-prompt <prompt>     Custom system prompt
   --json-schema <schema>       JSON Schema for structured output (use with --output-format json)
+  --headless-timeout-ms <ms>   Abort headless run after the given timeout (ms)
   -c, --continue               Continue the most recent conversation
   -r, --resume <session_id>    Resume a specific session by ID
   --cwd <path>                 Set working directory
@@ -322,6 +343,7 @@ Interactive Mode:
       continue: options.continue,
       resume: options.resume,
       cwdProvided: options.cwdProvided,
+      timeoutMs: options.headlessTimeoutMs,
     });
   }
 

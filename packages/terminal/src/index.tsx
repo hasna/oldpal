@@ -113,6 +113,7 @@ Headless Mode:
   --allowed-tools <tools>      Comma-separated tools to auto-approve (e.g., "Read,Edit,Bash")
   --system-prompt <prompt>     Custom system prompt
   --json-schema <schema>       JSON Schema for structured output (use with --output-format json)
+  --headless-timeout-ms <ms>   Abort headless run after the given timeout (ms)
   -c, --continue               Continue the most recent conversation
   -r, --resume <session_id>    Resume a specific session by ID
   --cwd <path>                 Set working directory
@@ -163,12 +164,10 @@ if (options.print !== null) {
     continue: options.continue,
     resume: options.resume,
     cwdProvided: options.cwdProvided,
+    timeoutMs: options.headlessTimeoutMs,
   })
     .then((result) => {
-      // Exit with error code if the operation failed
-      if (!result.success) {
-        process.exit(1);
-      }
+      process.exit(result.success ? 0 : 1);
     })
     .catch((error) => {
       console.error('Error:', error.message);

@@ -11,6 +11,7 @@ export interface HeadlessOptions {
   continue?: boolean;
   resume?: string | null;
   cwdProvided?: boolean;
+  timeoutMs?: number | null;
 }
 
 interface JsonOutput {
@@ -51,6 +52,7 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
     continue: shouldContinue,
     resume,
     cwdProvided,
+    timeoutMs,
   } = options;
 
   let sessionData = null as null | { id: string; data: ReturnType<typeof SessionStorage.loadSession> };
@@ -152,7 +154,16 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
 
   try {
     // Send the message and wait for completion
-    await client.send(message);
+    if (timeoutMs && timeoutMs > 0) {
+      await Promise.race([
+        client.send(message),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error(`Headless run timed out after ${timeoutMs}ms`)), timeoutMs)
+        ),
+      ]);
+    } else {
+      await client.send(message);
+    }
   } catch (error) {
     // Capture any thrown errors
     hadError = true;

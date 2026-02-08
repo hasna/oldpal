@@ -83,6 +83,11 @@ describe('parseArgs', () => {
     expect(options.jsonSchema).toBe(schema);
   });
 
+  test('parses --headless-timeout-ms', () => {
+    const options = parseArgs(['node', 'cli', '-p', 'test', '--headless-timeout-ms', '15000']);
+    expect(options.headlessTimeoutMs).toBe(15000);
+  });
+
   test('parses --continue flag', () => {
     const options = parseArgs(['node', 'cli', '-p', 'test', '--continue']);
     expect(options.continue).toBe(true);
@@ -152,6 +157,7 @@ describe('parseArgs', () => {
     expect(options.allowedTools).toEqual([]);
     expect(options.systemPrompt).toBeNull();
     expect(options.jsonSchema).toBeNull();
+    expect(options.headlessTimeoutMs).toBeNull();
     expect(options.continue).toBe(false);
     expect(options.resume).toBeNull();
     expect(options.cwdProvided).toBe(false);
@@ -206,6 +212,16 @@ describe('parseArgs - validation errors', () => {
     const options = parseArgs(['node', 'cli', '-p', 'test', '--json-schema', '--continue']);
     expect(options.errors).toContain('--json-schema requires a JSON schema string');
     expect(options.continue).toBe(true);
+  });
+
+  test('--headless-timeout-ms missing value adds error', () => {
+    const options = parseArgs(['node', 'cli', '-p', 'test', '--headless-timeout-ms']);
+    expect(options.errors).toContain('--headless-timeout-ms requires a millisecond value');
+  });
+
+  test('--headless-timeout-ms invalid value adds error', () => {
+    const options = parseArgs(['node', 'cli', '-p', 'test', '--headless-timeout-ms', 'nope']);
+    expect(options.errors).toContain('--headless-timeout-ms must be a positive number of milliseconds');
   });
 
   test('--resume missing value adds error', () => {
@@ -532,6 +548,7 @@ describe('main - headless wiring', () => {
       continue: true,
       resume: null,
       cwdProvided: true,
+      timeoutMs: null,
     });
   });
 });
