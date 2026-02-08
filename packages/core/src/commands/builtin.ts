@@ -206,6 +206,7 @@ export class BuiltinCommands {
     loader.register(this.channelsCommand());
     loader.register(this.peopleCommand());
     loader.register(this.phoneCommand());
+    loader.register(this.ordersCommand());
     loader.register(this.tasksCommand());
     loader.register(this.setupCommand());
     loader.register(this.exitCommand());
@@ -3507,6 +3508,221 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         context.emit('text', `Unknown command: ${subcommand}\n`);
         context.emit('text', 'Use /phone help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /orders - Order lifecycle management
+   */
+  private ordersCommand(): Command {
+    return {
+      name: 'orders',
+      description: 'Manage orders across stores and vendors',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const trimmed = args.trim();
+        const [subcommand, ...rest] = trimmed.split(/\s+/);
+        const subArgs = rest.join(' ');
+
+        // /orders (no args) → open interactive panel
+        if (!subcommand || subcommand === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'orders' };
+        }
+
+        const manager = context.getOrdersManager?.();
+        if (!manager) {
+          context.emit('text', 'Orders are not enabled. Set orders.enabled: true in config.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /orders list [--status X]
+        if (subcommand === 'list') {
+          try {
+            const statusMatch = subArgs.match(/--status\s+(\S+)/);
+            const status = statusMatch?.[1];
+            const orders = manager.listOrders({ status: status as any, limit: 20 });
+            if (orders.length === 0) {
+              context.emit('text', 'No orders found.\n');
+            } else {
+              context.emit('text', `Orders (${orders.length}):\n\n`);
+              for (const order of orders) {
+                const amount = order.totalAmount != null ? ` | ${order.currency} ${order.totalAmount.toFixed(2)}` : '';
+                const desc = order.description ? ` — ${order.description}` : '';
+                context.emit('text', `  ${order.id}: ${order.storeName} [${order.status}]${amount}${desc}\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /orders create <store> [description]
+        if (subcommand === 'create') {
+          const parts = splitArgs(subArgs);
+          const store = parts[0];
+          const description = parts.slice(1).join(' ') || undefined;
+
+          if (!store) {
+            context.emit('text', 'Usage: /orders create <store> [description]\n');
+            context.emit('text', 'Example: /orders create Amazon "New laptop order"\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = manager.createOrder(store, { description });
+            if (result.success) {
+              context.emit('text', `Order created!\n`);
+              context.emit('text', `  ID:    ${result.orderId}\n`);
+              context.emit('text', `  Store: ${store}\n`);
+              if (description) context.emit('text', `  Desc:  ${description}\n`);
+            } else {
+              context.emit('text', `Error: ${result.message}\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /orders get <id>
+        if (subcommand === 'get') {
+          const orderId = subArgs.trim();
+          if (!orderId) {
+            context.emit('text', 'Usage: /orders get <order-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = manager.getOrder(orderId);
+            if (!result) {
+              context.emit('text', `Order "${orderId}" not found.\n`);
+            } else {
+              const { order, items } = result;
+              context.emit('text', `Order ${order.id}\n`);
+              context.emit('text', `  Store:   ${order.storeName}\n`);
+              context.emit('text', `  Status:  ${order.status}\n`);
+              if (order.orderNumber) context.emit('text', `  Order #: ${order.orderNumber}\n`);
+              if (order.description) context.emit('text', `  Desc:    ${order.description}\n`);
+              if (order.totalAmount != null) context.emit('text', `  Total:   ${order.currency} ${order.totalAmount.toFixed(2)}\n`);
+              if (order.trackingNumber) context.emit('text', `  Track:   ${order.trackingNumber}\n`);
+              if (items.length > 0) {
+                context.emit('text', `  Items (${items.length}):\n`);
+                for (const item of items) {
+                  const price = item.totalPrice != null ? ` — $${item.totalPrice.toFixed(2)}` : '';
+                  context.emit('text', `    - ${item.name} x${item.quantity}${price}\n`);
+                }
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /orders cancel <id>
+        if (subcommand === 'cancel') {
+          const orderId = subArgs.trim();
+          if (!orderId) {
+            context.emit('text', 'Usage: /orders cancel <order-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const result = manager.cancelOrder(orderId);
+          context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /orders track <id>
+        if (subcommand === 'track') {
+          const orderId = subArgs.trim();
+          if (!orderId) {
+            context.emit('text', 'Usage: /orders track <order-id>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const tracking = manager.getTracking(orderId);
+          if (!tracking) {
+            context.emit('text', `Order "${orderId}" not found.\n`);
+          } else {
+            context.emit('text', `Tracking: ${tracking.orderId}\n`);
+            context.emit('text', `  Store:    ${tracking.storeName}\n`);
+            context.emit('text', `  Status:   ${tracking.status}\n`);
+            context.emit('text', `  Track #:  ${tracking.trackingNumber || 'N/A'}\n`);
+            if (tracking.trackingUrl) context.emit('text', `  URL:      ${tracking.trackingUrl}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /orders stores
+        if (subcommand === 'stores') {
+          // /orders stores add <name>
+          if (rest[0] === 'add') {
+            const name = rest.slice(1).join(' ').trim();
+            if (!name) {
+              context.emit('text', 'Usage: /orders stores add <store-name>\n');
+              context.emit('done');
+              return { handled: true };
+            }
+            const result = manager.addStore(name);
+            context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+            context.emit('done');
+            return { handled: true };
+          }
+
+          // /orders stores (list)
+          try {
+            const stores = manager.listStores();
+            if (stores.length === 0) {
+              context.emit('text', 'No stores registered. Use /orders stores add <name> to add one.\n');
+            } else {
+              context.emit('text', `Stores (${stores.length}):\n\n`);
+              for (const store of stores) {
+                const orders = store.orderCount > 0 ? ` | ${store.orderCount} orders` : '';
+                context.emit('text', `  ${store.name} [${store.category}]${orders}\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /orders help
+        if (subcommand === 'help') {
+          context.emit('text', 'Order Commands:\n\n');
+          context.emit('text', '/orders                        Open orders panel\n');
+          context.emit('text', '/orders list [--status X]      List orders\n');
+          context.emit('text', '/orders create <store> [desc]  Create order\n');
+          context.emit('text', '/orders get <id>               Get order details\n');
+          context.emit('text', '/orders cancel <id>            Cancel order\n');
+          context.emit('text', '/orders track <id>             Get tracking info\n');
+          context.emit('text', '/orders stores                 List stores\n');
+          context.emit('text', '/orders stores add <name>      Add store\n');
+          context.emit('text', '/orders help                   Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown command: ${subcommand}\n`);
+        context.emit('text', 'Use /orders help for available commands.\n');
         context.emit('done');
         return { handled: true };
       },

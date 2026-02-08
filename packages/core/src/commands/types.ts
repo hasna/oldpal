@@ -13,6 +13,7 @@ import type { MessagesManager } from '../messages';
 import type { WebhooksManager } from '../webhooks';
 import type { ChannelsManager, ChannelAgentPool } from '../channels';
 import type { TelephonyManager } from '../telephony';
+import type { OrdersManager } from '../orders';
 import type { GlobalMemoryManager } from '../memory';
 import type { SwarmCoordinator } from '../swarm';
 
@@ -101,6 +102,7 @@ export interface CommandContext {
   getChannelsManager?: () => ChannelsManager | null;
   getChannelAgentPool?: () => ChannelAgentPool | null;
   getTelephonyManager?: () => TelephonyManager | null;
+  getOrdersManager?: () => OrdersManager | null;
   getMemoryManager?: () => GlobalMemoryManager | null;
   getHooks?: () => HookConfig;
   setHookEnabled?: (hookId: string, enabled: boolean) => Promise<boolean>;
@@ -152,7 +154,7 @@ export interface CommandResult {
   /** Agent name/ID to assign to session */
   sessionAgent?: string;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony' | 'setup' | 'people';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony' | 'orders' | 'setup' | 'people';
   /** Initial value for panel (e.g., connector name) */
   panelValue?: string;
 }

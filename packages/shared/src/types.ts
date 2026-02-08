@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony' | 'setup' | 'people';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony' | 'orders' | 'setup' | 'people';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -454,6 +454,7 @@ export interface AssistantsConfig {
   webhooks?: WebhooksConfig;
   channels?: ChannelsConfig;
   telephony?: TelephonyConfig;
+  orders?: OrdersConfig;
   memory?: MemoryConfigShared;
   subassistants?: SubassistantConfigShared;
   input?: InputConfig;
@@ -1291,6 +1292,31 @@ export interface TelephonyConfig {
     recordCalls?: boolean;
     /** Max call duration in seconds (default: 3600 = 1 hour) */
     maxCallDurationSeconds?: number;
+  };
+}
+
+/**
+ * Configuration for orders (full-lifecycle order management)
+ * Enables tracking, creating, modifying, cancelling, and returning orders across stores/vendors
+ */
+export interface OrdersConfig {
+  /** Whether orders are enabled (default: false) */
+  enabled?: boolean;
+
+  /** Auto-injection settings for order status changes */
+  injection?: {
+    /** Auto-inject recent order updates at turn start (default: true) */
+    enabled?: boolean;
+    /** Max order updates to inject per turn (default: 5) */
+    maxPerTurn?: number;
+  };
+
+  /** Storage settings */
+  storage?: {
+    /** Max orders to retain (default: 5000) */
+    maxOrders?: number;
+    /** Max order age in days (default: 365) */
+    maxAgeDays?: number;
   };
 }
 

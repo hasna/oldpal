@@ -31,6 +31,7 @@ import { ChannelsPanel } from './ChannelsPanel';
 import { parseMentions, resolveNameToKnown, type ChannelMember } from '@hasna/assistants-core';
 import { PeoplePanel } from './PeoplePanel';
 import { TelephonyPanel } from './TelephonyPanel';
+import { OrdersPanel } from './OrdersPanel';
 import { OnboardingPanel, type OnboardingResult } from './OnboardingPanel';
 import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
@@ -380,6 +381,9 @@ export function App({ cwd, version }: AppProps) {
   // Telephony panel state
   const [showTelephonyPanel, setShowTelephonyPanel] = useState(false);
 
+  // Orders panel state
+  const [showOrdersPanel, setShowOrdersPanel] = useState(false);
+
   // Onboarding panel state
   const [showOnboardingPanel, setShowOnboardingPanel] = useState(false);
 
@@ -524,6 +528,7 @@ export function App({ cwd, version }: AppProps) {
     showChannelsPanel ||
     showPeoplePanel ||
     showTelephonyPanel ||
+    showOrdersPanel ||
     showMessagesPanel ||
     showProjectsPanel ||
     showPlansPanel ||
@@ -1384,6 +1389,8 @@ export function App({ cwd, version }: AppProps) {
         setShowPeoplePanel(true);
       } else if (chunk.panel === 'telephony') {
         setShowTelephonyPanel(true);
+      } else if (chunk.panel === 'orders') {
+        setShowOrdersPanel(true);
       } else if (chunk.panel === 'setup') {
         setShowOnboardingPanel(true);
       } else if (chunk.panel === 'messages') {
@@ -1968,6 +1975,7 @@ export function App({ cwd, version }: AppProps) {
     isProcessingRef.current = true;
 
     registryRef.current.setProcessing(activeSession.id, true);
+    pendingSendsRef.current.push({ id: nextMessage.id, sessionId: activeSessionId, mode: 'queued' });
     try {
       await activeSession.client.send(nextMessage.content);
     } catch (err) {
@@ -4245,6 +4253,25 @@ export function App({ cwd, version }: AppProps) {
       <TelephonyPanel
         manager={telephonyManager}
         onClose={() => setShowTelephonyPanel(false)}
+      />
+    );
+  }
+
+  // Show orders panel
+  if (showOrdersPanel) {
+    const ordersManager = activeSession?.client.getOrdersManager?.();
+    if (!ordersManager) {
+      return (
+        <CloseOnAnyKeyPanel
+          message="Orders are not enabled. Set orders.enabled: true in config."
+          onClose={() => setShowOrdersPanel(false)}
+        />
+      );
+    }
+    return (
+      <OrdersPanel
+        manager={ordersManager}
+        onClose={() => setShowOrdersPanel(false)}
       />
     );
   }

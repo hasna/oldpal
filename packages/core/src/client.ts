@@ -480,6 +480,16 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the orders manager
+   */
+  getOrdersManager(): any {
+    if (typeof (this.assistantLoop as any).getOrdersManager === 'function') {
+      return (this.assistantLoop as any).getOrdersManager();
+    }
+    return null;
+  }
+
+  /**
    * Get the wallet manager
    */
   getWalletManager(): any {

@@ -307,6 +307,9 @@ export * from './channels';
 // People (Human Participants)
 export * from './people';
 
+// Orders (Full-Lifecycle Order Management)
+export * from './orders';
+
 // Telephony (Twilio + ElevenLabs Conversational AI)
 export * from './telephony';
 

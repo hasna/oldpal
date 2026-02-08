@@ -87,6 +87,7 @@ import { createWebhooksManager, registerWebhookTools, type WebhooksManager } fro
 import { createChannelsManager, registerChannelTools, ChannelAgentPool, type ChannelsManager } from '../channels';
 import { createPeopleManager, type PeopleManager } from '../people';
 import { createTelephonyManager, registerTelephonyTools, type TelephonyManager } from '../telephony';
+import { createOrdersManager, registerOrderTools, type OrdersManager } from '../orders';
 import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
 import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
 import { registerSelfAwarenessTools } from '../tools/self-awareness';
@@ -197,6 +198,7 @@ export class AssistantLoop {
   private channelAgentPool: ChannelAgentPool | null = null;
   private peopleManager: PeopleManager | null = null;
   private telephonyManager: TelephonyManager | null = null;
+  private ordersManager: OrdersManager | null = null;
   private memoryManager: GlobalMemoryManager | null = null;
   private memoryInjector: MemoryInjector | null = null;
   private contextInjector: ContextInjector | null = null;
@@ -208,6 +210,7 @@ export class AssistantLoop {
   private pendingWebhooksContext: string | null = null;
   private pendingChannelsContext: string | null = null;
   private pendingTelephonyContext: string | null = null;
+  private pendingOrdersContext: string | null = null;
   private pendingMemoryContext: string | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
@@ -532,6 +535,15 @@ export class AssistantLoop {
       const assistantName = assistant?.name || 'assistant';
       this.telephonyManager = createTelephonyManager(assistantId, assistantName, this.config.telephony);
       registerTelephonyTools(this.toolRegistry, () => this.telephonyManager);
+    }
+
+    // Initialize orders if enabled
+    if (this.config?.orders?.enabled) {
+      const assistant = this.assistantManager?.getActive();
+      const assistantId = assistant?.id || this.sessionId;
+      const assistantName = assistant?.name || 'assistant';
+      this.ordersManager = createOrdersManager(assistantId, assistantName, this.config.orders);
+      registerOrderTools(this.toolRegistry, () => this.ordersManager);
     }
 
     // Initialize memory system if enabled
@@ -972,6 +984,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       await this.injectPendingChannelMessages();
       // Inject pending telephony messages before processing
       await this.injectPendingTelephonyMessages();
+      // Inject pending order updates before processing
+      await this.injectPendingOrderUpdates();
       // Inject relevant memories based on user message
       await this.injectMemoryContext(userMessage);
       // Inject environment context (datetime, cwd, etc.)
@@ -1919,6 +1933,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       getChannelAgentPool: () => this.channelAgentPool,
       getPeopleManager: () => this.peopleManager,
       getTelephonyManager: () => this.telephonyManager,
+      getOrdersManager: () => this.ordersManager,
       getMemoryManager: () => this.memoryManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
@@ -2243,6 +2258,9 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     // Close telephony connections
     this.telephonyManager?.close();
     this.telephonyManager = null;
+    // Close orders database connection
+    this.ordersManager?.close();
+    this.ordersManager = null;
     // Close memory database connection
     this.memoryManager?.close();
     this.memoryManager = null;
@@ -2367,6 +2385,10 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
 
   getTelephonyManager(): TelephonyManager | null {
     return this.telephonyManager;
+  }
+
+  getOrdersManager(): OrdersManager | null {
+    return this.ordersManager;
   }
 
   getWalletManager(): WalletManager | null {
@@ -3073,6 +3095,37 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
   }
 
   /**
+   * Inject pending order updates into context at turn start
+   */
+  private async injectPendingOrderUpdates(): Promise<void> {
+    if (!this.ordersManager) return;
+
+    try {
+      if (this.pendingOrdersContext) {
+        const previous = this.pendingOrdersContext.trim();
+        this.context.removeSystemMessages((content) => content.trim() === previous);
+        this.pendingOrdersContext = null;
+      }
+
+      const pending = this.ordersManager.getUnreadForInjection();
+      if (pending.length === 0) {
+        return;
+      }
+
+      this.pendingOrdersContext = this.ordersManager.buildInjectionContext(pending);
+
+      if (this.pendingOrdersContext) {
+        this.context.addSystemMessage(this.pendingOrdersContext);
+      }
+
+      this.ordersManager.markInjected(pending);
+    } catch (error) {
+      console.error('Failed to inject pending order updates:', error);
+      this.pendingOrdersContext = null;
+    }
+  }
+
+  /**
    * Inject relevant memories into context at turn start
    */
   private async injectMemoryContext(userMessage: string): Promise<void> {
@@ -3163,7 +3216,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
               sessionId: this.sessionId,
               updatedAt: Date.now(),
             };
-          });
+          }, { ownerId: this.sessionId });
           if (!claimed || (claimed.sessionId && claimed.sessionId !== this.sessionId)) {
             await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);
             continue;
@@ -3238,7 +3291,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
               updated.nextRunAt = computeNextRun(updated, now);
             }
             return updated;
-          });
+          }, { ownerId: this.sessionId });
         } finally {
           clearInterval(leaseTimer);
           await releaseScheduleLock(this.cwd, schedule.id, this.sessionId);

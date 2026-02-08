@@ -214,6 +214,17 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       maxAgeDays: 90,
     },
   },
+  orders: {
+    enabled: false,
+    injection: {
+      enabled: true,
+      maxPerTurn: 5,
+    },
+    storage: {
+      maxOrders: 5000,
+      maxAgeDays: 365,
+    },
+  },
   telephony: {
     enabled: false,
     injection: {
@@ -461,6 +472,18 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
       storage: {
         ...(base.channels?.storage || {}),
         ...(override.channels?.storage || {}),
+      },
+    },
+    orders: {
+      ...(base.orders || {}),
+      ...(override.orders || {}),
+      injection: {
+        ...(base.orders?.injection || {}),
+        ...(override.orders?.injection || {}),
+      },
+      storage: {
+        ...(base.orders?.storage || {}),
+        ...(override.orders?.storage || {}),
       },
     },
     telephony: {
