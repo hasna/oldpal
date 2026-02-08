@@ -174,7 +174,10 @@ export class TaskGraph {
 
     for (const depId of deps) {
       const depTask = this.tasks.get(depId);
-      if (depTask && depTask.status === 'failed') {
+      if (!depTask) {
+        return true;
+      }
+      if (depTask.status === 'failed' || depTask.status === 'blocked' || depTask.status === 'cancelled') {
         return true;
       }
     }

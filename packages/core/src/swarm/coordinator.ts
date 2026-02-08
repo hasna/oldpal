@@ -609,6 +609,7 @@ Maximum ${this.config.maxTasks} tasks.`;
   private async executeTaskGraph(plan: SwarmPlan): Promise<void> {
     const completed = new Set<string>();
     const failed = new Set<string>();
+    const blocked = new Set<string>();
     const running = new Map<string, Promise<void>>();
 
     while (!this.stopped) {
@@ -621,8 +622,9 @@ Maximum ${this.config.maxTasks} tasks.`;
       // Update blocked tasks
       plan.tasks.forEach(task => {
         if (task.status === 'pending' &&
-            task.dependsOn.some(dep => failed.has(dep))) {
+            task.dependsOn.some(dep => failed.has(dep) || blocked.has(dep))) {
           task.status = 'blocked';
+          blocked.add(task.id);
         }
       });
 
@@ -682,13 +684,31 @@ Maximum ${this.config.maxTasks} tasks.`;
       if (running.size > 0) {
         await Promise.race(Array.from(running.values()));
       } else if (readyTasks.length === 0 && pendingCount > 0) {
-        // Deadlock - all remaining tasks are blocked by failed dependencies
-        const blockedTasks = plan.tasks.filter(t => t.status === 'pending' || t.status === 'blocked');
+        // Deadlock - remaining tasks cannot proceed (failed/blocked/missing deps)
+        const stillPending = plan.tasks.filter(t => t.status === 'pending');
+        for (const task of stillPending) {
+          task.status = 'blocked';
+          blocked.add(task.id);
+        }
+        const blockedTasks = plan.tasks.filter(t => t.status === 'blocked');
         const blockedIds = blockedTasks.map(t => t.id).join(', ');
-        const error = `Deadlock detected: ${blockedTasks.length} task(s) cannot proceed due to failed dependencies (${blockedIds})`;
+        const error = `Deadlock detected: ${blockedTasks.length} task(s) cannot proceed due to failed or blocked dependencies (${blockedIds})`;
         this.state!.errors.push(error);
         this.streamText(`\n⚠️ ${error}\n`);
         break;
+      }
+    }
+
+    // Ensure all running tasks have settled before returning
+    if (running.size > 0) {
+      await Promise.allSettled(Array.from(running.values()));
+    }
+
+    if (this.stopped) {
+      for (const task of plan.tasks) {
+        if (task.status === 'pending' || task.status === 'running') {
+          task.status = 'cancelled';
+        }
       }
     }
   }
@@ -1005,6 +1025,16 @@ Maximum ${this.config.maxTasks} tasks.`;
     trackInternal?: boolean;
   }): Promise<SubassistantResult> {
     const { role, task, tools, trackInternal } = params;
+
+    const targetDepth = this.context.depth + 1;
+    if (this.config.maxDepth > 0 && targetDepth > this.config.maxDepth) {
+      return {
+        success: false,
+        error: `Swarm maxDepth (${this.config.maxDepth}) exceeded`,
+        turns: 0,
+        toolCalls: 0,
+      };
+    }
 
     // Build system prompt
     const systemPrompt = ROLE_SYSTEM_PROMPTS[role];
