@@ -54,6 +54,9 @@ export class ChannelAgentPool {
         targetMembers = assistantMembers.filter((m) =>
           resolvedIds.has(m.assistantId)
         );
+      } else {
+        // Mentions were present but none matched channel members — don't send to everyone
+        return;
       }
     }
 

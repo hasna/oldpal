@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { ChannelsManager, ChannelListItem, ChannelMessage, ChannelMember, Channel } from '@hasna/assistants-core';
@@ -57,6 +57,13 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
 
   // Chat state
   const [chatInput, setChatInput] = useState('');
+  const lastSubmitTimeRef = useRef<number>(0);
+
+  // @mention dropdown state
+  const [mentionActive, setMentionActive] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [chatMembers, setChatMembers] = useState<ChannelMember[]>([]);
 
   // Invite state
   const [inviteName, setInviteName] = useState('');
@@ -81,6 +88,7 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
       setSelectedChannel(ch);
       const result = manager.readMessages(ch.id, 50);
       setMessages(result?.messages || []);
+      setChatMembers(manager.getMembers(ch.id));
       setMode('chat');
     }
   };
@@ -94,7 +102,86 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
     }
   };
 
+  // Filtered mention candidates
+  const mentionCandidates = useMemo(() => {
+    if (!mentionActive) return [];
+    const q = mentionQuery.toLowerCase();
+    return chatMembers.filter((m) =>
+      m.assistantName.toLowerCase().includes(q)
+    );
+  }, [mentionActive, mentionQuery, chatMembers]);
+
+  // Track @mention trigger via onChange
+  const handleChatInputChange = (value: string) => {
+    const prev = chatInput;
+    setChatInput(value);
+
+    // Detect new @ typed (value grew by 1 char and the new char is @)
+    if (value.length === prev.length + 1 && value[value.length - 1] === '@' && !mentionActive) {
+      setMentionActive(true);
+      setMentionQuery('');
+      setMentionIndex(0);
+      return;
+    }
+
+    // If mention dropdown is active, update the query
+    if (mentionActive) {
+      // Find the last @ in the value to extract the query after it
+      const lastAt = value.lastIndexOf('@');
+      if (lastAt >= 0) {
+        const afterAt = value.slice(lastAt + 1);
+        // If user typed a space or deleted past the @, dismiss
+        if (lastAt > prev.lastIndexOf('@') + prev.slice(prev.lastIndexOf('@') + 1).length + 1) {
+          // @ was deleted
+          setMentionActive(false);
+        } else {
+          setMentionQuery(afterAt);
+          setMentionIndex(0);
+        }
+      } else {
+        // No @ in input anymore — dismiss
+        setMentionActive(false);
+      }
+    }
+  };
+
+  // Insert selected mention into chat input
+  const insertMention = (memberName: string) => {
+    const lastAt = chatInput.lastIndexOf('@');
+    if (lastAt >= 0) {
+      const before = chatInput.slice(0, lastAt);
+      const needsQuotes = memberName.includes(' ');
+      const mention = needsQuotes ? `@"${memberName}" ` : `@${memberName} `;
+      setChatInput(before + mention);
+    }
+    setMentionActive(false);
+    setMentionQuery('');
+    setMentionIndex(0);
+  };
+
   useInput((input, key) => {
+    // Handle mention dropdown navigation when active
+    if (mentionActive && mode === 'chat') {
+      if (key.escape) {
+        setMentionActive(false);
+        setMentionQuery('');
+        return;
+      }
+      if (key.upArrow) {
+        setMentionIndex((prev) => Math.max(0, prev - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setMentionIndex((prev) => Math.min(mentionCandidates.length - 1, prev + 1));
+        return;
+      }
+      if (key.tab && mentionCandidates.length > 0) {
+        insertMention(mentionCandidates[mentionIndex].assistantName);
+        return;
+      }
+      // Let other keys pass through to TextInput
+    }
+
     // In text-entry modes (chat, create, invite), only handle Escape
     const isTextEntry = mode === 'create-name' || mode === 'create-desc' || mode === 'invite' || mode === 'chat';
 
@@ -105,6 +192,7 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
         setMode('list');
         setSelectedChannel(null);
         setStatusMessage(null);
+        setMentionActive(false);
       }
       return;
     }
@@ -183,7 +271,7 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
       <Text color="gray"> | </Text>
       <Text color="gray">
         {mode === 'list' ? 'q:close c:create enter:open m:members i:invite l:leave d:delete r:refresh' :
-         mode === 'chat' ? 'esc:back (type to chat)' :
+         mode === 'chat' ? 'esc:back (type to chat, @ to mention)' :
          mode === 'members' ? 'esc:back' :
          mode === 'delete-confirm' ? 'y:confirm n:cancel' :
          mode === 'create-confirm' ? 'y:confirm n:cancel' :
@@ -272,9 +360,14 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
           <Text color="gray">{'> '}</Text>
           <TextInput
             value={chatInput}
-            onChange={setChatInput}
+            onChange={handleChatInputChange}
             onSubmit={() => {
               if (chatInput.trim()) {
+                // Dedup guard: prevent double-firing within 500ms
+                const now = Date.now();
+                if (now - lastSubmitTimeRef.current < 500) return;
+                lastSubmitTimeRef.current = now;
+
                 const msg = chatInput.trim();
                 // Send as person if logged in, otherwise as assistant
                 const result = activePersonId && activePersonName
@@ -282,6 +375,7 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
                   : manager.send(selectedChannel.id, msg);
                 if (result.success) {
                   setChatInput('');
+                  setMentionActive(false);
                   // Reload messages
                   const updated = manager.readMessages(selectedChannel.id, 50);
                   setMessages(updated?.messages || []);
@@ -315,9 +409,28 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
                 }
               }
             }}
-            placeholder="Type a message..."
+            placeholder="Type a message... (@ to mention)"
           />
         </Box>
+
+        {mentionActive && mentionCandidates.length > 0 && (
+          <Box flexDirection="column" paddingX={1} borderStyle="single" borderColor="yellow" marginTop={0}>
+            <Text color="yellow" bold>Members (Tab to select, Esc to dismiss)</Text>
+            {mentionCandidates.slice(0, 8).map((m, i) => (
+              <Box key={m.assistantId}>
+                <Text color={i === mentionIndex ? 'blue' : undefined}>
+                  {i === mentionIndex ? '▸ ' : '  '}
+                </Text>
+                <Text bold={i === mentionIndex} color={i === mentionIndex ? 'blue' : undefined}>
+                  {m.assistantName}
+                </Text>
+                <Text color="gray">
+                  {m.memberType === 'person' ? ' [person]' : ' [assistant]'}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        )}
       </Box>
     );
   }

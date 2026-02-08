@@ -3015,10 +3015,10 @@ Created: ${new Date(job.createdAt).toISOString()}
           if (activePerson && result.success) {
             const agentPool = context.getChannelAgentPool?.();
             const members = manager.getMembers(channel);
+            const currentAssistantId = context.getAssistantManager?.()?.getActive?.()?.id;
             if (agentPool && members.length > 0) {
               // Pool handles @mention filtering, concurrent sends, and client caching
               // Exclude the current assistant (it responds via the prompt return below)
-              const currentAssistantId = context.getAssistantManager?.()?.getActive?.()?.id;
               agentPool.triggerResponses(
                 channel,
                 activePerson.name,
@@ -3028,7 +3028,26 @@ Created: ${new Date(job.createdAt).toISOString()}
               );
             }
 
-            // Still trigger the active session's assistant via prompt return
+            // Check @mentions — only trigger active assistant if mentioned (or no mentions)
+            const mentions = parseMentions(message);
+            if (mentions.length > 0) {
+              const assistantMembers = members.filter((m) => m.memberType === 'assistant');
+              const knownNames = assistantMembers.map((m) => ({ id: m.assistantId, name: m.assistantName }));
+              const resolved = mentions
+                .map((m) => resolveNameToKnown(m, knownNames))
+                .filter(Boolean) as Array<{ id: string; name: string }>;
+              if (resolved.length > 0) {
+                // Mentions resolved — only trigger if active assistant is mentioned
+                if (!resolved.some((r) => r.id === currentAssistantId)) {
+                  return { handled: true };
+                }
+              } else {
+                // Mentions present but none resolved — don't trigger anyone
+                return { handled: true };
+              }
+            }
+
+            // Trigger the active session's assistant via prompt return
             return {
               handled: false,
               prompt: `[Channel Message] ${activePerson.name} posted in #${channel}: "${message}"\n\nRespond in #${channel} using channel_send. Be helpful and conversational.`,

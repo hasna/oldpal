@@ -4188,7 +4188,7 @@ export function App({ cwd, version }: AppProps) {
           // Check if @mentions exclude the active assistant
           const mentions = parseMentions(message);
           let activeAssistantTargeted = true;
-          if (mentions.length > 0 && isActiveMember) {
+          if (mentions.length > 0) {
             const assistantMembers = members.filter((m) => m.memberType === 'assistant');
             const knownNames = assistantMembers.map((m) => ({ id: m.assistantId, name: m.assistantName }));
             const resolved = mentions
@@ -4196,6 +4196,9 @@ export function App({ cwd, version }: AppProps) {
               .filter(Boolean) as Array<{ id: string; name: string }>;
             if (resolved.length > 0) {
               activeAssistantTargeted = resolved.some((r) => r.id === activeAssistantId);
+            } else {
+              // Mentions present but none resolved — don't trigger active assistant either
+              activeAssistantTargeted = false;
             }
           }
 
