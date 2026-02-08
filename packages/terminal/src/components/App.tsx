@@ -253,6 +253,11 @@ interface AskUserState {
   reject: (error: Error) => void;
 }
 
+interface IdentityPanelIntent {
+  id?: string;
+  mode?: 'detail' | 'edit';
+}
+
 const MESSAGE_CHUNK_LINES = 12;
 const MESSAGE_WRAP_CHARS = 120;
 
@@ -302,6 +307,7 @@ export function App({ cwd, version }: AppProps) {
   // Identity panel state
   const [showIdentityPanel, setShowIdentityPanel] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
+  const [identityPanelIntent, setIdentityPanelIntent] = useState<IdentityPanelIntent | null>(null);
 
   // Hooks panel state
   const [showHooksPanel, setShowHooksPanel] = useState(false);
@@ -1035,11 +1041,11 @@ export function App({ cwd, version }: AppProps) {
           startedAt: sessionData.startedAt,
         });
       }
-      session.client.setAskUserHandler((request) => beginAskUser(session.id, request));
+      session!.client.setAskUserHandler((request) => beginAskUser(session!.id, request));
     }
 
-    if (!sessionUIStates.current.has(session.id)) {
-      seedSessionState(session.id, sessionData.messages as Message[]);
+    if (!sessionUIStates.current.has(session!.id)) {
+      seedSessionState(session!.id, sessionData.messages as Message[]);
     }
     await switchToSession(session.id);
   }, [cwd, registry, beginAskUser, seedSessionState, switchToSession]);
@@ -1145,11 +1151,6 @@ export function App({ cwd, version }: AppProps) {
       const active = registryRef.current.getActiveSession();
       if (active) {
         registryRef.current.setProcessing(active.id, false);
-        // Clear any stale inline pending entries for this session
-        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== active.id));
-        pendingSendsRef.current = pendingSendsRef.current.filter(
-          (entry) => entry.sessionId !== active.id
-        );
       }
       // Trigger queue flush check after state settles
       setQueueFlushTrigger((prev) => prev + 1);
@@ -1173,11 +1174,6 @@ export function App({ cwd, version }: AppProps) {
       const active = registryRef.current.getActiveSession();
       if (active) {
         registryRef.current.setProcessing(active.id, false);
-        // Clear any stale inline pending entries for this session
-        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== active.id));
-        pendingSendsRef.current = pendingSendsRef.current.filter(
-          (entry) => entry.sessionId !== active.id
-        );
       }
       const turnId = turnIdRef.current;
       // Defer clearing streaming state to avoid flicker where output disappears
@@ -1204,11 +1200,6 @@ export function App({ cwd, version }: AppProps) {
       // Clear pending entries and trigger queue flush
       const active = registryRef.current.getActiveSession();
       if (active) {
-        // Clear any stale inline pending entries for this session
-        setInlinePending((prev) => prev.filter((msg) => msg.sessionId !== active.id));
-        pendingSendsRef.current = pendingSendsRef.current.filter(
-          (entry) => entry.sessionId !== active.id
-        );
       }
       // Trigger queue flush check (done chunk will follow shortly)
       setQueueFlushTrigger((prev) => prev + 1);
@@ -1282,6 +1273,20 @@ export function App({ cwd, version }: AppProps) {
         }
       } else if (chunk.panel === 'identity') {
         // Show identity management panel
+        const panelValue = chunk.panelValue?.trim();
+        if (panelValue) {
+          if (panelValue.startsWith('edit:')) {
+            const id = panelValue.slice('edit:'.length).trim();
+            setIdentityPanelIntent(id ? { id, mode: 'edit' } : null);
+          } else if (panelValue.startsWith('detail:')) {
+            const id = panelValue.slice('detail:'.length).trim();
+            setIdentityPanelIntent(id ? { id, mode: 'detail' } : null);
+          } else {
+            setIdentityPanelIntent({ id: panelValue, mode: 'detail' });
+          }
+        } else {
+          setIdentityPanelIntent(null);
+        }
         setShowIdentityPanel(true);
       } else if (chunk.panel === 'hooks') {
         // Load hooks and show panel
@@ -1747,12 +1752,6 @@ export function App({ cwd, version }: AppProps) {
 
     if (!nextMessage) return;
 
-    pendingSendsRef.current.push({
-      id: nextMessage.id,
-      sessionId: activeSessionId,
-      mode: 'queued',
-    });
-
     // Add user message if not already shown (queued messages are pre-rendered)
     const userMessage: Message = {
       id: nextMessage.id,
@@ -1973,7 +1972,8 @@ export function App({ cwd, version }: AppProps) {
       if (hasAsk) {
         cancelAskUser('Cancelled by user', activeSessionId);
       }
-      if ((isProcessing || hasPendingTools) && activeSession) {
+      const sessionProcessing = activeSession?.isProcessing ?? false;
+      if ((isProcessing || hasPendingTools || sessionProcessing || currentToolCall) && activeSession) {
         activeSession.client.stop();
         const finalized = finalizeResponse('stopped');
         if (finalized) {
@@ -2021,7 +2021,8 @@ export function App({ cwd, version }: AppProps) {
       if (activeSessionId && askUserStateRef.current.has(activeSessionId)) {
         cancelAskUser('Cancelled by user', activeSessionId);
       }
-      if ((isProcessing || hasPendingTools) && activeSession) {
+      const sessionProcessing = activeSession?.isProcessing ?? false;
+      if ((isProcessing || hasPendingTools || sessionProcessing || currentToolCall) && activeSession) {
         activeSession.client.stop();
         const finalized = finalizeResponse('stopped');
         if (finalized) {
@@ -2183,6 +2184,7 @@ export function App({ cwd, version }: AppProps) {
 
         // /identity (no args) → open panel
         if (cmdName === 'identity' && !cmdArgs) {
+          setIdentityPanelIntent(null);
           setShowIdentityPanel(true);
           return;
         }
@@ -3145,6 +3147,8 @@ export function App({ cwd, version }: AppProps) {
         <IdentityPanel
           identities={identitiesList}
           activeIdentityId={activeIdentity?.id}
+          initialIdentityId={identityPanelIntent?.id}
+          initialMode={identityPanelIntent?.mode}
           templates={templates}
           onSwitch={handleIdentitySwitch}
           onCreate={handleIdentityCreate}
@@ -3154,6 +3158,7 @@ export function App({ cwd, version }: AppProps) {
           onDelete={handleIdentityDelete}
           onClose={() => {
             setIdentityError(null);
+            setIdentityPanelIntent(null);
             setShowIdentityPanel(false);
           }}
           error={identityError}

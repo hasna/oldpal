@@ -21,6 +21,7 @@ const { WalletPanel } = await import('../src/components/WalletPanel');
 const { PlansPanel } = await import('../src/components/PlansPanel');
 const { ConfigPanel } = await import('../src/components/ConfigPanel');
 const { GuardrailsPanel } = await import('../src/components/GuardrailsPanel');
+const { ResumePanel } = await import('../src/components/ResumePanel');
 
 const stripAnsi = (text: string) => text.replace(/\x1B\[[0-9;]*m/g, '');
 
@@ -210,6 +211,26 @@ describe('terminal panels', () => {
     const frame = env.getOutput();
     expect(frame).toContain('Hooks');
     expect(frame).toContain('No hooks configured.');
+    instance.unmount();
+  });
+
+  test('ResumePanel renders empty state', async () => {
+    const env = createInkTestEnv();
+    const instance = render(
+      <ResumePanel
+        sessions={[]}
+        activeCwd="/tmp"
+        initialFilter="cwd"
+        onResume={() => {}}
+        onRefresh={async () => {}}
+        onClose={() => {}}
+      />,
+      { stdout: env.stdout, stdin: env.stdin }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const frame = env.getOutput();
+    expect(frame).toContain('Resume Sessions');
+    expect(frame).toContain('No saved sessions for this folder.');
     instance.unmount();
   });
 

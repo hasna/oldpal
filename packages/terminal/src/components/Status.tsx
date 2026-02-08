@@ -52,6 +52,7 @@ export function Status({
   recentTools = [],
 }: StatusProps) {
   const [elapsed, setElapsed] = useState(0);
+  const [heartbeatCountdown, setHeartbeatCountdown] = useState('');
 
   useEffect(() => {
     if (!isProcessing || !processingStartTime) {
@@ -67,6 +68,40 @@ export function Status({
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [isProcessing, processingStartTime]);
+
+  useEffect(() => {
+    if (!heartbeatState?.enabled) {
+      setHeartbeatCountdown('');
+      return;
+    }
+
+    const resolveNextHeartbeat = (): number => {
+      if (heartbeatState.nextHeartbeatAt) {
+        const nextAt = new Date(heartbeatState.nextHeartbeatAt).getTime();
+        if (!Number.isNaN(nextAt)) {
+          return nextAt;
+        }
+      }
+
+      const intervalMs = heartbeatState.intervalMs ?? 15000;
+      const lastActivityMs = new Date(heartbeatState.lastActivity).getTime();
+      if (!Number.isNaN(lastActivityMs)) {
+        return lastActivityMs + intervalMs;
+      }
+
+      return Date.now() + intervalMs;
+    };
+
+    const update = () => {
+      const nextAt = resolveNextHeartbeat();
+      const remainingSeconds = Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+      setHeartbeatCountdown(formatDuration(remainingSeconds));
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [heartbeatState?.enabled, heartbeatState?.nextHeartbeatAt, heartbeatState?.lastActivity, heartbeatState?.intervalMs]);
 
   const formatDuration = (seconds: number): string => {
     if (seconds < 60) return `${seconds}s`;
@@ -107,6 +142,9 @@ export function Status({
   const heartbeatIcon = heartbeatState?.enabled
     ? heartbeatState.isStale ? '💛' : '💚'
     : '';
+  const heartbeatDisplay = heartbeatIcon
+    ? `${heartbeatIcon}${heartbeatCountdown ? ` ${heartbeatCountdown}` : ''}`
+    : '';
 
   const queueInfo = queueLength > 0 ? `${queueLength} queued` : '';
   const verboseLabel = verboseTools ? 'verbose' : '';
@@ -142,7 +180,7 @@ export function Status({
     <Box marginTop={1} justifyContent="space-between">
       <Text dimColor>/help{sessionCount && sessionCount > 1 ? ' · Ctrl+]' : ''}</Text>
       <Box>
-        {heartbeatIcon && <Text dimColor>{heartbeatIcon} </Text>}
+        {heartbeatDisplay && <Text dimColor>{heartbeatDisplay} </Text>}
         {voiceIcon && <Text dimColor>{voiceIcon} </Text>}
         {isProcessing && <Text dimColor>esc · </Text>}
         {sessionInfo && <Text dimColor>{sessionInfo}{bgIndicator} · </Text>}

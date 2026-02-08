@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Identity, CreateIdentityOptions } from '@hasna/assistants-core';
@@ -30,6 +30,8 @@ const RESPONSE_LENGTHS = ['concise', 'detailed', 'balanced'] as const;
 interface IdentityPanelProps {
   identities: Identity[];
   activeIdentityId?: string;
+  initialIdentityId?: string;
+  initialMode?: 'detail' | 'edit';
   templates: Array<{ name: string; description: string }>;
   onSwitch: (identityId: string) => Promise<void>;
   onCreate: (options: CreateIdentityOptions) => Promise<void>;
@@ -87,6 +89,8 @@ function getVisibleRange(
 export function IdentityPanel({
   identities,
   activeIdentityId,
+  initialIdentityId,
+  initialMode,
   templates,
   onSwitch,
   onCreate,
@@ -102,6 +106,7 @@ export function IdentityPanel({
   const [templateIndex, setTemplateIndex] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<Identity | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const didApplyInitialRef = useRef(false);
 
   // Form state
   const [formStep, setFormStep] = useState<FormStep>('name');
@@ -223,6 +228,33 @@ export function IdentityPanel({
     formAddressPostal,
     formAddressCountry,
   ]);
+
+  useEffect(() => {
+    if (didApplyInitialRef.current) return;
+    if (!initialIdentityId && !initialMode) return;
+    if (identities.length === 0) return;
+
+    let targetIndex = identityIndex;
+    if (initialIdentityId) {
+      const idx = identities.findIndex((i) => i.id === initialIdentityId);
+      if (idx === -1) return;
+      targetIndex = idx;
+      setIdentityIndex(idx);
+    }
+
+    const targetIdentity = identities[targetIndex];
+    if (!targetIdentity) return;
+
+    if (initialMode === 'detail') {
+      setMode('detail');
+    } else if (initialMode === 'edit') {
+      setEditingIdentity(targetIdentity);
+      populateFormFromIdentity(targetIdentity);
+      setMode('edit-form');
+    }
+
+    didApplyInitialRef.current = true;
+  }, [identities, identityIndex, initialIdentityId, initialMode, populateFormFromIdentity]);
 
   // Handle create from template
   const handleCreateFromTemplate = useCallback(async () => {
