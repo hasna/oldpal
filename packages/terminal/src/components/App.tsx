@@ -1275,11 +1275,21 @@ export function App({ cwd, version }: AppProps) {
       }
     } else if (chunk.type === 'stopped') {
       // Assistant was stopped mid-processing (e.g., user pressed Ctrl+C)
-      // Clear pending entries and trigger queue flush
-      const active = registryRef.current.getActiveSession();
-      if (active) {
+      // Ensure UI state is finalized even if no done chunk arrives.
+      if (isProcessingRef.current) {
+        const finalized = finalizeResponse('stopped');
+        if (finalized) {
+          skipNextDoneRef.current = true;
+        }
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        const active = registryRef.current.getActiveSession();
+        if (active) {
+          registryRef.current.setProcessing(active.id, false);
+        }
+        resetTurnState();
       }
-      // Trigger queue flush check (done chunk will follow shortly)
+      // Trigger queue flush check (done chunk will follow shortly in normal cases)
       setQueueFlushTrigger((prev) => prev + 1);
     } else if (chunk.type === 'show_panel') {
       // Show interactive panel

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import type { BudgetStatus } from '@hasna/assistants-core';
 import { useSafeInput as useInput } from '../hooks/useSafeInput';
@@ -54,6 +54,10 @@ export function AssistantsDashboard({
   onCancel,
 }: AssistantsDashboardProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    setSelectedIndex((prev) => Math.min(prev, Math.max(0, sessions.length - 1)));
+  }, [sessions.length]);
 
   useInput((input, key) => {
     if (sessions.length === 0) {
