@@ -886,6 +886,19 @@ describe('TaskGraphScheduler', () => {
     expect(stats.blocked).toBe(1);
   });
 
+  test('should block tasks when dependency is blocked or missing', () => {
+    const t1 = graph.addTask({ id: 't1', description: '1', role: 'worker', priority: 1, dependsOn: [] });
+    graph.addTask({ id: 't2', description: '2', role: 'worker', priority: 2, dependsOn: [t1.id] });
+    graph.addTask({ id: 't3', description: '3', role: 'worker', priority: 3, dependsOn: ['missing'] });
+
+    // Mark t1 as blocked
+    graph.updateTaskStatus('t1', 'blocked');
+
+    const blocked = graph.markBlockedTasks();
+    expect(blocked).toContain('t2');
+    expect(blocked).toContain('t3');
+  });
+
   test('should execute tasks via scheduler', async () => {
     graph.addTask({ id: 't1', description: '1', role: 'worker', priority: 1, dependsOn: [] });
 

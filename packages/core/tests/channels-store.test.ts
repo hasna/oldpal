@@ -97,6 +97,25 @@ describe('ChannelStore', () => {
     expect(list[0].unreadCount).toBe(0);
   });
 
+  test('listChannels excludes sender messages from unread counts', () => {
+    const createdBy = 'assistant-a';
+    const createdByName = 'Alice';
+    const assistantB = 'assistant-b';
+    const assistantBName = 'Bob';
+
+    const channel = store.createChannel('epsilon', null, createdBy, createdByName);
+    expect(channel.success).toBe(true);
+    store.addMember(channel.channelId!, assistantB, assistantBName, 'member');
+
+    store.sendMessage(channel.channelId!, assistantB, assistantBName, 'from bob');
+
+    const listForB = store.listChannels({ assistantId: assistantB });
+    expect(listForB[0].unreadCount).toBe(0);
+
+    const listForA = store.listChannels({ assistantId: createdBy });
+    expect(listForA[0].unreadCount).toBe(1);
+  });
+
   test('returns unread messages in chronological order and excludes sender', async () => {
     const createdBy = 'assistant-a';
     const createdByName = 'Alice';
@@ -116,5 +135,31 @@ describe('ChannelStore', () => {
 
     const unreadForA = store.getUnreadMessages(channel.channelId!, createdBy);
     expect(unreadForA.length).toBe(0);
+  });
+
+  test('markReadAt advances unread cursor without skipping newer messages', async () => {
+    const createdBy = 'assistant-a';
+    const createdByName = 'Alice';
+    const assistantB = 'assistant-b';
+    const assistantBName = 'Bob';
+
+    const channel = store.createChannel('zeta', null, createdBy, createdByName);
+    expect(channel.success).toBe(true);
+    store.addMember(channel.channelId!, assistantB, assistantBName, 'member');
+
+    store.sendMessage(channel.channelId!, createdBy, createdByName, 'first');
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    store.sendMessage(channel.channelId!, createdBy, createdByName, 'second');
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    store.sendMessage(channel.channelId!, createdBy, createdByName, 'third');
+
+    const allMessages = store.getMessages(channel.channelId!, { limit: 10 });
+    expect(allMessages.length).toBe(3);
+
+    // Mark read up to the first message timestamp
+    store.markReadAt(channel.channelId!, assistantB, allMessages[0].createdAt);
+
+    const unreadForB = store.getUnreadMessages(channel.channelId!, assistantB);
+    expect(unreadForB.map((m) => m.content)).toEqual(['second', 'third']);
   });
 });
