@@ -148,6 +148,28 @@ export function SchedulesPanel({
     setCreateError(null);
   }
 
+  const getPreviousCreateStep = (): CreateStep | null => {
+    const kind = KIND_OPTIONS[createKindIndex]?.id;
+    switch (createStep) {
+      case 'kind':
+        return null;
+      case 'cron':
+      case 'time':
+      case 'interval':
+        return 'kind';
+      case 'command':
+        if (kind === 'interval') return 'interval';
+        if (kind === 'cron') return 'cron';
+        return 'time';
+      case 'description':
+        return 'command';
+      case 'confirm':
+        return 'description';
+      default:
+        return 'kind';
+    }
+  };
+
   async function handleCreateSubmit() {
     const kind = KIND_OPTIONS[createKindIndex].id;
     const command = createCommand.trim();
@@ -203,19 +225,12 @@ export function SchedulesPanel({
     if (createStep === 'cron' || createStep === 'time' || createStep === 'command' || createStep === 'description') return;
 
     if (key.escape) {
-      if (createStep === 'kind') {
+      const prevStep = getPreviousCreateStep();
+      if (prevStep) {
+        setCreateStep(prevStep);
+      } else {
         resetCreateState();
         setMode('list');
-      } else {
-        // Go back one step
-        const stepOrder: CreateStep[] = ['kind', 'cron', 'time', 'interval', 'command', 'description', 'confirm'];
-        const currentIdx = stepOrder.indexOf(createStep);
-        if (currentIdx > 0) {
-          setCreateStep(stepOrder[currentIdx - 1]);
-        } else {
-          resetCreateState();
-          setMode('list');
-        }
       }
       return;
     }
@@ -276,6 +291,22 @@ export function SchedulesPanel({
       }
     }
   }, { isActive: mode === 'create' && createStep !== 'cron' && createStep !== 'time' && createStep !== 'command' && createStep !== 'description' });
+
+  // Create mode input - text steps (allow Esc back)
+  useInput((_input, key) => {
+    if (mode !== 'create') return;
+    if (createStep !== 'cron' && createStep !== 'time' && createStep !== 'command' && createStep !== 'description') return;
+
+    if (key.escape) {
+      const prevStep = getPreviousCreateStep();
+      if (prevStep) {
+        setCreateStep(prevStep);
+      } else {
+        resetCreateState();
+        setMode('list');
+      }
+    }
+  }, { isActive: mode === 'create' && (createStep === 'cron' || createStep === 'time' || createStep === 'command' || createStep === 'description') });
 
   // List/detail/delete mode input
   useInput((input, key) => {

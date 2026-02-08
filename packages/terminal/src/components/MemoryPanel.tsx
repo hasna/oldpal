@@ -60,17 +60,26 @@ export function MemoryPanel({ memories, stats, onRefresh, onClose, error }: Memo
 
   useInput((input, key) => {
     if (mode === 'detail') {
-      if (key.escape || input === 'q' || input === 'Q') {
+      if (key.escape) {
         setMode('list');
+        return;
+      }
+      if (input === 'q' || input === 'Q') {
+        onClose();
+        return;
       }
       if (input === 'r' || input === 'R') {
         void handleRefresh();
+        return;
       }
       return;
     }
 
     if (key.escape || input === 'q' || input === 'Q') {
       onClose();
+      return;
+    }
+    if (sorted.length === 0) {
       return;
     }
     if (input === 'r' || input === 'R') {

@@ -200,11 +200,12 @@ export function AssistantsPanel({
 
   // Handle create/edit mode escape
   useInput((_input, key) => {
-    if ((mode !== 'create' && mode !== 'edit') || createStep === 'name' || editStep === 'name') return;
+    if (mode !== 'create' && mode !== 'edit') return;
+    const step = mode === 'create' ? createStep : editStep;
+    if (step === 'name') return;
 
     if (key.escape) {
       if (mode === 'create') {
-        // Go back to previous step or cancel
         if (createStep === 'description') setCreateStep('name');
         else if (createStep === 'model') setCreateStep('description');
         else if (createStep === 'temperature') setCreateStep('model');
@@ -216,7 +217,22 @@ export function AssistantsPanel({
         else if (editStep === 'systemPrompt') setEditStep('temperature');
       }
     }
-  }, { isActive: (mode === 'create' || mode === 'edit') && (createStep !== 'name' && editStep !== 'name') });
+  }, { isActive: mode === 'create' || mode === 'edit' });
+
+  // Handle create/edit tab skips
+  useInput((_input, key) => {
+    if (mode !== 'create' && mode !== 'edit') return;
+    if (!key.tab || key.shift) return;
+    const step = mode === 'create' ? createStep : editStep;
+
+    if (step === 'description') {
+      handleSkipDescription();
+      return;
+    }
+    if (step === 'systemPrompt') {
+      handleSkipSystemPrompt();
+    }
+  }, { isActive: mode === 'create' || mode === 'edit' });
 
   // Handle model selection input
   useInput((input, key) => {
