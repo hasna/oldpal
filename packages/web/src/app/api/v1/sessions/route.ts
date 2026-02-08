@@ -12,7 +12,7 @@ const createSessionSchema = z.object({
   label: z.string().max(255).optional(),
   cwd: z.string().optional(),
   assistantId: z.string().uuid().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 // GET /api/v1/sessions - List user sessions with search and filtering

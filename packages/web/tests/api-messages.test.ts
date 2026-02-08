@@ -15,7 +15,7 @@ let insertValuesData: any = null;
 let mockParentMessage: any = null;
 const assistantId1 = '11111111-1111-1111-1111-111111111111';
 const assistantId2 = '22222222-2222-2222-2222-222222222222';
-const parentMessageId = '33333333-3333-3333-3333-333333333333';
+const parentMessageId = '33333333-3333-4333-8333-333333333333';
 
 // Track which assistant is being queried
 let assistantQueryCount = 0;

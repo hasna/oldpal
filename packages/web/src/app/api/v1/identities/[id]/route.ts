@@ -50,7 +50,7 @@ const preferencesSchema = z.object({
     indentSize: z.number(),
     quoteStyle: z.enum(['single', 'double']),
   }).optional(),
-  custom: z.record(z.unknown()).optional(),
+  custom: z.record(z.string(), z.unknown()).optional(),
 });
 
 // Update identity schema

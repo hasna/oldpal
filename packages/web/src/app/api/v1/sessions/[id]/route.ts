@@ -10,7 +10,7 @@ import { eq, and } from 'drizzle-orm';
 
 const updateSessionSchema = z.object({
   label: z.string().max(255).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 async function resolveParams(

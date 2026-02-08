@@ -49,7 +49,7 @@ const preferencesSchema = z.object({
     indentSize: z.number(),
     quoteStyle: z.enum(['single', 'double']),
   }).optional(),
-  custom: z.record(z.unknown()).optional().default({}),
+  custom: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
 // Create identity schema
