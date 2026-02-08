@@ -203,6 +203,17 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       rateLimitPerMinute: 60,
     },
   },
+  channels: {
+    enabled: false,
+    injection: {
+      enabled: true,
+      maxPerTurn: 10,
+    },
+    storage: {
+      maxMessagesPerChannel: 5000,
+      maxAgeDays: 90,
+    },
+  },
   memory: {
     enabled: true,
     injection: {
@@ -424,6 +435,18 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
         ...(override.webhooks?.security || {}),
       },
     },
+    channels: {
+      ...(base.channels || {}),
+      ...(override.channels || {}),
+      injection: {
+        ...(base.channels?.injection || {}),
+        ...(override.channels?.injection || {}),
+      },
+      storage: {
+        ...(base.channels?.storage || {}),
+        ...(override.channels?.storage || {}),
+      },
+    },
     memory: {
       ...(base.memory || {}),
       ...(override.memory || {}),
@@ -458,6 +481,36 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
           ...(override.input?.paste?.thresholds || {}),
         },
       },
+    },
+    budget: {
+      ...(base.budget || {}),
+      ...(override.budget || {}),
+      session: {
+        ...(base.budget?.session || {}),
+        ...(override.budget?.session || {}),
+      },
+      assistant: {
+        ...(base.budget?.assistant || {}),
+        ...(override.budget?.assistant || {}),
+      },
+      swarm: {
+        ...(base.budget?.swarm || {}),
+        ...(override.budget?.swarm || {}),
+      },
+      project: {
+        ...(base.budget?.project || {}),
+        ...(override.budget?.project || {}),
+      },
+    },
+    guardrails: {
+      ...(base.guardrails || {}),
+      ...(override.guardrails || {}),
+    },
+    capabilities: {
+      ...(base.capabilities || {}),
+      ...(override.capabilities || {}),
+      allowedTools: override.capabilities?.allowedTools ?? base.capabilities?.allowedTools,
+      deniedTools: override.capabilities?.deniedTools ?? base.capabilities?.deniedTools,
     },
   };
 }

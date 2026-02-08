@@ -84,6 +84,7 @@ import { createSecretsManager, registerSecretsTools, type SecretsManager } from 
 import { JobManager, createJobTools } from '../jobs';
 import { createMessagesManager, registerMessagesTools, type MessagesManager } from '../messages';
 import { createWebhooksManager, registerWebhookTools, type WebhooksManager } from '../webhooks';
+import { createChannelsManager, registerChannelTools, type ChannelsManager } from '../channels';
 import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
 import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
 import { registerSelfAwarenessTools } from '../tools/self-awareness';
@@ -187,6 +188,7 @@ export class AssistantLoop {
   private jobManager: JobManager | null = null;
   private messagesManager: MessagesManager | null = null;
   private webhooksManager: WebhooksManager | null = null;
+  private channelsManager: ChannelsManager | null = null;
   private memoryManager: GlobalMemoryManager | null = null;
   private memoryInjector: MemoryInjector | null = null;
   private contextInjector: ContextInjector | null = null;
@@ -195,6 +197,7 @@ export class AssistantLoop {
   private depth: number = 0;
   private pendingMessagesContext: string | null = null;
   private pendingWebhooksContext: string | null = null;
+  private pendingChannelsContext: string | null = null;
   private pendingMemoryContext: string | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
@@ -490,6 +493,15 @@ export class AssistantLoop {
           this.pendingWebhooksContext = context;
         }
       });
+    }
+
+    // Initialize channels if enabled
+    if (this.config?.channels?.enabled) {
+      const assistant = this.assistantManager?.getActive();
+      const assistantId = assistant?.id || this.sessionId;
+      const assistantName = assistant?.name || 'assistant';
+      this.channelsManager = createChannelsManager(assistantId, assistantName, this.config.channels);
+      registerChannelTools(this.toolRegistry, () => this.channelsManager);
     }
 
     // Initialize memory system if enabled
@@ -924,6 +936,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       await this.injectPendingMessages();
       // Inject pending webhook events before processing
       await this.injectPendingWebhookEvents();
+      // Inject pending channel messages before processing
+      await this.injectPendingChannelMessages();
       // Inject relevant memories based on user message
       await this.injectMemoryContext(userMessage);
       // Inject environment context (datetime, cwd, etc.)
@@ -1001,7 +1015,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
               this.emit({
                 type: 'show_panel',
                 panel: commandResult.showPanel,
-                panelValue: commandResult.panelInitialValue,
+                panelValue: commandResult.panelValue,
               });
             }
             // Session actions: encode in show_panel with session-action prefix
@@ -1041,7 +1055,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
               this.emit({
                 type: 'show_panel',
                 panel: commandResult.showPanel,
-                panelValue: commandResult.panelInitialValue,
+                panelValue: commandResult.panelValue,
               });
             }
             return { ok: true, summary: `Handled ${userMessage}` };
@@ -1835,6 +1849,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       getSecretsManager: () => this.secretsManager,
       getMessagesManager: () => this.messagesManager,
       getWebhooksManager: () => this.webhooksManager,
+      getChannelsManager: () => this.channelsManager,
       getMemoryManager: () => this.memoryManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
@@ -2129,6 +2144,9 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     this.messagesManager?.stopWatching();
     // Stop webhook watching
     this.webhooksManager?.stopWatching();
+    // Close channels database connection
+    this.channelsManager?.close();
+    this.channelsManager = null;
     // Close memory database connection
     this.memoryManager?.close();
     this.memoryManager = null;
@@ -2227,12 +2245,20 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     return this.identityManager;
   }
 
+  getMemoryManager(): GlobalMemoryManager | null {
+    return this.memoryManager;
+  }
+
   getMessagesManager(): MessagesManager | null {
     return this.messagesManager;
   }
 
   getWebhooksManager(): WebhooksManager | null {
     return this.webhooksManager;
+  }
+
+  getChannelsManager(): ChannelsManager | null {
+    return this.channelsManager;
   }
 
   getWalletManager(): WalletManager | null {
@@ -2869,6 +2895,41 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       // Log but don't fail - webhooks are non-critical
       console.error('Failed to inject pending webhook events:', error);
       this.pendingWebhooksContext = null;
+    }
+  }
+
+  /**
+   * Inject pending channel messages into context at turn start
+   */
+  private async injectPendingChannelMessages(): Promise<void> {
+    if (!this.channelsManager) return;
+
+    try {
+      if (this.pendingChannelsContext) {
+        const previous = this.pendingChannelsContext.trim();
+        this.context.removeSystemMessages((content) => content.trim() === previous);
+        this.pendingChannelsContext = null;
+      }
+
+      const pending = this.channelsManager.getUnreadForInjection();
+      if (pending.length === 0) {
+        return;
+      }
+
+      // Build and store context string
+      this.pendingChannelsContext = this.channelsManager.buildInjectionContext(pending);
+
+      // Add as system message so it appears in context
+      if (this.pendingChannelsContext) {
+        this.context.addSystemMessage(this.pendingChannelsContext);
+      }
+
+      // Mark messages as read
+      this.channelsManager.markInjected(pending);
+    } catch (error) {
+      // Log but don't fail - channels are non-critical
+      console.error('Failed to inject pending channel messages:', error);
+      this.pendingChannelsContext = null;
     }
   }
 

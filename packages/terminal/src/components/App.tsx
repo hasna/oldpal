@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { spawn } from 'child_process';
-import { Box, Text, useApp, useInput, useStdout, Static } from 'ink';
-import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, AudioRecorder, ElevenLabsSTT, WhisperSTT, readHeartbeatHistoryBySession, type SessionInfo, type RecoverableSession, type CreateIdentityOptions, type Heartbeat, type SavedSessionInfo, type CreateSessionOptions } from '@hasna/assistants-core';
+import { Box, Text, useApp, useStdout, Static } from 'ink';
+import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, AudioRecorder, ElevenLabsSTT, WhisperSTT, readHeartbeatHistoryBySession, type SessionInfo, type RecoverableSession, type CreateIdentityOptions, type Heartbeat, type SavedSessionInfo, type CreateSessionOptions, type Identity, type Memory, type MemoryStats } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand, Skill } from '@hasna/assistants-shared';
 import { generateId, now } from '@hasna/assistants-shared';
 import { Input, type InputHandle } from './Input';
@@ -25,11 +25,13 @@ import { HooksPanel } from './HooksPanel';
 import { ConfigPanel } from './ConfigPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { WebhooksPanel } from './WebhooksPanel';
+import { ChannelsPanel } from './ChannelsPanel';
 import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
 import { AssistantsRegistryPanel } from './AssistantsRegistryPanel';
 import { SchedulesPanel } from './SchedulesPanel';
 import { SkillsPanel } from './SkillsPanel';
+import { MemoryPanel } from './MemoryPanel';
 import { ProjectsPanel } from './ProjectsPanel';
 import { PlansPanel } from './PlansPanel';
 import { WalletPanel } from './WalletPanel';
@@ -43,6 +45,7 @@ import { ResumePanel } from './ResumePanel';
 import type { QueuedMessage } from './appTypes';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
 import { CLEAR_SCREEN_TOKEN } from '../output/sanitize';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 import {
   getTasks,
   addTask,
@@ -308,6 +311,13 @@ export function App({ cwd, version }: AppProps) {
   const [showIdentityPanel, setShowIdentityPanel] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [identityPanelIntent, setIdentityPanelIntent] = useState<IdentityPanelIntent | null>(null);
+  const [identitiesList, setIdentitiesList] = useState<Identity[]>([]);
+
+  // Memory panel state
+  const [showMemoryPanel, setShowMemoryPanel] = useState(false);
+  const [memoryList, setMemoryList] = useState<Memory[]>([]);
+  const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
 
   // Hooks panel state
   const [showHooksPanel, setShowHooksPanel] = useState(false);
@@ -341,6 +351,9 @@ export function App({ cwd, version }: AppProps) {
 
   // Webhooks panel state
   const [showWebhooksPanel, setShowWebhooksPanel] = useState(false);
+
+  // Channels panel state
+  const [showChannelsPanel, setShowChannelsPanel] = useState(false);
 
   // Messages panel state
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
@@ -463,6 +476,35 @@ export function App({ cwd, version }: AppProps) {
     silenceMs: 0,
     manager: null,
   });
+
+  const isPanelOpen = (
+    showRecoveryPanel ||
+    showConnectorsPanel ||
+    showTasksPanel ||
+    showSchedulesPanel ||
+    showSkillsPanel ||
+    showAssistantsPanel ||
+    showIdentityPanel ||
+    showMemoryPanel ||
+    showHooksPanel ||
+    showGuardrailsPanel ||
+    showBudgetPanel ||
+    showAssistantsRegistryPanel ||
+    showConfigPanel ||
+    showWebhooksPanel ||
+    showChannelsPanel ||
+    showMessagesPanel ||
+    showProjectsPanel ||
+    showPlansPanel ||
+    showWalletPanel ||
+    showSecretsPanel ||
+    showWorkspacePanel ||
+    showAssistantsDashboard ||
+    showSwarmPanel ||
+    showLogsPanel ||
+    showHeartbeatPanel ||
+    showResumePanel
+  );
   const sendListenMessageRef = useRef<(text: string) => void>(() => {});
   const processingStartTimeRef = useRef<number | undefined>(processingStartTime);
   const pendingSendsRef = useRef<Array<{ id: string; sessionId: string; mode: 'inline' | 'queued' }>>([]);
@@ -1288,6 +1330,9 @@ export function App({ cwd, version }: AppProps) {
           setIdentityPanelIntent(null);
         }
         setShowIdentityPanel(true);
+      } else if (chunk.panel === 'memory') {
+        setMemoryError(null);
+        setShowMemoryPanel(true);
       } else if (chunk.panel === 'hooks') {
         // Load hooks and show panel
         if (!hookStoreRef.current) {
@@ -1302,6 +1347,8 @@ export function App({ cwd, version }: AppProps) {
         setShowConfigPanel(true);
       } else if (chunk.panel === 'webhooks') {
         setShowWebhooksPanel(true);
+      } else if (chunk.panel === 'channels') {
+        setShowChannelsPanel(true);
       } else if (chunk.panel === 'messages') {
         // Load messages and inbox data, then show unified panel
         const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
@@ -1438,7 +1485,7 @@ export function App({ cwd, version }: AppProps) {
           setShowSecretsPanel(true);
         }
       } else if (chunk.panel === 'inbox') {
-        // /inbox alias → open messages panel (with inbox tab active via panelInitialValue)
+        // /inbox alias → open messages panel (with inbox tab active via panelValue)
         const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
         const inboxManager = registry.getActiveSession()?.client.getInboxManager?.();
 
@@ -1813,6 +1860,39 @@ export function App({ cwd, version }: AppProps) {
   const sessionCount = registry.getSessionCount();
   const backgroundProcessingCount = registry.getBackgroundProcessingSessions().length;
 
+  const refreshIdentitiesList = useCallback(() => {
+    const manager = activeSession?.client.getIdentityManager?.();
+    setIdentitiesList(manager?.listIdentities() ?? []);
+  }, [activeSession]);
+
+  useEffect(() => {
+    if (!showIdentityPanel) return;
+    refreshIdentitiesList();
+  }, [showIdentityPanel, refreshIdentitiesList]);
+
+  const refreshMemoryList = useCallback(async () => {
+    const manager = activeSession?.client.getMemoryManager?.();
+    if (!manager) {
+      setMemoryError('Memory system not available. Enable it in config.');
+      setMemoryList([]);
+      setMemoryStats(null);
+      return;
+    }
+    try {
+      const result = await manager.query({ limit: 200, orderBy: 'updated', orderDir: 'desc' });
+      setMemoryList(result.memories);
+      setMemoryStats(await manager.getStats());
+      setMemoryError(null);
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : String(err));
+    }
+  }, [activeSession]);
+
+  useEffect(() => {
+    if (!showMemoryPanel) return;
+    void refreshMemoryList();
+  }, [showMemoryPanel, refreshMemoryList]);
+
   const MAX_QUEUED_PREVIEW = 3;
   const inlineCount = activeInline.length;
   const activeAskQuestion = askUserState && askUserState.sessionId === activeSessionId
@@ -2086,7 +2166,7 @@ export function App({ cwd, version }: AppProps) {
     }
 
     // Native terminal scrolling is used - scroll with terminal's scrollback
-  }, { isActive: !showSessionSelector });
+  }, { isActive: !showSessionSelector && !isPanelOpen });
 
 
   // Handle message submission
@@ -2956,17 +3036,22 @@ export function App({ cwd, version }: AppProps) {
     const assistantManager = activeSession?.client.getAssistantManager?.();
     const assistantsList = assistantManager?.listAssistants() ?? [];
     const activeAssistantId = assistantManager?.getActiveId() ?? undefined;
+    const ensureAssistantManager = () => {
+      if (assistantManager) return assistantManager;
+      const err = new Error('Assistant manager not available');
+      setAssistantError(err.message);
+      throw err;
+    };
 
     const handleAssistantSelect = async (assistantId: string) => {
       setAssistantError(null);
       try {
-        if (assistantManager) {
-          await assistantManager.switchAssistant(assistantId);
-          // Refresh identity context after switching
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-          setAssistantsRefreshKey((k) => k + 1);
-        }
+        const manager = ensureAssistantManager();
+        await manager.switchAssistant(assistantId);
+        // Refresh identity context after switching
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        setAssistantsRefreshKey((k) => k + 1);
         setShowAssistantsPanel(false);
       } catch (err) {
         setAssistantError(err instanceof Error ? err.message : 'Failed to switch assistant');
@@ -2976,14 +3061,13 @@ export function App({ cwd, version }: AppProps) {
     const handleAssistantCreate = async (options: { name: string; description?: string; settings?: { model?: string; temperature?: number } }) => {
       setAssistantError(null);
       try {
-        if (assistantManager) {
-          await assistantManager.createAssistant(options);
-          // Refresh identity context after creation
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-          // Force refresh of assistants list
-          setAssistantsRefreshKey((k) => k + 1);
-        }
+        const manager = ensureAssistantManager();
+        await manager.createAssistant(options);
+        // Refresh identity context after creation
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        // Force refresh of assistants list
+        setAssistantsRefreshKey((k) => k + 1);
       } catch (err) {
         setAssistantError(err instanceof Error ? err.message : 'Failed to create assistant');
         throw err; // Re-throw so AssistantsPanel knows creation failed
@@ -2993,14 +3077,13 @@ export function App({ cwd, version }: AppProps) {
     const handleAssistantUpdate = async (id: string, updates: Partial<{ name: string; description: string; settings: Record<string, unknown> }>) => {
       setAssistantError(null);
       try {
-        if (assistantManager) {
-          await assistantManager.updateAssistant(id, updates as any);
-          // Refresh identity context after update
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-          // Force refresh of assistants list
-          setAssistantsRefreshKey((k) => k + 1);
-        }
+        const manager = ensureAssistantManager();
+        await manager.updateAssistant(id, updates as any);
+        // Refresh identity context after update
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        // Force refresh of assistants list
+        setAssistantsRefreshKey((k) => k + 1);
       } catch (err) {
         setAssistantError(err instanceof Error ? err.message : 'Failed to update assistant');
         throw err; // Re-throw so AssistantsPanel knows update failed
@@ -3010,14 +3093,13 @@ export function App({ cwd, version }: AppProps) {
     const handleAssistantDelete = async (assistantId: string) => {
       setAssistantError(null);
       try {
-        if (assistantManager) {
-          await assistantManager.deleteAssistant(assistantId);
-          // Refresh identity context after deletion
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-          // Force refresh of assistants list
-          setAssistantsRefreshKey((k) => k + 1);
-        }
+        const manager = ensureAssistantManager();
+        await manager.deleteAssistant(assistantId);
+        // Refresh identity context after deletion
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        // Force refresh of assistants list
+        setAssistantsRefreshKey((k) => k + 1);
       } catch (err) {
         setAssistantError(err instanceof Error ? err.message : 'Failed to delete assistant');
         throw err; // Re-throw so AssistantsPanel knows deletion failed
@@ -3047,18 +3129,24 @@ export function App({ cwd, version }: AppProps) {
   // Show identity panel
   if (showIdentityPanel) {
     const identityManager = activeSession?.client.getIdentityManager?.();
-    const identitiesList = identityManager?.listIdentities() ?? [];
     const activeIdentity = identityManager?.getActive();
     const templates = listTemplates();
+
+    const ensureIdentityManager = () => {
+      if (identityManager) return identityManager;
+      const err = new Error('Identity manager not available');
+      setIdentityError(err.message);
+      throw err;
+    };
 
     const handleIdentitySwitch = async (identityId: string) => {
       setIdentityError(null);
       try {
-        if (identityManager) {
-          await identityManager.switchIdentity(identityId);
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-        }
+        const manager = ensureIdentityManager();
+        await manager.switchIdentity(identityId);
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        refreshIdentitiesList();
       } catch (err) {
         setIdentityError(err instanceof Error ? err.message : 'Failed to switch identity');
       }
@@ -3067,11 +3155,11 @@ export function App({ cwd, version }: AppProps) {
     const handleIdentityCreate = async (options: CreateIdentityOptions) => {
       setIdentityError(null);
       try {
-        if (identityManager) {
-          await identityManager.createIdentity(options);
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-        }
+        const manager = ensureIdentityManager();
+        await manager.createIdentity(options);
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        refreshIdentitiesList();
       } catch (err) {
         setIdentityError(err instanceof Error ? err.message : 'Failed to create identity');
         throw err;
@@ -3081,13 +3169,13 @@ export function App({ cwd, version }: AppProps) {
     const handleIdentityCreateFromTemplate = async (templateName: string) => {
       setIdentityError(null);
       try {
-        if (identityManager) {
-          const options = createIdentityFromTemplate(templateName);
-          if (options) {
-            await identityManager.createIdentity(options);
-            await activeSession?.client.refreshIdentityContext?.();
-            setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-          }
+        const manager = ensureIdentityManager();
+        const options = createIdentityFromTemplate(templateName);
+        if (options) {
+          await manager.createIdentity(options);
+          await activeSession?.client.refreshIdentityContext?.();
+          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+          refreshIdentitiesList();
         }
       } catch (err) {
         setIdentityError(err instanceof Error ? err.message : 'Failed to create identity from template');
@@ -3098,11 +3186,11 @@ export function App({ cwd, version }: AppProps) {
     const handleIdentityUpdate = async (identityId: string, updates: Partial<CreateIdentityOptions>) => {
       setIdentityError(null);
       try {
-        if (identityManager) {
-          await identityManager.updateIdentity(identityId, updates as any);
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-        }
+        const manager = ensureIdentityManager();
+        await manager.updateIdentity(identityId, updates as any);
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        refreshIdentitiesList();
       } catch (err) {
         setIdentityError(err instanceof Error ? err.message : 'Failed to update identity');
         throw err;
@@ -3112,17 +3200,17 @@ export function App({ cwd, version }: AppProps) {
     const handleIdentitySetDefault = async (identityId: string) => {
       setIdentityError(null);
       try {
-        if (identityManager) {
-          // Clear default from all other identities
-          for (const identity of identitiesList) {
-            if (identity.isDefault && identity.id !== identityId) {
-              await identityManager.updateIdentity(identity.id, { isDefault: false });
-            }
+        const manager = ensureIdentityManager();
+        // Clear default from all other identities
+        for (const identity of identitiesList) {
+          if (identity.isDefault && identity.id !== identityId) {
+            await manager.updateIdentity(identity.id, { isDefault: false });
           }
-          await identityManager.updateIdentity(identityId, { isDefault: true });
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
         }
+        await manager.updateIdentity(identityId, { isDefault: true });
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        refreshIdentitiesList();
       } catch (err) {
         setIdentityError(err instanceof Error ? err.message : 'Failed to set default identity');
       }
@@ -3131,11 +3219,11 @@ export function App({ cwd, version }: AppProps) {
     const handleIdentityDelete = async (identityId: string) => {
       setIdentityError(null);
       try {
-        if (identityManager) {
-          await identityManager.deleteIdentity(identityId);
-          await activeSession?.client.refreshIdentityContext?.();
-          setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
-        }
+        const manager = ensureIdentityManager();
+        await manager.deleteIdentity(identityId);
+        await activeSession?.client.refreshIdentityContext?.();
+        setIdentityInfo(activeSession?.client.getIdentityInfo() ?? undefined);
+        refreshIdentitiesList();
       } catch (err) {
         setIdentityError(err instanceof Error ? err.message : 'Failed to delete identity');
         throw err;
@@ -3162,6 +3250,24 @@ export function App({ cwd, version }: AppProps) {
             setShowIdentityPanel(false);
           }}
           error={identityError}
+        />
+      </Box>
+    );
+  }
+
+  // Show memory panel
+  if (showMemoryPanel) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <MemoryPanel
+          memories={memoryList}
+          stats={memoryStats}
+          error={memoryError}
+          onRefresh={refreshMemoryList}
+          onClose={() => {
+            setShowMemoryPanel(false);
+            setMemoryError(null);
+          }}
         />
       </Box>
     );
@@ -3839,6 +3945,25 @@ export function App({ cwd, version }: AppProps) {
       <WebhooksPanel
         manager={webhooksManager}
         onClose={() => setShowWebhooksPanel(false)}
+      />
+    );
+  }
+
+  // Show channels panel
+  if (showChannelsPanel) {
+    const channelsManager = activeSession?.client.getChannelsManager?.();
+    if (!channelsManager) {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text color="red">Channels are not enabled. Set channels.enabled: true in config.</Text>
+          <Text color="gray">Press any key to close.</Text>
+        </Box>
+      );
+    }
+    return (
+      <ChannelsPanel
+        manager={channelsManager}
+        onClose={() => setShowChannelsPanel(false)}
       />
     );
   }

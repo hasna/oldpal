@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -452,6 +452,7 @@ export interface AssistantsConfig {
   jobs?: JobsConfig;
   messages?: MessagesConfig;
   webhooks?: WebhooksConfig;
+  channels?: ChannelsConfig;
   memory?: MemoryConfigShared;
   subassistants?: SubassistantConfigShared;
   input?: InputConfig;
@@ -1153,31 +1154,39 @@ export interface SecretsConfig {
 export type MessagePriority = 'low' | 'normal' | 'high' | 'urgent';
 
 /**
+ * Messages injection configuration
+ */
+export interface MessagesInjectionConfig {
+  /** Whether to auto-inject messages at turn start (default: true) */
+  enabled?: boolean;
+  /** Max messages to inject per turn (default: 5) */
+  maxPerTurn?: number;
+  /** Only inject messages >= this priority (default: 'low') */
+  minPriority?: MessagePriority;
+}
+
+/**
+ * Messages storage configuration
+ */
+export interface MessagesStorageConfig {
+  /** Base path for storage (default: ~/.assistants/messages) */
+  basePath?: string;
+  /** Max messages per inbox (default: 1000) */
+  maxMessages?: number;
+  /** Max message age in days (default: 90) */
+  maxAgeDays?: number;
+}
+
+/**
  * Configuration for assistant-to-assistant messaging
  */
 export interface MessagesConfig {
   /** Whether messages are enabled (default: false) */
   enabled?: boolean;
-
   /** Auto-injection settings */
-  injection?: {
-    /** Auto-inject at turn start (default: true) */
-    enabled?: boolean;
-    /** Max messages to inject per turn (default: 5) */
-    maxPerTurn?: number;
-    /** Only inject >= this priority (default: 'low') */
-    minPriority?: MessagePriority;
-  };
-
+  injection?: MessagesInjectionConfig;
   /** Storage settings */
-  storage?: {
-    /** Base path (default: ~/.assistants/messages) */
-    basePath?: string;
-    /** Max messages per inbox (default: 1000) */
-    maxMessages?: number;
-    /** Max age in days (default: 90) */
-    maxAgeDays?: number;
-  };
+  storage?: MessagesStorageConfig;
 }
 
 /**
@@ -1212,6 +1221,31 @@ export interface WebhooksConfig {
     maxTimestampAgeMs?: number;
     /** Rate limit: max events per webhook per minute (default: 60) */
     rateLimitPerMinute?: number;
+  };
+}
+
+/**
+ * Configuration for channels (Slack-like agent collaboration)
+ * Enables shared communication spaces where multiple agents can collaborate
+ */
+export interface ChannelsConfig {
+  /** Whether channels are enabled (default: false) */
+  enabled?: boolean;
+
+  /** Auto-injection settings for channel messages */
+  injection?: {
+    /** Auto-inject unread messages at turn start (default: true) */
+    enabled?: boolean;
+    /** Max messages to inject per turn across all channels (default: 10) */
+    maxPerTurn?: number;
+  };
+
+  /** Storage settings */
+  storage?: {
+    /** Max messages to retain per channel (default: 5000) */
+    maxMessagesPerChannel?: number;
+    /** Max message age in days (default: 90) */
+    maxAgeDays?: number;
   };
 }
 

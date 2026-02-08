@@ -10,6 +10,7 @@ import type { WalletManager } from '../wallet';
 import type { SecretsManager } from '../secrets';
 import type { MessagesManager } from '../messages';
 import type { WebhooksManager } from '../webhooks';
+import type { ChannelsManager } from '../channels';
 import type { GlobalMemoryManager } from '../memory';
 import type { SwarmCoordinator } from '../swarm';
 
@@ -94,6 +95,7 @@ export interface CommandContext {
   getSecretsManager?: () => SecretsManager | null;
   getMessagesManager?: () => MessagesManager | null;
   getWebhooksManager?: () => WebhooksManager | null;
+  getChannelsManager?: () => ChannelsManager | null;
   getMemoryManager?: () => GlobalMemoryManager | null;
   getHooks?: () => HookConfig;
   setHookEnabled?: (hookId: string, enabled: boolean) => Promise<boolean>;
@@ -145,7 +147,7 @@ export interface CommandResult {
   /** Agent name/ID to assign to session */
   sessionAgent?: string;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels';
   /** Initial value for panel (e.g., connector name) */
-  panelInitialValue?: string;
+  panelValue?: string;
 }

@@ -301,6 +301,9 @@ export * from './messages';
 // Webhooks (External Event Reception)
 export * from './webhooks';
 
+// Channels (Slack-like Agent Collaboration)
+export * from './channels';
+
 // Client
 export { EmbeddedClient } from './client';
 

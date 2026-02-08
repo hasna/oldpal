@@ -57,7 +57,7 @@ import {
 } from '../jobs';
 import {
   getTasks,
-  getTask,
+  resolveTaskId,
   addTask,
   updateTask,
   deleteTask,
@@ -202,6 +202,7 @@ export class BuiltinCommands {
     loader.register(this.jobsCommand());
     loader.register(this.messagesCommand());
     loader.register(this.webhooksCommand());
+    loader.register(this.channelsCommand());
     loader.register(this.tasksCommand());
     loader.register(this.exitCommand());
   }
@@ -289,10 +290,10 @@ export class BuiltinCommands {
 
         try {
           await context.speak(text);
-          context.emit('done');
         } catch (error) {
           context.emit('error', error instanceof Error ? error.message : String(error));
         }
+        context.emit('done');
         return { handled: true };
       },
     };
@@ -335,6 +336,7 @@ export class BuiltinCommands {
           return { handled: false, prompt: transcript };
         } catch (error) {
           context.emit('error', error instanceof Error ? error.message : String(error));
+          context.emit('done');
           return { handled: true };
         }
       },
@@ -892,7 +894,7 @@ export class BuiltinCommands {
           }
           if (action === 'edit') {
             context.emit('done');
-            return { handled: true, showPanel: 'identity', panelInitialValue: `edit:${match.id}` };
+            return { handled: true, showPanel: 'identity', panelValue: `edit:${match.id}` };
           }
           context.emit('text', '\n## Identity Details\n\n');
           context.emit('text', `**Name:** ${match.name}\n`);
@@ -1784,7 +1786,7 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
-        const parts = args.trim().split(/\s+/);
+        const parts = splitArgs(args.trim());
         const subcommand = parts[0]?.toLowerCase() || '';
 
         // Interactive UI mode - default when no args or explicit 'ui'
@@ -2078,9 +2080,12 @@ export class BuiltinCommands {
               return { handled: true };
             }
 
-            // Note: actual cancellation would need JobManager access
-            // For now, just update status in store
-            context.emit('text', `Job ${job.id} marked for cancellation. Use job_cancel tool for full cancellation.\n`);
+            const deleted = await deleteJob(job.id);
+            if (deleted) {
+              context.emit('text', `Job ${job.id} cancelled and removed.\n`);
+            } else {
+              context.emit('text', `Failed to cancel job ${job.id}.\n`);
+            }
             context.emit('done');
             return { handled: true };
           }
@@ -2296,6 +2301,15 @@ Created: ${new Date(job.createdAt).toISOString()}
           }
 
           try {
+            // Validate index against actual attachment count
+            const email = await inboxManager.read(emailId);
+            if (email && email.attachments) {
+              if (index >= email.attachments.length) {
+                context.emit('text', `Invalid attachment index. Email has ${email.attachments.length} attachment(s) (0-${email.attachments.length - 1}).\n`);
+                context.emit('done');
+                return { handled: true };
+              }
+            }
             const path = await inboxManager.downloadAttachment(emailId, index);
             context.emit('text', `Downloaded to: ${path}\n`);
           } catch (error) {
@@ -2848,6 +2862,258 @@ Created: ${new Date(job.createdAt).toISOString()}
   }
 
   /**
+   * /channels - Slack-like channel collaboration
+   */
+  private channelsCommand(): Command {
+    return {
+      name: 'channels',
+      description: 'Manage channels for agent collaboration',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const trimmed = args.trim();
+        const [subcommand, ...rest] = trimmed.split(/\s+/);
+        const subArgs = rest.join(' ');
+
+        // /channels (no args) or /channels ui → open interactive panel
+        if (!subcommand || subcommand === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'channels' };
+        }
+
+        const manager = context.getChannelsManager?.();
+        if (!manager) {
+          context.emit('text', 'Channels are not enabled. Set channels.enabled: true in config.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels list
+        if (subcommand === 'list') {
+          try {
+            const channels = manager.listChannels();
+            if (channels.length === 0) {
+              context.emit('text', 'No channels exist. Use /channels create <name> to create one.\n');
+            } else {
+              context.emit('text', `Channels (${channels.length}):\n\n`);
+              for (const ch of channels) {
+                const unread = ch.unreadCount > 0 ? ` (${ch.unreadCount} unread)` : '';
+                context.emit('text', `  #${ch.name}${unread}\n`);
+                if (ch.description) {
+                  context.emit('text', `    ${ch.description}\n`);
+                }
+                context.emit('text', `    Members: ${ch.memberCount} | Last: ${ch.lastMessagePreview || 'no messages'}\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels create <name> [description]
+        if (subcommand === 'create') {
+          const parts = splitArgs(subArgs);
+          const name = parts[0];
+          const description = parts.slice(1).join(' ') || undefined;
+
+          if (!name) {
+            context.emit('text', 'Usage: /channels create <name> [description]\n');
+            context.emit('text', 'Example: /channels create general "Team discussion"\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = manager.createChannel(name, description);
+            if (result.success) {
+              context.emit('text', `Channel created!\n\n`);
+              context.emit('text', `  Name: #${name}\n`);
+              context.emit('text', `  ID:   ${result.channelId}\n`);
+              if (description) {
+                context.emit('text', `  Desc: ${description}\n`);
+              }
+            } else {
+              context.emit('text', `Error: ${result.message}\n`);
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels join <channel>
+        if (subcommand === 'join') {
+          const channel = subArgs.trim();
+          if (!channel) {
+            context.emit('text', 'Usage: /channels join <channel-name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const result = manager.join(channel);
+          context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels leave <channel>
+        if (subcommand === 'leave') {
+          const channel = subArgs.trim();
+          if (!channel) {
+            context.emit('text', 'Usage: /channels leave <channel-name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const result = manager.leave(channel);
+          context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels send <channel> <message>
+        if (subcommand === 'send') {
+          const parts = splitArgs(subArgs);
+          const channel = parts[0];
+          const message = parts.slice(1).join(' ');
+
+          if (!channel || !message) {
+            context.emit('text', 'Usage: /channels send <channel> <message>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const result = manager.send(channel, message);
+          context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels read <channel> [limit]
+        if (subcommand === 'read') {
+          const parts = subArgs.trim().split(/\s+/);
+          const channel = parts[0];
+          const limit = parts[1] ? parseInt(parts[1], 10) : 20;
+
+          if (!channel) {
+            context.emit('text', 'Usage: /channels read <channel> [limit]\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const result = manager.readMessages(channel, limit);
+            if (!result) {
+              context.emit('text', `Channel "${channel}" not found.\n`);
+            } else if (result.messages.length === 0) {
+              context.emit('text', `No messages in #${result.channel.name}.\n`);
+            } else {
+              context.emit('text', `#${result.channel.name} — Recent (${result.messages.length}):\n\n`);
+              for (const msg of result.messages) {
+                const date = new Date(msg.createdAt).toLocaleString();
+                context.emit('text', `  [${msg.senderName}] (${date})\n`);
+                context.emit('text', `  ${msg.content}\n\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels members <channel>
+        if (subcommand === 'members') {
+          const channel = subArgs.trim();
+          if (!channel) {
+            context.emit('text', 'Usage: /channels members <channel>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const ch = manager.getChannel(channel);
+            if (!ch) {
+              context.emit('text', `Channel "${channel}" not found.\n`);
+            } else {
+              const members = manager.getMembers(channel);
+              context.emit('text', `#${ch.name} Members (${members.length}):\n\n`);
+              for (const m of members) {
+                const roleTag = m.role === 'owner' ? ' (owner)' : '';
+                context.emit('text', `  ${m.assistantName}${roleTag}\n`);
+              }
+            }
+          } catch (error) {
+            context.emit('text', `Error: ${error instanceof Error ? error.message : String(error)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels invite <channel> <agent>
+        if (subcommand === 'invite') {
+          const parts = subArgs.trim().split(/\s+/);
+          const channel = parts[0];
+          const agent = parts[1];
+
+          if (!channel || !agent) {
+            context.emit('text', 'Usage: /channels invite <channel> <agent-name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const result = manager.invite(channel, agent, agent);
+          context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels delete <channel>
+        if (subcommand === 'delete') {
+          const channel = subArgs.trim();
+          if (!channel) {
+            context.emit('text', 'Usage: /channels delete <channel>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const result = manager.archiveChannel(channel);
+          context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /channels help
+        if (subcommand === 'help') {
+          context.emit('text', 'Channel Commands:\n\n');
+          context.emit('text', '/channels                      Open channels panel\n');
+          context.emit('text', '/channels list                 List all channels\n');
+          context.emit('text', '/channels create <name> [desc] Create a channel\n');
+          context.emit('text', '/channels join <channel>       Join a channel\n');
+          context.emit('text', '/channels leave <channel>      Leave a channel\n');
+          context.emit('text', '/channels send <ch> <msg>      Send a message\n');
+          context.emit('text', '/channels read <ch> [limit]    Read messages\n');
+          context.emit('text', '/channels members <ch>         List members\n');
+          context.emit('text', '/channels invite <ch> <agent>  Invite an agent\n');
+          context.emit('text', '/channels delete <ch>          Archive a channel\n');
+          context.emit('text', '/channels help                 Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown command: ${subcommand}\n`);
+        context.emit('text', 'Use /channels help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
    * /tasks - Task queue management
    */
   private tasksCommand(): Command {
@@ -2861,6 +3127,21 @@ Created: ${new Date(job.createdAt).toISOString()}
       handler: async (args, context) => {
         const parts = splitArgs(args);
         const sub = parts[0] || '';
+        const formatTaskMatch = (task: Task): string => {
+          const desc = task.description.length > 60
+            ? `${task.description.slice(0, 60)}...`
+            : task.description;
+          return `${task.id} - ${desc}`;
+        };
+        const emitResolveError = (id: string, matches: Task[], label: string): void => {
+          if (matches.length > 1) {
+            const listed = matches.slice(0, 5).map(formatTaskMatch).join('\n');
+            const more = matches.length > 5 ? `\n...and ${matches.length - 5} more` : '';
+            context.emit('text', `Multiple ${label} match "${id}". Use a longer ID prefix.\n${listed}${more}\n`);
+            return;
+          }
+          context.emit('text', `${label} not found: ${id}\n`);
+        };
 
         // Interactive UI mode - default when no args or explicit 'ui'
         if (!sub || sub === 'ui') {
@@ -2919,6 +3200,7 @@ Created: ${new Date(job.createdAt).toISOString()}
           output += '  /tasks resume            Resume auto-processing\n';
           output += '  /tasks run               Run next pending task\n';
           output += '  /tasks help              Show this help\n';
+          output += '\nNote: You can use a unique ID prefix from /tasks list.\n';
 
           context.emit('text', output);
           context.emit('done');
@@ -2936,8 +3218,8 @@ Created: ${new Date(job.createdAt).toISOString()}
 
           const paused = await isPaused(context.cwd);
           let output = `\n**Task Queue** ${paused ? '(Paused)' : ''}\n\n`;
-          output += '| Status | Pri | Description | Created |\n';
-          output += '|--------|-----|-------------|----------|\n';
+          output += '| Status | Pri | ID | Description | Created |\n';
+          output += '|--------|-----|----|-------------|----------|\n';
 
           for (const task of tasks) {
             const statusIcon = task.status === 'pending' ? '○' :
@@ -2947,7 +3229,7 @@ Created: ${new Date(job.createdAt).toISOString()}
                                  task.priority === 'low' ? '↓' : '-';
             const desc = task.description.slice(0, 40) + (task.description.length > 40 ? '...' : '');
             const created = new Date(task.createdAt).toLocaleDateString();
-            output += `| ${statusIcon} | ${priorityIcon} | ${desc} | ${created} |\n`;
+            output += `| ${statusIcon} | ${priorityIcon} | ${task.id} | ${desc} | ${created} |\n`;
           }
 
           context.emit('text', output);
@@ -2995,9 +3277,9 @@ Created: ${new Date(job.createdAt).toISOString()}
             return { handled: true };
           }
 
-          const task = await getTask(context.cwd, id);
+          const { task, matches } = await resolveTaskId(context.cwd, id);
           if (!task) {
-            context.emit('text', `Task not found: ${id}\n`);
+            emitResolveError(id, matches, 'Task');
             context.emit('done');
             return { handled: true };
           }
@@ -3038,11 +3320,18 @@ Created: ${new Date(job.createdAt).toISOString()}
             return { handled: true };
           }
 
-          const deleted = await deleteTask(context.cwd, id);
+          const { task, matches } = await resolveTaskId(context.cwd, id);
+          if (!task) {
+            emitResolveError(id, matches, 'Task');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const deleted = await deleteTask(context.cwd, task.id);
           if (deleted) {
-            context.emit('text', `Task deleted: ${id}\n`);
+            context.emit('text', `Task deleted: ${task.id}\n`);
           } else {
-            context.emit('text', `Task not found: ${id}\n`);
+            context.emit('text', `Task not found: ${task.id}\n`);
           }
           context.emit('done');
           return { handled: true };
@@ -3078,11 +3367,18 @@ Created: ${new Date(job.createdAt).toISOString()}
             return { handled: true };
           }
 
-          const task = await updateTask(context.cwd, id, { priority: newPriority as TaskPriority });
+          const { task: resolved, matches } = await resolveTaskId(context.cwd, id);
+          if (!resolved) {
+            emitResolveError(id, matches, 'Task');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          const task = await updateTask(context.cwd, resolved.id, { priority: newPriority as TaskPriority });
           if (task) {
             context.emit('text', `Task priority updated to ${newPriority}: ${task.description}\n`);
           } else {
-            context.emit('text', `Task not found: ${id}\n`);
+            context.emit('text', `Task not found: ${resolved.id}\n`);
           }
           context.emit('done');
           return { handled: true };
@@ -3427,7 +3723,7 @@ Created: ${new Date(job.createdAt).toISOString()}
           return {
             handled: true,
             showPanel: 'resume',
-            panelInitialValue: showAll ? 'all' : 'cwd',
+            panelValue: showAll ? 'all' : 'cwd',
           };
         }
 
@@ -5666,8 +5962,14 @@ Please summarize the last interaction and suggest 2-3 next steps.
 
         const [action, ...rest] = args.trim().split(/\s+/).filter(Boolean);
 
-        // No args - show help and stats
-        if (!action) {
+        // No args or explicit ui - open interactive panel
+        if (!action || action === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'memory' as const };
+        }
+
+        // /memory help - show help and stats
+        if (action === 'help') {
           const stats = await manager.getStats();
           context.emit('text', '\n/memory - Persistent Memory Management\n');
           context.emit('text', '───────────────────────────────────────\n\n');
@@ -5675,6 +5977,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
           context.emit('text', `  By scope: global=${stats.byScope.global}, shared=${stats.byScope.shared}, private=${stats.byScope.private}\n`);
           context.emit('text', `  By category: preference=${stats.byCategory.preference}, fact=${stats.byCategory.fact}, knowledge=${stats.byCategory.knowledge}, history=${stats.byCategory.history}\n\n`);
           context.emit('text', 'Commands:\n');
+          context.emit('text', '  /memory                         Open interactive memory panel\n');
           context.emit('text', '  /memory list [cat] [opts]     List memories (filter by category/scope/tags)\n');
           context.emit('text', '  /memory get <key>             Get a specific memory\n');
           context.emit('text', '  /memory set <key> <value>     Save a memory (supports --scope, --scopeId)\n');
@@ -6474,7 +6777,7 @@ Please summarize the last interaction and suggest 2-3 next steps.
           return {
             handled: true,
             showPanel: 'connectors' as const,
-            panelInitialValue: argWithoutFlag || undefined,
+            panelValue: argWithoutFlag || undefined,
           };
         }
 

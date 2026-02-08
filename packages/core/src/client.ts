@@ -401,6 +401,16 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the memory manager
+   */
+  getMemoryManager(): any {
+    if (typeof (this.assistantLoop as any).getMemoryManager === 'function') {
+      return (this.assistantLoop as any).getMemoryManager();
+    }
+    return null;
+  }
+
+  /**
    * Refresh identity context after assistant/identity changes
    */
   async refreshIdentityContext(): Promise<void> {
@@ -425,6 +435,16 @@ export class EmbeddedClient implements AssistantClient {
   getWebhooksManager(): any {
     if (typeof (this.assistantLoop as any).getWebhooksManager === 'function') {
       return (this.assistantLoop as any).getWebhooksManager();
+    }
+    return null;
+  }
+
+  /**
+   * Get the channels manager
+   */
+  getChannelsManager(): any {
+    if (typeof (this.assistantLoop as any).getChannelsManager === 'function') {
+      return (this.assistantLoop as any).getChannelsManager();
     }
     return null;
   }
