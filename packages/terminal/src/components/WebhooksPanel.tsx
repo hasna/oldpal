@@ -73,6 +73,10 @@ export function WebhooksPanel({ manager, onClose }: WebhooksPanelProps) {
     loadWebhooks();
   }, []);
 
+  useEffect(() => {
+    setSelectedIndex((prev) => Math.min(prev, Math.max(0, webhooks.length - 1)));
+  }, [webhooks.length]);
+
   const loadDetail = async (webhookId: string) => {
     try {
       const webhook = await manager.get(webhookId);
@@ -115,7 +119,11 @@ export function WebhooksPanel({ manager, onClose }: WebhooksPanelProps) {
       if (key.upArrow || input === 'k') {
         setSelectedIndex((prev) => Math.max(0, prev - 1));
       } else if (key.downArrow || input === 'j') {
-        setSelectedIndex((prev) => Math.min(webhooks.length - 1, prev + 1));
+        if (webhooks.length === 0) {
+          setSelectedIndex(0);
+        } else {
+          setSelectedIndex((prev) => Math.min(webhooks.length - 1, prev + 1));
+        }
       } else if (key.return) {
         if (webhooks.length > 0) {
           loadDetail(webhooks[selectedIndex].id);

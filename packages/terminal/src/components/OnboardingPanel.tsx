@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Text, useStdin } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { useSafeInput as useInput } from '../hooks/useSafeInput';
 import { useTypewriter } from '../hooks/useTypewriter';
@@ -140,32 +140,18 @@ export function OnboardingPanel({
   const currentStepRef = useRef(currentStep);
   currentStepRef.current = currentStep;
 
-  // Direct stdin listener for Escape — fallback when useSafeInput doesn't receive events
-  const { setRawMode, isRawModeSupported } = useStdin();
-  useEffect(() => {
-    if (isRawModeSupported && setRawMode) {
-      setRawMode(true);
-    }
-    const handleData = (data: Buffer) => {
-      const s = data.toString();
-      if (s === '\x1b') {
-        // Escape key pressed
-        if (currentStepRef.current === 'welcome') {
-          onCancel();
-        }
-      }
-    };
-    process.stdin.on('data', handleData);
-    return () => {
-      process.stdin.removeListener('data', handleData);
-    };
-  }, [onCancel, isRawModeSupported, setRawMode]);
+  // useSafeInput handles Escape; avoid toggling raw mode directly to prevent conflicts.
   const [connectorKeys, setConnectorKeys] = useState<Record<string, string>>({});
   const [connectorKeyIndex, setConnectorKeyIndex] = useState(0);
   const [connectorKeyValue, setConnectorKeyValue] = useState('');
   const [introRevealCount, setIntroRevealCount] = useState(0);
   const [isCompact, setIsCompact] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const submitGuardRef = useRef(false);
+
+  useEffect(() => {
+    submitGuardRef.current = false;
+  }, [currentStep]);
 
   const logoColor = useGradientCycle(600);
   const { displayed: subtitle, done: subtitleDone } = useTypewriter(
@@ -234,6 +220,8 @@ export function OnboardingPanel({
   }, [apiKey, selectedModelIndex, enabledConnectors, connectorKeys, onComplete, isSaving]);
 
   const submitApiKey = useCallback((value: string) => {
+    if (submitGuardRef.current) return;
+    submitGuardRef.current = true;
     const key = value.trim();
     if (!key && existingApiKey) {
       // Keep existing key
@@ -244,10 +232,12 @@ export function OnboardingPanel({
     }
     if (!key) {
       setApiKeyError('API key is required');
+      submitGuardRef.current = false;
       return;
     }
     if (!key.startsWith('sk-ant-')) {
       setApiKeyError('Invalid key format. Anthropic keys start with "sk-ant-"');
+      submitGuardRef.current = false;
       return;
     }
     setApiKeyValidated(true);
@@ -255,6 +245,8 @@ export function OnboardingPanel({
   }, [existingApiKey, goNext]);
 
   const submitConnectorKey = useCallback((value: string) => {
+    if (submitGuardRef.current) return;
+    submitGuardRef.current = true;
     const currentConnector = connectorKeysNeeded[connectorKeyIndex];
     if (!currentConnector) {
       goNext();
@@ -267,6 +259,7 @@ export function OnboardingPanel({
     setConnectorKeyValue('');
     if (connectorKeyIndex < connectorKeysNeeded.length - 1) {
       setConnectorKeyIndex((prev) => prev + 1);
+      submitGuardRef.current = false;
     } else {
       goNext();
     }
@@ -352,7 +345,7 @@ export function OnboardingPanel({
         goBack();
         return;
       }
-      if (!key.return && input === '\n') {
+      if (key.return || input === '\n') {
         submitApiKey(apiKey);
       }
       return;
@@ -362,7 +355,7 @@ export function OnboardingPanel({
         goBack();
         return;
       }
-      if (!key.return && input === '\n') {
+      if (key.return || input === '\n') {
         submitConnectorKey(connectorKeyValue);
       }
     }

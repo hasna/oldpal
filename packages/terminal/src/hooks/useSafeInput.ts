@@ -2,11 +2,25 @@ import { useEffect } from 'react';
 import { useStdin, type Key } from 'ink';
 
 let rawModeUsers = 0;
-let rawModeEnabled = false;
+let rawModePatched = false;
+let originalSetRawMode: ((mode: boolean) => void) | null = null;
+
+function ensureRawModePatch(): void {
+  if (rawModePatched) return;
+  if (!process.stdin || typeof process.stdin.setRawMode !== 'function') return;
+  originalSetRawMode = process.stdin.setRawMode.bind(process.stdin);
+  process.stdin.setRawMode = (mode: boolean) => {
+    if (!mode && rawModeUsers > 0) {
+      return;
+    }
+    originalSetRawMode?.(mode);
+  };
+  rawModePatched = true;
+}
 // Inline minimal keypress parser to avoid depending on ink internals
 function parseKeypress(s: string): { name: string; ctrl: boolean; shift: boolean; meta: boolean; option: boolean; sequence: string } {
   const key = { name: '', ctrl: false, shift: false, meta: false, option: false, sequence: s };
-  if (s === '\r' || s === '\n') { key.name = 'return'; }
+  if (s === '\r' || s === '\n' || s === '\r\n' || s === '\n\r') { key.name = 'return'; }
   else if (s === '\x1b') { key.name = 'escape'; }
   else if (s === '\t') { key.name = 'tab'; }
   else if (s === '\x7f' || s === '\b') { key.name = 'backspace'; }
@@ -37,6 +51,7 @@ type Options = { isActive?: boolean };
 
 // Input hook that avoids toggling raw mode off when handlers deactivate.
 export function useSafeInput(handler: Handler, options: Options = {}): void {
+  ensureRawModePatch();
   const { internal_eventEmitter, internal_exitOnCtrlC, setRawMode, isRawModeSupported } = useStdin() as {
     internal_eventEmitter?: NodeJS.EventEmitter;
     internal_exitOnCtrlC?: boolean;
@@ -47,16 +62,10 @@ export function useSafeInput(handler: Handler, options: Options = {}): void {
   useEffect(() => {
     if (!isRawModeSupported || !setRawMode) return;
     rawModeUsers += 1;
-    if (!rawModeEnabled) {
-      setRawMode(true);
-      rawModeEnabled = true;
-    }
+    setRawMode(true);
     return () => {
       rawModeUsers = Math.max(0, rawModeUsers - 1);
-      if (rawModeEnabled && rawModeUsers === 0) {
-        setRawMode(false);
-        rawModeEnabled = false;
-      }
+      setRawMode(false);
     };
   }, [isRawModeSupported, setRawMode]);
 
@@ -64,8 +73,26 @@ export function useSafeInput(handler: Handler, options: Options = {}): void {
     if (options.isActive === false) return;
     if (!internal_eventEmitter) return;
 
-    const handleData = (data: string) => {
-      const keypress = parseKeypress(data);
+    const handleData = (data: string, inkKey?: Key) => {
+      if (inkKey && typeof inkKey === 'object') {
+        let input = typeof data === 'string' ? data : '';
+        // Preserve Alt+Enter newline handling (ESC + CR/LF) for consumers.
+        if (inkKey.meta && inkKey.return && (input === '\r' || input === '\n')) {
+          input = input === '\n' ? '\x1b\n' : '\x1b\r';
+        }
+        const key = { ...inkKey };
+        if (input.length === 1 && /[A-Z]/.test(input)) {
+          key.shift = true;
+        }
+        if (!(input === 'c' && key.ctrl) || !internal_exitOnCtrlC) {
+          handler(input, key);
+        }
+        return;
+      }
+
+      const raw = typeof data === 'string' ? data : '';
+      const keypress = parseKeypress(raw);
+      const isReturn = keypress.name === 'return' || keypress.sequence === '\x1b\r' || keypress.sequence === '\x1b\n';
       const key = {
         upArrow: keypress.name === 'up',
         downArrow: keypress.name === 'down',
@@ -75,7 +102,7 @@ export function useSafeInput(handler: Handler, options: Options = {}): void {
         pageUp: keypress.name === 'pageup',
         home: keypress.name === 'home',
         end: keypress.name === 'end',
-        return: keypress.name === 'return',
+        return: isReturn,
         escape: keypress.name === 'escape',
         ctrl: keypress.ctrl,
         shift: keypress.shift,
@@ -88,9 +115,6 @@ export function useSafeInput(handler: Handler, options: Options = {}): void {
       let input = keypress.ctrl ? keypress.name : keypress.sequence;
       if (NON_ALPHA_KEYS.includes(keypress.name)) {
         input = '';
-      }
-      if (input.startsWith('\u001B')) {
-        input = input.slice(1);
       }
       if (input.length === 1 && typeof input[0] === 'string' && /[A-Z]/.test(input[0])) {
         key.shift = true;

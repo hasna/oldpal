@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
 import { useSafeInput as useInput } from '../hooks/useSafeInput';
@@ -105,6 +105,10 @@ export function InboxPanel({
   const [isProcessing, setIsProcessing] = useState(false);
   const [detailEmail, setDetailEmail] = useState<Email | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEmailIndex((prev) => Math.min(prev, Math.max(0, emails.length - 1)));
+  }, [emails.length]);
 
   // Calculate visible range for emails list
   const emailRange = useMemo(
@@ -223,6 +227,9 @@ export function InboxPanel({
 
     // List mode navigation
     if (mode === 'list') {
+      if (emails.length === 0) {
+        return;
+      }
       if (key.upArrow) {
         setEmailIndex((prev) => (prev === 0 ? emails.length - 1 : prev - 1));
         return;

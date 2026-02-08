@@ -107,6 +107,10 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
     loadChannels();
   }, []);
 
+  useEffect(() => {
+    setSelectedIndex((prev) => Math.min(prev, Math.max(0, channels.length - 1)));
+  }, [channels.length]);
+
   const openChannel = (nameOrId: string) => {
     const ch = manager.getChannel(nameOrId);
     if (ch) {
@@ -193,11 +197,19 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
         return;
       }
       if (key.upArrow) {
-        setMentionIndex((prev) => Math.max(0, prev - 1));
+        if (mentionCandidates.length === 0) {
+          setMentionIndex(0);
+        } else {
+          setMentionIndex((prev) => Math.max(0, prev - 1));
+        }
         return;
       }
       if (key.downArrow) {
-        setMentionIndex((prev) => Math.min(mentionCandidates.length - 1, prev + 1));
+        if (mentionCandidates.length === 0) {
+          setMentionIndex(0);
+        } else {
+          setMentionIndex((prev) => Math.min(mentionCandidates.length - 1, prev + 1));
+        }
         return;
       }
       if (key.tab && mentionCandidates.length > 0) {
@@ -229,7 +241,11 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
       if (key.upArrow || input === 'k') {
         setSelectedIndex((prev) => Math.max(0, prev - 1));
       } else if (key.downArrow || input === 'j') {
-        setSelectedIndex((prev) => Math.min(channels.length - 1, prev + 1));
+        if (channels.length === 0) {
+          setSelectedIndex(0);
+        } else {
+          setSelectedIndex((prev) => Math.min(channels.length - 1, prev + 1));
+        }
       } else if (key.return) {
         if (channels.length > 0) {
           openChannel(channels[selectedIndex].id);

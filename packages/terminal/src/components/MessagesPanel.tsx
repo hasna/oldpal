@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { InboxPanel } from './InboxPanel';
 import type { Email, EmailListItem } from '@hasna/assistants-shared';
@@ -197,6 +197,10 @@ function AssistantMessagesContent({
   const [isProcessing, setIsProcessing] = useState(false);
   const [detailMessage, setDetailMessage] = useState<MessageEntry | null>(null);
 
+  useEffect(() => {
+    setMessageIndex((prev) => Math.min(prev, Math.max(0, messages.length - 1)));
+  }, [messages.length]);
+
   // Calculate visible range for messages list
   const messageRange = useMemo(
     () => getVisibleRange(messageIndex, messages.length),
@@ -280,6 +284,9 @@ function AssistantMessagesContent({
 
     // List mode navigation
     if (mode === 'list') {
+      if (messages.length === 0) {
+        return;
+      }
       if (key.upArrow) {
         setMessageIndex((prev) => (prev === 0 ? messages.length - 1 : prev - 1));
         return;

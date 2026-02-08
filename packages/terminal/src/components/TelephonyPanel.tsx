@@ -69,6 +69,11 @@ export function TelephonyPanel({ manager, onClose }: TelephonyPanelProps) {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const maxIndex = Math.max(0, getListLength() - 1);
+    setSelectedIndex((prev) => Math.min(prev, maxIndex));
+  }, [tab, calls.length, messages.length, numbers.length, routes.length]);
+
   const tabs: Tab[] = ['overview', 'calls', 'messages', 'numbers', 'routes'];
 
   useInput((input, key) => {

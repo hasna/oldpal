@@ -41,6 +41,10 @@ export function PeoplePanel({ manager, onClose }: PeoplePanelProps) {
     loadPeople();
   }, []);
 
+  useEffect(() => {
+    setSelectedIndex((prev) => Math.min(prev, Math.max(0, people.length - 1)));
+  }, [people.length]);
+
   useInput((input, key) => {
     const isTextEntry = mode === 'create-name' || mode === 'create-email';
 
@@ -61,7 +65,11 @@ export function PeoplePanel({ manager, onClose }: PeoplePanelProps) {
       if (key.upArrow || input === 'k') {
         setSelectedIndex((prev) => Math.max(0, prev - 1));
       } else if (key.downArrow || input === 'j') {
-        setSelectedIndex((prev) => Math.min(people.length - 1, prev + 1));
+        if (people.length === 0) {
+          setSelectedIndex(0);
+        } else {
+          setSelectedIndex((prev) => Math.min(people.length - 1, prev + 1));
+        }
       } else if (key.return && people.length > 0) {
         const person = people[selectedIndex];
         manager.setActivePerson(person.id).then(() => {
