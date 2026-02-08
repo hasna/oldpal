@@ -761,6 +761,51 @@ describe('GlobalMemoryManager', () => {
       }
     });
 
+    test('should evict unaccessed memories before accessed ones when importance ties', async () => {
+      const tempDir5 = await mkdtemp(join(tmpdir(), 'memory-test-access-order-'));
+      const managerWithLimits = new GlobalMemoryManager({
+        dbPath: join(tempDir5, 'memory.db'),
+        scope: 'private',
+        scopeId: 'test-assistant',
+        config: {
+          storage: {
+            maxEntries: 2,
+          },
+        },
+      });
+
+      try {
+        await managerWithLimits.set('unaccessed', 'value-a', {
+          category: 'fact',
+          importance: 5,
+        });
+        await managerWithLimits.set('accessed', 'value-b', {
+          category: 'fact',
+          importance: 5,
+        });
+
+        // Touch one memory so it has accessed_at set
+        await managerWithLimits.get('accessed');
+
+        // Adding another memory should evict the unaccessed one first
+        await managerWithLimits.set('new-memory', 'value-c', {
+          category: 'fact',
+          importance: 5,
+        });
+
+        const unaccessed = await managerWithLimits.get('unaccessed');
+        const accessed = await managerWithLimits.get('accessed');
+        const newMemory = await managerWithLimits.get('new-memory');
+
+        expect(unaccessed).toBeNull();
+        expect(accessed).not.toBeNull();
+        expect(newMemory).not.toBeNull();
+      } finally {
+        managerWithLimits.close();
+        await rm(tempDir5, { recursive: true, force: true });
+      }
+    });
+
     test('cleanup should clear expired and enforce limits', async () => {
       const tempDir4 = await mkdtemp(join(tmpdir(), 'memory-test-cleanup-'));
       const managerForCleanup = new GlobalMemoryManager({
@@ -793,6 +838,21 @@ describe('GlobalMemoryManager', () => {
         managerForCleanup.close();
         await rm(tempDir4, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe('query ordering', () => {
+    test('orders by accessed_at desc when requested', async () => {
+      await manager.set('a', 'value-a', { category: 'fact' });
+      await manager.set('b', 'value-b', { category: 'fact' });
+
+      await manager.get('a');
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      await manager.get('a');
+
+      const results = await manager.query({ orderBy: 'accessed', orderDir: 'desc' });
+      expect(results.memories.length).toBeGreaterThanOrEqual(2);
+      expect(results.memories[0].key).toBe('a');
     });
   });
 });

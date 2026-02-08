@@ -356,7 +356,7 @@ export class GlobalMemoryManager {
       const result = this.db.prepare(`
         DELETE FROM memories WHERE id IN (
           SELECT id FROM memories
-          ORDER BY importance ASC, accessed_at ASC NULLS FIRST, created_at ASC
+          ORDER BY importance ASC, (accessed_at IS NOT NULL) ASC, accessed_at ASC, created_at ASC
           LIMIT ?
         )
       `).run(toRemove);
