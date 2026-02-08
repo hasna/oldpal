@@ -231,8 +231,9 @@ export class ChannelsManager {
       return { success: false, message: `Channel #${channel.name} is archived.` };
     }
 
+    // Auto-join the person if they're not already a member
     if (!this.store.isMember(channel.id, senderId)) {
-      return { success: false, message: `${senderName} is not a member of #${channel.name}. Join first.` };
+      this.store.addMember(channel.id, senderId, senderName, 'member', 'person');
     }
 
     const messageId = this.store.sendMessage(

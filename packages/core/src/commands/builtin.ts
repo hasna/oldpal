@@ -527,6 +527,13 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
+        if (action === 'update') {
+          context.emit('text', 'To update assistants, run:\n');
+          context.emit('text', '  bun install -g @hasna/assistants\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
         // /assistants help
         if (action === 'help') {
           context.emit('text', '\n## Assistant Commands\n\n');
@@ -539,6 +546,7 @@ export class BuiltinCommands {
           context.emit('text', '/assistants settings           Show assistant settings\n');
           context.emit('text', '/assistants prompt [text]      Get/set assistant system prompt\n');
           context.emit('text', '/assistants prompt-clear       Clear assistant system prompt\n');
+          context.emit('text', '/assistants update             Update CLI via bun install -g\n');
           context.emit('text', '/assistants help               Show this help\n');
           context.emit('done');
           return { handled: true };
@@ -2990,7 +2998,7 @@ Created: ${new Date(job.createdAt).toISOString()}
             return { handled: true };
           }
 
-          // If a person is logged in, send as that person
+          // If a person is logged in, send as that person and trigger assistant response
           const peopleManager = context.getPeopleManager?.();
           const activePerson = peopleManager?.getActivePerson();
           let result;
@@ -3001,6 +3009,14 @@ Created: ${new Date(job.createdAt).toISOString()}
           }
           context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
           context.emit('done');
+
+          // When a person sends a message, prompt the assistant to respond in the channel
+          if (activePerson && result.success) {
+            return {
+              handled: false,
+              prompt: `[Channel Message] ${activePerson.name} posted in #${channel}: "${message}"\n\nPlease respond to this in the #${channel} channel using the channel_send tool. Be helpful and conversational.`,
+            };
+          }
           return { handled: true };
         }
 
