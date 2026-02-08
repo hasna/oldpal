@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import type { GuardrailsConfig, GuardrailsPolicy, PolicyAction, PolicyScope, ToolPolicyRule } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface PolicyInfo {
   id: string;

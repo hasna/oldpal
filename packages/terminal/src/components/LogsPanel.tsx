@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { getSecurityLogger } from '@hasna/assistants-core';
 import type { SecurityEvent, Severity } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface LogsPanelProps {
   onCancel: () => void;

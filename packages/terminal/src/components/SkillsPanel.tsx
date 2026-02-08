@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Skill } from '@hasna/assistants-shared';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 import type { CreateSkillOptions, CreateSkillResult, SkillScope } from '@hasna/assistants-core';
 
 interface SkillsPanelProps {

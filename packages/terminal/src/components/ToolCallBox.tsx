@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import type { ToolCall, ToolResult } from '@hasna/assistants-shared';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface ToolCallEntry {
   toolCall: ToolCall;

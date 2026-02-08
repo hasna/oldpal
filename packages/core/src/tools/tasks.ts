@@ -1,7 +1,7 @@
 import type { Tool } from '@hasna/assistants-shared';
 import {
   getTasks,
-  getTask,
+  resolveTaskId,
   addTask,
   getNextTask,
   startTask,
@@ -11,6 +11,7 @@ import {
   getTaskCounts,
   getRecurringTasks,
   cancelRecurringTask,
+  type Task,
   type TaskPriority,
 } from '../tasks';
 
@@ -240,6 +241,22 @@ export const taskTools: Tool[] = [
  * Create tool executors for task management
  */
 export function createTaskToolExecutors(context: TasksToolContext) {
+  const formatTaskMatch = (task: Task): string => {
+    const desc = task.description.length > 60
+      ? `${task.description.slice(0, 60)}...`
+      : task.description;
+    return `${task.id} - ${desc}`;
+  };
+
+  const handleResolveError = (id: string, matches: Task[], label: string): string => {
+    if (matches.length > 1) {
+      const listed = matches.slice(0, 5).map(formatTaskMatch).join('\n');
+      const more = matches.length > 5 ? `\n...and ${matches.length - 5} more` : '';
+      return `Multiple ${label} match "${id}". Use a longer ID prefix.\n${listed}${more}`;
+    }
+    return `${label} not found: ${id}`;
+  };
+
   return {
     tasks_list: async (input: { status?: string }) => {
       const tasks = await getTasks(context.cwd);
@@ -259,16 +276,16 @@ export function createTaskToolExecutors(context: TasksToolContext) {
                           t.status === 'completed' ? '●' : '✗';
         const priorityIcon = t.priority === 'high' ? '↑' :
                             t.priority === 'low' ? '↓' : '-';
-        return `${statusIcon} [${priorityIcon}] ${t.id.slice(0, 8)} - ${t.description}`;
+        return `${statusIcon} [${priorityIcon}] ${t.id} - ${t.description}`;
       });
 
       return `Tasks (${filtered.length}):\n${lines.join('\n')}`;
     },
 
     tasks_get: async (input: { id: string }) => {
-      const task = await getTask(context.cwd, input.id);
+      const { task, matches } = await resolveTaskId(context.cwd, input.id);
       if (!task) {
-        return `Task not found: ${input.id}`;
+        return handleResolveError(input.id, matches, 'Task');
       }
 
       const lines = [
@@ -319,7 +336,11 @@ export function createTaskToolExecutors(context: TasksToolContext) {
     },
 
     tasks_complete: async (input: { id: string; result?: string }) => {
-      const task = await completeTask(context.cwd, input.id, input.result);
+      const { task: resolved, matches } = await resolveTaskId(context.cwd, input.id);
+      if (!resolved) {
+        return handleResolveError(input.id, matches, 'Task');
+      }
+      const task = await completeTask(context.cwd, resolved.id, input.result);
       if (!task) {
         return `Task not found: ${input.id}`;
       }
@@ -327,7 +348,11 @@ export function createTaskToolExecutors(context: TasksToolContext) {
     },
 
     tasks_fail: async (input: { id: string; error?: string }) => {
-      const task = await failTask(context.cwd, input.id, input.error);
+      const { task: resolved, matches } = await resolveTaskId(context.cwd, input.id);
+      if (!resolved) {
+        return handleResolveError(input.id, matches, 'Task');
+      }
+      const task = await failTask(context.cwd, resolved.id, input.error);
       if (!task) {
         return `Task not found: ${input.id}`;
       }
@@ -366,7 +391,7 @@ export function createTaskToolExecutors(context: TasksToolContext) {
           : 'completed';
         const count = t.recurrence?.occurrenceCount ?? 0;
         const statusIcon = t.status === 'pending' ? '◐' : '●';
-        return `${statusIcon} ${t.id.slice(0, 8)} - ${t.description}\n   ${schedule} | next: ${nextRun} | runs: ${count}`;
+        return `${statusIcon} ${t.id} - ${t.description}\n   ${schedule} | next: ${nextRun} | runs: ${count}`;
       });
 
       return `Recurring Tasks (${recurring.length}):\n${lines.join('\n')}`;
@@ -409,7 +434,15 @@ export function createTaskToolExecutors(context: TasksToolContext) {
     },
 
     tasks_recurring_cancel: async (input: { id: string }) => {
-      const task = await cancelRecurringTask(context.cwd, input.id);
+      const { task: resolved, matches } = await resolveTaskId(
+        context.cwd,
+        input.id,
+        (t) => t.isRecurringTemplate === true
+      );
+      if (!resolved) {
+        return handleResolveError(input.id, matches, 'Recurring task');
+      }
+      const task = await cancelRecurringTask(context.cwd, resolved.id);
       if (!task) {
         return `Recurring task not found: ${input.id}`;
       }

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import type { Heartbeat } from '@hasna/assistants-core';
 import type { HeartbeatState } from '@hasna/assistants-shared';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface HeartbeatPanelProps {
   runs: Heartbeat[];

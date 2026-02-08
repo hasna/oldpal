@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Task, TaskPriority, TaskStatus, TaskCreateOptions } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface TasksPanelProps {
   tasks: Task[];

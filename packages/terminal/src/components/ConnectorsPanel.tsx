@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { Connector, ConnectorCommand, ConnectorStatus } from '@hasna/assistants-shared';
 import { ConnectorAutoRefreshManager } from '@hasna/assistants-core';
 import type { ConnectorAutoRefreshEntry, ConnectorAutoRefreshSchedule } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 type ViewMode = 'list' | 'detail' | 'command';
 

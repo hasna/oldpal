@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 const MAX_VISIBLE_ITEMS = 5;
 

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import type { HookEvent, HookHandler } from '@hasna/assistants-shared';
 import type { HookLocation } from '@hasna/assistants-core';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface HookWizardProps {
   onSave: (event: HookEvent, handler: HookHandler, location: HookLocation, matcher?: string) => Promise<void>;

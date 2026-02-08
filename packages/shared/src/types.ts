@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony';
   /** Initial value for the panel */
   panelValue?: string;
 }
@@ -1246,6 +1246,50 @@ export interface ChannelsConfig {
     maxMessagesPerChannel?: number;
     /** Max message age in days (default: 90) */
     maxAgeDays?: number;
+  };
+}
+
+/**
+ * Configuration for telephony (Twilio + ElevenLabs Conversational AI)
+ * Enables phone numbers, SMS, WhatsApp, and real-time voice calls
+ */
+export interface TelephonyConfig {
+  /** Whether telephony is enabled (default: false) */
+  enabled?: boolean;
+
+  /** Twilio webhook base URL (e.g., "https://app.example.com") */
+  webhookUrl?: string;
+
+  /** Default phone number for outbound calls/SMS */
+  defaultPhoneNumber?: string;
+
+  /** ElevenLabs Conversational AI Agent ID */
+  elevenLabsAgentId?: string;
+
+  /** Auto-injection settings for incoming calls/SMS */
+  injection?: {
+    /** Auto-inject events at turn start (default: true) */
+    enabled?: boolean;
+    /** Max events to inject per turn (default: 5) */
+    maxPerTurn?: number;
+  };
+
+  /** Storage settings */
+  storage?: {
+    /** Max call logs to retain (default: 1000) */
+    maxCallLogs?: number;
+    /** Max SMS logs to retain (default: 5000) */
+    maxSmsLogs?: number;
+    /** Max log age in days (default: 90) */
+    maxAgeDays?: number;
+  };
+
+  /** Voice settings */
+  voice?: {
+    /** Whether to record calls (default: false) */
+    recordCalls?: boolean;
+    /** Max call duration in seconds (default: 3600 = 1 hour) */
+    maxCallDurationSeconds?: number;
   };
 }
 

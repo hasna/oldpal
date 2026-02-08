@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import type { HookEvent, HookMatcher, HookHandler, HookConfig, NativeHook } from '@hasna/assistants-shared';
 import type { HookLocation } from '@hasna/assistants-core';
 import { HookWizard } from './HookWizard';
+import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
 interface NativeHookInfo {
   hook: NativeHook;

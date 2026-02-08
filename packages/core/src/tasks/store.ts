@@ -74,6 +74,26 @@ export async function getTask(cwd: string, id: string): Promise<Task | null> {
 }
 
 /**
+ * Resolve a task by exact ID or unique ID prefix
+ */
+export async function resolveTaskId(
+  cwd: string,
+  idOrPrefix: string,
+  filter?: (task: Task) => boolean
+): Promise<{ task: Task | null; matches: Task[] }> {
+  const data = await loadTaskStore(cwd);
+  const candidates = filter ? data.tasks.filter(filter) : data.tasks;
+
+  const exact = candidates.find((t) => t.id === idOrPrefix);
+  if (exact) {
+    return { task: exact, matches: [exact] };
+  }
+
+  const matches = candidates.filter((t) => t.id.startsWith(idOrPrefix));
+  return { task: matches.length === 1 ? matches[0] : null, matches };
+}
+
+/**
  * Calculate the next run time for a recurring task
  */
 function calculateNextRunAt(recurrence: TaskRecurrence, fromTime: number): number | undefined {
