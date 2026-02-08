@@ -900,4 +900,19 @@ describe('TaskGraphScheduler', () => {
     expect(results.size).toBe(1);
     expect(results.get('t1')?.success).toBe(true);
   });
+
+  test('should clamp maxConcurrent to avoid deadlock when set to 0', async () => {
+    graph.addTask({ id: 't1', description: '1', role: 'worker', priority: 1, dependsOn: [] });
+    scheduler = new TaskGraphScheduler(graph, { maxConcurrent: 0 });
+
+    const executor = async (task: SwarmTask): Promise<SubagentResult> => ({
+      success: true,
+      result: `Done: ${task.description}`,
+      turns: 1,
+      toolCalls: 1,
+    });
+
+    const results = await scheduler.execute(executor);
+    expect(results.get('t1')?.success).toBe(true);
+  });
 });

@@ -236,6 +236,11 @@ export class SwarmCoordinator {
     const config = { ...this.config, ...input.config };
     this.config = config;
 
+    if (!Number.isFinite(config.maxConcurrent) || config.maxConcurrent < 1) {
+      this.streamText(`\n⚠️ Invalid swarm config: maxConcurrent=${config.maxConcurrent}. Using 1.\n`);
+      this.config.maxConcurrent = 1;
+    }
+
     // Validate tool name lists (warn about unknown tools)
     this.validateToolLists(config);
 

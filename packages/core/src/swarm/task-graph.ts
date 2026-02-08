@@ -411,7 +411,12 @@ export class TaskGraphScheduler {
 
   constructor(graph: TaskGraph, options: Partial<SchedulerOptions> = {}) {
     this.graph = graph;
-    this.options = { ...DEFAULT_SCHEDULER_OPTIONS, ...options };
+    const merged = { ...DEFAULT_SCHEDULER_OPTIONS, ...options };
+    const maxConcurrent = Number.isFinite(merged.maxConcurrent) ? merged.maxConcurrent : DEFAULT_SCHEDULER_OPTIONS.maxConcurrent;
+    this.options = {
+      ...merged,
+      maxConcurrent: Math.max(1, maxConcurrent),
+    };
   }
 
   /**
