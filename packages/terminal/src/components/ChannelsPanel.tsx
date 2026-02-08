@@ -11,6 +11,8 @@ interface ChannelsPanelProps {
   activePersonId?: string;
   /** Active person name for message attribution */
   activePersonName?: string;
+  /** Called when a person sends a message - triggers assistant to respond */
+  onPersonMessage?: (channelName: string, personName: string, message: string) => void;
 }
 
 type Mode =
@@ -39,7 +41,7 @@ function formatRelativeTime(isoDate: string | null | undefined): string {
   return `${seconds}s ago`;
 }
 
-export function ChannelsPanel({ manager, onClose, activePersonId, activePersonName }: ChannelsPanelProps) {
+export function ChannelsPanel({ manager, onClose, activePersonId, activePersonName, onPersonMessage }: ChannelsPanelProps) {
   const [mode, setMode] = useState<Mode>('list');
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -277,15 +279,20 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
             onChange={setChatInput}
             onSubmit={() => {
               if (chatInput.trim()) {
+                const msg = chatInput.trim();
                 // Send as person if logged in, otherwise as assistant
                 const result = activePersonId && activePersonName
-                  ? manager.sendAs(selectedChannel.id, chatInput.trim(), activePersonId, activePersonName)
-                  : manager.send(selectedChannel.id, chatInput.trim());
+                  ? manager.sendAs(selectedChannel.id, msg, activePersonId, activePersonName)
+                  : manager.send(selectedChannel.id, msg);
                 if (result.success) {
                   setChatInput('');
                   // Reload messages
                   const updated = manager.readMessages(selectedChannel.id, 50);
                   setMessages(updated?.messages || []);
+                  // Trigger assistant to respond when a person sends a message
+                  if (activePersonId && activePersonName && onPersonMessage && selectedChannel) {
+                    onPersonMessage(selectedChannel.name, activePersonName, msg);
+                  }
                 } else {
                   setStatusMessage(`Error: ${result.message}`);
                 }

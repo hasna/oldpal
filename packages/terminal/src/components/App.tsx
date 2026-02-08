@@ -2479,6 +2479,32 @@ export function App({ cwd, version }: AppProps) {
           return;
         }
 
+        // /assistants update → run CLI update
+        if (cmdName === 'assistants' && cmdArgs) {
+          const [subcommand] = cmdArgs.split(/\s+/);
+          if (subcommand?.toLowerCase() === 'update') {
+            const shellCommand = 'bun install -g @hasna/assistants';
+            const shellCwd = activeSession?.cwd || cwd;
+            setError(null);
+            try {
+              const result = await runShellCommand(shellCommand, shellCwd);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: generateId(),
+                  role: 'assistant',
+                  content: formatShellResult(shellCommand, result),
+                  timestamp: now(),
+                },
+              ]);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              setError(message);
+            }
+            return;
+          }
+        }
+
         // /assistants (no args) → open panel or dashboard
         if (cmdName === 'assistants' && !cmdArgs) {
           // Show the dashboard view
@@ -4129,6 +4155,12 @@ export function App({ cwd, version }: AppProps) {
         onClose={() => setShowChannelsPanel(false)}
         activePersonId={activeSession?.client.getPeopleManager?.()?.getActivePersonId?.() || undefined}
         activePersonName={activeSession?.client.getPeopleManager?.()?.getActivePerson?.()?.name || undefined}
+        onPersonMessage={(channelName, personName, message) => {
+          // Close the panel and send the channel message as a prompt to the assistant
+          setShowChannelsPanel(false);
+          const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\nPlease respond to this in the #${channelName} channel using the channel_send tool. Be helpful and conversational.`;
+          activeSession?.client.send(prompt);
+        }}
       />
     );
   }
