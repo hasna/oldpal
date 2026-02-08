@@ -17,7 +17,7 @@ export class ChannelAgentPool {
   private cwd: string;
   private getChannelsManager: (() => ChannelsManager | null) | undefined;
   private responding = false;
-  private maxRounds = 2;
+  private maxRounds = 1;
 
   constructor(cwd: string, getChannelsManager?: () => ChannelsManager | null) {
     this.cwd = cwd;
