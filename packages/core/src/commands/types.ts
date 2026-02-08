@@ -5,6 +5,7 @@ import type { RecordOptions } from '../voice/recorder';
 import type { ErrorStats } from '../errors';
 import type { ContextInfo, ContextProcessResult } from '../context';
 import type { AssistantManager, IdentityManager } from '../identity';
+import type { PeopleManager } from '../people';
 import type { InboxManager } from '../inbox';
 import type { WalletManager } from '../wallet';
 import type { SecretsManager } from '../secrets';
@@ -91,6 +92,7 @@ export interface CommandContext {
   stopListening?: () => void;
   getAssistantManager?: () => AssistantManager | null;
   getIdentityManager?: () => IdentityManager | null;
+  getPeopleManager?: () => PeopleManager | null;
   getInboxManager?: () => InboxManager | null;
   getWalletManager?: () => WalletManager | null;
   getSecretsManager?: () => SecretsManager | null;
@@ -149,7 +151,7 @@ export interface CommandResult {
   /** Agent name/ID to assign to session */
   sessionAgent?: string;
   /** Panel to show (terminal-specific interactive UIs) */
-  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony';
+  showPanel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony' | 'setup' | 'people';
   /** Initial value for panel (e.g., connector name) */
   panelValue?: string;
 }

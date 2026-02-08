@@ -203,8 +203,10 @@ export class BuiltinCommands {
     loader.register(this.messagesCommand());
     loader.register(this.webhooksCommand());
     loader.register(this.channelsCommand());
+    loader.register(this.peopleCommand());
     loader.register(this.phoneCommand());
     loader.register(this.tasksCommand());
+    loader.register(this.setupCommand());
     loader.register(this.exitCommand());
   }
 
@@ -2988,7 +2990,15 @@ Created: ${new Date(job.createdAt).toISOString()}
             return { handled: true };
           }
 
-          const result = manager.send(channel, message);
+          // If a person is logged in, send as that person
+          const peopleManager = context.getPeopleManager?.();
+          const activePerson = peopleManager?.getActivePerson();
+          let result;
+          if (activePerson) {
+            result = manager.sendAs(channel, message, activePerson.id, activePerson.name);
+          } else {
+            result = manager.send(channel, message);
+          }
           context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
           context.emit('done');
           return { handled: true };
@@ -3055,19 +3065,26 @@ Created: ${new Date(job.createdAt).toISOString()}
           return { handled: true };
         }
 
-        // /channels invite <channel> <agent>
+        // /channels invite <channel> <name>
         if (subcommand === 'invite') {
           const parts = subArgs.trim().split(/\s+/);
           const channel = parts[0];
-          const agent = parts[1];
+          const name = parts[1];
 
-          if (!channel || !agent) {
-            context.emit('text', 'Usage: /channels invite <channel> <agent-name>\n');
+          if (!channel || !name) {
+            context.emit('text', 'Usage: /channels invite <channel> <name>\n');
             context.emit('done');
             return { handled: true };
           }
 
-          const result = manager.invite(channel, agent, agent);
+          // Check if name matches a person first, then fall back to assistant
+          const peopleManager = context.getPeopleManager?.();
+          const person = peopleManager?.getPerson(name);
+          const memberType = person ? 'person' as const : 'assistant' as const;
+          const memberId = person ? person.id : name;
+          const memberName = person ? person.name : name;
+
+          const result = manager.invite(channel, memberId, memberName, memberType);
           context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
           context.emit('done');
           return { handled: true };
@@ -3099,7 +3116,7 @@ Created: ${new Date(job.createdAt).toISOString()}
           context.emit('text', '/channels send <ch> <msg>      Send a message\n');
           context.emit('text', '/channels read <ch> [limit]    Read messages\n');
           context.emit('text', '/channels members <ch>         List members\n');
-          context.emit('text', '/channels invite <ch> <agent>  Invite an agent\n');
+          context.emit('text', '/channels invite <ch> <name>   Invite person/agent\n');
           context.emit('text', '/channels delete <ch>          Archive a channel\n');
           context.emit('text', '/channels help                 Show this help\n');
           context.emit('done');
@@ -3108,6 +3125,159 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         context.emit('text', `Unknown command: ${subcommand}\n`);
         context.emit('text', 'Use /channels help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /people - Human participant management
+   */
+  private peopleCommand(): Command {
+    return {
+      name: 'people',
+      description: 'Manage human participants',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const trimmed = args.trim();
+        const [subcommand, ...rest] = trimmed.split(/\s+/);
+        const subArgs = rest.join(' ');
+
+        // /people (no args) → open interactive panel
+        if (!subcommand || subcommand === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'people' };
+        }
+
+        const manager = context.getPeopleManager?.();
+        if (!manager) {
+          context.emit('text', 'People system is not available.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /people list
+        if (subcommand === 'list') {
+          const people = manager.listPeople();
+          if (people.length === 0) {
+            context.emit('text', 'No people registered. Use /people create <name> to add one.\n');
+          } else {
+            context.emit('text', `People (${people.length}):\n\n`);
+            for (const p of people) {
+              const active = p.isActive ? ' (active)' : '';
+              const email = p.email ? ` <${p.email}>` : '';
+              context.emit('text', `  ${p.name}${email}${active}\n`);
+            }
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /people create <name> [email]
+        if (subcommand === 'create') {
+          const parts = splitArgs(subArgs);
+          const name = parts[0];
+          const email = parts[1] || undefined;
+
+          if (!name) {
+            context.emit('text', 'Usage: /people create <name> [email]\n');
+            context.emit('text', 'Example: /people create Andrei andrei@hasna.com\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const person = await manager.createPerson({ name, email });
+            context.emit('text', `Person created: ${person.name} (${person.id})\n`);
+            // Auto-login to new person
+            await manager.setActivePerson(person.id);
+            context.emit('text', `Logged in as ${person.name}.\n`);
+          } catch (err) {
+            context.emit('text', `Error: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /people login <name>
+        if (subcommand === 'login') {
+          const name = subArgs.trim();
+          if (!name) {
+            context.emit('text', 'Usage: /people login <name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            const person = await manager.setActivePerson(name);
+            context.emit('text', `Logged in as ${person.name} (${person.id}).\n`);
+          } catch (err) {
+            context.emit('text', `Error: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /people logout
+        if (subcommand === 'logout') {
+          await manager.logout();
+          context.emit('text', 'Logged out.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /people whoami
+        if (subcommand === 'whoami') {
+          const active = manager.getActivePerson();
+          if (active) {
+            const email = active.email ? ` <${active.email}>` : '';
+            context.emit('text', `${active.name}${email} (${active.id})\n`);
+          } else {
+            context.emit('text', 'Not logged in. Use /people login <name> to log in.\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /people delete <name>
+        if (subcommand === 'delete') {
+          const name = subArgs.trim();
+          if (!name) {
+            context.emit('text', 'Usage: /people delete <name>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+
+          try {
+            await manager.deletePerson(name);
+            context.emit('text', `Person "${name}" deleted.\n`);
+          } catch (err) {
+            context.emit('text', `Error: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /people help
+        if (subcommand === 'help') {
+          context.emit('text', 'People Commands:\n\n');
+          context.emit('text', '/people                       Open people panel\n');
+          context.emit('text', '/people list                  List all people\n');
+          context.emit('text', '/people create <name> [email] Create a person\n');
+          context.emit('text', '/people login <name>          Switch active person\n');
+          context.emit('text', '/people logout                Deactivate person\n');
+          context.emit('text', '/people whoami                Show current person\n');
+          context.emit('text', '/people delete <name>         Remove a person\n');
+          context.emit('text', '/people help                  Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown command: ${subcommand}\n`);
+        context.emit('text', 'Use /people help for available commands.\n');
         context.emit('done');
         return { handled: true };
       },
@@ -3733,6 +3903,24 @@ Created: ${new Date(job.createdAt).toISOString()}
   }
 
 
+
+  /**
+   * /setup - Run the interactive setup wizard
+   */
+  private setupCommand(): Command {
+    return {
+      name: 'setup',
+      aliases: ['onboarding'],
+      description: 'Run the interactive setup wizard',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (_args, context) => {
+        context.emit('done');
+        return { handled: true, showPanel: 'setup' as const };
+      },
+    };
+  }
 
   private exitCommand(): Command {
     return {

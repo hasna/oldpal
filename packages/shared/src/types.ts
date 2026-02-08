@@ -37,7 +37,7 @@ export interface StreamChunk {
   error?: string;
   usage?: TokenUsage;
   /** Panel to show (for 'show_panel' type) */
-  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony';
+  panel?: 'connectors' | 'projects' | 'plans' | 'tasks' | 'assistants' | 'hooks' | 'config' | 'messages' | 'guardrails' | 'budget' | 'schedules' | 'wallet' | 'secrets' | 'identity' | 'memory' | 'inbox' | 'swarm' | 'workspace' | 'logs' | 'skills' | 'heartbeat' | 'resume' | 'webhooks' | 'channels' | 'telephony' | 'setup' | 'people';
   /** Initial value for the panel */
   panelValue?: string;
 }

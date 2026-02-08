@@ -450,6 +450,16 @@ export class EmbeddedClient implements AssistantClient {
   }
 
   /**
+   * Get the people manager
+   */
+  getPeopleManager(): any {
+    if (typeof (this.assistantLoop as any).getPeopleManager === 'function') {
+      return (this.assistantLoop as any).getPeopleManager();
+    }
+    return null;
+  }
+
+  /**
    * Get the telephony manager
    */
   getTelephonyManager(): any {

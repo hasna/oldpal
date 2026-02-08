@@ -304,6 +304,9 @@ export * from './webhooks';
 // Channels (Slack-like Agent Collaboration)
 export * from './channels';
 
+// People (Human Participants)
+export * from './people';
+
 // Telephony (Twilio + ElevenLabs Conversational AI)
 export * from './telephony';
 

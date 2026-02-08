@@ -74,6 +74,10 @@ export const tasksAddTool: Tool = {
         description: 'Task priority: high, normal, or low (default: normal)',
         enum: ['high', 'normal', 'low'],
       },
+      assignee: {
+        type: 'string',
+        description: 'Name or ID of person/assistant to assign this task to',
+      },
     },
     required: ['description'],
   },
@@ -312,8 +316,17 @@ export function createTaskToolExecutors(context: TasksToolContext) {
       return lines.join('\n');
     },
 
-    tasks_add: async (input: { description: string; priority?: string }) => {
+    tasks_add: async (input: { description: string; priority?: string; assignee?: string }) => {
       const priority = (input.priority || 'normal') as TaskPriority;
+      if (input.assignee) {
+        const task = await addTask(context.cwd, {
+          description: input.description,
+          priority,
+          projectId: context.projectId,
+          assignee: input.assignee,
+        });
+        return `Task added: ${task.id}\nDescription: ${task.description}\nPriority: ${task.priority}\nAssignee: ${task.assignee}`;
+      }
       const task = await addTask(context.cwd, input.description, priority, context.projectId);
       return `Task added: ${task.id}\nDescription: ${task.description}\nPriority: ${task.priority}`;
     },

@@ -85,6 +85,7 @@ import { JobManager, createJobTools } from '../jobs';
 import { createMessagesManager, registerMessagesTools, type MessagesManager } from '../messages';
 import { createWebhooksManager, registerWebhookTools, type WebhooksManager } from '../webhooks';
 import { createChannelsManager, registerChannelTools, type ChannelsManager } from '../channels';
+import { createPeopleManager, type PeopleManager } from '../people';
 import { createTelephonyManager, registerTelephonyTools, type TelephonyManager } from '../telephony';
 import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
 import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
@@ -171,8 +172,10 @@ export class AssistantLoop {
   private cwd: string;
   private sessionId: string;
   private sessionStartTime: number = Date.now();
+  private initialized = false;
   private isRunning = false;
   private shouldStop = false;
+  private cumulativeTurns = 0;
   private toolAbortController: AbortController | null = null;
   private systemPrompt: string | null = null;
   private connectorDiscovery: Promise<unknown> | null = null;
@@ -190,6 +193,7 @@ export class AssistantLoop {
   private messagesManager: MessagesManager | null = null;
   private webhooksManager: WebhooksManager | null = null;
   private channelsManager: ChannelsManager | null = null;
+  private peopleManager: PeopleManager | null = null;
   private telephonyManager: TelephonyManager | null = null;
   private memoryManager: GlobalMemoryManager | null = null;
   private memoryInjector: MemoryInjector | null = null;
@@ -197,6 +201,7 @@ export class AssistantLoop {
   private pendingContextInjection: string | null = null;
   private subassistantManager: SubassistantManager | null = null;
   private depth: number = 0;
+  private static readonly MAX_CUMULATIVE_TURNS = 100;
   private pendingMessagesContext: string | null = null;
   private pendingWebhooksContext: string | null = null;
   private pendingChannelsContext: string | null = null;
@@ -277,6 +282,9 @@ export class AssistantLoop {
    * Initialize the assistant (parallelized for fast startup)
    */
   async initialize(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+
     // Phase 1: Load config and ensure directories exist (fast, needed for phase 2)
     const [config] = await Promise.all([
       loadConfig(this.cwd),
@@ -505,6 +513,13 @@ export class AssistantLoop {
       const assistantName = assistant?.name || 'assistant';
       this.channelsManager = createChannelsManager(assistantId, assistantName, this.config.channels);
       registerChannelTools(this.toolRegistry, () => this.channelsManager);
+    }
+
+    // Initialize people manager (always available)
+    try {
+      this.peopleManager = await createPeopleManager();
+    } catch {
+      // People manager is non-critical
     }
 
     // Initialize telephony if enabled
@@ -942,6 +957,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     // The heartbeat timer checks isRunning before draining the scheduled queue,
     // so we need to set it before any async operations to avoid concurrent runs.
     this.isRunning = true;
+    // Reset cumulative turn counter for each new user message
+    this.cumulativeTurns = 0;
 
     try {
       // Inject pending messages before processing
@@ -977,6 +994,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     this.isRunning = true;
     this.setHeartbeatState('processing');
     this.shouldStop = false;
+    this.cumulativeTurns = 0;
     const beforeCount = this.context.getMessages().length;
     this.lastUserMessage = userMessage;
     this.recordHeartbeatActivity('message');
@@ -1168,9 +1186,17 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     let turn = 0;
     let streamError: Error | null = null;
 
+    // Safety check: prevent unbounded recursive calls from scope verification
+    if (this.cumulativeTurns >= AssistantLoop.MAX_CUMULATIVE_TURNS) {
+      this.emit({ type: 'text', content: '\n[Safety limit reached - too many cumulative turns. Stopping.]\n' });
+      this.emit({ type: 'done' });
+      return;
+    }
+
     try {
-      while (turn < maxTurns && !this.shouldStop) {
+      while (turn < maxTurns && !this.shouldStop && this.cumulativeTurns < AssistantLoop.MAX_CUMULATIVE_TURNS) {
         turn++;
+        this.cumulativeTurns++;
 
         // Wait if paused (budget pause enforcement)
         if (this.paused) {
@@ -1263,12 +1289,16 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
         this.context.addToolResults(results);
       }
     } finally {
-      // Run user-defined Stop hooks
-      await this.hookExecutor.execute(this.hookLoader.getHooks('Stop'), {
-        session_id: this.sessionId,
-        hook_event_name: 'Stop',
-        cwd: this.cwd,
-      });
+      // Run user-defined Stop hooks (wrapped in try/catch to prevent blocking cleanup)
+      try {
+        await this.hookExecutor.execute(this.hookLoader.getHooks('Stop'), {
+          session_id: this.sessionId,
+          hook_event_name: 'Stop',
+          cwd: this.cwd,
+        });
+      } catch {
+        // User Stop hooks must never block the assistant or prevent cleanup
+      }
 
       // Run native Stop hooks (e.g., auto-schedule heartbeat) unconditionally
       try {
@@ -1472,6 +1502,20 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       continue: result.continue !== false,
       systemMessage: result.systemMessage,
     };
+  }
+
+  /**
+   * Fire PostToolUseFailure hook for a failed tool call
+   */
+  private async firePostToolUseFailure(toolCall: ToolCall, resultContent: string): Promise<void> {
+    await this.hookExecutor.execute(this.hookLoader.getHooks('PostToolUseFailure'), {
+      session_id: this.sessionId,
+      hook_event_name: 'PostToolUseFailure',
+      cwd: this.cwd,
+      tool_name: toolCall.name,
+      tool_input: toolCall.input,
+      tool_result: resultContent,
+    });
   }
 
   /**
@@ -1864,6 +1908,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       getMessagesManager: () => this.messagesManager,
       getWebhooksManager: () => this.webhooksManager,
       getChannelsManager: () => this.channelsManager,
+      getPeopleManager: () => this.peopleManager,
       getTelephonyManager: () => this.telephonyManager,
       getMemoryManager: () => this.memoryManager,
       refreshIdentityContext: async () => {
@@ -1970,6 +2015,16 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
         } else {
           this.budgetTracker.resetAll();
         }
+      },
+      resumeBudget: () => {
+        if (this.budgetTracker) {
+          this.budgetTracker.setEnabled(true);
+        }
+      },
+      getHooks: () => this.hookLoader.getAllHooks?.() ?? {},
+      setHookEnabled: async (_hookId: string, _enabled: boolean) => {
+        // Hook enable/disable is managed by the hook store, not the loader
+        return false;
       },
       guardrailsConfig: this.guardrailsConfig || undefined,
       setGuardrailsEnabled: (enabled: boolean) => {
@@ -2277,6 +2332,10 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
 
   getChannelsManager(): ChannelsManager | null {
     return this.channelsManager;
+  }
+
+  getPeopleManager(): PeopleManager | null {
+    return this.peopleManager;
   }
 
   getTelephonyManager(): TelephonyManager | null {
