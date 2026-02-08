@@ -6,6 +6,7 @@ import { HeartbeatManager } from '../src/heartbeat/manager';
 import { StatePersistence } from '../src/heartbeat/persistence';
 import { RecoveryManager } from '../src/heartbeat/recovery';
 import type { Heartbeat } from '../src/heartbeat/types';
+import { readHeartbeatHistory } from '../src/heartbeat/history';
 import {
   HEARTBEAT_KEYS,
   heartbeatScheduleId,
@@ -47,6 +48,25 @@ describe('HeartbeatManager', () => {
     expect(exists).toBe(true);
     const content = await file.json();
     expect(content.sessionId).toBe('sess-1');
+  });
+
+  test('writes heartbeat history when configured', async () => {
+    const heartbeatPath = join(tempDir, 'hb.json');
+    const historyPath = join(tempDir, 'runs', 'sess-1.jsonl');
+    const manager = new HeartbeatManager({
+      intervalMs: 10,
+      staleThresholdMs: 50,
+      persistPath: heartbeatPath,
+      historyPath,
+    });
+
+    manager.start('sess-1');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    manager.stop();
+
+    const runs = await readHeartbeatHistory(historyPath, { order: 'desc' });
+    expect(runs.length).toBeGreaterThan(0);
+    expect(runs[0].sessionId).toBe('sess-1');
   });
 });
 

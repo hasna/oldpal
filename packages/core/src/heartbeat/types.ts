@@ -19,6 +19,7 @@ export interface HeartbeatConfig {
   intervalMs: number;
   staleThresholdMs: number;
   persistPath: string;
+  historyPath?: string;
   /** Enable autonomous self-scheduling (default: false). */
   autonomous?: boolean;
   /** Maximum ms the agent can sleep between heartbeats. */

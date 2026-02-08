@@ -2,6 +2,7 @@ import { dirname } from 'path';
 import { mkdirSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
 import type { AssistantState, Heartbeat, HeartbeatConfig, HeartbeatStats } from './types';
+import { appendHeartbeatHistory } from './history';
 
 export class HeartbeatManager {
   private config: HeartbeatConfig;
@@ -11,6 +12,7 @@ export class HeartbeatManager {
   private stats: HeartbeatStats;
   private intervalId?: ReturnType<typeof setInterval>;
   private listeners: Set<(heartbeat: Heartbeat) => void> = new Set();
+  private lastHeartbeatAt: number | null = null;
 
   constructor(config: HeartbeatConfig) {
     this.config = config;
@@ -73,6 +75,11 @@ export class HeartbeatManager {
     return this.startTime;
   }
 
+  getNextHeartbeatAt(): number {
+    const base = this.lastHeartbeatAt ?? Date.now();
+    return base + this.config.intervalMs;
+  }
+
   getStats(): HeartbeatStats {
     return {
       ...this.stats,
@@ -90,14 +97,17 @@ export class HeartbeatManager {
   }
 
   private async emit(sessionId: string): Promise<void> {
+    const now = Date.now();
+    this.lastHeartbeatAt = now;
+    const uptimeSeconds = Math.floor((now - this.startTime) / 1000);
     const heartbeat: Heartbeat = {
       sessionId,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(now).toISOString(),
       state: this.state,
       lastActivity: new Date(this.lastActivity).toISOString(),
       stats: {
         ...this.stats,
-        uptimeSeconds: Math.floor((Date.now() - this.startTime) / 1000),
+        uptimeSeconds,
       },
     };
 
@@ -111,6 +121,9 @@ export class HeartbeatManager {
   private async persist(heartbeat: Heartbeat): Promise<void> {
     try {
       await writeFile(this.config.persistPath, JSON.stringify(heartbeat, null, 2));
+      if (this.config.historyPath) {
+        await appendHeartbeatHistory(this.config.historyPath, heartbeat);
+      }
     } catch {
       // ignore persistence errors
     }

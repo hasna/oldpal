@@ -2205,6 +2205,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     const lastActivity = this.heartbeatManager.getLastActivity();
     const age = Date.now() - lastActivity;
     const stats = this.heartbeatManager.getStats();
+    const intervalMs = this.heartbeatRuntimeConfig?.intervalMs ?? this.config?.heartbeat?.intervalMs ?? 15000;
+    const nextHeartbeatAt = this.heartbeatManager.getNextHeartbeatAt();
 
     return {
       enabled: true,
@@ -2212,6 +2214,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       lastActivity: new Date(lastActivity).toISOString(),
       uptimeSeconds: stats.uptimeSeconds,
       isStale: age > staleThresholdMs,
+      intervalMs,
+      nextHeartbeatAt: new Date(nextHeartbeatAt).toISOString(),
     };
   }
 
