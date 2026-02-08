@@ -259,6 +259,17 @@ export class SubassistantManager {
       };
     }
 
+    const info: SubassistantInfo = {
+      id: subassistantId,
+      task: config.task,
+      status: 'running',
+      startedAt: Date.now(),
+      depth: config.depth,
+    };
+
+    // Reserve slot immediately to avoid race with concurrent spawns
+    this.activeSubassistants.set(subassistantId, info);
+
     // Fire SubassistantStart hook if available
     if (this.context.fireHook) {
       const hookInput: HookInput = {
@@ -277,6 +288,7 @@ export class SubassistantManager {
 
       // Hook can block subassistant creation
       if (hookResult && hookResult.continue === false) {
+        this.activeSubassistants.delete(subassistantId);
         return {
           success: false,
           error: hookResult.stopReason || 'Blocked by SubassistantStart hook',
@@ -305,15 +317,7 @@ export class SubassistantManager {
       }
     }
 
-    const info: SubassistantInfo = {
-      id: subassistantId,
-      task: config.task,
-      status: 'running',
-      startedAt: Date.now(),
-      depth: config.depth,
-    };
-
-    this.activeSubassistants.set(subassistantId, info);
+    info.task = config.task;
 
     try {
       // Filter tools
