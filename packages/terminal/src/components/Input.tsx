@@ -27,6 +27,7 @@ const COMMANDS = [
   { name: '/memory', description: 'show what AI remembers' },
   { name: '/context', description: 'manage injected project context' },
   { name: '/hooks', description: 'manage hooks (list, add, remove, test)' },
+  { name: '/onboarding', description: 'rerun onboarding setup' },
   // Projects and plans
   { name: '/projects', description: 'manage projects in this folder' },
   { name: '/plans', description: 'manage project plans' },

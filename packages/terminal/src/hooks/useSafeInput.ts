@@ -1,5 +1,8 @@
 import { useEffect } from 'react';
 import { useStdin, type Key } from 'ink';
+
+let rawModeUsers = 0;
+let rawModeEnabled = false;
 // Inline minimal keypress parser to avoid depending on ink internals
 function parseKeypress(s: string): { name: string; ctrl: boolean; shift: boolean; meta: boolean; option: boolean; sequence: string } {
   const key = { name: '', ctrl: false, shift: false, meta: false, option: false, sequence: s };
@@ -43,9 +46,17 @@ export function useSafeInput(handler: Handler, options: Options = {}): void {
 
   useEffect(() => {
     if (!isRawModeSupported || !setRawMode) return;
-    setRawMode(true);
+    rawModeUsers += 1;
+    if (!rawModeEnabled) {
+      setRawMode(true);
+      rawModeEnabled = true;
+    }
     return () => {
-      setRawMode(false);
+      rawModeUsers = Math.max(0, rawModeUsers - 1);
+      if (rawModeEnabled && rawModeUsers === 0) {
+        setRawMode(false);
+        rawModeEnabled = false;
+      }
     };
   }, [isRawModeSupported, setRawMode]);
 
