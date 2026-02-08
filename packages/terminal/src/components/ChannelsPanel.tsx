@@ -4,6 +4,31 @@ import TextInput from 'ink-text-input';
 import type { ChannelsManager, ChannelListItem, ChannelMessage, ChannelMember, Channel } from '@hasna/assistants-core';
 import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
+// Slack's base aubergine color for channel badges
+const SLACK_COLOR = '#4A154B';
+
+// Deterministic color palette for assistant badges (white text on colored bg)
+const ASSISTANT_COLORS = [
+  '#6B4C9A', // purple
+  '#2E86AB', // cerulean
+  '#A23B72', // mulberry
+  '#1B813E', // forest
+  '#C1440E', // rust
+  '#5B5EA6', // indigo
+  '#9B2335', // crimson
+  '#2D6A4F', // teal green
+  '#7C4DFF', // violet
+  '#D4621B', // tangerine
+];
+
+function getAssistantColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  }
+  return ASSISTANT_COLORS[Math.abs(hash) % ASSISTANT_COLORS.length];
+}
+
 interface ChannelsPanelProps {
   manager: ChannelsManager;
   onClose: () => void;
@@ -267,7 +292,7 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
   // Header
   const header = (
     <Box borderStyle="single" borderColor="blue" paddingX={1} marginBottom={1}>
-      <Text bold color="blue">Channels</Text>
+      <Text backgroundColor={SLACK_COLOR} color="white" bold> Channels </Text>
       <Text color="gray"> | </Text>
       <Text color="gray">
         {mode === 'list' ? 'q:close c:create enter:open m:members i:invite l:leave d:delete r:refresh' :
@@ -336,7 +361,7 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
         {header}
         {statusBar}
         <Box paddingX={1} marginBottom={1}>
-          <Text bold color="blue">#{selectedChannel.name}</Text>
+          <Text backgroundColor={SLACK_COLOR} color="white" bold> #{selectedChannel.name} </Text>
           {selectedChannel.description && (
             <Text color="gray"> — {selectedChannel.description}</Text>
           )}
@@ -348,8 +373,8 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
           ) : (
             messages.slice(-20).map((msg) => (
               <Box key={msg.id} marginBottom={0}>
-                <Text color="cyan" bold>{msg.senderName}</Text>
-                <Text color="gray"> ({formatRelativeTime(msg.createdAt)}): </Text>
+                <Text backgroundColor={getAssistantColor(msg.senderName)} color="white" bold> {msg.senderName} </Text>
+                <Text color="gray"> {formatRelativeTime(msg.createdAt)}: </Text>
                 <Text>{msg.content}</Text>
               </Box>
             ))
@@ -441,13 +466,14 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
       <Box flexDirection="column">
         {header}
         <Box paddingX={1} marginBottom={1}>
-          <Text bold>#{selectedChannel.name} — Members ({members.length})</Text>
+          <Text backgroundColor={SLACK_COLOR} color="white" bold> #{selectedChannel.name} </Text>
+          <Text bold> Members ({members.length})</Text>
         </Box>
         <Box flexDirection="column" paddingX={1}>
           {members.map((m) => (
             <Box key={`${m.channelId}-${m.assistantId}`}>
               <Text>  </Text>
-              <Text bold>{m.assistantName}</Text>
+              <Text backgroundColor={getAssistantColor(m.assistantName)} color="white" bold> {m.assistantName} </Text>
               {m.role === 'owner' && <Text color="yellow"> (owner)</Text>}
               {m.memberType === 'person' && <Text color="green"> [person]</Text>}
               <Text color="gray"> — joined {new Date(m.joinedAt).toLocaleDateString()}</Text>

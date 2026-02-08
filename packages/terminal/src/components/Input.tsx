@@ -4,6 +4,28 @@ import { buildLayout, moveCursorVertical, type InputLayout } from './inputLayout
 import { CommandHistory, getCommandHistory } from '@hasna/assistants-core';
 import { useSafeInput as useInput } from '../hooks/useSafeInput';
 
+// Deterministic color palette for assistant badges (white text on colored bg)
+const ASSISTANT_COLORS = [
+  '#6B4C9A', // purple
+  '#2E86AB', // cerulean
+  '#A23B72', // mulberry
+  '#1B813E', // forest
+  '#C1440E', // rust
+  '#5B5EA6', // indigo
+  '#9B2335', // crimson
+  '#2D6A4F', // teal green
+  '#7C4DFF', // violet
+  '#D4621B', // tangerine
+];
+
+function getAssistantColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  }
+  return ASSISTANT_COLORS[Math.abs(hash) % ASSISTANT_COLORS.length];
+}
+
 // Available commands with descriptions
 const COMMANDS = [
   // Core commands
@@ -729,7 +751,7 @@ export const Input = React.forwardRef<InputHandle, InputProps>(function Input({
           <>
             <Text color="#666666">{'─'.repeat(Math.max(0, terminalWidth - assistantName.length - 3))}</Text>
             <Text> </Text>
-            <Text backgroundColor="#4a8ba4" color="white" bold> {assistantName} </Text>
+            <Text backgroundColor={getAssistantColor(assistantName)} color="white" bold> {assistantName} </Text>
           </>
         ) : (
           <Text color="#666666">{'─'.repeat(terminalWidth)}</Text>
