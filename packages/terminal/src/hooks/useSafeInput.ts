@@ -1,6 +1,33 @@
 import { useEffect } from 'react';
 import { useStdin, type Key } from 'ink';
-import parseKeypress, { nonAlphanumericKeys } from 'ink/build/parse-keypress.js';
+// Inline minimal keypress parser to avoid depending on ink internals
+function parseKeypress(s: string): { name: string; ctrl: boolean; shift: boolean; meta: boolean; option: boolean; sequence: string } {
+  const key = { name: '', ctrl: false, shift: false, meta: false, option: false, sequence: s };
+  if (s === '\r' || s === '\n') { key.name = 'return'; }
+  else if (s === '\x1b') { key.name = 'escape'; }
+  else if (s === '\t') { key.name = 'tab'; }
+  else if (s === '\x7f' || s === '\b') { key.name = 'backspace'; }
+  else if (s === '\x1b[A') { key.name = 'up'; }
+  else if (s === '\x1b[B') { key.name = 'down'; }
+  else if (s === '\x1b[C') { key.name = 'right'; }
+  else if (s === '\x1b[D') { key.name = 'left'; }
+  else if (s === '\x1b[5~') { key.name = 'pageup'; }
+  else if (s === '\x1b[6~') { key.name = 'pagedown'; }
+  else if (s === '\x1b[H' || s === '\x1bOH') { key.name = 'home'; }
+  else if (s === '\x1b[F' || s === '\x1bOF') { key.name = 'end'; }
+  else if (s === '\x1b[3~') { key.name = 'delete'; }
+  else if (s.length === 1 && s.charCodeAt(0) <= 26) {
+    key.ctrl = true;
+    key.name = String.fromCharCode(s.charCodeAt(0) + 96);
+  } else if (s.startsWith('\x1b') && s.length === 2) {
+    key.meta = true;
+    key.name = s[1];
+  } else {
+    key.name = s;
+  }
+  return key;
+}
+const NON_ALPHA_KEYS = ['up', 'down', 'left', 'right', 'pageup', 'pagedown', 'home', 'end', 'delete', 'backspace', 'return', 'escape', 'tab'];
 
 type Handler = (input: string, key: Key) => void;
 type Options = { isActive?: boolean };
@@ -48,7 +75,7 @@ export function useSafeInput(handler: Handler, options: Options = {}): void {
       };
 
       let input = keypress.ctrl ? keypress.name : keypress.sequence;
-      if (nonAlphanumericKeys.includes(keypress.name)) {
+      if (NON_ALPHA_KEYS.includes(keypress.name)) {
         input = '';
       }
       if (input.startsWith('\u001B')) {
