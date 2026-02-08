@@ -3,31 +3,12 @@ import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { setRuntime } from '../src/runtime';
+import { bunRuntime } from '@hasna/runtime-bun';
 import { LocalWebhookStorage } from '../src/webhooks/storage/local-storage';
 import type { WebhookRegistration, WebhookEvent, WebhookDelivery } from '../src/webhooks/types';
 
 // Set up Bun runtime for tests
-setRuntime({
-  name: 'bun',
-  file: (path: string) => ({
-    exists: async () => {
-      try {
-        const stat = await Bun.file(path).exists();
-        return stat;
-      } catch { return false; }
-    },
-    text: () => Bun.file(path).text(),
-    json: <T = unknown>() => Bun.file(path).json() as Promise<T>,
-  }),
-  write: async (path: string, content: string) => {
-    await Bun.write(path, content);
-  },
-  spawn: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
-  shell: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
-  glob: async () => [],
-  sleep: (ms: number) => new Promise((r) => setTimeout(r, ms)),
-  openDatabase: () => { throw new Error('not implemented'); },
-});
+setRuntime(bunRuntime);
 
 describe('LocalWebhookStorage', () => {
   let tempDir: string;

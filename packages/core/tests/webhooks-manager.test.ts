@@ -3,31 +3,13 @@ import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { setRuntime } from '../src/runtime';
+import { bunRuntime } from '@hasna/runtime-bun';
 import { WebhooksManager, createWebhooksManager } from '../src/webhooks/manager';
 import { signPayload, generateWebhookSecret } from '../src/webhooks/crypto';
 import type { WebhooksConfig } from '../src/webhooks/types';
 
 // Set up Bun runtime for tests
-setRuntime({
-  name: 'bun',
-  file: (path: string) => ({
-    exists: async () => {
-      try {
-        return await Bun.file(path).exists();
-      } catch { return false; }
-    },
-    text: () => Bun.file(path).text(),
-    json: <T = unknown>() => Bun.file(path).json() as Promise<T>,
-  }),
-  write: async (path: string, content: string) => {
-    await Bun.write(path, content);
-  },
-  spawn: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
-  shell: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
-  glob: async () => [],
-  sleep: (ms: number) => new Promise((r) => setTimeout(r, ms)),
-  openDatabase: () => { throw new Error('not implemented'); },
-});
+setRuntime(bunRuntime);
 
 describe('WebhooksManager', () => {
   let tempDir: string;

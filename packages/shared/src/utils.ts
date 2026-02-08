@@ -1,10 +1,29 @@
 import { randomUUID } from 'crypto';
 
+let lastUuidBase = '';
+let uuidCounter = 0;
+
 /**
  * Generate a unique ID
  */
 export function generateId(): string {
-  return randomUUID();
+  const base = randomUUID();
+  if (base !== lastUuidBase) {
+    lastUuidBase = base;
+    uuidCounter = 0;
+    return base;
+  }
+
+  uuidCounter = (uuidCounter + 1) & 0xffffffffffff;
+  const parts = base.split('-');
+  if (parts.length !== 5) {
+    return base;
+  }
+
+  const baseValue = BigInt(`0x${parts[4]}`);
+  const nextValue = (baseValue + BigInt(uuidCounter)) & 0xffffffffffffn;
+  const nextLast = nextValue.toString(16).padStart(12, '0');
+  return `${parts[0]}-${parts[1]}-${parts[2]}-${parts[3]}-${nextLast}`;
 }
 
 /**
