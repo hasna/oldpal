@@ -1,6 +1,6 @@
 /**
  * Channels module exports
- * Provides Slack-like channel collaboration for agents
+ * Provides Slack-like channel collaboration for agents and people
  */
 
 // Core manager
@@ -9,6 +9,9 @@ export type { ChannelsManagerOptions } from './manager';
 
 // Store
 export { ChannelStore } from './store';
+
+// Mentions
+export { parseMentions, resolveMentions, getMentionedMemberIds } from './mentions';
 
 // Tools
 export {
@@ -36,4 +39,5 @@ export type {
   ChannelsConfig,
   ChannelsInjectionConfig,
   ChannelsStorageConfig,
+  MemberType,
 } from './types';

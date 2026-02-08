@@ -4,9 +4,11 @@
  */
 
 import type { ChannelsConfig } from '@hasna/assistants-shared';
+import type { MemberType } from '../people/types';
 
 // Re-export shared config type
 export type { ChannelsConfig };
+export type { MemberType };
 
 // ============================================
 // Status Types
@@ -34,7 +36,7 @@ export interface Channel {
 }
 
 /**
- * A member of a channel
+ * A member of a channel (person or assistant)
  */
 export interface ChannelMember {
   channelId: string;
@@ -43,6 +45,8 @@ export interface ChannelMember {
   role: ChannelMemberRole;
   joinedAt: string;
   lastReadAt: string | null;
+  /** Type of member: 'person' or 'assistant' (default: 'assistant') */
+  memberType: MemberType;
 }
 
 /**

@@ -129,11 +129,11 @@ export const channelMembersTool: Tool = {
 };
 
 /**
- * channel_invite - Invite an agent to a channel
+ * channel_invite - Invite an agent or person to a channel
  */
 export const channelInviteTool: Tool = {
   name: 'channel_invite',
-  description: 'Invite another assistant to join a channel.',
+  description: 'Invite another assistant or person to join a channel.',
   parameters: {
     type: 'object',
     properties: {
@@ -141,12 +141,17 @@ export const channelInviteTool: Tool = {
         type: 'string',
         description: 'Channel name or ID',
       },
-      assistant: {
+      name: {
         type: 'string',
-        description: 'Assistant name or ID to invite',
+        description: 'Name or ID of the person or assistant to invite',
+      },
+      type: {
+        type: 'string',
+        description: 'Member type: "person" or "assistant" (default: "assistant")',
+        enum: ['person', 'assistant'],
       },
     },
-    required: ['channel', 'assistant'],
+    required: ['channel', 'name'],
   },
 };
 
@@ -317,8 +322,9 @@ export function createChannelToolExecutors(
 
         for (const member of members) {
           const roleTag = member.role === 'owner' ? ' (owner)' : '';
+          const typeTag = member.memberType === 'person' ? ' [person]' : '';
           const joined = new Date(member.joinedAt).toLocaleDateString();
-          lines.push(`- **${member.assistantName}**${roleTag} — joined ${joined}`);
+          lines.push(`- **${member.assistantName}**${roleTag}${typeTag} — joined ${joined}`);
         }
 
         return lines.join('\n');
@@ -334,14 +340,13 @@ export function createChannelToolExecutors(
       }
 
       const channel = String(input.channel || '').trim();
-      const assistant = String(input.assistant || '').trim();
+      const name = String(input.name || input.assistant || '').trim();
+      const memberType = (input.type === 'person' ? 'person' : 'assistant') as 'person' | 'assistant';
 
       if (!channel) return 'Error: Channel name or ID is required.';
-      if (!assistant) return 'Error: Assistant name or ID is required.';
+      if (!name) return 'Error: Name is required.';
 
-      // For now, use the assistant name as both ID and name
-      // In a full implementation, this would resolve through AssistantManager
-      const result = manager.invite(channel, assistant, assistant);
+      const result = manager.invite(channel, name, name, memberType);
       return result.success ? result.message : `Error: ${result.message}`;
     },
   };

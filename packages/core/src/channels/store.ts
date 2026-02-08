@@ -19,6 +19,7 @@ import type {
   ChannelOperationResult,
   ChannelStatus,
   ChannelMemberRole,
+  MemberType,
 } from './types';
 
 /**
@@ -77,6 +78,7 @@ export class ChannelStore {
         role TEXT NOT NULL DEFAULT 'member',
         joined_at TEXT NOT NULL,
         last_read_at TEXT,
+        member_type TEXT NOT NULL DEFAULT 'assistant',
         PRIMARY KEY (channel_id, assistant_id)
       );
 
@@ -94,6 +96,24 @@ export class ChannelStore {
       CREATE INDEX IF NOT EXISTS idx_channel_members_assistant
         ON channel_members(assistant_id);
     `);
+
+    // Migration: add member_type column if it doesn't exist (for existing databases)
+    this.migrateAddMemberType();
+  }
+
+  /**
+   * Add member_type column to existing channel_members tables
+   */
+  private migrateAddMemberType(): void {
+    try {
+      const columns = this.db.prepare("PRAGMA table_info(channel_members)").all() as Record<string, unknown>[];
+      const hasMemberType = columns.some((col) => String(col.name) === 'member_type');
+      if (!hasMemberType) {
+        this.db.exec("ALTER TABLE channel_members ADD COLUMN member_type TEXT NOT NULL DEFAULT 'assistant'");
+      }
+    } catch {
+      // Ignore - column may already exist
+    }
   }
 
   // ============================================
@@ -255,15 +275,16 @@ export class ChannelStore {
     channelId: string,
     assistantId: string,
     assistantName: string,
-    role: ChannelMemberRole = 'member'
+    role: ChannelMemberRole = 'member',
+    memberType: MemberType = 'assistant'
   ): boolean {
     try {
       const now = new Date().toISOString();
       const stmt = this.db.prepare(
-        `INSERT OR IGNORE INTO channel_members (channel_id, assistant_id, assistant_name, role, joined_at)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT OR IGNORE INTO channel_members (channel_id, assistant_id, assistant_name, role, joined_at, member_type)
+         VALUES (?, ?, ?, ?, ?, ?)`
       );
-      const result = stmt.run(channelId, assistantId, assistantName, role, now);
+      const result = stmt.run(channelId, assistantId, assistantName, role, now, memberType);
       return (result as { changes: number }).changes > 0;
     } catch {
       return false;
@@ -508,6 +529,7 @@ export class ChannelStore {
       role: String(row.role) as ChannelMemberRole,
       joinedAt: String(row.joined_at),
       lastReadAt: row.last_read_at ? String(row.last_read_at) : null,
+      memberType: (row.member_type ? String(row.member_type) : 'assistant') as MemberType,
     };
   }
 

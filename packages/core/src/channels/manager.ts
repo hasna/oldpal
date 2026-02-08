@@ -13,6 +13,7 @@ import type {
   ChannelMessage,
   ChannelListItem,
   ChannelOperationResult,
+  MemberType,
 } from './types';
 
 export interface ChannelsManagerOptions {
@@ -139,12 +140,13 @@ export class ChannelsManager {
   }
 
   /**
-   * Invite another assistant to a channel
+   * Invite another assistant or person to a channel
    */
   invite(
     nameOrId: string,
     targetId: string,
-    targetName: string
+    targetName: string,
+    memberType: MemberType = 'assistant'
   ): ChannelOperationResult {
     const channel = this.store.resolveChannel(nameOrId);
     if (!channel) {
@@ -159,7 +161,7 @@ export class ChannelsManager {
       return { success: false, message: `${targetName} is already a member of #${channel.name}.` };
     }
 
-    this.store.addMember(channel.id, targetId, targetName);
+    this.store.addMember(channel.id, targetId, targetName, 'member', memberType);
     return {
       success: true,
       message: `Invited ${targetName} to #${channel.name}.`,
@@ -201,6 +203,42 @@ export class ChannelsManager {
       channel.id,
       this.assistantId,
       this.assistantName,
+      content
+    );
+
+    return {
+      success: true,
+      message: `Message sent to #${channel.name} (${messageId}).`,
+      channelId: channel.id,
+    };
+  }
+
+  /**
+   * Send a message to a channel as a specific sender (for person/human attribution)
+   */
+  sendAs(
+    nameOrId: string,
+    content: string,
+    senderId: string,
+    senderName: string
+  ): ChannelOperationResult {
+    const channel = this.store.resolveChannel(nameOrId);
+    if (!channel) {
+      return { success: false, message: `Channel "${nameOrId}" not found.` };
+    }
+
+    if (channel.status !== 'active') {
+      return { success: false, message: `Channel #${channel.name} is archived.` };
+    }
+
+    if (!this.store.isMember(channel.id, senderId)) {
+      return { success: false, message: `${senderName} is not a member of #${channel.name}. Join first.` };
+    }
+
+    const messageId = this.store.sendMessage(
+      channel.id,
+      senderId,
+      senderName,
       content
     );
 
