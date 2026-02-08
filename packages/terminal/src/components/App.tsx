@@ -28,6 +28,7 @@ import { ConfigPanel } from './ConfigPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { WebhooksPanel } from './WebhooksPanel';
 import { ChannelsPanel } from './ChannelsPanel';
+import { parseMentions, resolveNameToKnown } from '@hasna/assistants-core';
 import { PeoplePanel } from './PeoplePanel';
 import { TelephonyPanel } from './TelephonyPanel';
 import { OnboardingPanel, type OnboardingResult } from './OnboardingPanel';
@@ -4156,9 +4157,31 @@ export function App({ cwd, version }: AppProps) {
         activePersonId={activeSession?.client.getPeopleManager?.()?.getActivePersonId?.() || undefined}
         activePersonName={activeSession?.client.getPeopleManager?.()?.getActivePerson?.()?.name || undefined}
         onPersonMessage={(channelName, personName, message) => {
-          // Send the channel message as a prompt to the assistant in the background
-          // Panel stays open - polling in ChannelsPanel will show the reply
-          const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\nRespond in #${channelName} using channel_send. Be helpful and conversational.`;
+          // Get channel members to know which assistants should respond
+          const members = channelsManager.getMembers(channelName);
+          const assistantMembers = members
+            .filter((m) => m.memberType === 'assistant')
+            .map((m) => m.assistantName);
+
+          // Detect @mentions to target specific assistants
+          const mentions = parseMentions(message);
+          let targetAssistants = assistantMembers;
+          if (mentions.length > 0) {
+            const knownNames = assistantMembers.map((name) => ({ id: name, name }));
+            const resolved = mentions
+              .map((m) => resolveNameToKnown(m, knownNames))
+              .filter(Boolean)
+              .map((r) => r!.name);
+            if (resolved.length > 0) {
+              targetAssistants = resolved;
+            }
+          }
+
+          const assistantList = targetAssistants.length > 0
+            ? `Assistants in this channel: ${targetAssistants.join(', ')}.`
+            : '';
+
+          const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\n${assistantList}\n\nRespond in #${channelName} using channel_send. Be helpful and conversational.`;
           activeSession?.client.send(prompt);
         }}
       />

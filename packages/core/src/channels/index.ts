@@ -11,7 +11,7 @@ export type { ChannelsManagerOptions } from './manager';
 export { ChannelStore } from './store';
 
 // Mentions
-export { parseMentions, resolveMentions, getMentionedMemberIds } from './mentions';
+export { parseMentions, resolveMentions, getMentionedMemberIds, resolveNameToKnown } from './mentions';
 
 // Tools
 export {

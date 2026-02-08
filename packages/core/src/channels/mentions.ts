@@ -6,19 +6,61 @@ import type { ChannelMember } from './types';
 
 /**
  * Extract @mention names from message content
- * Matches @name patterns (alphanumeric, hyphens, underscores)
+ * Supports:
+ *   @name          - single word (alphanumeric, hyphens, underscores)
+ *   @"Name Here"   - quoted multi-word name
+ *   @Name-Here     - hyphenated name
  */
 export function parseMentions(content: string): string[] {
-  const regex = /@([a-zA-Z0-9_-]+)/g;
   const mentions: string[] = [];
+
+  // Match @"quoted name" first
+  const quotedRegex = /@"([^"]+)"/g;
   let match: RegExpExecArray | null;
-  while ((match = regex.exec(content)) !== null) {
+  while ((match = quotedRegex.exec(content)) !== null) {
+    const name = match[1].trim();
+    if (name && !mentions.includes(name)) {
+      mentions.push(name);
+    }
+  }
+
+  // Match @singleword (skip already-matched quoted ones)
+  const simpleRegex = /@([a-zA-Z0-9_-]+)/g;
+  while ((match = simpleRegex.exec(content)) !== null) {
     const name = match[1];
     if (!mentions.includes(name)) {
       mentions.push(name);
     }
   }
+
   return mentions;
+}
+
+/**
+ * Resolve mention names against a list of known names (assistants, people).
+ * Performs fuzzy matching: exact match, case-insensitive, or prefix match.
+ */
+export function resolveNameToKnown(
+  mentionName: string,
+  knownNames: Array<{ id: string; name: string }>
+): { id: string; name: string } | null {
+  const lower = mentionName.toLowerCase();
+
+  // Exact match (case-insensitive)
+  const exact = knownNames.find((k) => k.name.toLowerCase() === lower);
+  if (exact) return exact;
+
+  // Prefix match (e.g. @Default matches "Default Assistant")
+  const prefix = knownNames.find((k) => k.name.toLowerCase().startsWith(lower));
+  if (prefix) return prefix;
+
+  // Word match (e.g. @Email matches "Email Assistant")
+  const word = knownNames.find((k) =>
+    k.name.toLowerCase().split(/\s+/).some((w) => w === lower)
+  );
+  if (word) return word;
+
+  return null;
 }
 
 /**

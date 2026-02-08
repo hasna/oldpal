@@ -3,6 +3,7 @@ import type { CommandLoader } from './loader';
 import { join } from 'path';
 import { homedir, platform, release, arch } from 'os';
 import { getRuntime } from '../runtime';
+import { parseMentions, resolveNameToKnown } from '../channels/mentions';
 import { buildCommandArgs } from '../utils/command-line';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getConfigDir } from '../config';
@@ -3012,9 +3013,25 @@ Created: ${new Date(job.createdAt).toISOString()}
 
           // When a person sends a message, prompt the assistant to respond in the channel
           if (activePerson && result.success) {
+            // Detect @mentions
+            const mentions = parseMentions(message);
+            let mentionContext = '';
+            if (mentions.length > 0) {
+              const assistantManager = context.getAssistantManager?.();
+              if (assistantManager) {
+                const assistants = assistantManager.listAssistants?.() || [];
+                const knownNames = assistants.map((a: { id: string; name: string }) => ({ id: a.id, name: a.name }));
+                const resolved = mentions
+                  .map((m: string) => resolveNameToKnown(m, knownNames))
+                  .filter(Boolean);
+                if (resolved.length > 0) {
+                  mentionContext = `\n\nNote: ${activePerson.name} mentioned ${resolved.map((r) => r!.name).join(', ')}. Respond as the mentioned assistant.`;
+                }
+              }
+            }
             return {
               handled: false,
-              prompt: `[Channel Message] ${activePerson.name} posted in #${channel}: "${message}"\n\nPlease respond to this in the #${channel} channel using the channel_send tool. Be helpful and conversational.`,
+              prompt: `[Channel Message] ${activePerson.name} posted in #${channel}: "${message}"${mentionContext}\n\nRespond in #${channel} using channel_send. Be helpful and conversational.`,
             };
           }
           return { handled: true };
