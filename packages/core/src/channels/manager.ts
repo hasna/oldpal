@@ -41,6 +41,13 @@ export class ChannelsManager {
     this.store = new ChannelStore();
   }
 
+  /**
+   * Get the underlying store (for agent pool unread checks)
+   */
+  getStore(): ChannelStore {
+    return this.store;
+  }
+
   // ============================================
   // Channel CRUD
   // ============================================

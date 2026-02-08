@@ -3050,7 +3050,7 @@ Created: ${new Date(job.createdAt).toISOString()}
             // Trigger the active session's assistant via prompt return
             return {
               handled: false,
-              prompt: `[Channel Message] ${activePerson.name} posted in #${channel}: "${message}"\n\nRespond in #${channel} using channel_send. Be helpful and conversational.`,
+              prompt: `[Channel Message] ${activePerson.name} posted in #${channel}: "${message}"\n\nYou are in a group channel with other assistants and people. Respond in #${channel} using channel_send. Be helpful and conversational. You may reference or build on what other assistants have said.`,
             };
           }
           return { handled: true };

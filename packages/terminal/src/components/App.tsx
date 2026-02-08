@@ -4203,7 +4203,7 @@ export function App({ cwd, version }: AppProps) {
           }
 
           if (isActiveMember && activeAssistantTargeted) {
-            const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\nRespond in #${channelName} using channel_send. Be helpful and conversational.`;
+            const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\nYou are in a group channel with other assistants and people. Respond in #${channelName} using channel_send. Be helpful and conversational. You may reference or build on what other assistants have said.`;
             activeSession?.client.send(prompt);
           }
         }}

@@ -176,6 +176,7 @@ export class AssistantLoop {
   private isRunning = false;
   private shouldStop = false;
   private cumulativeTurns = 0;
+  private emittedTerminalChunk = false;
   private toolAbortController: AbortController | null = null;
   private systemPrompt: string | null = null;
   private connectorDiscovery: Promise<unknown> | null = null;
@@ -514,7 +515,7 @@ export class AssistantLoop {
       const assistantName = assistant?.name || 'assistant';
       this.channelsManager = createChannelsManager(assistantId, assistantName, this.config.channels);
       registerChannelTools(this.toolRegistry, () => this.channelsManager);
-      this.channelAgentPool = new ChannelAgentPool(this.cwd);
+      this.channelAgentPool = new ChannelAgentPool(this.cwd, () => this.channelsManager);
     }
 
     // Initialize people manager (always available)
@@ -994,6 +995,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     }
 
     this.isRunning = true;
+    this.emittedTerminalChunk = false;
     this.setHeartbeatState('processing');
     this.shouldStop = false;
     this.cumulativeTurns = 0;
@@ -1025,6 +1027,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
         // Clear pending context - explicit tool commands bypass the LLM
         this.pendingMemoryContext = null;
         this.pendingContextInjection = null;
+        this.ensureTerminalChunk();
         return explicitToolResult;
       }
 
@@ -1066,6 +1069,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
                 panelValue: `session:${payload}`,
               });
             }
+            this.ensureTerminalChunk();
             return { ok: true, summary: `Handled ${userMessage}` };
           }
           if (commandResult.prompt) {
@@ -1077,6 +1081,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
             // Clear pending context - skills handle their own context
             this.pendingMemoryContext = null;
             this.pendingContextInjection = null;
+            this.ensureTerminalChunk();
             return { ok: true, summary: `Executed ${userMessage}` };
           }
         } else {
@@ -1092,6 +1097,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
                 panelValue: commandResult.panelValue,
               });
             }
+            this.ensureTerminalChunk();
             return { ok: true, summary: `Handled ${userMessage}` };
           }
           if (commandResult.prompt) {
@@ -2135,9 +2141,21 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
   }
 
   /**
+   * Ensure we emit a terminal chunk for command-only paths.
+   */
+  private ensureTerminalChunk(): void {
+    if (!this.emittedTerminalChunk) {
+      this.emit({ type: 'done' });
+    }
+  }
+
+  /**
    * Emit a stream chunk
    */
   private emit(chunk: StreamChunk): void {
+    if (chunk.type === 'done' || chunk.type === 'error') {
+      this.emittedTerminalChunk = true;
+    }
     this.onChunk?.(chunk);
   }
 

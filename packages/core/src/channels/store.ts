@@ -232,7 +232,7 @@ export class ChannelStore {
       }
     }
 
-    query += ' ORDER BY last_message_at DESC NULLS LAST, c.created_at DESC';
+    query += ' ORDER BY (last_message_at IS NULL) ASC, last_message_at DESC, c.created_at DESC';
 
     const stmt = this.db.prepare(query);
     const rows = stmt.all(...params) as Record<string, unknown>[];
@@ -340,19 +340,20 @@ export class ChannelStore {
     const id = generateMessageId();
     const now = new Date().toISOString();
 
-    const stmt = this.db.prepare(
-      `INSERT INTO channel_messages (id, channel_id, sender_id, sender_name, content, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    );
-    stmt.run(id, channelId, senderId, senderName, content, now);
+    this.db.transaction(() => {
+      this.db.prepare(
+        `INSERT INTO channel_messages (id, channel_id, sender_id, sender_name, content, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(id, channelId, senderId, senderName, content, now);
 
-    // Update channel updated_at
-    this.db.prepare('UPDATE channels SET updated_at = ? WHERE id = ?').run(now, channelId);
+      // Update channel updated_at
+      this.db.prepare('UPDATE channels SET updated_at = ? WHERE id = ?').run(now, channelId);
 
-    // Update sender's last_read_at (they've seen their own message)
-    this.db.prepare(
-      'UPDATE channel_members SET last_read_at = ? WHERE channel_id = ? AND assistant_id = ?'
-    ).run(now, channelId, senderId);
+      // Update sender's last_read_at (they've seen their own message)
+      this.db.prepare(
+        'UPDATE channel_members SET last_read_at = ? WHERE channel_id = ? AND assistant_id = ?'
+      ).run(now, channelId, senderId);
+    });
 
     return id;
   }
