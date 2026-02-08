@@ -214,6 +214,22 @@ const DEFAULT_CONFIG: AssistantsConfig = {
       maxAgeDays: 90,
     },
   },
+  telephony: {
+    enabled: false,
+    injection: {
+      enabled: true,
+      maxPerTurn: 5,
+    },
+    storage: {
+      maxCallLogs: 1000,
+      maxSmsLogs: 5000,
+      maxAgeDays: 90,
+    },
+    voice: {
+      recordCalls: false,
+      maxCallDurationSeconds: 3600,
+    },
+  },
   memory: {
     enabled: true,
     injection: {
@@ -445,6 +461,22 @@ function mergeConfig(base: AssistantsConfig, override?: Partial<AssistantsConfig
       storage: {
         ...(base.channels?.storage || {}),
         ...(override.channels?.storage || {}),
+      },
+    },
+    telephony: {
+      ...(base.telephony || {}),
+      ...(override.telephony || {}),
+      injection: {
+        ...(base.telephony?.injection || {}),
+        ...(override.telephony?.injection || {}),
+      },
+      storage: {
+        ...(base.telephony?.storage || {}),
+        ...(override.telephony?.storage || {}),
+      },
+      voice: {
+        ...(base.telephony?.voice || {}),
+        ...(override.telephony?.voice || {}),
       },
     },
     memory: {

@@ -453,6 +453,7 @@ export interface AssistantsConfig {
   messages?: MessagesConfig;
   webhooks?: WebhooksConfig;
   channels?: ChannelsConfig;
+  telephony?: TelephonyConfig;
   memory?: MemoryConfigShared;
   subassistants?: SubassistantConfigShared;
   input?: InputConfig;

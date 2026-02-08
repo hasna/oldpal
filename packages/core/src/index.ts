@@ -304,6 +304,9 @@ export * from './webhooks';
 // Channels (Slack-like Agent Collaboration)
 export * from './channels';
 
+// Telephony (Twilio + ElevenLabs Conversational AI)
+export * from './telephony';
+
 // Client
 export { EmbeddedClient } from './client';
 

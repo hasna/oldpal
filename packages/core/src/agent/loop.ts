@@ -85,6 +85,7 @@ import { JobManager, createJobTools } from '../jobs';
 import { createMessagesManager, registerMessagesTools, type MessagesManager } from '../messages';
 import { createWebhooksManager, registerWebhookTools, type WebhooksManager } from '../webhooks';
 import { createChannelsManager, registerChannelTools, type ChannelsManager } from '../channels';
+import { createTelephonyManager, registerTelephonyTools, type TelephonyManager } from '../telephony';
 import { registerSessionTools, type SessionContext, type SessionQueryFunctions } from '../sessions';
 import { registerProjectTools, type ProjectToolContext } from '../tools/projects';
 import { registerSelfAwarenessTools } from '../tools/self-awareness';
@@ -189,6 +190,7 @@ export class AssistantLoop {
   private messagesManager: MessagesManager | null = null;
   private webhooksManager: WebhooksManager | null = null;
   private channelsManager: ChannelsManager | null = null;
+  private telephonyManager: TelephonyManager | null = null;
   private memoryManager: GlobalMemoryManager | null = null;
   private memoryInjector: MemoryInjector | null = null;
   private contextInjector: ContextInjector | null = null;
@@ -198,6 +200,7 @@ export class AssistantLoop {
   private pendingMessagesContext: string | null = null;
   private pendingWebhooksContext: string | null = null;
   private pendingChannelsContext: string | null = null;
+  private pendingTelephonyContext: string | null = null;
   private pendingMemoryContext: string | null = null;
   private identityContext: string | null = null;
   private projectContext: string | null = null;
@@ -502,6 +505,15 @@ export class AssistantLoop {
       const assistantName = assistant?.name || 'assistant';
       this.channelsManager = createChannelsManager(assistantId, assistantName, this.config.channels);
       registerChannelTools(this.toolRegistry, () => this.channelsManager);
+    }
+
+    // Initialize telephony if enabled
+    if (this.config?.telephony?.enabled) {
+      const assistant = this.assistantManager?.getActive();
+      const assistantId = assistant?.id || this.sessionId;
+      const assistantName = assistant?.name || 'assistant';
+      this.telephonyManager = createTelephonyManager(assistantId, assistantName, this.config.telephony);
+      registerTelephonyTools(this.toolRegistry, () => this.telephonyManager);
     }
 
     // Initialize memory system if enabled
@@ -938,6 +950,8 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       await this.injectPendingWebhookEvents();
       // Inject pending channel messages before processing
       await this.injectPendingChannelMessages();
+      // Inject pending telephony messages before processing
+      await this.injectPendingTelephonyMessages();
       // Inject relevant memories based on user message
       await this.injectMemoryContext(userMessage);
       // Inject environment context (datetime, cwd, etc.)
@@ -1850,6 +1864,7 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       getMessagesManager: () => this.messagesManager,
       getWebhooksManager: () => this.webhooksManager,
       getChannelsManager: () => this.channelsManager,
+      getTelephonyManager: () => this.telephonyManager,
       getMemoryManager: () => this.memoryManager,
       refreshIdentityContext: async () => {
         if (this.identityManager) {
@@ -2147,6 +2162,9 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
     // Close channels database connection
     this.channelsManager?.close();
     this.channelsManager = null;
+    // Close telephony connections
+    this.telephonyManager?.close();
+    this.telephonyManager = null;
     // Close memory database connection
     this.memoryManager?.close();
     this.memoryManager = null;
@@ -2259,6 +2277,10 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
 
   getChannelsManager(): ChannelsManager | null {
     return this.channelsManager;
+  }
+
+  getTelephonyManager(): TelephonyManager | null {
+    return this.telephonyManager;
   }
 
   getWalletManager(): WalletManager | null {
@@ -2930,6 +2952,37 @@ You are running in **autonomous mode**. You manage your own wakeup schedule.
       // Log but don't fail - channels are non-critical
       console.error('Failed to inject pending channel messages:', error);
       this.pendingChannelsContext = null;
+    }
+  }
+
+  /**
+   * Inject pending telephony messages into context at turn start
+   */
+  private async injectPendingTelephonyMessages(): Promise<void> {
+    if (!this.telephonyManager) return;
+
+    try {
+      if (this.pendingTelephonyContext) {
+        const previous = this.pendingTelephonyContext.trim();
+        this.context.removeSystemMessages((content) => content.trim() === previous);
+        this.pendingTelephonyContext = null;
+      }
+
+      const pending = this.telephonyManager.getUnreadForInjection();
+      if (pending.length === 0) {
+        return;
+      }
+
+      this.pendingTelephonyContext = this.telephonyManager.buildInjectionContext(pending);
+
+      if (this.pendingTelephonyContext) {
+        this.context.addSystemMessage(this.pendingTelephonyContext);
+      }
+
+      this.telephonyManager.markInjected(pending);
+    } catch (error) {
+      console.error('Failed to inject pending telephony messages:', error);
+      this.pendingTelephonyContext = null;
     }
   }
 

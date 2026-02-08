@@ -26,6 +26,7 @@ import { ConfigPanel } from './ConfigPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { WebhooksPanel } from './WebhooksPanel';
 import { ChannelsPanel } from './ChannelsPanel';
+import { TelephonyPanel } from './TelephonyPanel';
 import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
 import { AssistantsRegistryPanel } from './AssistantsRegistryPanel';
@@ -355,6 +356,9 @@ export function App({ cwd, version }: AppProps) {
   // Channels panel state
   const [showChannelsPanel, setShowChannelsPanel] = useState(false);
 
+  // Telephony panel state
+  const [showTelephonyPanel, setShowTelephonyPanel] = useState(false);
+
   // Messages panel state
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const [messagesPanelError, setMessagesPanelError] = useState<string | null>(null);
@@ -493,6 +497,7 @@ export function App({ cwd, version }: AppProps) {
     showConfigPanel ||
     showWebhooksPanel ||
     showChannelsPanel ||
+    showTelephonyPanel ||
     showMessagesPanel ||
     showProjectsPanel ||
     showPlansPanel ||
@@ -1349,6 +1354,8 @@ export function App({ cwd, version }: AppProps) {
         setShowWebhooksPanel(true);
       } else if (chunk.panel === 'channels') {
         setShowChannelsPanel(true);
+      } else if (chunk.panel === 'telephony') {
+        setShowTelephonyPanel(true);
       } else if (chunk.panel === 'messages') {
         // Load messages and inbox data, then show unified panel
         const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
@@ -2269,6 +2276,13 @@ export function App({ cwd, version }: AppProps) {
           return;
         }
 
+        // /memory (no args) → open panel
+        if (cmdName === 'memory' && !cmdArgs) {
+          setMemoryError(null);
+          setShowMemoryPanel(true);
+          return;
+        }
+
         // /guardrails (no args) → open panel
         if (cmdName === 'guardrails' && !cmdArgs) {
           if (!guardrailsStoreRef.current) {
@@ -2542,6 +2556,8 @@ export function App({ cwd, version }: AppProps) {
         responseRef.current = '';
         toolCallsRef.current = [];
         toolResultsRef.current = [];
+
+        clearSessionWindow();
 
         // Clear conversation on the client side (resets context, tokens, etc.)
         activeSession.client.clearConversation();
@@ -3964,6 +3980,25 @@ export function App({ cwd, version }: AppProps) {
       <ChannelsPanel
         manager={channelsManager}
         onClose={() => setShowChannelsPanel(false)}
+      />
+    );
+  }
+
+  // Show telephony panel
+  if (showTelephonyPanel) {
+    const telephonyManager = activeSession?.client.getTelephonyManager?.();
+    if (!telephonyManager) {
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text color="red">Telephony is not enabled. Set telephony.enabled: true in config.</Text>
+          <Text color="gray">Press any key to close.</Text>
+        </Box>
+      );
+    }
+    return (
+      <TelephonyPanel
+        manager={telephonyManager}
+        onClose={() => setShowTelephonyPanel(false)}
       />
     );
   }

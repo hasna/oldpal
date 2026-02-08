@@ -203,6 +203,7 @@ export class BuiltinCommands {
     loader.register(this.messagesCommand());
     loader.register(this.webhooksCommand());
     loader.register(this.channelsCommand());
+    loader.register(this.phoneCommand());
     loader.register(this.tasksCommand());
     loader.register(this.exitCommand());
   }
@@ -3107,6 +3108,183 @@ Created: ${new Date(job.createdAt).toISOString()}
 
         context.emit('text', `Unknown command: ${subcommand}\n`);
         context.emit('text', 'Use /channels help for available commands.\n');
+        context.emit('done');
+        return { handled: true };
+      },
+    };
+  }
+
+  /**
+   * /phone - Telephony management (SMS, calls, WhatsApp)
+   */
+  private phoneCommand(): Command {
+    return {
+      name: 'phone',
+      description: 'Manage telephony: SMS, calls, WhatsApp, routing',
+      builtin: true,
+      selfHandled: true,
+      content: '',
+      handler: async (args, context) => {
+        const trimmed = args.trim();
+        const [subcommand, ...rest] = trimmed.split(/\s+/);
+        const subArgs = rest.join(' ');
+
+        // /phone (no args) → open interactive panel
+        if (!subcommand || subcommand === 'ui') {
+          context.emit('done');
+          return { handled: true, showPanel: 'telephony' };
+        }
+
+        const manager = context.getTelephonyManager?.();
+        if (!manager) {
+          context.emit('text', 'Telephony is not enabled. Set telephony.enabled: true in config.\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /phone numbers
+        if (subcommand === 'numbers') {
+          const numbers = manager.listPhoneNumbers();
+          if (numbers.length === 0) {
+            context.emit('text', 'No phone numbers configured. Use /phone sync to import from Twilio.\n');
+          } else {
+            context.emit('text', `Phone Numbers (${numbers.length}):\n\n`);
+            for (const num of numbers) {
+              const caps: string[] = [];
+              if (num.capabilities.voice) caps.push('voice');
+              if (num.capabilities.sms) caps.push('sms');
+              if (num.capabilities.whatsapp) caps.push('whatsapp');
+              const name = num.friendlyName ? ` (${num.friendlyName})` : '';
+              context.emit('text', `  ${num.number}${name} [${caps.join(', ')}]\n`);
+            }
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /phone sync
+        if (subcommand === 'sync') {
+          context.emit('text', 'Syncing phone numbers from Twilio...\n');
+          const result = await manager.syncPhoneNumbers();
+          context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /phone sms send <to> <body>
+        if (subcommand === 'sms') {
+          const smsParts = subArgs.trim().split(/\s+/);
+          const smsAction = smsParts[0];
+
+          if (smsAction === 'send') {
+            const to = smsParts[1];
+            const body = smsParts.slice(2).join(' ');
+            if (!to || !body) {
+              context.emit('text', 'Usage: /phone sms send <to> <body>\n');
+              context.emit('done');
+              return { handled: true };
+            }
+            const result = await manager.sendSms(to, body);
+            context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          } else if (smsAction === 'list' || !smsAction) {
+            const messages = manager.getSmsHistory({ limit: 20 });
+            if (messages.length === 0) {
+              context.emit('text', 'No SMS history.\n');
+            } else {
+              context.emit('text', `Recent SMS (${messages.length}):\n\n`);
+              for (const msg of messages) {
+                const dir = msg.direction === 'inbound' ? 'IN' : 'OUT';
+                context.emit('text', `  [${dir}] ${msg.fromNumber} → ${msg.toNumber}: ${msg.bodyPreview}\n`);
+              }
+            }
+          } else {
+            context.emit('text', 'Usage: /phone sms [send <to> <body> | list]\n');
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /phone call <to>
+        if (subcommand === 'call') {
+          const to = subArgs.trim();
+          if (!to) {
+            context.emit('text', 'Usage: /phone call <to>\n');
+            context.emit('done');
+            return { handled: true };
+          }
+          const result = await manager.makeCall(to);
+          context.emit('text', `${result.success ? result.message : `Error: ${result.message}`}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /phone calls
+        if (subcommand === 'calls') {
+          const calls = manager.getCallHistory({ limit: 20 });
+          if (calls.length === 0) {
+            context.emit('text', 'No call history.\n');
+          } else {
+            context.emit('text', `Recent Calls (${calls.length}):\n\n`);
+            for (const call of calls) {
+              const dir = call.direction === 'inbound' ? 'IN' : 'OUT';
+              const dur = call.duration != null ? `${call.duration}s` : '-';
+              context.emit('text', `  [${dir}] ${call.fromNumber} → ${call.toNumber} | ${call.status} | ${dur}\n`);
+            }
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /phone routes
+        if (subcommand === 'routes') {
+          const rules = manager.listRoutingRules();
+          if (rules.length === 0) {
+            context.emit('text', 'No routing rules configured.\n');
+          } else {
+            context.emit('text', `Routing Rules (${rules.length}):\n\n`);
+            for (const rule of rules) {
+              const enabled = rule.enabled ? '' : ' [DISABLED]';
+              context.emit('text', `  ${rule.name} (priority: ${rule.priority})${enabled}\n`);
+              context.emit('text', `    Target: ${rule.targetAssistantName} | Type: ${rule.messageType}\n`);
+            }
+          }
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /phone status
+        if (subcommand === 'status') {
+          const status = manager.getStatus();
+          context.emit('text', 'Telephony Status:\n\n');
+          context.emit('text', `  Enabled:       ${status.enabled ? 'Yes' : 'No'}\n`);
+          context.emit('text', `  Twilio:        ${status.twilioConfigured ? 'Configured' : 'Not configured'}\n`);
+          context.emit('text', `  ElevenLabs:    ${status.elevenLabsConfigured ? 'Configured' : 'Not configured'}\n`);
+          context.emit('text', `  Numbers:       ${status.phoneNumbers}\n`);
+          context.emit('text', `  Active calls:  ${status.activeCalls}\n`);
+          context.emit('text', `  Routes:        ${status.routingRules}\n`);
+          context.emit('done');
+          return { handled: true };
+        }
+
+        // /phone help
+        if (subcommand === 'help') {
+          context.emit('text', 'Phone Commands:\n\n');
+          context.emit('text', '/phone                         Open telephony panel\n');
+          context.emit('text', '/phone numbers                 List phone numbers\n');
+          context.emit('text', '/phone sync                    Sync numbers from Twilio\n');
+          context.emit('text', '/phone sms send <to> <body>    Send SMS\n');
+          context.emit('text', '/phone sms list                Recent SMS\n');
+          context.emit('text', '/phone call <to>               Initiate call\n');
+          context.emit('text', '/phone calls                   Recent calls\n');
+          context.emit('text', '/phone routes                  Routing rules\n');
+          context.emit('text', '/phone status                  Status summary\n');
+          context.emit('text', '/phone help                    Show this help\n');
+          context.emit('done');
+          return { handled: true };
+        }
+
+        context.emit('text', `Unknown command: ${subcommand}\n`);
+        context.emit('text', 'Use /phone help for available commands.\n');
         context.emit('done');
         return { handled: true };
       },
