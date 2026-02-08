@@ -176,6 +176,36 @@ describe('identities API', () => {
     expect(insertValuesData.contacts.virtualAddresses.length).toBe(1);
     expect(insertValuesData.isDefault).toBe(true);
   });
+
+  test('POST creates identity with preferences and context', async () => {
+    const request = createPostRequest({
+      name: 'Support',
+      bio: 'Support lead for customer operations.',
+      locale: 'en-GB',
+      timezone: 'America/New_York',
+      context: 'Handle escalations and be concise.',
+      preferences: {
+        communicationStyle: 'casual',
+        responseLength: 'detailed',
+        language: 'es',
+        dateFormat: 'DD/MM/YYYY',
+      },
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.success).toBe(true);
+    expect(insertValuesData.bio).toBe('Support lead for customer operations.');
+    expect(insertValuesData.locale).toBe('en-GB');
+    expect(insertValuesData.timezone).toBe('America/New_York');
+    expect(insertValuesData.context).toBe('Handle escalations and be concise.');
+    expect(insertValuesData.preferences.communicationStyle).toBe('casual');
+    expect(insertValuesData.preferences.responseLength).toBe('detailed');
+    expect(insertValuesData.preferences.language).toBe('es');
+    expect(insertValuesData.preferences.dateFormat).toBe('DD/MM/YYYY');
+  });
 });
 
 afterAll(() => {

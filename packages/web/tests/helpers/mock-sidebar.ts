@@ -63,7 +63,7 @@ export function createSidebarMock(options: SidebarMockOptions = {}) {
       { 'data-sidebar-menu': true },
       children
     ),
-    SidebarMenuAction: ({ children, className, showOnHover, ...props }: any) => React.createElement(
+    SidebarMenuAction: ({ children, className, showOnHover, asChild, ...props }: any) => React.createElement(
       'button',
       {
         'data-sidebar-menu-action': true,
@@ -73,7 +73,7 @@ export function createSidebarMock(options: SidebarMockOptions = {}) {
       },
       children
     ),
-    SidebarMenuButton: ({ children, tooltip, size, ...props }: any) => React.createElement(
+    SidebarMenuButton: ({ children, tooltip, size, asChild, ...props }: any) => React.createElement(
       'button',
       {
         'data-sidebar-menu-button': true,
@@ -93,7 +93,7 @@ export function createSidebarMock(options: SidebarMockOptions = {}) {
       { 'data-sidebar-menu-sub': true },
       children
     ),
-    SidebarMenuSubButton: ({ children, ...props }: any) => React.createElement(
+    SidebarMenuSubButton: ({ children, asChild, ...props }: any) => React.createElement(
       'button',
       { 'data-sidebar-menu-sub-button': true, ...props },
       children

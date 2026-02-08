@@ -87,6 +87,53 @@ const createWindowStub = () => {
   };
 };
 
+const setupAudioStubs = () => {
+  let processor: any = null;
+  let trackStopCalls = 0;
+  const stream = {
+    getTracks: () => [{ stop: () => { trackStopCalls += 1; } }],
+  };
+
+  class FakeScriptProcessor {
+    onaudioprocess: ((event: any) => void) | null = null;
+    connect() {}
+    disconnect() {}
+  }
+
+  class FakeAudioContext {
+    sampleRate = 8000;
+    state = 'running';
+    destination = {};
+    createMediaStreamSource() {
+      return { connect: () => {} };
+    }
+    createScriptProcessor() {
+      processor = new FakeScriptProcessor();
+      return processor;
+    }
+    createGain() {
+      return { gain: { value: 1 }, connect: () => {} };
+    }
+    async resume() {
+      this.state = 'running';
+    }
+    async close() {}
+  }
+
+  (globalThis as any).AudioContext = FakeAudioContext;
+  (globalThis as any).navigator = {
+    language: 'en-US',
+    mediaDevices: {
+      getUserMedia: async () => stream,
+    },
+  };
+
+  return {
+    getProcessor: () => processor,
+    getStopCalls: () => trackStopCalls,
+  };
+};
+
 describe('web extra components', () => {
   let originalWindow: any;
   let originalNavigator: any;
@@ -319,28 +366,7 @@ describe('web extra components', () => {
   test('InputArea toggles /listen without sending a message', async () => {
     const { listeners } = createWindowStub();
     (globalThis as any).crypto = { randomUUID: () => 'session-6' };
-    (globalThis as any).navigator = { language: 'en-US' };
-
-    let startCalls = 0;
-    let stopCalls = 0;
-
-    class FakeSpeechRecognition {
-      continuous = false;
-      interimResults = false;
-      lang = '';
-      onresult: any = null;
-      onerror: any = null;
-      onend: any = null;
-      start() {
-        startCalls += 1;
-      }
-      stop() {
-        stopCalls += 1;
-      }
-    }
-
-    (globalThis as any).window.SpeechRecognition = FakeSpeechRecognition;
-    (globalThis as any).window.webkitSpeechRecognition = FakeSpeechRecognition;
+    const audioStubs = setupAudioStubs();
 
     const renderer = await renderWithAct(<InputArea />);
 
@@ -352,7 +378,6 @@ describe('web extra components', () => {
       input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
     });
 
-    expect(startCalls).toBe(1);
     expect(sent.some((msg) => msg.type === 'message' && msg.content === '/listen')).toBe(false);
 
     let tree = renderer!.toJSON();
@@ -362,7 +387,7 @@ describe('web extra components', () => {
       listeners.keydown?.[0]({ key: 'Escape' });
     });
 
-    expect(stopCalls).toBeGreaterThan(0);
+    expect(audioStubs.getStopCalls()).toBeGreaterThan(0);
     tree = renderer!.toJSON();
     expect(JSON.stringify(tree)).not.toContain('listening...');
 
@@ -372,28 +397,7 @@ describe('web extra components', () => {
   test('InputArea stops listening on /listen stop', async () => {
     createWindowStub();
     (globalThis as any).crypto = { randomUUID: () => 'session-9' };
-    (globalThis as any).navigator = { language: 'en-US' };
-
-    let startCalls = 0;
-    let stopCalls = 0;
-
-    class FakeSpeechRecognition {
-      continuous = false;
-      interimResults = false;
-      lang = '';
-      onresult: any = null;
-      onerror: any = null;
-      onend: any = null;
-      start() {
-        startCalls += 1;
-      }
-      stop() {
-        stopCalls += 1;
-      }
-    }
-
-    (globalThis as any).window.SpeechRecognition = FakeSpeechRecognition;
-    (globalThis as any).window.webkitSpeechRecognition = FakeSpeechRecognition;
+    const audioStubs = setupAudioStubs();
 
     const renderer = await renderWithAct(<InputArea />);
     const input = renderer!.root.findByType(Textarea);
@@ -405,8 +409,6 @@ describe('web extra components', () => {
       input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
     });
 
-    expect(startCalls).toBe(1);
-
     await act(async () => {
       input.props.onChange({ target: { value: '/listen stop' } });
     });
@@ -414,7 +416,7 @@ describe('web extra components', () => {
       input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
     });
 
-    expect(stopCalls).toBeGreaterThan(0);
+    expect(audioStubs.getStopCalls()).toBeGreaterThan(0);
     expect(sent.some((msg) => msg.type === 'message' && msg.content.includes('/listen stop'))).toBe(false);
 
     renderer!.unmount();
@@ -423,21 +425,7 @@ describe('web extra components', () => {
   test('InputArea ignores manual typing while listening', async () => {
     createWindowStub();
     (globalThis as any).crypto = { randomUUID: () => 'session-10' };
-    (globalThis as any).navigator = { language: 'en-US' };
-
-    class FakeSpeechRecognition {
-      continuous = false;
-      interimResults = false;
-      lang = '';
-      onresult: any = null;
-      onerror: any = null;
-      onend: any = null;
-      start() {}
-      stop() {}
-    }
-
-    (globalThis as any).window.SpeechRecognition = FakeSpeechRecognition;
-    (globalThis as any).window.webkitSpeechRecognition = FakeSpeechRecognition;
+    setupAudioStubs();
 
     const renderer = await renderWithAct(<InputArea />);
     const input = renderer!.root.findByType(Textarea);
@@ -525,39 +513,29 @@ describe('web extra components', () => {
   test('InputArea sends dictation after silence threshold', async () => {
     createWindowStub();
     (globalThis as any).crypto = { randomUUID: () => 'session-8' };
-    (globalThis as any).navigator = { language: 'en-US' };
-
-    let recognitionInstance: any = null;
-    class FakeSpeechRecognition {
-      continuous = false;
-      interimResults = false;
-      lang = '';
-      onresult: any = null;
-      onerror: any = null;
-      onend: any = null;
-      start() {
-        recognitionInstance = this;
-      }
-      stop() {}
-    }
-
-    (globalThis as any).window.SpeechRecognition = FakeSpeechRecognition;
-    (globalThis as any).window.webkitSpeechRecognition = FakeSpeechRecognition;
+    const audioStubs = setupAudioStubs();
 
     const originalNow = Date.now;
     const originalSetInterval = globalThis.setInterval;
     const originalClearInterval = globalThis.clearInterval;
-    let intervalCallback: (() => void) | null = null;
+    const intervalCallbacks: Array<() => void> = [];
     let nowValue = 0;
     Date.now = () => nowValue;
     globalThis.setInterval = ((cb: () => void) => {
-      intervalCallback = cb;
+      intervalCallbacks.push(cb);
       return 1 as any;
     }) as any;
     globalThis.clearInterval = (() => {}) as any;
 
     let renderer: ReturnType<typeof create> | null = null;
     try {
+      (globalThis as any).fetch = async () => {
+        return new Response(JSON.stringify({
+          success: true,
+          data: { text: 'hello', confidence: 1, language: 'en' },
+        }), { status: 200 });
+      };
+
       renderer = await renderWithAct(<InputArea />);
       const input = renderer!.root.findByType(Textarea);
       await act(async () => {
@@ -567,19 +545,19 @@ describe('web extra components', () => {
         input.props.onKeyDown({ key: 'Enter', shiftKey: false, preventDefault: () => {} });
       });
 
+      const processor = audioStubs.getProcessor();
+      const sample = new Float32Array(4096).fill(0.2);
       nowValue = 1000;
-      await act(async () => {
-        recognitionInstance?.onresult?.({
-          resultIndex: 0,
-          results: [
-            { isFinal: true, 0: { transcript: 'hello' } },
-          ],
-        });
-      });
+      processor?.onaudioprocess?.({ inputBuffer: { getChannelData: () => sample } });
 
       nowValue = 5000;
+      intervalCallbacks.forEach((cb) => cb());
+
       await act(async () => {
-        intervalCallback?.();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await Promise.resolve();
       });
 
       expect(sent.some((msg) => msg.type === 'message' && msg.content === 'hello')).toBe(true);

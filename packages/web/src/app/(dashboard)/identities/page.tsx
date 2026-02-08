@@ -107,6 +107,7 @@ export default function IdentitiesPage() {
   const [newIdentityDisplayName, setNewIdentityDisplayName] = useState('');
   const [newIdentityTitle, setNewIdentityTitle] = useState('');
   const [newIdentityCompany, setNewIdentityCompany] = useState('');
+  const [newIdentityBio, setNewIdentityBio] = useState('');
   const [newIdentityEmail, setNewIdentityEmail] = useState('');
   const [newIdentityPhone, setNewIdentityPhone] = useState('');
   const [newIdentityAddressStreet, setNewIdentityAddressStreet] = useState('');
@@ -117,7 +118,12 @@ export default function IdentitiesPage() {
   const [newIdentityAddressLabel, setNewIdentityAddressLabel] = useState('Primary');
   const [newIdentityVirtualAddress, setNewIdentityVirtualAddress] = useState('');
   const [newIdentityTimezone, setNewIdentityTimezone] = useState('UTC');
+  const [newIdentityLocale, setNewIdentityLocale] = useState('en-US');
+  const [newIdentityLanguage, setNewIdentityLanguage] = useState('en');
+  const [newIdentityDateFormat, setNewIdentityDateFormat] = useState('YYYY-MM-DD');
   const [newIdentityCommunicationStyle, setNewIdentityCommunicationStyle] = useState<'formal' | 'casual' | 'professional'>('professional');
+  const [newIdentityResponseLength, setNewIdentityResponseLength] = useState<'concise' | 'detailed' | 'balanced'>('balanced');
+  const [newIdentityContext, setNewIdentityContext] = useState('');
   const createFormRef = useRef<HTMLDivElement>(null);
 
   // Edit dialog state
@@ -252,11 +258,17 @@ export default function IdentitiesPage() {
           displayName: newIdentityDisplayName || newIdentityName,
           title: newIdentityTitle || undefined,
           company: newIdentityCompany || undefined,
+          bio: newIdentityBio || undefined,
           timezone: newIdentityTimezone,
+          locale: newIdentityLocale,
           contacts,
           preferences: {
             communicationStyle: newIdentityCommunicationStyle,
+            responseLength: newIdentityResponseLength,
+            language: newIdentityLanguage,
+            dateFormat: newIdentityDateFormat,
           },
+          context: newIdentityContext || undefined,
         }),
       });
       const data = await response.json();
@@ -266,6 +278,7 @@ export default function IdentitiesPage() {
         setNewIdentityDisplayName('');
         setNewIdentityTitle('');
         setNewIdentityCompany('');
+        setNewIdentityBio('');
         setNewIdentityEmail('');
         setNewIdentityPhone('');
         setNewIdentityAddressStreet('');
@@ -276,7 +289,12 @@ export default function IdentitiesPage() {
         setNewIdentityAddressLabel('Primary');
         setNewIdentityVirtualAddress('');
         setNewIdentityTimezone('UTC');
+        setNewIdentityLocale('en-US');
+        setNewIdentityLanguage('en');
+        setNewIdentityDateFormat('YYYY-MM-DD');
         setNewIdentityCommunicationStyle('professional');
+        setNewIdentityResponseLength('balanced');
+        setNewIdentityContext('');
         toast({
           title: 'Identity created',
           description: `${data.data.name} has been created successfully.`,
@@ -499,6 +517,17 @@ export default function IdentitiesPage() {
                   </div>
                 </div>
 
+                <div>
+                  <Label htmlFor="bio">Bio (optional)</Label>
+                  <Textarea
+                    id="bio"
+                    value={newIdentityBio}
+                    onChange={(e) => setNewIdentityBio(e.target.value)}
+                    placeholder="A short description or background..."
+                    rows={3}
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="email">Primary Email (optional)</Label>
@@ -594,6 +623,27 @@ export default function IdentitiesPage() {
                     </Select>
                   </div>
                   <div>
+                    <Label htmlFor="locale">Locale</Label>
+                    <Select value={newIdentityLocale} onValueChange={setNewIdentityLocale}>
+                      <SelectTrigger id="locale">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="en-US">English (US)</SelectItem>
+                        <SelectItem value="en-GB">English (UK)</SelectItem>
+                        <SelectItem value="fr-FR">French</SelectItem>
+                        <SelectItem value="de-DE">German</SelectItem>
+                        <SelectItem value="es-ES">Spanish</SelectItem>
+                        <SelectItem value="pt-BR">Portuguese (Brazil)</SelectItem>
+                        <SelectItem value="ja-JP">Japanese</SelectItem>
+                        <SelectItem value="zh-CN">Chinese (Simplified)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
                     <Label htmlFor="communicationStyle">Communication Style</Label>
                     <Select value={newIdentityCommunicationStyle} onValueChange={(v) => setNewIdentityCommunicationStyle(v as 'formal' | 'casual' | 'professional')}>
                       <SelectTrigger id="communicationStyle">
@@ -606,6 +656,67 @@ export default function IdentitiesPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label htmlFor="responseLength">Response Length</Label>
+                    <Select value={newIdentityResponseLength} onValueChange={(v) => setNewIdentityResponseLength(v as 'concise' | 'detailed' | 'balanced')}>
+                      <SelectTrigger id="responseLength">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="concise">Concise</SelectItem>
+                        <SelectItem value="balanced">Balanced</SelectItem>
+                        <SelectItem value="detailed">Detailed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="language">Language</Label>
+                    <Select value={newIdentityLanguage} onValueChange={setNewIdentityLanguage}>
+                      <SelectTrigger id="language">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="es">Spanish</SelectItem>
+                        <SelectItem value="fr">French</SelectItem>
+                        <SelectItem value="de">German</SelectItem>
+                        <SelectItem value="pt">Portuguese</SelectItem>
+                        <SelectItem value="ja">Japanese</SelectItem>
+                        <SelectItem value="zh">Chinese</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="dateFormat">Date Format</Label>
+                    <Select value={newIdentityDateFormat} onValueChange={setNewIdentityDateFormat}>
+                      <SelectTrigger id="dateFormat">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="YYYY-MM-DD">YYYY-MM-DD (2024-01-15)</SelectItem>
+                        <SelectItem value="MM/DD/YYYY">MM/DD/YYYY (01/15/2024)</SelectItem>
+                        <SelectItem value="DD/MM/YYYY">DD/MM/YYYY (15/01/2024)</SelectItem>
+                        <SelectItem value="DD.MM.YYYY">DD.MM.YYYY (15.01.2024)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="context">Additional Context (optional)</Label>
+                  <Textarea
+                    id="context"
+                    value={newIdentityContext}
+                    onChange={(e) => setNewIdentityContext(e.target.value)}
+                    placeholder="Add notes or context the assistant should know..."
+                    rows={5}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This context will be included in conversations when using this identity.
+                  </p>
                 </div>
 
                 <Button type="submit" disabled={isCreating || !newIdentityName.trim()}>
