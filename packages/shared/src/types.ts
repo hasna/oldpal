@@ -732,6 +732,10 @@ export interface HeartbeatState {
   lastActivity: string;
   uptimeSeconds: number;
   isStale: boolean;
+  /** Interval in ms between heartbeats (if available). */
+  intervalMs?: number;
+  /** ISO timestamp for the next planned heartbeat (if available). */
+  nextHeartbeatAt?: string;
 }
 
 // ============================================

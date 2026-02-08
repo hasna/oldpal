@@ -238,26 +238,29 @@ export class SessionStorage {
   }
 
   private static resolveSessionsDir(assistantId?: string | null): string {
+    return SessionStorage.resolveSessionsDirWithAssistant(assistantId).dir;
+  }
+
+  private static resolveSessionsDirWithAssistant(
+    assistantId?: string | null
+  ): { dir: string; assistantId: string | null } {
     const root = getConfigDir();
-    // Validate assistantId parameter, fall back to getActiveAssistantId if invalid
     const safeAssistantId = isValidId(assistantId) ? assistantId : null;
     const resolvedId = safeAssistantId ?? SessionStorage.getActiveAssistantId();
     if (resolvedId && isValidId(resolvedId)) {
       const assistantDir = join(root, 'assistants', resolvedId, 'sessions');
       if (existsSync(assistantDir)) {
-        return assistantDir;
+        return { dir: assistantDir, assistantId: resolvedId };
       }
     }
-    return join(root, 'sessions');
+    return { dir: join(root, 'sessions'), assistantId: null };
   }
 
-  /**
-   * List all saved sessions
-   */
-  static listSessions(assistantId?: string | null): SavedSessionInfo[] {
-    const sessionsDir = SessionStorage.resolveSessionsDir(assistantId);
+  private static readSessionsFromDir(
+    sessionsDir: string,
+    assistantId: string | null
+  ): SavedSessionInfo[] {
     if (!existsSync(sessionsDir)) return [];
-
     const sessions: SavedSessionInfo[] = [];
     const files = readdirSync(sessionsDir);
 
@@ -272,13 +275,51 @@ export class SessionStorage {
           startedAt: content.startedAt,
           updatedAt: content.updatedAt,
           messageCount: content.messages?.length || 0,
+          assistantId,
         });
       } catch {
         // Skip invalid files
       }
     }
 
+    return sessions;
+  }
+
+  /**
+   * List all saved sessions
+   */
+  static listSessions(assistantId?: string | null): SavedSessionInfo[] {
+    const { dir, assistantId: resolvedAssistantId } =
+      SessionStorage.resolveSessionsDirWithAssistant(assistantId);
+    const sessions = SessionStorage.readSessionsFromDir(dir, resolvedAssistantId);
+
     // Sort by updatedAt descending (most recent first)
+    return sessions.sort((a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
+  /**
+   * List all saved sessions across all assistants and global sessions
+   */
+  static listAllSessions(): SavedSessionInfo[] {
+    const root = getConfigDir();
+    const sessions: SavedSessionInfo[] = [];
+
+    const rootSessionsDir = join(root, 'sessions');
+    sessions.push(...SessionStorage.readSessionsFromDir(rootSessionsDir, null));
+
+    const assistantsDir = join(root, 'assistants');
+    if (existsSync(assistantsDir)) {
+      const entries = readdirSync(assistantsDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (!isValidId(entry.name)) continue;
+        const assistantSessionsDir = join(assistantsDir, entry.name, 'sessions');
+        sessions.push(...SessionStorage.readSessionsFromDir(assistantSessionsDir, entry.name));
+      }
+    }
+
     return sessions.sort((a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
@@ -331,6 +372,7 @@ export interface SavedSessionInfo {
   startedAt: string;
   updatedAt: string;
   messageCount: number;
+  assistantId?: string | null;
 }
 
 /**

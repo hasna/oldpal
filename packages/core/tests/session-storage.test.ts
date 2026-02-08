@@ -86,4 +86,28 @@ describe('SessionStorage', () => {
     const loaded = SessionStorage.loadSession('session-a');
     expect(loaded?.cwd).toBe('/tmp/project-a');
   });
+
+  test('lists sessions across assistants', () => {
+    const rootStorage = new SessionStorage('session-root');
+    rootStorage.save({
+      messages: [],
+      startedAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:01.000Z',
+      cwd: '/tmp/root',
+    });
+
+    const assistantId = 'assistant-2';
+    const assistantStorage = new SessionStorage('session-assistant', undefined, assistantId);
+    assistantStorage.save({
+      messages: [],
+      startedAt: '2024-01-02T00:00:00.000Z',
+      updatedAt: '2024-01-02T00:00:01.000Z',
+      cwd: '/tmp/assistant',
+    });
+
+    const sessions = SessionStorage.listAllSessions();
+    expect(sessions.length).toBe(2);
+    const assistantSession = sessions.find((session) => session.id === 'session-assistant');
+    expect(assistantSession?.assistantId).toBe(assistantId);
+  });
 });

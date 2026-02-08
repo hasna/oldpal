@@ -40,6 +40,12 @@ export interface CreateSessionOptions {
   assistantId?: string;
   /** Optional label for the session */
   label?: string;
+  /** Optional session ID override (used when resuming) */
+  sessionId?: string;
+  /** Optional initial messages to seed the session */
+  initialMessages?: Message[];
+  /** Optional original startedAt timestamp (ISO string) */
+  startedAt?: string;
 }
 
 /**
@@ -51,12 +57,12 @@ export class SessionRegistry {
   private chunkBuffers: Map<string, StreamChunk[]> = new Map();
   private chunkCallbacks: ((chunk: StreamChunk) => void)[] = [];
   private errorCallbacks: ((error: Error) => void)[] = [];
-  private clientFactory: (cwd: string) => EmbeddedClient;
+  private clientFactory: (cwd: string, options?: ConstructorParameters<typeof EmbeddedClient>[1]) => EmbeddedClient;
   private maxBufferedChunks = 2000;
   private store: SessionStore;
 
-  constructor(clientFactory?: (cwd: string) => EmbeddedClient) {
-    this.clientFactory = clientFactory ?? ((cwd) => new EmbeddedClient(cwd));
+  constructor(clientFactory?: (cwd: string, options?: ConstructorParameters<typeof EmbeddedClient>[1]) => EmbeddedClient) {
+    this.clientFactory = clientFactory ?? ((cwd, options) => new EmbeddedClient(cwd, options));
     this.store = new SessionStore();
   }
 
@@ -68,13 +74,21 @@ export class SessionRegistry {
       ? { cwd: cwdOrOptions }
       : cwdOrOptions;
 
-    const client = this.clientFactory(options.cwd);
+    const clientOptions: ConstructorParameters<typeof EmbeddedClient>[1] = {
+      sessionId: options.sessionId,
+      initialMessages: options.initialMessages,
+      startedAt: options.startedAt,
+      assistantId: options.assistantId,
+    };
+    const client = this.clientFactory(options.cwd, clientOptions);
     await client.initialize();
 
+    const parsedStartedAt = options.startedAt ? new Date(options.startedAt).getTime() : Date.now();
+    const startedAt = Number.isNaN(parsedStartedAt) ? Date.now() : parsedStartedAt;
     const sessionInfo: SessionInfo = {
       id: client.getSessionId(),
       cwd: options.cwd,
-      startedAt: Date.now(),
+      startedAt,
       updatedAt: Date.now(),
       isProcessing: false,
       client,
