@@ -873,7 +873,8 @@ export class BuiltinCommands {
           return { handled: true };
         }
 
-        // /identity edit <name|id> - Show identity details for editing
+        // /identity edit <name|id> - Open identity panel for editing
+        // /identity show <name|id> - Show identity details
         if (action === 'edit' || action === 'show') {
           if (!target) {
             context.emit('text', `Usage: /identity ${action} <name|id>\n`);
@@ -888,6 +889,10 @@ export class BuiltinCommands {
             context.emit('text', `Identity not found: ${target}\n`);
             context.emit('done');
             return { handled: true };
+          }
+          if (action === 'edit') {
+            context.emit('done');
+            return { handled: true, showPanel: 'identity', panelInitialValue: `edit:${match.id}` };
           }
           context.emit('text', '\n## Identity Details\n\n');
           context.emit('text', `**Name:** ${match.name}\n`);
@@ -945,6 +950,7 @@ export class BuiltinCommands {
           context.emit('text', '/identity create --template <t>  Create from template\n');
           context.emit('text', '/identity switch <name|id>       Switch to identity\n');
           context.emit('text', '/identity show <name|id>         Show identity details\n');
+          context.emit('text', '/identity edit <name|id>         Edit identity in panel\n');
           context.emit('text', '/identity set-default <name|id>  Set as default\n');
           context.emit('text', '/identity delete <name|id>       Delete identity\n');
           context.emit('text', '/identity templates              List available templates\n');

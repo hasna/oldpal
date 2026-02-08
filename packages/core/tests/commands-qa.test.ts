@@ -261,9 +261,10 @@ describe('Slash command QA', () => {
       expect(cmd).toBeUndefined();
     });
 
-    test('/resume command is removed (merged into /schedules)', async () => {
-      const cmd = loader.getCommand('resume');
-      expect(cmd).toBeUndefined();
+    test('/resume handled', async () => {
+      const result = await executor.execute('/resume', mockContext);
+      expect(result.handled).toBe(true);
+      expect(result.showPanel).toBe('resume');
     });
 
     test('/logs handled and shows panel', async () => {

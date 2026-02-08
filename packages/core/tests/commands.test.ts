@@ -4,12 +4,14 @@ import { CommandExecutor } from '../src/commands/executor';
 import { BuiltinCommands } from '../src/commands/builtin';
 import { listProjects, readProject } from '../src/projects/store';
 import type { CommandContext, CommandResult } from '../src/commands/types';
+import { IdentityManager } from '../src/identity/identity-manager';
 import { mkdirSync, writeFileSync, rmSync, existsSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { listSchedules, saveSchedule, computeNextRun } from '../src/scheduler/store';
 import { generateId } from '@hasna/assistants-shared';
 import { getRuntime } from '../src/runtime';
+import { SessionStorage } from '../src/logger';
 
 describe('CommandLoader', () => {
   let loader: CommandLoader;
@@ -439,6 +441,13 @@ describe('BuiltinCommands', () => {
   let originalAssistantsDir: string | undefined;
   let activeProjectId: string | null;
   let projectContextContent: string | null;
+  const heartbeatState = {
+    enabled: true,
+    state: 'idle' as const,
+    lastActivity: new Date().toISOString(),
+    uptimeSeconds: 42,
+    isStale: false,
+  };
 
   beforeEach(() => {
     builtins = new BuiltinCommands();
@@ -466,6 +475,10 @@ describe('BuiltinCommands', () => {
         { name: 'alpha', description: 'Alpha skill', argumentHint: '[arg]' },
       ],
       connectors: [],
+      getHeartbeatState: () => heartbeatState,
+      getHeartbeatConfig: () => ({
+        historyPath: join(tempDir, 'heartbeats', 'runs', '{sessionId}.jsonl'),
+      }),
       getActiveProjectId: () => activeProjectId,
       setActiveProjectId: (id) => { activeProjectId = id; },
       setProjectContext: (content) => { projectContextContent = content; },
@@ -545,6 +558,29 @@ describe('BuiltinCommands', () => {
         expect(result.handled).toBe(true);
         expect(result.clearConversation).toBe(true);
         expect(messagesCleared).toBe(true);
+      }
+    });
+  });
+
+  describe('/identity command', () => {
+    test('edit opens identity panel with target id', async () => {
+      const cmd = loader.getCommand('identity');
+      expect(cmd).toBeDefined();
+
+      const identityManager = new IdentityManager('assistant-test', tempDir);
+      await identityManager.initialize();
+      const identity = await identityManager.createIdentity({ name: 'Primary' });
+
+      const contextWithIdentity: CommandContext = {
+        ...mockContext,
+        getIdentityManager: () => identityManager,
+      };
+
+      if (cmd?.handler) {
+        const result = await cmd.handler(`edit ${identity.id}`, contextWithIdentity);
+        expect(result.handled).toBe(true);
+        expect(result.showPanel).toBe('identity');
+        expect(result.panelInitialValue).toBe(`edit:${identity.id}`);
       }
     });
   });
@@ -988,6 +1024,122 @@ describe('BuiltinCommands', () => {
         const output = emittedContent.join('\n');
         expect(output).toContain('Schedules');
         expect(output).toContain('Usage');
+      }
+    });
+  });
+
+  describe('/heartbeat command', () => {
+    test('should list heartbeat runs', async () => {
+      const cmd = loader.getCommand('heartbeat');
+      expect(cmd).toBeDefined();
+
+      const runsDir = join(tempDir, 'heartbeats', 'runs');
+      mkdirSync(runsDir, { recursive: true });
+      const historyPath = join(runsDir, `${mockContext.sessionId}.jsonl`);
+      const heartbeatRun = {
+        sessionId: mockContext.sessionId,
+        timestamp: new Date(Date.now() - 10_000).toISOString(),
+        state: 'idle',
+        lastActivity: new Date(Date.now() - 5_000).toISOString(),
+        stats: { messagesProcessed: 1, toolCallsExecuted: 2, errorsEncountered: 0, uptimeSeconds: 10 },
+      };
+      writeFileSync(historyPath, `${JSON.stringify(heartbeatRun)}\n`);
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('list', mockContext);
+        expect(result.handled).toBe(true);
+        const output = emittedContent.join('\n');
+        expect(output).toContain('Heartbeat Status');
+        expect(output).toContain('| Time | State |');
+      }
+    });
+
+    test('should show status', async () => {
+      const cmd = loader.getCommand('heartbeat');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('status', mockContext);
+        expect(result.handled).toBe(true);
+        const output = emittedContent.join('\n');
+        expect(output).toContain('Heartbeat Status');
+        expect(output).toContain('State: idle');
+      }
+    });
+  });
+
+  describe('/resume command', () => {
+    test('should open resume panel by default', async () => {
+      const cmd = loader.getCommand('resume');
+      expect(cmd).toBeDefined();
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('', mockContext);
+        expect(result.handled).toBe(true);
+        expect(result.showPanel).toBe('resume');
+      }
+    });
+
+    test('should list sessions scoped to cwd', async () => {
+      const cmd = loader.getCommand('resume');
+      expect(cmd).toBeDefined();
+
+      const rootId = 'resume-root';
+      const otherId = 'resume-other';
+      const rootSession = new SessionStorage(rootId);
+      rootSession.save({
+        messages: [],
+        startedAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:01.000Z',
+        cwd: tempDir,
+      });
+
+      const otherSession = new SessionStorage(otherId);
+      otherSession.save({
+        messages: [],
+        startedAt: '2024-01-02T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:01.000Z',
+        cwd: '/tmp/other',
+      });
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('list', mockContext);
+        expect(result.handled).toBe(true);
+        const output = emittedContent.join('\n');
+        expect(output).toContain(rootId.slice(0, 8));
+        expect(output).not.toContain(otherId.slice(0, 8));
+      }
+    });
+
+    test('should list sessions across assistants with --all', async () => {
+      const cmd = loader.getCommand('resume');
+      expect(cmd).toBeDefined();
+
+      const rootId = 'resume-all-root';
+      const assistantSessionId = 'resume-all-assistant';
+      const rootSession = new SessionStorage(rootId);
+      rootSession.save({
+        messages: [],
+        startedAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:01.000Z',
+        cwd: tempDir,
+      });
+
+      const assistantId = 'assistant-test';
+      const assistantSession = new SessionStorage(assistantSessionId, undefined, assistantId);
+      assistantSession.save({
+        messages: [],
+        startedAt: '2024-01-02T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:01.000Z',
+        cwd: tempDir,
+      });
+
+      if (cmd?.handler) {
+        const result = await cmd.handler('list --all', mockContext);
+        expect(result.handled).toBe(true);
+        const output = emittedContent.join('\n');
+        expect(output).toContain(rootId.slice(0, 8));
+        expect(output).toContain(assistantSessionId.slice(0, 8));
       }
     });
   });
