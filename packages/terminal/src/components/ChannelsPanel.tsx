@@ -94,25 +94,23 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
     }
   };
 
-  // Disable main keyboard handler during text-entry modes so TextInput receives keystrokes
-  const isTextEntry = mode === 'create-name' || mode === 'create-desc' || mode === 'invite' || mode === 'chat';
+  useInput((input, key) => {
+    // In text-entry modes (chat, create, invite), only handle Escape
+    const isTextEntry = mode === 'create-name' || mode === 'create-desc' || mode === 'invite' || mode === 'chat';
 
-  // Escape handler — always active so user can always go back
-  useInput((_input, key) => {
-    if (key.escape) {
-      if (mode === 'list') {
+    if (key.escape || input === 'q' && !isTextEntry) {
+      if (key.escape && mode === 'list' || input === 'q' && mode === 'list') {
         onClose();
-      } else {
+      } else if (key.escape) {
         setMode('list');
         setSelectedChannel(null);
         setStatusMessage(null);
       }
+      return;
     }
-  });
 
-  // Main keyboard handler — disabled during text entry
-  useInput((input, key) => {
-    if (key.escape) return; // handled above
+    // Don't handle other keys during text entry - let TextInput receive them
+    if (isTextEntry) return;
 
     if (mode === 'list') {
       if (key.upArrow || input === 'k') {
@@ -143,8 +141,6 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
         const ch = channels[selectedIndex];
         setSelectedChannel(manager.getChannel(ch.id));
         setMode('delete-confirm');
-      } else if (input === 'q') {
-        onClose();
       } else if (input === 'r') {
         loadChannels();
         setStatusMessage('Refreshed');
@@ -178,7 +174,7 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
         setMode('list');
       }
     }
-  }, { isActive: !isTextEntry });
+  });
 
   // Header
   const header = (
@@ -289,9 +285,30 @@ export function ChannelsPanel({ manager, onClose, activePersonId, activePersonNa
                   // Reload messages
                   const updated = manager.readMessages(selectedChannel.id, 50);
                   setMessages(updated?.messages || []);
-                  // Trigger assistant to respond when a person sends a message
+                  // Trigger assistant to respond and start polling for reply
                   if (activePersonId && activePersonName && onPersonMessage && selectedChannel) {
                     onPersonMessage(selectedChannel.name, activePersonName, msg);
+                    setStatusMessage('Assistant is thinking...');
+                    // Poll for assistant's reply every 2 seconds for up to 60 seconds
+                    const channelId = selectedChannel.id;
+                    const currentCount = updated?.messages.length || 0;
+                    let polls = 0;
+                    const pollInterval = setInterval(() => {
+                      polls++;
+                      const fresh = manager.readMessages(channelId, 50);
+                      if (fresh) {
+                        setMessages(fresh.messages);
+                        if (fresh.messages.length > currentCount) {
+                          // New message arrived (assistant replied)
+                          clearInterval(pollInterval);
+                          setStatusMessage(null);
+                        }
+                      }
+                      if (polls >= 30) {
+                        clearInterval(pollInterval);
+                        setStatusMessage(null);
+                      }
+                    }, 2000);
                   }
                 } else {
                   setStatusMessage(`Error: ${result.message}`);

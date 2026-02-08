@@ -41,23 +41,21 @@ export function PeoplePanel({ manager, onClose }: PeoplePanelProps) {
     loadPeople();
   }, []);
 
-  const isTextEntry = mode === 'create-name' || mode === 'create-email';
+  useInput((input, key) => {
+    const isTextEntry = mode === 'create-name' || mode === 'create-email';
 
-  // Escape handler - always active
-  useInput((_input, key) => {
-    if (key.escape) {
-      if (mode === 'list') {
+    if (key.escape || (input === 'q' && !isTextEntry)) {
+      if ((key.escape || input === 'q') && mode === 'list') {
         onClose();
-      } else {
+      } else if (key.escape) {
         setMode('list');
         setStatusMessage(null);
       }
+      return;
     }
-  });
 
-  // Main keyboard handler - disabled during text entry
-  useInput((input, key) => {
-    if (key.escape) return; // handled above
+    // Don't handle other keys during text entry - let TextInput receive them
+    if (isTextEntry) return;
 
     if (mode === 'list') {
       if (key.upArrow || input === 'k') {
@@ -65,7 +63,6 @@ export function PeoplePanel({ manager, onClose }: PeoplePanelProps) {
       } else if (key.downArrow || input === 'j') {
         setSelectedIndex((prev) => Math.min(people.length - 1, prev + 1));
       } else if (key.return && people.length > 0) {
-        // Login/switch to selected person
         const person = people[selectedIndex];
         manager.setActivePerson(person.id).then(() => {
           setStatusMessage(`Logged in as ${person.name}`);
@@ -78,7 +75,6 @@ export function PeoplePanel({ manager, onClose }: PeoplePanelProps) {
         setCreateEmail('');
         setMode('create-name');
       } else if (input === 'l') {
-        // Logout
         manager.logout().then(() => {
           setStatusMessage('Logged out');
           loadPeople();
@@ -125,7 +121,7 @@ export function PeoplePanel({ manager, onClose }: PeoplePanelProps) {
         setMode('list');
       }
     }
-  }, { isActive: !isTextEntry });
+  });
 
   // Header
   const header = (

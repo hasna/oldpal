@@ -4156,9 +4156,9 @@ export function App({ cwd, version }: AppProps) {
         activePersonId={activeSession?.client.getPeopleManager?.()?.getActivePersonId?.() || undefined}
         activePersonName={activeSession?.client.getPeopleManager?.()?.getActivePerson?.()?.name || undefined}
         onPersonMessage={(channelName, personName, message) => {
-          // Close the panel and send the channel message as a prompt to the assistant
-          setShowChannelsPanel(false);
-          const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\nPlease respond to this in the #${channelName} channel using the channel_send tool. Be helpful and conversational.`;
+          // Send the channel message as a prompt to the assistant in the background
+          // Panel stays open - polling in ChannelsPanel will show the reply
+          const prompt = `[Channel Message] ${personName} posted in #${channelName}: "${message}"\n\nRespond in #${channelName} using channel_send. Be helpful and conversational.`;
           activeSession?.client.send(prompt);
         }}
       />
