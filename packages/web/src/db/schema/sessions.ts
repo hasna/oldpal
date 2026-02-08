@@ -10,7 +10,7 @@ export const sessions = pgTable('sessions', {
     .notNull(),
   label: varchar('label', { length: 255 }),
   cwd: text('cwd'),
-  assistantId: uuid('agent_id').references(() => assistants.id, { onDelete: 'set null' }),
+  assistantId: uuid('assistant_id').references(() => assistants.id, { onDelete: 'set null' }),
   metadata: jsonb('metadata').$type<SessionMetadata>(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

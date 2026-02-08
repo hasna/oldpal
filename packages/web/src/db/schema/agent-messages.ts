@@ -5,12 +5,12 @@ import { assistants } from './assistants';
 export const messagePriorityEnum = pgEnum('message_priority', ['low', 'normal', 'high', 'urgent']);
 export const messageStatusEnum = pgEnum('message_status', ['unread', 'read', 'archived', 'injected']);
 
-export const assistantMessages = pgTable('agent_messages', {
+export const assistantMessages = pgTable('assistant_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   threadId: uuid('thread_id').notNull(),
   parentId: uuid('parent_id'),
-  fromAssistantId: uuid('from_agent_id').references(() => assistants.id, { onDelete: 'set null' }),
-  toAssistantId: uuid('to_agent_id').references(() => assistants.id, { onDelete: 'set null' }),
+  fromAssistantId: uuid('from_assistant_id').references(() => assistants.id, { onDelete: 'set null' }),
+  toAssistantId: uuid('to_assistant_id').references(() => assistants.id, { onDelete: 'set null' }),
   subject: varchar('subject', { length: 500 }),
   body: text('body').notNull(),
   priority: messagePriorityEnum('priority').default('normal').notNull(),

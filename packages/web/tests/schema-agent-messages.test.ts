@@ -102,6 +102,6 @@ describe('assistant-messages schema', () => {
   test('assistantMessages table has correct name', async () => {
     const mod = await import('../src/db/schema/agent-messages');
     // @ts-ignore - accessing internal drizzle property
-    expect(mod.assistantMessages[Symbol.for('drizzle:Name')]).toBe('agent_messages');
+    expect(mod.assistantMessages[Symbol.for('drizzle:Name')]).toBe('assistant_messages');
   });
 });

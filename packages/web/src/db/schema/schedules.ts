@@ -8,7 +8,7 @@ export const schedules = pgTable('schedules', {
   userId: uuid('user_id')
     .references(() => users.id, { onDelete: 'cascade' })
     .notNull(),
-  assistantId: uuid('agent_id')
+  assistantId: uuid('assistant_id')
     .references(() => assistants.id, { onDelete: 'cascade' }),
   command: text('command').notNull(),
   description: text('description'),
