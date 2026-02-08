@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { spawn } from 'child_process';
+import { join } from 'path';
+import { homedir } from 'os';
 import { Box, Text, useApp, useStdout, Static } from 'ink';
 import { SessionRegistry, SessionStorage, findRecoverableSessions, clearRecoveryState, ConnectorBridge, listTemplates, createIdentityFromTemplate, VoiceManager, AudioRecorder, ElevenLabsSTT, WhisperSTT, readHeartbeatHistoryBySession, type SessionInfo, type RecoverableSession, type CreateIdentityOptions, type Heartbeat, type SavedSessionInfo, type CreateSessionOptions, type Identity, type Memory, type MemoryStats } from '@hasna/assistants-core';
 import type { StreamChunk, Message, ToolCall, ToolResult, TokenUsage, EnergyState, VoiceState, HeartbeatState, ActiveIdentityInfo, AskUserRequest, AskUserResponse, Connector, HookConfig, HookEvent, HookHandler, ScheduledCommand, Skill } from '@hasna/assistants-shared';
@@ -26,7 +28,9 @@ import { ConfigPanel } from './ConfigPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { WebhooksPanel } from './WebhooksPanel';
 import { ChannelsPanel } from './ChannelsPanel';
+import { PeoplePanel } from './PeoplePanel';
 import { TelephonyPanel } from './TelephonyPanel';
+import { OnboardingPanel, type OnboardingResult } from './OnboardingPanel';
 import { GuardrailsPanel } from './GuardrailsPanel';
 import { BudgetPanel } from './BudgetPanel';
 import { AssistantsRegistryPanel } from './AssistantsRegistryPanel';
@@ -265,6 +269,19 @@ interface IdentityPanelIntent {
 const MESSAGE_CHUNK_LINES = 12;
 const MESSAGE_WRAP_CHARS = 120;
 
+function CloseOnAnyKeyPanel({ message, onClose }: { message: string; onClose: () => void }) {
+  useInput(() => {
+    onClose();
+  }, { isActive: true });
+
+  return (
+    <Box flexDirection="column" padding={1}>
+      <Text color="red">{message}</Text>
+      <Text color="gray">Press any key to close.</Text>
+    </Box>
+  );
+}
+
 export function App({ cwd, version }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -356,8 +373,14 @@ export function App({ cwd, version }: AppProps) {
   // Channels panel state
   const [showChannelsPanel, setShowChannelsPanel] = useState(false);
 
+  // People panel state
+  const [showPeoplePanel, setShowPeoplePanel] = useState(false);
+
   // Telephony panel state
   const [showTelephonyPanel, setShowTelephonyPanel] = useState(false);
+
+  // Onboarding panel state
+  const [showOnboardingPanel, setShowOnboardingPanel] = useState(false);
 
   // Messages panel state
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
@@ -482,6 +505,7 @@ export function App({ cwd, version }: AppProps) {
   });
 
   const isPanelOpen = (
+    showOnboardingPanel ||
     showRecoveryPanel ||
     showConnectorsPanel ||
     showTasksPanel ||
@@ -497,6 +521,7 @@ export function App({ cwd, version }: AppProps) {
     showConfigPanel ||
     showWebhooksPanel ||
     showChannelsPanel ||
+    showPeoplePanel ||
     showTelephonyPanel ||
     showMessagesPanel ||
     showProjectsPanel ||
@@ -1354,8 +1379,12 @@ export function App({ cwd, version }: AppProps) {
         setShowWebhooksPanel(true);
       } else if (chunk.panel === 'channels') {
         setShowChannelsPanel(true);
+      } else if (chunk.panel === 'people') {
+        setShowPeoplePanel(true);
       } else if (chunk.panel === 'telephony') {
         setShowTelephonyPanel(true);
+      } else if (chunk.panel === 'setup') {
+        setShowOnboardingPanel(true);
       } else if (chunk.panel === 'messages') {
         // Load messages and inbox data, then show unified panel
         const messagesManager = registry.getActiveSession()?.client.getMessagesManager?.();
@@ -1732,6 +1761,77 @@ export function App({ cwd, version }: AppProps) {
     });
   }, [recoverableSessions, createSessionFromRecovery]);
 
+  const handleOnboardingComplete = useCallback(async (result: OnboardingResult) => {
+    const { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } = await import('fs');
+
+    // 1. Save API key to ~/.secrets
+    const secretsPath = join(homedir(), '.secrets');
+    const keyExport = `export ANTHROPIC_API_KEY="${result.apiKey}"`;
+    if (existsSync(secretsPath)) {
+      const content = readFileSync(secretsPath, 'utf-8');
+      if (content.includes('ANTHROPIC_API_KEY')) {
+        // Replace existing line
+        const updated = content.replace(/^export ANTHROPIC_API_KEY=.*$/m, keyExport);
+        writeFileSync(secretsPath, updated, 'utf-8');
+      } else {
+        appendFileSync(secretsPath, '\n' + keyExport + '\n', 'utf-8');
+      }
+    } else {
+      writeFileSync(secretsPath, keyExport + '\n', { mode: 0o600 });
+    }
+
+    // Save additional connector keys to ~/.secrets
+    for (const [name, key] of Object.entries(result.connectorKeys)) {
+      const envName = `${name.toUpperCase()}_API_KEY`;
+      const connKeyExport = `export ${envName}="${key}"`;
+      const content = readFileSync(secretsPath, 'utf-8');
+      if (content.includes(envName)) {
+        const updated = content.replace(new RegExp(`^export ${envName}=.*$`, 'm'), connKeyExport);
+        writeFileSync(secretsPath, updated, 'utf-8');
+      } else {
+        appendFileSync(secretsPath, connKeyExport + '\n', 'utf-8');
+      }
+    }
+
+    // 2. Save config to ~/.assistants/config.json
+    const configDir = join(homedir(), '.assistants');
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+    const configPath = join(configDir, 'config.json');
+    let existingConfig: Record<string, unknown> = {};
+    if (existsSync(configPath)) {
+      try {
+        existingConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
+      } catch {
+        // Start fresh if corrupt
+      }
+    }
+    const newConfig = {
+      ...existingConfig,
+      onboardingCompleted: true,
+      llm: {
+        provider: 'anthropic',
+        model: result.model,
+        apiKey: result.apiKey,
+      },
+      connectors: result.connectors.length > 0 ? result.connectors : undefined,
+    };
+    writeFileSync(configPath, JSON.stringify(newConfig, null, 2), 'utf-8');
+
+    // 3. Set API key in current process
+    process.env.ANTHROPIC_API_KEY = result.apiKey;
+
+    // 4. Close panel and re-trigger session init
+    setShowOnboardingPanel(false);
+    // initStateRef is 'idle', so the useEffect will re-run and create a session
+  }, []);
+
+  const handleOnboardingCancel = useCallback(() => {
+    setShowOnboardingPanel(false);
+    // Let the init effect proceed without onboarding
+  }, []);
+
   // Initialize first session
   useEffect(() => {
     // Only skip if initialization completed successfully
@@ -1741,8 +1841,9 @@ export function App({ cwd, version }: AppProps) {
     // If already pending, another instance is running
     if (initStateRef.current === 'pending') return;
 
-    // If showing recovery panel, wait for user decision
+    // If showing recovery panel or onboarding, wait for user decision
     if (showRecoveryPanel) return;
+    if (showOnboardingPanel) return;
 
     initStateRef.current = 'pending';
 
@@ -1758,6 +1859,34 @@ export function App({ cwd, version }: AppProps) {
           setShowRecoveryPanel(true);
           initStateRef.current = 'idle'; // Allow re-entry after user decision
           return;
+        }
+
+        // Check for first-run onboarding
+        try {
+          const configPath = join(homedir(), '.assistants', 'config.json');
+          const { existsSync, readFileSync } = await import('fs');
+          let needsOnboarding = false;
+          if (!existsSync(configPath)) {
+            needsOnboarding = true;
+          } else {
+            try {
+              const raw = readFileSync(configPath, 'utf-8');
+              const parsed = JSON.parse(raw);
+              if (!parsed.onboardingCompleted) {
+                needsOnboarding = true;
+              }
+            } catch {
+              needsOnboarding = true;
+            }
+          }
+          if (needsOnboarding) {
+            setShowOnboardingPanel(true);
+            initStateRef.current = 'idle';
+            setIsInitializing(false);
+            return;
+          }
+        } catch {
+          // If checking fails, proceed without onboarding
         }
 
         // No recovery needed, create fresh session
@@ -1777,7 +1906,7 @@ export function App({ cwd, version }: AppProps) {
     return () => {
       cancelled = true;
     };
-  }, [cwd, registry, showRecoveryPanel, recoverableSessions, createSessionFromRecovery]);
+  }, [cwd, registry, showRecoveryPanel, showOnboardingPanel, recoverableSessions, createSessionFromRecovery]);
 
   // Separate effect for component mount/unmount lifecycle
   // This ensures registry is only closed when component truly unmounts
@@ -2748,11 +2877,29 @@ export function App({ cwd, version }: AppProps) {
     };
   }, [handleSubmit]);
 
-  if (isInitializing && !showRecoveryPanel) {
+  if (isInitializing && !showRecoveryPanel && !showOnboardingPanel) {
     return (
       <Box flexDirection="column" padding={1}>
         <Spinner label="Initializing..." />
       </Box>
+    );
+  }
+
+  // Show onboarding panel for first-run setup
+  if (showOnboardingPanel) {
+    // Get existing API key from env or config
+    const existingKey = process.env.ANTHROPIC_API_KEY || undefined;
+    // Get discovered connectors from connector bridge
+    const discovered = connectorBridgeRef.current?.fastDiscover() || [];
+    const discoveredNames = discovered.map((c: Connector) => c.name);
+
+    return (
+      <OnboardingPanel
+        onComplete={handleOnboardingComplete}
+        onCancel={handleOnboardingCancel}
+        existingApiKey={existingKey}
+        discoveredConnectors={discoveredNames}
+      />
     );
   }
 
@@ -3951,10 +4098,10 @@ export function App({ cwd, version }: AppProps) {
     const webhooksManager = activeSession?.client.getWebhooksManager?.();
     if (!webhooksManager) {
       return (
-        <Box flexDirection="column" padding={1}>
-          <Text color="red">Webhooks are not enabled. Set webhooks.enabled: true in config.</Text>
-          <Text color="gray">Press any key to close.</Text>
-        </Box>
+        <CloseOnAnyKeyPanel
+          message="Webhooks are not enabled. Set webhooks.enabled: true in config."
+          onClose={() => setShowWebhooksPanel(false)}
+        />
       );
     }
     return (
@@ -3970,10 +4117,10 @@ export function App({ cwd, version }: AppProps) {
     const channelsManager = activeSession?.client.getChannelsManager?.();
     if (!channelsManager) {
       return (
-        <Box flexDirection="column" padding={1}>
-          <Text color="red">Channels are not enabled. Set channels.enabled: true in config.</Text>
-          <Text color="gray">Press any key to close.</Text>
-        </Box>
+        <CloseOnAnyKeyPanel
+          message="Channels are not enabled. Set channels.enabled: true in config."
+          onClose={() => setShowChannelsPanel(false)}
+        />
       );
     }
     return (
@@ -3984,15 +4131,34 @@ export function App({ cwd, version }: AppProps) {
     );
   }
 
+  // Show people panel
+  if (showPeoplePanel) {
+    const peopleManager = activeSession?.client.getPeopleManager?.();
+    if (!peopleManager) {
+      return (
+        <CloseOnAnyKeyPanel
+          message="People system is not available."
+          onClose={() => setShowPeoplePanel(false)}
+        />
+      );
+    }
+    return (
+      <PeoplePanel
+        manager={peopleManager}
+        onClose={() => setShowPeoplePanel(false)}
+      />
+    );
+  }
+
   // Show telephony panel
   if (showTelephonyPanel) {
     const telephonyManager = activeSession?.client.getTelephonyManager?.();
     if (!telephonyManager) {
       return (
-        <Box flexDirection="column" padding={1}>
-          <Text color="red">Telephony is not enabled. Set telephony.enabled: true in config.</Text>
-          <Text color="gray">Press any key to close.</Text>
-        </Box>
+        <CloseOnAnyKeyPanel
+          message="Telephony is not enabled. Set telephony.enabled: true in config."
+          onClose={() => setShowTelephonyPanel(false)}
+        />
       );
     }
     return (

@@ -300,6 +300,7 @@ export function ChannelsPanel({ manager, onClose }: ChannelsPanelProps) {
               <Text>  </Text>
               <Text bold>{m.assistantName}</Text>
               {m.role === 'owner' && <Text color="yellow"> (owner)</Text>}
+              {m.memberType === 'person' && <Text color="green"> [person]</Text>}
               <Text color="gray"> — joined {new Date(m.joinedAt).toLocaleDateString()}</Text>
             </Box>
           ))}
